@@ -354,7 +354,8 @@ fog and a full-range ramp. Every uploaded Y/UV byte is checked by actual cold GP
 readback before encoding. This is a GPU diagnostic, not a VR rendering hot path.
 
 Compare initial20Mbit/s, fresh1Mbit/s and100kbit/s, dynamic20Mbit/s→100kbit/s,
-automatic GOP1 IDR, infinite GOP with every frame forced IDR, P3/quarter-resolution
+automatic GOP1 IDR and infinite GOP with every frame forced IDR (both100kbit/s
+and20Mbit/s), P3/quarter-resolution
 multipass and P3/multipass IPPP8. The last IPPP mode is diagnostic only: the current
 runtime's IDR guard still refuses its P pictures. It does not establish Frame
 compatibility or permit reusing a stale/currently unproved mask. No live runtime

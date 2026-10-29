@@ -55,7 +55,9 @@ constexpr Mode Modes[]{
     {"fresh-vbr-100k",100000},
     {"dynamic-vbr-20m-to-100k",20000000,true},
     {"automatic-idr-vbr-100k",100000,false,true},
+    {"automatic-idr-vbr-20m",20000000,false,true},
     {"infinite-gop-forced-idr-100k",100000,false,false,false,false,false,true},
+    {"infinite-gop-forced-idr-20m",20000000,false,false,false,false,false,true},
     {"p3-qres-vbr-20m",20000000,false,false,true,true},
     {"p3-qres-ippp8-vbr-20m",20000000,false,false,true,true,true},
 };
