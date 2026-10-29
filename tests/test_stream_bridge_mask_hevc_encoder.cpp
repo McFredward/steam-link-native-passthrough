@@ -2,6 +2,8 @@
 #include "pc/stream-bridge-mask-hevc-platform.h"
 #include "pc/stream-bridge-mask-hevc-stage.h"
 #include "pc/stream-bridge-sender-provider-coverage-stages.h"
+#include "tests/stream_bridge_hevc_fixture.h"
+#include "bridge/stream_bridge_hevc_coverage.h"
 #include <nvEncodeAPI.h>
 #include <algorithm>
 #include <cstdio>
@@ -34,6 +36,7 @@ struct Fixture {
     bool async=true,nv12=true,failOpen=false,failInit=false,failPreset=false,mapFail=false,encodeBusy=false,lockBusy=false;
     bool wrongStamp=false,wrongType=false,wrongStruct=false,nullOutput=false,emptyOutput=false,hwFailure=false,reenter=false,eosFail=false,flushWaitFail=false;std::uint32_t outputSize=0;
     NVENCSTATUS mapStatus=NV_ENC_SUCCESS,encodeStatus=NV_ENC_SUCCESS,lockStatus=NV_ENC_SUCCESS;
+    std::uint32_t hardwareStatus=2;
     int failResource=-1,failBuffer=-1,failEvent=-1;
     MaskHevcEncoder encoder;
     Fixture();
@@ -108,7 +111,7 @@ NVENCSTATUS NVENCAPI lock(void* s,NV_ENC_LOCK_BITSTREAM* p){
     if(x.reenter){std::vector<std::uint8_t> bytes{99};check(x.encoder.tryTake(x.key(1),bytes)==MaskHevcTake::Busy&&bytes.empty(),"hot reentry refuses without waiting or exposing stale data");}
     o.locked=true;p->outputTimeStamp=o.token+(x.wrongStamp?1:0);p->pictureType=x.wrongType?NV_ENC_PIC_TYPE_P:NV_ENC_PIC_TYPE_IDR;
     p->pictureStruct=x.wrongStruct?NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM:NV_ENC_PIC_STRUCT_FRAME;
-    p->hwEncodeStatus=x.hwFailure?1:0;p->bitstreamBufferPtr=x.nullOutput?nullptr:o.bytes.data();
+    p->hwEncodeStatus=x.hwFailure?1:x.hardwareStatus;p->bitstreamBufferPtr=x.nullOutput?nullptr:o.bytes.data();
     p->bitstreamSizeInBytes=x.emptyOutput?0:(x.outputSize?x.outputSize:std::uint32_t(o.bytes.size()));return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI unlock(void* s,NV_ENC_OUTPUT_PTR p){f(s);auto& o=*static_cast<Output*>(p);check(o.locked,"unlock actual locked buffer");o.locked=false;o.submitted=false;return NV_ENC_SUCCESS;}
@@ -142,8 +145,32 @@ MaskHevcPlatform maskHevcTestPlatform()noexcept{
     };
 }
 }
-int main(){
+int main(int argc,char** argv){
     using namespace stream_bridge::sender;
+    for(const auto hardwareStatus:{2u,0u,1u,3u,8u,0xffffffffu}){
+        Fixture x;x.config.width=x.config.height=64;x.hardwareStatus=hardwareStatus;
+        x.outputs[0].bytes.assign(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());
+        check(x.configure(),"configure actual completed-state output regression");
+        const auto key=x.key(1);check(x.encoder.beginStage(key,&x.textures[0])&&x.encoder.submit(key),"submit exact input before completed-state output");
+        std::vector<std::uint8_t> output{99};
+        check(x.encoder.tryTake(key,output)==MaskHevcTake::Pending&&output.empty()&&x.locks==0,"status alone cannot bypass the actual completion event");
+        x.complete(0);const auto result=x.encoder.tryTake(key,output);
+        if(hardwareStatus==2||hardwareStatus==0){
+            check(result==MaskHevcTake::Ready&&output==x.outputs[0].bytes,"completed HW state2 and prior zero state return their exact output");
+            std::vector<std::uint8_t> envelope;
+            check(stream_bridge::wrapHevcCoverage({output.data(),output.size()},64,64,envelope),"completed-state output still passes actual independent-IDR parameter-set validation");
+            stream_bridge::HevcCoverageView decoded;
+            check(stream_bridge::inspectHevcCoverage({envelope.data(),envelope.size()},64,64,decoded),"completed-state mask reaches the unchanged bounded HEVC wire parser");
+            check(x.encoder.diagnostics().ready==1,"completion status does not fabricate a ready counter");
+        }else{
+            check(result==MaskHevcTake::Refused&&output.empty(),"partial and unknown hardware states remain refused");
+            check(x.encoder.diagnostics().rejectedFields==8,"unsupported state retains its hardware-status diagnostic");
+        }
+        check(x.coldWaits==0,"completion-state handling never waits in a hot callback");resetAndCheck(x);
+    }
+    if(argc==2&&std::strcmp(argv[1],"--completion-regression")==0){
+        std::printf("%u completed-HW-state regression checks passed; synthetic API, real owned HEVC fixture\n",checks);return 0;
+    }
     {
         Fixture x;check(x.configure()&&x.encoder.configured(),"configure separate async encoder");
         check(x.created==4&&x.events.size()==5,"four bounded output events plus one cold flush event");

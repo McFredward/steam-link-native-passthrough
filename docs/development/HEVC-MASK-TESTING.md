@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.2 / PC 0.3.1 / Frame 0.3.0 selects lossy HEVC masks by default
+Installer 0.3.3 / PC 0.3.2 / Frame 0.3.0 selects lossy HEVC masks by default
 with a 20 Mbit/s target. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
@@ -81,7 +81,7 @@ at221.33Mbit/s; five sampled updates reduced the image to1Mbit/s. This test
 therefore did not exercise lossy-mask image quality. `prepared=1`, `available=1`
 and `target-bit/s=20000000` describe setup, not successful HEVC output.
 
-PC0.3.1 is a diagnostic update, not a confirmed remedy for that refusal. The
+PC0.3.1 was a diagnostic update. The
 new `HEVC mask detail:` line separates API-call failures (`map-input`,
 `encode-picture`, `lock-bitstream`, cleanup) from `output-validation` after a
 successful lock. It reports actual API status, mapped/submitted/locked/ready
@@ -95,6 +95,25 @@ For the next short test, close SteamVR after the affected scene to include the
 final counters in `vrserver.txt`. Successful HEVC transmission must increment
 both `encoded` and the `coverage encoding:` HEVC frame count. A lower mask
 bitrate cannot be assessed while those counts remain zero.
+
+PC 0.3.2 fixes the next test's isolated rejection: 2873 successful map, encode
+and lock calls returned matching timestamps, IDR/progressive metadata and
+nonempty bounded output, but our `hwEncodeStatus == 0` check rejected the
+reported completed state 2. This member is not an `NVENCSTATUS` return code.
+The sender now accepts 2 and retains the previously accepted 0; all other
+hardware states remain refused. Completion-event, API-success, exact token,
+IDR, structure, size and actual HEVC syntax checks remain mandatory.
+
+NVIDIA's S4654 presentation, *Detailed Overview of NVENC Encoder API* by
+Swagat Mohapatra ([transcript](https://expydoc.com/doc/4731033/detailed-overview-of-nvenc-encoder-api)),
+describes 2 as the completed readback state. The historical NVIDIA PDF URL now
+redirects to its general on-demand site. NVIDIA's public
+[encoder sample](https://github.com/NVIDIA/video-sdk-samples/blob/master/Samples/NvCodec/NvEncoder/NvEncoder.cpp)
+waits for completion and checks the API return before consuming output, without
+requiring this field to be zero. Regression coverage includes the reported 2,
+the previous 0, partial/unknown 1/3/8/UINT_MAX, missing events, and real owned
+HEVC data reaching the existing envelope parser. This is software evidence;
+post-fix headset bandwidth, decoding throughput and quality still need a test.
 
 The existing optional A8 diagnostic capture remains an original-sample source
 for encodings 1–5. It deliberately does not label lossy decoded HEVC as original

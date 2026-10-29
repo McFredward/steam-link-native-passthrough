@@ -128,8 +128,13 @@ struct MaskHevcEncoder::Impl {
         if(result!=NV_ENC_SUCCESS){fail(result,MaskHevcFailure::LockBitstream);return MaskHevcTake::Refused;}
         lockedCount.fetch_add(1,std::memory_order_relaxed);
         s.locked=true;
+        // hwEncodeStatus is a completion state, not an NVENCSTATUS return code.
+        // NVIDIA's S4654 documents 2 as complete. Keep the previously accepted
+        // zero value too; partial/unknown states still fail closed. The exact
+        // completion event, API success, token and bitstream checks remain required.
+        const bool hardwareComplete=lock.hwEncodeStatus==0||lock.hwEncodeStatus==2;
         const unsigned rejected=(lock.outputTimeStamp!=s.token?1u:0u)|(lock.pictureType!=NV_ENC_PIC_TYPE_IDR?2u:0u)
-            |(lock.pictureStruct!=NV_ENC_PIC_STRUCT_FRAME?4u:0u)|(lock.hwEncodeStatus?8u:0u)
+            |(lock.pictureStruct!=NV_ENC_PIC_STRUCT_FRAME?4u:0u)|(!hardwareComplete?8u:0u)
             |(!lock.bitstreamBufferPtr?16u:0u)|(!lock.bitstreamSizeInBytes||lock.bitstreamSizeInBytes>config.maxAccessUnitBytes?32u:0u);
         const auto expected=s.token;bool valid=rejected==0;
         if(valid&&out)try{

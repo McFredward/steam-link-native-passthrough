@@ -1,6 +1,8 @@
 # Patch versions
 
-The October29 dev package is installer **0.3.2**, PC **0.3.1**, Frame **0.3.0**.
+The October29 dev package is installer **0.3.3**, PC **0.3.2**, Frame **0.3.0**.
+PC0.3.2 accepts NVENC's completed output state2 after exact completion and
+frame checks. This remains a PC-only update with identical Frame artifacts.
 PC0.3.1 distinguishes native HEVC API failures from local output refusals.
 Its PC-only update retains the exact Frame payload and existing HEVC selection.
 Installer0.3.1 fixes continuation and cleanup of recovery checkpoints larger
