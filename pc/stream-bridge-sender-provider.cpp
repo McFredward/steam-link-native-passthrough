@@ -31,12 +31,16 @@ using stream_bridge::sender::NvencFactory;
 std::uint32_t maskCodecRate(const std::filesystem::path& root){
     const auto path=root/L"mask-codec.conf";
     const auto file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
-    if(file==INVALID_HANDLE_VALUE)return 0;
+    if(file==INVALID_HANDLE_VALUE){
+        const auto error=GetLastError();
+        return error==ERROR_FILE_NOT_FOUND||error==ERROR_PATH_NOT_FOUND?
+            stream_bridge::sender::maskHevcBitrate(std::nullopt):0;
+    }
     BY_HANDLE_FILE_INFORMATION info{};LARGE_INTEGER size{};char bytes[64]{};DWORD used=0;
     const bool regular=GetFileInformationByHandle(file,&info)&&info.nNumberOfLinks==1&&
         !(info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))&&GetFileSizeEx(file,&size)&&size.QuadPart>0&&size.QuadPart<=64;
     const bool read=regular&&ReadFile(file,bytes,static_cast<DWORD>(size.QuadPart),&used,nullptr)&&used==size.QuadPart;
-    CloseHandle(file);return read?stream_bridge::sender::maskHevcBitrate({bytes,used}):0;
+    CloseHandle(file);return read?stream_bridge::sender::maskHevcBitrate(std::string_view{bytes,used}):0;
 }
 constexpr std::array<std::uint8_t,32> ExpectedHash{{0x1e,0x84,0x6b,0xe0,0x41,0x03,0x97,0x98,
  0x58,0x0a,0x91,0x45,0x23,0x71,0xf6,0x28,0x8c,0x61,0x4f,0xb4,0xc1,0x52,0x12,0x6b,

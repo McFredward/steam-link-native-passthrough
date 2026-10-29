@@ -1,22 +1,32 @@
 # HEVC mask test candidate
 
-Installer 0.2.23 / PC 0.2.22 / Frame 0.2.19 adds an optional lossy mask codec.
+Installer 0.3.0 / PC 0.3.0 / Frame 0.3.0 selects lossy HEVC masks by default
+with a 20 Mbit/s target. No flag or configuration file is needed. Existing
+explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
 decoder on the Frame. The ordinary image keeps its native dimensions, encoder,
 foveation and reprojection. Install both updated components through the paired
 setup. This candidate is software-tested; headset quality and 90 Hz performance
 have not yet been established for this codec.
 
-## Windows selection
+## Windows installation and selection
 
-The normal installer bootstrap accepts an explicit mask bitrate after the guided
-update:
+Run the normal dev installer and apply the paired update:
+
+```powershell
+irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get.ps1 | iex
+```
+
+HEVC is selected by the sender itself when its configuration file is absent,
+including when installed from the ZIP or a compatibility entry point. The
+bootstrap's optional bitrate argument sets an explicit override after the guided
+update; its default zero means preserve the preference, not disable HEVC:
 
 ```powershell
 .\get.ps1 -HevcMaskBitrate 20
 ```
 
-The mode is selected only when the installed PC DLL matches the target package.
+The override is written only when the installed PC DLL matches the target package.
 The existing Apply step controls the paired update and coordinated Frame restart.
 The bootstrap never starts PC SteamVR. Alternatively, from this checkout after
 installing, select the mode with existing Python:
@@ -27,7 +37,7 @@ py -3 .\tools\configure_mask_codec.py --bitrate 20
 
 Start PC SteamVR again and launch Venture through its MR command file. The fixed
 PC file `%LOCALAPPDATA%\steam-link-native-passthrough\mask-codec.conf` stores the
-selection; it creates no version directories. Its bitrate is an NVENC target,
+override; it creates no version directories. Its bitrate is an NVENC target,
 not a guaranteed ceiling on encoded access units or total network traffic.
 To return to the established lossless codec:
 
@@ -36,7 +46,9 @@ py -3 .\tools\configure_mask_codec.py --disable
 ```
 
 Restart PC SteamVR after changing the selection. No Frame update is needed to
-change this PC setting. Failed/unsupported individual HEVC outputs use the
+change this PC setting. Disabling writes an explicit zero preference; removing
+the file returns to the 20 Mbit/s HEVC default. Unreadable or invalid settings
+preserve the lossless route. Failed/unsupported individual HEVC outputs use the
 current frame's established independent A8 fallback. Missing current data keeps
 the existing active-MR camera-only recovery. There is never a latest-mask
 substitution. Old peers negotiate their existing lossless capabilities.

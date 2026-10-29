@@ -22,10 +22,10 @@ def configure(root,rate=None):
     previous=target.read_bytes() if target.exists() else None
     if previous is not None and (len(previous)>64 or not previous.startswith(MARKER.encode('ascii'))):
         raise RuntimeError('Existing unrelated configuration was preserved')
-    if rate is None:
-        if previous is not None:target.unlink()
-        return
-    if type(rate)is not int or not 1000000<=rate<=200000000:raise RuntimeError('Mask bitrate must be1–200 Mbit/s')
+    # Absence now selects HEVC by default. Persist zero so an explicit lossless
+    # preference survives normal setup, updates and repeated SteamVR starts.
+    if rate is None:rate=0
+    if type(rate)is not int or (rate!=0 and not 1000000<=rate<=200000000):raise RuntimeError('Mask bitrate must be1–200 Mbit/s')
     pending=target.with_suffix('.tmp');ordinary(pending)
     try:
         with pending.open('xb') as stream:

@@ -1,10 +1,14 @@
 #pragma once
 #include <cstdint>
+#include <optional>
 #include <string_view>
 namespace stream_bridge::sender {
-// Opt-in user configuration, read once by the cold provider. Zero preserves
-// the existing lossless route. A rate target is not a wire-size guarantee.
-inline std::uint32_t maskHevcBitrate(std::string_view value)noexcept{
+// Read once by the cold provider. Missing configuration selects the default;
+// explicit zero or unreadable/invalid configuration selects lossless masks.
+// A rate target is not a wire-size guarantee. Negotiation is still mandatory.
+inline std::uint32_t maskHevcBitrate(std::optional<std::string_view> configured)noexcept{
+    if(!configured)return 20000000;
+    auto value=*configured;
     constexpr std::string_view marker="SFNP_MASK_HEVC_V1\n";
     if(value.size()<=marker.size()+1||value.size()>64||value.substr(0,marker.size())!=marker||value.back()!='\n')return 0;
     value.remove_prefix(marker.size());value.remove_suffix(1);

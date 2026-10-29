@@ -1,5 +1,10 @@
 # Patch versions
 
+The October29 dev package is installer **0.3.0**, PC **0.3.0**, Frame **0.3.0**.
+This coordinated minor version identifies the paired HEVC mask update; the PC
+now selects HEVC by default. The unchanged private Frame decoder and renderer
+binaries retain their exact artifact pins from the first HEVC dev candidate.
+
 The October22 stable release is installer **0.2.22**, PC **0.2.21**, Frame
 **0.2.18**. The current repository version files remain authoritative; the
 examples below illustrate independent versioning, not a runtime allowlist.
