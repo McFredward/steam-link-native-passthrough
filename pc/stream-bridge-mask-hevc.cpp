@@ -224,7 +224,9 @@ struct MaskHevcEncoder::Impl {
         enc.rcParams.lowDelayKeyFrameScale=1;enc.rcParams.multiPass=NV_ENC_MULTI_PASS_DISABLED;
         enc.encodeCodecConfig={};auto& hevc=enc.encodeCodecConfig.hevcConfig;
         hevc.chromaFormatIDC=1;hevc.pixelBitDepthMinus8=0;hevc.idrPeriod=1;hevc.maxNumRefFramesInDPB=1;
-        hevc.repeatSPSPPS=1;hevc.outputAUD=1;hevc.sliceMode=0;hevc.sliceModeData=0;
+        // The signed per-mask payload already delimits one complete IDR. The
+        // private decoder needs VPS/SPS/PPS, not optional access-unit delimiters.
+        hevc.repeatSPSPPS=1;hevc.outputAUD=0;hevc.sliceMode=0;hevc.sliceModeData=0;
         hevc.hevcVUIParameters.videoSignalTypePresentFlag=1;hevc.hevcVUIParameters.videoFormat=5;
         hevc.hevcVUIParameters.videoFullRangeFlag=1;hevc.hevcVUIParameters.colourDescriptionPresentFlag=0;
         NV_ENC_INITIALIZE_PARAMS init{};init.version=NV_ENC_INITIALIZE_PARAMS_VER;init.encodeGUID=NV_ENC_CODEC_HEVC_GUID;

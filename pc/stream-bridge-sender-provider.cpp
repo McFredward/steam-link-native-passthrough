@@ -358,6 +358,22 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             // on every 8 ms worker tick instead of this cold five-second cadence.
             nextGateReport=now+std::chrono::seconds(5);
             const auto stats=coverage_.gateStats();
+            stream_bridge::sender::MaskHevcSyntaxTrace syntax{};
+            if(coverage_.takeHevcSyntaxTrace(syntax)){
+                char detail[720]{};
+                constexpr char digits[]="0123456789abcdef";
+                char beginning[65]{};
+                for(unsigned j=0;j<syntax.prefixBytes;++j){beginning[2*j]=digits[syntax.prefix[j]>>4];beginning[2*j+1]=digits[syntax.prefix[j]&15];}
+                std::snprintf(detail,sizeof detail,"HEVC mask syntax: extent=%ux%u, bytes=%u, nals=%u, more=%u, prefix=%s; first refused AU, bounded header prefixes only; not frame authority",
+                    syntax.width,syntax.height,syntax.bytes,syntax.count,unsigned(syntax.more),beginning);
+                report(detail,stream_bridge::logging::Level::Warning);
+                for(unsigned i=0;i<syntax.count;++i){
+                    const auto& nal=syntax.nals[i];char hex[513]{};
+                    for(unsigned j=0;j<nal.copied;++j){hex[2*j]=digits[nal.prefix[j]>>4];hex[2*j+1]=digits[nal.prefix[j]&15];}
+                    std::snprintf(detail,sizeof detail,"HEVC mask syntax NAL%u: type=%u, bytes=%u, copied=%u, hex=%s",i,nal.type,nal.bytes,nal.copied,hex);
+                    report(detail,stream_bridge::logging::Level::Warning);
+                }
+            }
             // Sample without taking the render/registry mutex. Report cleanup
             // causes before the older finite verbose gate budget can hide them.
             const auto cleanup=directMode().cleanupStats();

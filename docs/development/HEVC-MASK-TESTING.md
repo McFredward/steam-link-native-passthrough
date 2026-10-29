@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.3 / PC 0.3.2 / Frame 0.3.0 selects lossy HEVC masks by default
+Installer 0.3.4 / PC 0.3.3 / Frame 0.3.0 selects lossy HEVC masks by default
 with a 20 Mbit/s target. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
@@ -114,6 +114,28 @@ requiring this field to be zero. Regression coverage includes the reported 2,
 the previous 0, partial/unknown 1/3/8/UINT_MAX, missing events, and real owned
 HEVC data reaching the existing envelope parser. This is software evidence;
 post-fix headset bandwidth, decoding throughput and quality still need a test.
+
+The next PC0.3.2 hardware log confirmed4163 completed/ready masks and no API or
+output-metadata refusal. All4163 were subsequently refused by the strict HEVC
+syntax parser, so no HEVC mask was transmitted. That log contains no coded
+parameter sets and cannot identify the rejected syntax feature.
+
+PC0.3.3 omits the optional AUD from the private mask stream; repeated VPS/SPS/PPS
+and the actual IDR still delimit each signed payload. AUD-free owned fixtures
+already pass both the parser and private decoder. This removes an unnecessary
+encoder output option, without changing the receiver's admitted grammar.
+It is not yet a confirmed remedy for the observed syntax refusal.
+
+On the first remaining syntax refusal per PC SteamVR process, the sender records
+`HEVC mask syntax:` followed by bounded `HEVC mask syntax NAL` lines. These
+contain coded extent, NAL types/lengths, up to256 bytes per parameter set/AUD and
+up to32 bytes per other NAL. The eight-NAL snapshot occupies fixed memory and
+is published once from the output callback; the existing cold worker formats
+at most nine log lines. There is no render-thread file I/O, additional capture
+directory, complete image dump or unbounded queue. Diagnostics never authorize
+a frame, skip parsing or change the exact current-frame lossless fallback.
+Use the same short test and provide `vrserver.txt`; actual headers allow an
+offline reproduction of the parser refusal without guessing its feature.
 
 The existing optional A8 diagnostic capture remains an original-sample source
 for encodings 1–5. It deliberately does not label lossy decoded HEVC as original

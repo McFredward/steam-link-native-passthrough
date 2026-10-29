@@ -1,6 +1,8 @@
 # Patch versions
 
-The October29 dev package is installer **0.3.3**, PC **0.3.2**, Frame **0.3.0**.
+The October29 dev package is installer **0.3.4**, PC **0.3.3**, Frame **0.3.0**.
+PC0.3.3 removes the optional mask AUD and records one bounded header diagnostic
+if actual NVENC syntax remains unsupported. The Frame payload stays identical.
 PC0.3.2 accepts NVENC's completed output state2 after exact completion and
 frame checks. This remains a PC-only update with identical Frame artifacts.
 PC0.3.1 distinguishes native HEVC API failures from local output refusals.

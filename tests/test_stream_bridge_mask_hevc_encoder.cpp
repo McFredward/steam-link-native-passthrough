@@ -4,12 +4,14 @@
 #include "pc/stream-bridge-sender-provider-coverage-stages.h"
 #include "tests/stream_bridge_hevc_fixture.h"
 #include "bridge/stream_bridge_hevc_coverage.h"
+#include "pc/stream-bridge-mask-hevc-syntax-trace.h"
 #include <nvEncodeAPI.h>
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <new>
+#include <thread>
 
 // Same encoder implementation, original API table and event state transitions
 // as Windows, with no real GPU/OS handles. These are contract/lifetime tests,
@@ -73,7 +75,7 @@ NVENCSTATUS NVENCAPI init(void* s,NV_ENC_INITIALIZE_PARAMS* p){
     check(p->encodeConfig&&p->encodeConfig->frameIntervalP==1&&p->encodeConfig->gopLength==1,"independent-picture GOP configuration");
     const auto& c=*p->encodeConfig;const auto& h=c.encodeCodecConfig.hevcConfig;const auto& r=c.rcParams;
     check(std::memcmp(&c.profileGUID,&NV_ENC_HEVC_PROFILE_MAIN_GUID,sizeof(GUID))==0,"Main profile is explicit");
-    check(h.repeatSPSPPS&&h.idrPeriod==1&&h.chromaFormatIDC==1&&!h.pixelBitDepthMinus8&&!h.enableAlphaLayerEncoding,"independent Main8 420 with repeated parameter sets");
+    check(h.repeatSPSPPS&&!h.outputAUD&&h.idrPeriod==1&&h.chromaFormatIDC==1&&!h.pixelBitDepthMinus8&&!h.enableAlphaLayerEncoding,"independent Main8 420 with repeated parameter sets and no optional AUD");
     check(!h.sliceMode&&!h.sliceModeData&&!h.enableIntraRefresh&&!h.enableLTR,"one slice, no refresh/reference features");
     check(h.hevcVUIParameters.videoSignalTypePresentFlag&&h.hevcVUIParameters.videoFullRangeFlag&&!h.hevcVUIParameters.colourDescriptionPresentFlag,"raw full-range Y without color transform signaling");
     check(r.rateControlMode==NV_ENC_PARAMS_RC_CBR&&r.averageBitRate==x.config.bitRate&&r.maxBitRate==x.config.bitRate,"configured mask CBR target");
@@ -147,6 +149,31 @@ MaskHevcPlatform maskHevcTestPlatform()noexcept{
 }
 int main(int argc,char** argv){
     using namespace stream_bridge::sender;
+    {
+        MaskHevcSyntaxTraceSlot slot;MaskHevcSyntaxTrace trace{};
+        check(!slot.take(trace),"cold diagnostic cannot read an unpublished header snapshot");
+        check(!slot.captureOnce({},64,64),"empty diagnostic does not consume the single capture");
+        check(slot.captureOnce({HevcMainIdrFixture.data(),HevcMainIdrFixture.size()},64,64),"capture first actual HEVC header prefixes");
+        check(!slot.captureOnce({HevcMainIdrFixture.data(),HevcMainIdrFixture.size()},128,64),"later images cannot replace a pending diagnostic");
+        check(slot.take(trace)&&trace.width==64&&trace.height==64&&trace.count==4&&!trace.more,"cold diagnostic acquires one coherent first snapshot");
+        for(unsigned i=0;i<4;++i)check(trace.nals[i].type==(i==3?20u:32u+i),"parameter-set and IDR NAL ordering retained in diagnostic");
+        check(trace.nals[0].prefix[0]==0x40&&trace.nals[3].copied<=32,"exact owned parameter bytes and bounded picture prefix retained");
+        check(!slot.take(trace)&&!slot.captureOnce({HevcMainIdrFixture.data(),HevcMainIdrFixture.size()},64,64),"consumed one-shot cannot grow a log or capture queue");
+        MaskHevcSyntaxTraceSlot hugeSlot;
+        check(!hugeSlot.captureOnce({HevcMainIdrFixture.data(),stream_bridge::MaximumHevcCoverageBitstreamBytes+1},64,64),"oversized diagnostic is refused before reading the pointer");
+        std::vector<std::uint8_t> many;
+        for(unsigned i=0;i<12;++i)many.insert(many.end(),{0,0,1,0x46,1,0x10});
+        MaskHevcSyntaxTraceSlot manySlot;check(manySlot.captureOnce({many.data(),many.size()},64,64)&&manySlot.take(trace),"bounded extra-NAL diagnostic captured");
+        check(trace.count==8&&trace.more,"NAL count stays bounded on arbitrarily fragmented output");
+        const std::vector<std::uint8_t> noPicture(4096,0x55);MaskHevcSyntaxTraceSlot plain;
+        check(plain.captureOnce({noPicture.data(),noPicture.size()},64,64)&&plain.take(trace)&&trace.count==0&&trace.prefixBytes==32&&trace.prefix[0]==0x55,"diagnostic keeps unknown leading bytes without inventing framing");
+        MaskHevcSyntaxTraceSlot concurrent;bool published=false,taken=false;
+        std::thread producer([&]{published=concurrent.captureOnce({HevcMainIdrFixture.data(),HevcMainIdrFixture.size()},64,64);});
+        for(unsigned attempt=0;attempt<1024&&!taken;++attempt){taken=concurrent.take(trace);if(!taken)std::this_thread::yield();}
+        producer.join();if(!taken)taken=concurrent.take(trace);
+        check(published&&taken&&trace.width==64&&trace.height==64&&trace.count==4,"cross-thread header publication is coherent and consumed once");
+        check(!concurrent.take(trace),"cross-thread snapshot cannot be consumed twice");
+    }
     for(const auto hardwareStatus:{2u,0u,1u,3u,8u,0xffffffffu}){
         Fixture x;x.config.width=x.config.height=64;x.hardwareStatus=hardwareStatus;
         x.outputs[0].bytes.assign(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());

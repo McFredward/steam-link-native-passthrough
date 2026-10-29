@@ -135,6 +135,7 @@ struct SenderCoverage::Impl {
     MaskContentPublication maskContent;
     capture::Writer maskCapture;
     MaskHevcEncoder maskEncoder;MaskHevcSurfaces maskSurfaces;
+    MaskHevcSyntaxTraceSlot syntaxTrace;
     bool hevcRequested=false;std::uint32_t hevcBitrate=20000000;
     unsigned nextHevcStage=0;
     std::atomic<bool> hevcPrepared{false},hevcAvailable{false},hevcDirty{false},hevcPeerReady{false};
@@ -258,7 +259,10 @@ struct SenderCoverage::Impl {
                             if(wrapHevcCoverage({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight,encoded)){
                                 encoding=CoverageEncoding::HevcIntra;maskPid=slot.pid;maskContract=slot.contract;
                                 CoverageGateCounters::increment(s.hevcEncoded);
-                            }else CoverageGateCounters::increment(s.hevcSyntaxRefused);
+                            }else{
+                                s.syntaxTrace.captureOnce({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight);
+                                CoverageGateCounters::increment(s.hevcSyntaxRefused);
+                            }
                         }else if(result==MaskHevcTake::Pending||result==MaskHevcTake::Busy)CoverageGateCounters::increment(s.hevcPending);
                         else CoverageGateCounters::increment(s.hevcRefused);
                         hevcEncodeUs=elapsedMicros(started,clockMicros());
@@ -618,6 +622,7 @@ void SenderCoverage::configureHevcMask(std::uint32_t bitrate)noexcept{
     s.hevcBitrate=bitrate;s.hevcDirty.store(s.hevcRequested,std::memory_order_release);
 }
 bool SenderCoverage::hevcAvailable()const noexcept{return impl_->hevcAvailable.load(std::memory_order_acquire);}
+bool SenderCoverage::takeHevcSyntaxTrace(MaskHevcSyntaxTrace& trace)noexcept{return impl_->syntaxTrace.take(trace);}
 HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
     const auto& s=*impl_;HevcMaskStats stats{};stats.requested=s.hevcRequested;stats.bitRate=s.hevcBitrate;
     stats.prepared=s.hevcPrepared.load(std::memory_order_acquire);stats.available=s.hevcAvailable.load(std::memory_order_acquire);

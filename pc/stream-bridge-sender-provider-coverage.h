@@ -7,6 +7,7 @@
 #include "stream-bridge-source-alpha-stats.h"
 #include "stream-bridge-mask-content.h"
 #include "stream-bridge-mask-hevc.h"
+#include "stream-bridge-mask-hevc-syntax-trace.h"
 #include "bridge/stream_bridge_control.h"
 #include <memory>
 #include <limits>
@@ -217,6 +218,7 @@ public:
     void configureHevcMask(std::uint32_t bitrate)noexcept; // Cold startup only; zero disables.
     bool hevcAvailable()const noexcept;
     HevcMaskStats hevcMaskStats()const noexcept;
+    bool takeHevcSyntaxTrace(MaskHevcSyntaxTrace&)noexcept; // Cold one-shot diagnostic only.
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
     void stop()noexcept;
     bool ready(std::uint32_t processId)const noexcept;
