@@ -55,14 +55,15 @@ public:
         Slot* slot_=nullptr;std::uint64_t word_=0;Phase previous_=Phase::Free;std::size_t index_=0;
     };
     using PoolClaim=std::array<Claim,Capacity>;
-    Claim capture(std::uintptr_t input)noexcept{
+    Claim capture(std::uintptr_t input,std::size_t preferredStart=0)noexcept{
         if(!input)return {};
         // One native producer serializes colour CopyResource. Replace only an
         // unconsumed receipt for that exact canonical input; never a Bound one.
         for(std::size_t i=0;i<Capacity;++i)if(matchesCaptured(i,input)){
             auto result=claim(i,Phase::Captured,Phase::Writing);if(result)return result;
         }
-        for(std::size_t i=0;i<Capacity;++i){
+        for(std::size_t n=0;n<Capacity;++n){
+            const auto i=(preferredStart+n)%Capacity;
             auto result=claim(i,Phase::Free,Phase::Writing);if(result)return result;
             result=claim(i,Phase::Retired,Phase::Writing);if(result)return result;
         }

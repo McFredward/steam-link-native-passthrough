@@ -136,6 +136,7 @@ struct SenderCoverage::Impl {
     capture::Writer maskCapture;
     MaskHevcEncoder maskEncoder;MaskHevcSurfaces maskSurfaces;
     bool hevcRequested=false;std::uint32_t hevcBitrate=20000000;
+    unsigned nextHevcStage=0;
     std::atomic<bool> hevcPrepared{false},hevcAvailable{false},hevcDirty{false},hevcPeerReady{false};
     std::uint64_t hevcContract=0,hevcGeneration=0;std::uint32_t hevcPid=0;
     std::atomic<std::uint64_t> hevcEncoded{0},hevcPending{0},hevcRefused{0},hevcSyntaxRefused{0};
@@ -375,6 +376,7 @@ struct SenderCoverage::Impl {
         invalidateMaskHevcStages(all);
         if(!maskEncoder.reset())return false;
         maskSurfaces.resetCold();hevcContract=hevcGeneration=0;hevcPid=0;
+        nextHevcStage=0;
         poolReady=false;prepared=false;preparedPid=0;state=4;release(targetView);release(target);
         for(auto& slot:all){auto& gpu=slot->resources;release(gpu.texture);release(gpu.completion);release(gpu.input);gpu={};slot->receipt={};}
         D3D11_TEXTURE2D_DESC desc{};desc.Width=w;desc.Height=h;desc.MipLevels=desc.ArraySize=1;desc.Format=DXGI_FORMAT_R8_UNORM;desc.SampleDesc.Count=1;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
@@ -399,6 +401,7 @@ struct SenderCoverage::Impl {
         invalidateMaskHevcStages(all);
         if(!maskEncoder.reset()){hevcDirty.store(false,std::memory_order_release);return;}
         hevcContract=hevcGeneration=0;hevcPid=0;
+        nextHevcStage=0;
         const bool surfaces=maskSurfaces.prepareCold(device,target);
         const MaskHevcConfig config{width,height,qos.frameRateNum,qos.frameRateDen,hevcBitrate,static_cast<std::uint32_t>(MaximumHevcCoverageBitstreamBytes)};
         const bool ready=surfaces&&maskEncoder.configure(device,config,maskSurfaces.textures(),original);
@@ -538,7 +541,12 @@ struct SenderCoverage::Impl {
         auto* input=identity(destination);if(!input){s.gates.refuse(CoverageGate::InputReceipt);forwardCopy(ctx,destination,source);return;}
         // A stage is frozen from the native input handoff through matching
         // Unlock; another accepted frame and cold maintenance cannot evict it.
-        auto free=s.stages.capture(reinterpret_cast<std::uintptr_t>(input));
+        // Rotate reusable stages while the independent asynchronous encoder is
+        // active. Repeatedly choosing slot0 can starve its warm-up while other
+        // NV12 slots remain unused, even though ordinary RGB retires promptly.
+        const bool hevc=s.hevcPrepared.load(std::memory_order_acquire)&&s.hevcPeerReady.load(std::memory_order_acquire);
+        const auto preferred=hevc?(s.nextHevcStage++%StageCount):0;
+        auto free=s.stages.capture(reinterpret_cast<std::uintptr_t>(input),preferred);
         if(!free){release(input);s.gates.refuse(CoverageGate::StageFull);forwardCopy(ctx,destination,source);return;}
         auto& gpu=free->resources;release(gpu.input);gpu.input=input;
         gpu.hevcSurfaceReady=gpu.hevcSubmitted=false;gpu.hevcKey={};

@@ -249,5 +249,20 @@ int main(){
             "captured NV12 write/key cannot survive cold pool replacement or failed reset");
         check(bound->receipt.contract==17&&bound->receipt.present==1,"NV12 invalidation preserves independent current A8 source proof");
     }
+    {
+        Fixture x;check(x.configure(),"configure independent mask warm-up pipeline");
+        using Stages=CoverageStages<MaskHevcStageState>;Stages stages;
+        for(unsigned i=0;i<4;++i){
+            auto stage=stages.capture(9+i,i);check(stage&&stage.index()==i,"retired RGB stage rotates to another independent mask input");
+            const auto key=x.key(i+1);check(x.encoder.canStage(&x.textures[i]),"warm-up uses a free NV12 surface instead of overwriting pending slot0");
+            check(x.encoder.beginStage(key,&x.textures[i])&&x.encoder.submit(key),"four distinct exact inputs can enter asynchronous warm-up");
+            std::vector<std::uint8_t> output;
+            check(x.encoder.tryTake(key,output)==MaskHevcTake::Pending,"delayed mask output keeps per-frame lossless fallback possible");
+            x.encoder.cancel(key);stage.publish(Stages::Phase::Retired);
+        }
+        check(x.privateEncodes==4,"prompt RGB retirement cannot starve independent mask encoder of subsequent inputs");
+        for(unsigned i=0;i<4;++i)x.complete(i);
+        check(x.encoder.canStage(&x.textures[0]),"completed canceled warm-up input safely becomes reusable");resetAndCheck(x);
+    }
     std::printf("mask HEVC private-session lifetime/association tests: %u checks passed; no hardware codec claim\n",checks);
 }
