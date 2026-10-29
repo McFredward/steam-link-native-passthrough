@@ -333,11 +333,11 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             nextBudgetReport=now+std::chrono::seconds(5);
             const auto stats=boundary().reconfigureStats();if(!stats.budgeted||(!final&&stats.budgeted==budgetReports))return;
             budgetReports=stats.budgeted;char text[512]{};
-            std::snprintf(text,sizeof text,"producer wire budget: attempts/accepted/rejected=%llu/%llu/%llu; last video requested/passed=%u/%u bit/s; reserved metadata peak/mean=%u/%u bit/s; VBV requested/passed=%u/%u bits; delay=%u/%u bits; over-budget=%u; producer-v2 only, exact coverage retained",
+            std::snprintf(text,sizeof text,"producer wire budget: attempts/accepted/rejected=%llu/%llu/%llu; last video requested/passed=%u/%u bit/s; reserved metadata planned/mean/peak=%u/%u/%u bit/s; VBV requested/passed=%u/%u bits; delay=%u/%u bits; over-budget=%u, burst-over-budget=%u; producer-v2 only, exact coverage retained",
                 static_cast<unsigned long long>(stats.budgeted),static_cast<unsigned long long>(stats.budgetAccepted),static_cast<unsigned long long>(stats.budgetRejected),
-                stats.requestedVideoRate,stats.appliedVideoRate,stats.metadataRate,stats.meanMetadataRate,
+                stats.requestedVideoRate,stats.appliedVideoRate,stats.metadataRate,stats.meanMetadataRate,stats.peakMetadataRate,
                 stats.requestedVbv,stats.appliedVbv,stats.requestedDelay,stats.appliedDelay,
-                unsigned(std::uint64_t(stats.appliedVideoRate)+stats.metadataRate>stats.requestedVideoRate));report(text,(stats.budgetRejected||std::uint64_t(stats.appliedVideoRate)+stats.metadataRate>stats.requestedVideoRate)?stream_bridge::logging::Level::Warning:stream_bridge::logging::Level::Debug);
+                unsigned(std::uint64_t(stats.appliedVideoRate)+stats.metadataRate>stats.requestedVideoRate),unsigned(std::uint64_t(stats.appliedVideoRate)+stats.peakMetadataRate>stats.requestedVideoRate));report(text,(stats.budgetRejected||std::uint64_t(stats.appliedVideoRate)+stats.metadataRate>stats.requestedVideoRate)?stream_bridge::logging::Level::Warning:stream_bridge::logging::Level::Debug);
         };
         // Atomic metadata is sampled/formatted only here, never inside a D3D
         // callback. Refusal populations distinguish the actual first gate from
@@ -501,6 +501,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs));
                 report(hevcText,stream_bridge::logging::Level::Debug);
                 const auto& diagnostic=hevc.diagnostics;
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask rate: user-ceiling/stream-target/mask-budget/applied=%u/%u/%u/%u bit/s; added-wire-mean=%u bit/s; configured-fps=%u/%u; changes=%llu; VBR maximum plus measured feedback; not a guaranteed wire cap",
+                    hevc.bitRate,diagnostic.streamTarget,diagnostic.rateBudget,diagnostic.rateTarget,diagnostic.wireMean,diagnostic.frameRateNum,diagnostic.frameRateDen,static_cast<unsigned long long>(diagnostic.rateChanges));
+                report(hevcText,stream_bridge::logging::Level::Debug);
                 std::snprintf(hevcText,sizeof hevcText,
                     "HEVC mask detail: mapped/submitted/locked/ready=%llu/%llu/%llu/%llu; last-failure=%s, api-status=%d, rejected-fields=0x%x; output expected/returned-timestamp=%llu/%llu, picture-type/struct=%u/%u, hardware-status=%u, bytes=%u; field bits timestamp1/type2/structure4/hardware8/pointer16/size32/copy64; lifetime approximate counters",
                     static_cast<unsigned long long>(diagnostic.mapped),static_cast<unsigned long long>(diagnostic.submitted),

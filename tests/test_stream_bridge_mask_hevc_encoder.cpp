@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-mask-hevc.h"
+#include "pc/stream-bridge-mask-hevc-rate.h"
 #include "pc/stream-bridge-mask-hevc-platform.h"
 #include "pc/stream-bridge-mask-hevc-stage.h"
 #include "pc/stream-bridge-sender-provider-coverage-stages.h"
@@ -34,7 +35,8 @@ struct Fixture {
     ID3D11Device device{};std::array<ID3D11Texture2D,4> textures{};
     std::array<Resource,4> resources{};std::array<Output,4> outputs{};std::vector<Event*> events;
     NV_ENCODE_API_FUNCTION_LIST api{};MaskHevcConfig config{1152,4608,90,1,20000000,2u*1024u*1024u};
-    unsigned opened=0,destroyed=0,created=0,registered=0,locks=0,unmaps=0,coldWaits=0,eos=0,privateEncodes=0,polled=0;
+    unsigned opened=0,destroyed=0,created=0,registered=0,locks=0,unmaps=0,coldWaits=0,eos=0,privateEncodes=0,polled=0,rateChanges=0;
+    std::uint32_t lastRate=0,lastRateNum=0,lastRateDen=0;NVENCSTATUS rateStatus=NV_ENC_SUCCESS;
     bool async=true,nv12=true,failOpen=false,failInit=false,failPreset=false,mapFail=false,encodeBusy=false,lockBusy=false;
     bool wrongStamp=false,wrongType=false,wrongStruct=false,nullOutput=false,emptyOutput=false,hwFailure=false,reenter=false,eosFail=false,flushWaitFail=false;std::uint32_t outputSize=0;
     NVENCSTATUS mapStatus=NV_ENC_SUCCESS,encodeStatus=NV_ENC_SUCCESS,lockStatus=NV_ENC_SUCCESS;
@@ -78,11 +80,21 @@ NVENCSTATUS NVENCAPI init(void* s,NV_ENC_INITIALIZE_PARAMS* p){
     check(h.repeatSPSPPS&&!h.outputAUD&&h.idrPeriod==1&&h.chromaFormatIDC==1&&!h.pixelBitDepthMinus8&&!h.enableAlphaLayerEncoding,"independent Main8 420 with repeated parameter sets and no optional AUD");
     check(!h.sliceMode&&!h.sliceModeData&&!h.enableIntraRefresh&&!h.enableLTR,"one slice, no refresh/reference features");
     check(h.hevcVUIParameters.videoSignalTypePresentFlag&&h.hevcVUIParameters.videoFullRangeFlag&&!h.hevcVUIParameters.colourDescriptionPresentFlag,"raw full-range Y without color transform signaling");
-    check(r.rateControlMode==NV_ENC_PARAMS_RC_CBR&&r.averageBitRate==x.config.bitRate&&r.maxBitRate==x.config.bitRate,"configured mask CBR target");
+    check(r.rateControlMode==NV_ENC_PARAMS_RC_VBR&&r.averageBitRate==x.config.bitRate&&r.maxBitRate==x.config.bitRate,"explicit VBR average and maximum, never ignored CBR maxBitRate");
     check(r.vbvBufferSize==(std::uint64_t(x.config.bitRate)*x.config.frameRateDen+x.config.frameRateNum-1)/x.config.frameRateNum&&r.vbvInitialDelay==r.vbvBufferSize,"one-frame VBV in bits with safe rational rounding");
     check(!r.enableAQ&&!r.enableTemporalAQ&&!r.enableLookahead&&!r.lookaheadDepth&&r.zeroReorderDelay&&r.multiPass==NV_ENC_MULTI_PASS_DISABLED,"no hidden lookahead, AQ, multipass or reordering");
     return x.failInit?NV_ENC_ERR_INVALID_PARAM:NV_ENC_SUCCESS;
 }
+NVENCSTATUS NVENCAPI reconfigure(void* s,NV_ENC_RECONFIGURE_PARAMS* p){
+    auto& x=f(s);++x.rateChanges;
+    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&!p->resetEncoder&&!p->forceIDR,"private rate update does not reset or force a new source epoch");
+    const auto& i=p->reInitEncodeParams;const auto& c=*i.encodeConfig;
+    check(i.encodeWidth==x.config.width&&i.encodeHeight==x.config.height&&i.enableEncodeAsync&&i.enablePTD,"rate update preserves dimensions and asynchronous ownership");
+    check(c.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR&&c.rcParams.averageBitRate==c.rcParams.maxBitRate&&c.gopLength==1&&c.encodeCodecConfig.hevcConfig.idrPeriod==1,"rate change preserves explicit ceiling and independent mask pictures");
+    check(c.rcParams.vbvBufferSize==(std::uint64_t(c.rcParams.averageBitRate)*i.frameRateDen+i.frameRateNum-1)/i.frameRateNum,"rate/FPS updates keep a one-picture VBV");
+    x.lastRate=c.rcParams.averageBitRate;x.lastRateNum=i.frameRateNum;x.lastRateDen=i.frameRateDen;return x.rateStatus;
+}
+
 NVENCSTATUS NVENCAPI reg(void* s,NV_ENC_REGISTER_RESOURCE* p){
     auto& x=f(s);const auto index=x.registered++;if(int(index)==x.failResource)return NV_ENC_ERR_RESOURCE_REGISTER_FAILED;
     check(index<4&&p->resourceType==NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX&&p->bufferFormat==NV_ENC_BUFFER_FORMAT_NV12&&p->bufferUsage==NV_ENC_INPUT_IMAGE&&!p->pitch,"fixed original GPU NV12 resource only");
@@ -121,7 +133,7 @@ Fixture::Fixture(){
     active=this;for(auto& t:textures)t.device=&device;
     api.version=NV_ENCODE_API_FUNCTION_LIST_VER;api.nvEncOpenEncodeSessionEx=open;api.nvEncDestroyEncoder=destroy;
     api.nvEncGetEncodeCaps=caps;api.nvEncGetInputFormatCount=formatCount;api.nvEncGetInputFormats=formats;
-    api.nvEncGetEncodePresetConfigEx=preset;api.nvEncInitializeEncoder=init;api.nvEncRegisterResource=reg;api.nvEncUnregisterResource=unreg;
+    api.nvEncGetEncodePresetConfigEx=preset;api.nvEncInitializeEncoder=init;api.nvEncReconfigureEncoder=reconfigure;api.nvEncRegisterResource=reg;api.nvEncUnregisterResource=unreg;
     api.nvEncCreateBitstreamBuffer=createBuffer;api.nvEncDestroyBitstreamBuffer=destroyBuffer;api.nvEncRegisterAsyncEvent=regEvent;
     api.nvEncUnregisterAsyncEvent=unregEvent;api.nvEncMapInputResource=map;api.nvEncUnmapInputResource=unmap;
     api.nvEncEncodePicture=encode;api.nvEncLockBitstream=lock;api.nvEncUnlockBitstream=unlock;
@@ -147,8 +159,31 @@ MaskHevcPlatform maskHevcTestPlatform()noexcept{
     };
 }
 }
+namespace {
+void dynamicRate(){
+    Fixture x;check(x.configure(),"configure explicit capped VBR encoder");
+    const auto first=x.key(1);check(x.encoder.beginStage(first,&x.textures[0])&&x.encoder.submit(first),"original current-frame input submitted before a rate change");
+    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.rateChanges==1,"cold dynamic RC progresses while an earlier exact output remains outstanding");
+    x.complete(0);std::vector<std::uint8_t> bytes;std::uint64_t oldEpoch=0;
+    check(x.encoder.tryTake(first,bytes,&oldEpoch)==MaskHevcTake::Ready&&oldEpoch,"matching original output retains its submission rate epoch across a rate update");
+    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.lastRate==2600000,"13Mbps stream gives at most2.6Mbps to mask, preserving RGB share");
+    check(x.opened==1&&!x.destroyed&&!x.coldWaits&&x.registered==4,"rate change reuses exact fixed resources without flush or session recreation");
+    x.encoder.observeAddedBytes(oldEpoch,100000);check(!x.encoder.diagnostics().wireMean,"old encoded bytes cannot contaminate a newly applied rate epoch");
+    const auto second=x.key(2);check(x.encoder.beginStage(second,&x.textures[0])&&x.encoder.submit(second),"fresh frame uses same source/encoder/resource contract after rate change");x.complete(0);std::uint64_t epoch=0;
+    check(x.encoder.tryTake(second,bytes,&epoch)==MaskHevcTake::Ready&&epoch!=oldEpoch,"rate epoch is independent of unchanged exact frame binding");
+    for(unsigned i=0;i<MaskHevcRate::Window;++i)x.encoder.observeAddedBytes(epoch,8000); //5.76Mbps observed at90Hz, above2.6Mbps grant.
+    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.lastRate<1300000,"actual byte feedback corrects hardware overshoot instead of trusting a configured target");
+    const auto changes=x.rateChanges;check(x.encoder.updateRate(91,1,13000000,20000000)&&x.rateChanges==changes,"small native FPS jitter does not recreate/reconfigure the encoder each frame");
+    check(x.encoder.updateRate(120,1,13000000,20000000)&&x.lastRateNum==120,"real nominal FPS change updates the private encoder without losing frame ownership");
+    x.rateStatus=NV_ENC_ERR_INVALID_PARAM;const auto prior=x.encoder.diagnostics().rateTarget;
+    check(!x.encoder.updateRate(120,1,2000000,20000000)&&x.encoder.configured()&&x.encoder.diagnostics().rateTarget==prior,"failed rate reconfigure preserves working actual configuration and source");
+    check(x.encoder.diagnostics().stage==MaskHevcFailure::Reconfigure,"real private rate API failure has separate bounded diagnostics");
+    resetAndCheck(x);
+}
+}
+
 int main(int argc,char** argv){
-    using namespace stream_bridge::sender;
+    using namespace stream_bridge::sender;dynamicRate();
     {
         MaskHevcSyntaxTraceSlot slot;MaskHevcSyntaxTrace trace{};
         check(!slot.take(trace),"cold diagnostic cannot read an unpublished header snapshot");

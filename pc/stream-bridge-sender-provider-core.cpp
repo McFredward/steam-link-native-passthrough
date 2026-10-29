@@ -214,7 +214,8 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                     budgeted.reInitEncodeParams.encodeConfig=&budgetConfig;applyBudget=applyingBudget=true;
                     count(self.reconfigureStats_.budgeted);self.reconfigureStats_.requestedVideoRate=requested;
                     self.reconfigureStats_.appliedVideoRate=budgetConfig.rcParams.averageBitRate;self.reconfigureStats_.metadataRate=metadata;
-                    self.reconfigureStats_.meanMetadataRate=s->wireBudget.average(authority,contract.frameRateNum,contract.frameRateDen);
+                    self.reconfigureStats_.meanMetadataRate=s->wireBudget.planningMean(authority,contract.frameRateNum,contract.frameRateDen);
+                    self.reconfigureStats_.peakMetadataRate=s->wireBudget.peakRate(authority,contract.frameRateNum,contract.frameRateDen);
                     self.reconfigureStats_.requestedVbv=requestedConfig.rcParams.vbvBufferSize;self.reconfigureStats_.appliedVbv=buffer.bits;
                     self.reconfigureStats_.requestedDelay=requestedConfig.rcParams.vbvInitialDelay;self.reconfigureStats_.appliedDelay=buffer.delay;
                 }else if(s->budgetApplied&&!hasConfig&&haveConfig){
@@ -226,7 +227,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                 }
                 observation=qosObservation(contract,haveConfig?&requestedConfig:nullptr,
                     haveConfig?(applyBudget?&budgetConfig:&requestedConfig):nullptr,applyingBudget,
-                    applyingBudget?metadata:0,applyingBudget?s->wireBudget.average(authority,contract.frameRateNum,contract.frameRateDen):0);
+                    applyingBudget?metadata:0,applyingBudget?s->wireBudget.planningMean(authority,contract.frameRateNum,contract.frameRateDen):0);
 
             }else{generation=self.revoke(*s,hevc);count(self.reconfigureStats_.revoked);}
         }
@@ -385,7 +386,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::lock(void* encoder,NV_ENC_LOCK_BITSTREAM* pa
             params->bitstreamBufferPtr=const_cast<std::uint8_t*>(candidate.data);
             params->bitstreamSizeInBytes=static_cast<std::uint32_t>(candidate.size);
             const auto authority=evidence.coverageSessionAuthorized&&self.augmenter_.budgetAuthority?self.augmenter_.budgetAuthority(self.augmenter_.context):0;
-            s->wireBudget.observe(authority,original.size,candidate.size);
+            s->wireBudget.observe(authority,original.size,candidate.size,self.augmenter_.controlledMetadata&&self.augmenter_.controlledMetadata(self.augmenter_.context));
         }
     }catch(...){if(ticket)s->adapter.complete(ticket,false,s->channel);s->augmented.clear();} // Exact original successful output on any refusal.
 

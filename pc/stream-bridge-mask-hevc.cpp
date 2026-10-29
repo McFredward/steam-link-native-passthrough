@@ -1,5 +1,6 @@
 #include "stream-bridge-mask-hevc.h"
 #include "stream-bridge-mask-hevc-platform.h"
+#include "stream-bridge-mask-hevc-rate.h"
 #include <nvEncodeAPI.h> // Same explicitly supplied, hash-pinned SDK11.1 as provider.
 #include <atomic>
 #include <cstring>
@@ -34,7 +35,7 @@ bool validKey(const MaskHevcKey& k,const MaskHevcConfig& c)noexcept{
 bool validTable(const NV_ENCODE_API_FUNCTION_LIST& f)noexcept{
     return f.version==NV_ENCODE_API_FUNCTION_LIST_VER&&f.nvEncOpenEncodeSessionEx&&f.nvEncDestroyEncoder
         &&f.nvEncGetEncodeCaps&&f.nvEncGetInputFormatCount&&f.nvEncGetInputFormats&&f.nvEncGetEncodePresetConfigEx
-        &&f.nvEncInitializeEncoder&&f.nvEncCreateBitstreamBuffer&&f.nvEncDestroyBitstreamBuffer
+        &&f.nvEncInitializeEncoder&&f.nvEncReconfigureEncoder&&f.nvEncCreateBitstreamBuffer&&f.nvEncDestroyBitstreamBuffer
         &&f.nvEncRegisterResource&&f.nvEncUnregisterResource&&f.nvEncMapInputResource&&f.nvEncUnmapInputResource
         &&f.nvEncRegisterAsyncEvent&&f.nvEncUnregisterAsyncEvent&&f.nvEncEncodePicture
         &&f.nvEncLockBitstream&&f.nvEncUnlockBitstream;
@@ -75,12 +76,16 @@ struct MaskHevcEncoder::Impl {
     struct Slot {
         ID3D11Texture2D* texture=nullptr;NV_ENC_REGISTERED_PTR registered=nullptr;NV_ENC_INPUT_PTR mapped=nullptr;
         NV_ENC_OUTPUT_PTR output=nullptr;void* event=nullptr;bool eventRegistered=false,notified=false,locked=false;
-        Phase phase=Phase::Free;MaskHevcKey key{};std::uint64_t token=0;
+        Phase phase=Phase::Free;MaskHevcKey key{};std::uint64_t token=0,rateEpoch=0;
     };
     detail::MaskHevcPlatform os=platform();NV_ENCODE_API_FUNCTION_LIST api{};void* session=nullptr;
     ID3D11Device* device=nullptr;MaskHevcConfig config{};std::array<Slot,StageCount> slots{};
     void* flushEvent=nullptr;bool flushRegistered=false,initialized=false,submittedAny=false,flushStarted=false;
     std::uint64_t nextToken=1,sourceContract=0,encoderGeneration=0,highestSubmission=0;
+    MaskHevcRate rate;std::uint64_t rateEpoch=0;unsigned rateBackoff=0;
+    NV_ENC_INITIALIZE_PARAMS rateInit{};NV_ENC_CONFIG rateConfig{};
+    std::atomic<std::uint32_t> rateTarget{0},rateBudget{0},streamTarget{0},rateNum{0},rateDen{0},wireMean{0};
+    std::atomic<std::uint64_t> rateChanges{0};
     std::uint32_t processId=0;
     mutable std::mutex mutex;std::atomic<bool> healthy{false};std::atomic<int> status{int(NV_ENC_SUCCESS)};
     std::atomic<unsigned> failureStage{0},failureFields{0},outputType{0},outputStruct{0},hardwareStatus{0},outputBytes{0};
@@ -116,11 +121,11 @@ struct MaskHevcEncoder::Impl {
             if(result!=NV_ENC_SUCCESS)return fail(result,MaskHevcFailure::UnmapInput);
             s.mapped=nullptr;
         }
-        s.phase=Phase::Free;s.key={};s.token=0;s.notified=false;return true;
+        s.phase=Phase::Free;s.key={};s.token=0;s.rateEpoch=0;s.notified=false;return true;
     }
     // Called only after event notification. A canceled in-flight texture must
     // not be recycled merely because its native RGB frame has been retired.
-    MaskHevcTake take(Slot& s,std::vector<std::uint8_t>* out)noexcept{
+    MaskHevcTake take(Slot& s,std::vector<std::uint8_t>* out,std::uint64_t* epoch=nullptr)noexcept{
         if(!notified(s))return healthy?MaskHevcTake::Pending:MaskHevcTake::Refused;
         NV_ENC_LOCK_BITSTREAM lock{};lock.version=NV_ENC_LOCK_BITSTREAM_VER;lock.outputBitstream=s.output;lock.doNotWait=1;
         const auto result=api.nvEncLockBitstream(session,&lock);status.store(int(result),std::memory_order_relaxed);
@@ -136,7 +141,7 @@ struct MaskHevcEncoder::Impl {
         const unsigned rejected=(lock.outputTimeStamp!=s.token?1u:0u)|(lock.pictureType!=NV_ENC_PIC_TYPE_IDR?2u:0u)
             |(lock.pictureStruct!=NV_ENC_PIC_STRUCT_FRAME?4u:0u)|(!hardwareComplete?8u:0u)
             |(!lock.bitstreamBufferPtr?16u:0u)|(!lock.bitstreamSizeInBytes||lock.bitstreamSizeInBytes>config.maxAccessUnitBytes?32u:0u);
-        const auto expected=s.token;bool valid=rejected==0;
+        const auto expected=s.token,encodedRateEpoch=s.rateEpoch;bool valid=rejected==0;
         if(valid&&out)try{
             const auto* bytes=static_cast<const std::uint8_t*>(lock.bitstreamBufferPtr);
             out->assign(bytes,bytes+lock.bitstreamSizeInBytes);
@@ -152,7 +157,7 @@ struct MaskHevcEncoder::Impl {
             if(out)out->clear();
             return MaskHevcTake::Refused;
         }
-        if(out)readyCount.fetch_add(1,std::memory_order_relaxed);
+        if(out){readyCount.fetch_add(1,std::memory_order_relaxed);if(epoch)*epoch=encodedRateEpoch;}
         return out?MaskHevcTake::Ready:MaskHevcTake::Refused;
     }
     // Cold and quiesced only. No OS/event wait is reachable from hot methods.
@@ -188,7 +193,7 @@ struct MaskHevcEncoder::Impl {
         if(flushEvent)os.closeEvent(flushEvent);
         if(session)api.nvEncDestroyEncoder(session);
         if(device)os.releaseDevice(device);
-        api={};session=nullptr;device=nullptr;config={};flushEvent=nullptr;
+        api={};session=nullptr;device=nullptr;config={};flushEvent=nullptr;rate={};rateInit={};rateConfig={};rateBackoff=0;
         flushRegistered=initialized=submittedAny=flushStarted=false;nextToken=1;sourceContract=encoderGeneration=highestSubmission=0;processId=0;
         return true;
     }
@@ -215,11 +220,12 @@ struct MaskHevcEncoder::Impl {
         bool nv12=false;for(unsigned i=0;i<actual;++i)nv12|=formats[i]==NV_ENC_BUFFER_FORMAT_NV12;if(!nv12)return false;
         NV_ENC_PRESET_CONFIG preset{};preset.version=NV_ENC_PRESET_CONFIG_VER;preset.presetCfg.version=NV_ENC_CONFIG_VER;
         if(!success(api.nvEncGetEncodePresetConfigEx(session,NV_ENC_CODEC_HEVC_GUID,NV_ENC_PRESET_P1_GUID,NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY,&preset)))return false;
+        const auto planned=rate.initial(c.bitRate,c.frameRateNum,c.frameRateDen,c.streamBitRate);
         NV_ENC_CONFIG enc=preset.presetCfg;enc.version=NV_ENC_CONFIG_VER;enc.profileGUID=NV_ENC_HEVC_PROFILE_MAIN_GUID;
         enc.gopLength=1;enc.frameIntervalP=1;enc.monoChromeEncoding=0;enc.frameFieldMode=NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
-        enc.rcParams={};enc.rcParams.version=NV_ENC_RC_PARAMS_VER;enc.rcParams.rateControlMode=NV_ENC_PARAMS_RC_CBR;
-        enc.rcParams.averageBitRate=enc.rcParams.maxBitRate=c.bitRate;
-        enc.rcParams.vbvBufferSize=std::uint32_t((std::uint64_t(c.bitRate)*c.frameRateDen+c.frameRateNum-1)/c.frameRateNum);
+        enc.rcParams={};enc.rcParams.version=NV_ENC_RC_PARAMS_VER;enc.rcParams.rateControlMode=NV_ENC_PARAMS_RC_VBR;
+        enc.rcParams.averageBitRate=enc.rcParams.maxBitRate=planned.target;
+        enc.rcParams.vbvBufferSize=std::uint32_t((std::uint64_t(planned.target)*c.frameRateDen+c.frameRateNum-1)/c.frameRateNum);
         enc.rcParams.vbvInitialDelay=enc.rcParams.vbvBufferSize;enc.rcParams.zeroReorderDelay=1;
         enc.rcParams.lowDelayKeyFrameScale=1;enc.rcParams.multiPass=NV_ENC_MULTI_PASS_DISABLED;
         enc.encodeCodecConfig={};auto& hevc=enc.encodeCodecConfig.hevcConfig;
@@ -234,7 +240,9 @@ struct MaskHevcEncoder::Impl {
         init.encodeHeight=init.darHeight=init.maxEncodeHeight=c.height;init.frameRateNum=c.frameRateNum;init.frameRateDen=c.frameRateDen;
         init.enableEncodeAsync=1;init.enablePTD=1;init.tuningInfo=NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;init.encodeConfig=&enc;
         if(!success(api.nvEncInitializeEncoder(session,&init)))return false;
-        initialized=true;
+        initialized=true;rateConfig=enc;rateInit=init;rateInit.encodeConfig=&rateConfig;
+        if(rateEpoch==UINT64_MAX)return false;
+        ++rateEpoch;rateTarget=planned.target;rateBudget=planned.cap;streamTarget=c.streamBitRate;rateNum=c.frameRateNum;rateDen=c.frameRateDen;wireMean=0;
         flushEvent=os.createEvent();if(!flushEvent)return false;
         NV_ENC_EVENT_PARAMS event{};event.version=NV_ENC_EVENT_PARAMS_VER;event.completionEvent=flushEvent;
         if(!success(api.nvEncRegisterAsyncEvent(session,&event)))return false;
@@ -310,15 +318,43 @@ bool MaskHevcEncoder::submit(const MaskHevcKey& key)noexcept{
     const auto result=p.api.nvEncEncodePicture(p.session,&pic);p.status.store(int(result),std::memory_order_relaxed);
     if(result!=NV_ENC_SUCCESS&&result!=NV_ENC_ERR_NEED_MORE_INPUT){p.record(MaskHevcFailure::EncodePicture,result);p.releaseMapped(*s);return false;}
     p.submittedCount.fetch_add(1,std::memory_order_relaxed);
-    s->phase=Impl::Phase::Submitted;p.submittedAny=true;return true;
+    s->rateEpoch=p.rateEpoch;s->phase=Impl::Phase::Submitted;p.submittedAny=true;return true;
 }
-MaskHevcTake MaskHevcEncoder::tryTake(const MaskHevcKey& key,std::vector<std::uint8_t>& out)noexcept{
-    out.clear();auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
+MaskHevcTake MaskHevcEncoder::tryTake(const MaskHevcKey& key,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch)noexcept{
+    out.clear();if(rateEpoch)*rateEpoch=0;auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
     if(!guard)return MaskHevcTake::Busy;
     if(!p.healthy)return MaskHevcTake::Unavailable;
     auto* s=p.find(key);if(!s||s->phase!=Impl::Phase::Submitted)return MaskHevcTake::Missing;
-    return p.take(*s,&out);
+    return p.take(*s,&out,rateEpoch);
 }
+bool MaskHevcEncoder::updateRate(std::uint32_t num,std::uint32_t den,std::uint32_t stream,std::uint32_t user)noexcept{
+    auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
+    if(!guard||!p.healthy||p.rateBackoff||p.rateEpoch==UINT64_MAX)return false;
+    auto config=p.config;config.frameRateNum=num;config.frameRateDen=den;config.bitRate=user;config.streamBitRate=stream;
+    if(!validConfig(config))return false;
+    const auto plan=p.rate.plan(user,num,den,stream);p.rateBudget=plan.cap;p.streamTarget=stream;
+    if(!plan.change)return true;
+    // Dynamic RC is serialized with Encode, not with GPU completion. Waiting
+    // for every slot to empty could starve updates during continuous playback.
+    // Each accepted submission retains its own rate epoch for byte feedback.
+    NV_ENC_CONFIG enc=p.rateConfig;enc.rcParams.averageBitRate=enc.rcParams.maxBitRate=plan.target;
+    enc.rcParams.vbvBufferSize=std::uint32_t((std::uint64_t(plan.target)*plan.den+plan.num-1)/plan.num);
+    enc.rcParams.vbvInitialDelay=enc.rcParams.vbvBufferSize;
+    NV_ENC_RECONFIGURE_PARAMS params{};params.version=NV_ENC_RECONFIGURE_PARAMS_VER;params.reInitEncodeParams=p.rateInit;
+    params.reInitEncodeParams.frameRateNum=plan.num;params.reInitEncodeParams.frameRateDen=plan.den;params.reInitEncodeParams.encodeConfig=&enc;
+    const auto result=p.api.nvEncReconfigureEncoder(p.session,&params);p.status.store(int(result),std::memory_order_relaxed);
+    if(result!=NV_ENC_SUCCESS){p.record(MaskHevcFailure::Reconfigure,result);p.rateBackoff=MaskHevcRate::Window;return false;}
+    p.rateConfig=enc;p.rateInit=params.reInitEncodeParams;p.rateInit.encodeConfig=&p.rateConfig;p.config=config;
+    p.rate.commit(plan);++p.rateEpoch;p.rateTarget=plan.target;p.rateNum=plan.num;p.rateDen=plan.den;p.wireMean=0;
+    p.rateChanges.fetch_add(1,std::memory_order_relaxed);return true;
+}
+void MaskHevcEncoder::observeAddedBytes(std::uint64_t epoch,std::size_t bytes)noexcept{
+    auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
+    if(!guard||!p.healthy||!epoch||epoch!=p.rateEpoch)return;
+    p.rate.observe(bytes);const auto current=p.rate.current();p.wireMean=p.rate.observed(current.num,current.den);
+    if(p.rateBackoff)--p.rateBackoff;
+}
+
 void MaskHevcEncoder::cancel(const MaskHevcKey& key)noexcept{
     auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);if(!guard||!p.healthy)return;
     auto* s=p.find(key);if(!s)return;
@@ -335,6 +371,8 @@ MaskHevcDiagnostics MaskHevcEncoder::diagnostics()const noexcept{
     d.pictureStruct=p.outputStruct.load(std::memory_order_relaxed);d.hardwareStatus=p.hardwareStatus.load(std::memory_order_relaxed);
     d.bytes=p.outputBytes.load(std::memory_order_relaxed);d.expectedTimestamp=p.expectedTimestamp.load(std::memory_order_relaxed);
     d.returnedTimestamp=p.returnedTimestamp.load(std::memory_order_relaxed);d.mapped=p.mappedCount.load(std::memory_order_relaxed);
-    d.submitted=p.submittedCount.load(std::memory_order_relaxed);d.locked=p.lockedCount.load(std::memory_order_relaxed);d.ready=p.readyCount.load(std::memory_order_relaxed);return d;
+    d.submitted=p.submittedCount.load(std::memory_order_relaxed);d.locked=p.lockedCount.load(std::memory_order_relaxed);d.ready=p.readyCount.load(std::memory_order_relaxed);
+    d.rateTarget=p.rateTarget.load(std::memory_order_relaxed);d.rateBudget=p.rateBudget.load(std::memory_order_relaxed);d.streamTarget=p.streamTarget.load(std::memory_order_relaxed);
+    d.frameRateNum=p.rateNum.load(std::memory_order_relaxed);d.frameRateDen=p.rateDen.load(std::memory_order_relaxed);d.wireMean=p.wireMean.load(std::memory_order_relaxed);d.rateChanges=p.rateChanges.load(std::memory_order_relaxed);return d;
 }
 }

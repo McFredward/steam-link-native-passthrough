@@ -21,13 +21,14 @@ inline bool operator!=(const MaskHevcKey& a,const MaskHevcKey& b)noexcept{return
 
 struct MaskHevcConfig {
     std::uint32_t width=0,height=0,frameRateNum=0,frameRateDen=0;
-    // CBR target, not a guarantee of AU/wire size. Reconfigure only cold.
+    // User ceiling, not a guarantee of AU/wire size. Reconfigure only cold.
     std::uint32_t bitRate=0,maxAccessUnitBytes=2u*1024u*1024u;
+    std::uint32_t streamBitRate=0; // Original native target, before metadata deduction;0 unknown.
 };
 enum class MaskHevcTake { Unavailable,Busy,Missing,Pending,Ready,Refused };
 enum class MaskHevcFailure : unsigned {
     None,Setup,MapInput,MapOutput,EncodePicture,LockBitstream,OutputValidation,
-    UnlockBitstream,UnmapInput,PollEvent,Flush,FlushWait
+    UnlockBitstream,UnmapInput,PollEvent,Flush,FlushWait,Reconfigure
 };
 inline const char* maskHevcFailureName(MaskHevcFailure stage)noexcept{
     switch(stage){
@@ -37,6 +38,7 @@ inline const char* maskHevcFailureName(MaskHevcFailure stage)noexcept{
     case MaskHevcFailure::OutputValidation:return "output-validation";case MaskHevcFailure::UnlockBitstream:return "unlock-bitstream";
     case MaskHevcFailure::UnmapInput:return "unmap-input";case MaskHevcFailure::PollEvent:return "poll-event";
     case MaskHevcFailure::Flush:return "flush";case MaskHevcFailure::FlushWait:return "flush-wait";
+    case MaskHevcFailure::Reconfigure:return "reconfigure";
     }return "unknown";
 }
 // Fixed diagnostic storage only. These approximate snapshots never authorize
@@ -46,6 +48,8 @@ struct MaskHevcDiagnostics {
     int nativeStatus=0;
     std::uint32_t rejectedFields=0,pictureType=0,pictureStruct=0,hardwareStatus=0,bytes=0;
     std::uint64_t expectedTimestamp=0,returnedTimestamp=0,mapped=0,submitted=0,locked=0,ready=0;
+    std::uint32_t rateTarget=0,rateBudget=0,streamTarget=0,frameRateNum=0,frameRateDen=0,wireMean=0;
+    std::uint64_t rateChanges=0;
 };
 
 // Separate Windows/D3D11 HEVC Main8 session. Each output is an independent
@@ -77,7 +81,12 @@ public:
     // Polls one event with timeout0, locks with doNotWait1, and returns only
     // this exact key's IDR. Always clears out on non-Ready. Reserve out's
     // capacity cold when allocation-free output copying is required.
-    MaskHevcTake tryTake(const MaskHevcKey&,std::vector<std::uint8_t>& out)noexcept;
+    MaskHevcTake tryTake(const MaskHevcKey&,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch=nullptr)noexcept;
+    // Cold, opportunistic and only between private submissions. No resource
+    // recreation, flush, source-generation change or invalidation on API failure.
+    bool updateRate(std::uint32_t num,std::uint32_t den,std::uint32_t streamBitRate,std::uint32_t userLimit)noexcept;
+    // Hot, bounded try-lock. Exact added wire bytes from this rate epoch only.
+    void observeAddedBytes(std::uint64_t rateEpoch,std::size_t bytes)noexcept;
     void cancel(const MaskHevcKey&)noexcept;
     // Cold/quiesced; waits at most2s for the NVENC flush event. On false,
     // deactivates but retains the bounded GPU-live session; retry cold later.

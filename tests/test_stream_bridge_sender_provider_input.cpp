@@ -15,6 +15,7 @@ void* observedDevice=nullptr;std::uint64_t deviceGeneration=0;NV_ENC_DEVICE_TYPE
 NvencOutputEvidence captured{},observed{};bool allowAugment=false,wrongTimestamp=false;
 std::uint64_t rateAuthority=0;
 std::size_t augmentBytes=1;
+bool controlledMetadata(void*)noexcept{return true;}
 NV_ENC_RECONFIGURE_PARAMS* receivedRateParams=nullptr;
 std::uint32_t receivedRate=0,receivedMaximum=0,receivedBuffer=0,receivedDelay=0;bool observeRateParams=false;
 std::uint64_t budgetAuthority(void*)noexcept{return rateAuthority;}
@@ -338,6 +339,20 @@ void run(){
             &&bridge.generation(handle)==qosGeneration&&observed.coverageSessionAuthorized,
             "fixed CBR accounting preserves caller settings, exact current coverage and the live paired source");
     }
+    // Real native Lock -> successful augmenter -> QoS path, including a raw
+    // fallback spike. Keep the actual peak visible after the recent model recovers.
+    rateAuthority=0x323400000049;
+    bridge.setOutputAugmenter({augment,nullptr,budgetAuthority,controlledMetadata});
+    augmentBytes=20000;for(unsigned n=0;n<16;++n){p=sendFrame();release();}
+    augmentBytes=250000;p=sendFrame();release();
+    augmentBytes=20000;for(unsigned n=0;n<16;++n){p=sendFrame();release();}
+    check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_SUCCESS&&receivedRate==76000000,
+        "controlled wire rate recovers RGB after16 normal actual outputs rather than retaining a128-frame peak");
+    const auto controlledRates=bridge.reconfigureStats();
+    check(controlledRates.metadataRate==24000000&&controlledRates.meanMetadataRate==19200000&&controlledRates.peakMetadataRate==240000000,
+        "native diagnostics retain every actual burst while planning recent measured bytes plus25percent headroom");
+    check(!std::memcmp(&codecConfig,&fixedConfig,sizeof codecConfig)&&bridge.generation(handle)==qosGeneration,
+        "controlled metadata policy preserves exact caller config and native source generation");
     codecConfig.rcParams.maxBitRate=120000000;
     observeRateParams=false;rateAuthority=0;augmentBytes=1;bridge.setOutputAugmenter({augment,nullptr});
     qos.reInitEncodeParams.encodeConfig=nullptr;table.nvEncReconfigureEncoder(handle,&qos);
@@ -348,7 +363,7 @@ void run(){
     ++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"QoS never resurrects a resource unregistered by the native callback");release();
     table.nvEncRegisterResource(handle,&rr);table.nvEncMapInputResource(handle,&mp);
     p=sendFrame();check(observed.exactInput&&observed.coverageSessionAuthorized,"native re-registration gets fresh valid input after QoS");release();
-    const auto qosStats=bridge.reconfigureStats();check(qosStats.preservedSuccessful==22+2*repeatedBudgetCalls&&qosStats.preservedRejected==3,"cold QoS counters distinguish successes from rejected attempts");
+    const auto qosStats=bridge.reconfigureStats();check(qosStats.preservedSuccessful==23+2*repeatedBudgetCalls&&qosStats.preservedRejected==3,"cold QoS counters distinguish successes from rejected attempts");
     check(qosStats.overlappingInputs==1&&qosStats.overlappingOutputs==2,"cold counters identify exact completions across both QoS overlap schedules");
     const auto paddingStart=offsetof(NV_ENC_INITIALIZE_PARAMS,privDataSize)+sizeof qos.reInitEncodeParams.privDataSize;
     const auto paddingEnd=offsetof(NV_ENC_INITIALIZE_PARAMS,privData);

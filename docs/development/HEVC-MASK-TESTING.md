@@ -1,17 +1,17 @@
 # HEVC mask test candidate
 
-Installer 0.3.6 / PC 0.3.4 / Frame 0.3.2 selects lossy HEVC masks by default
-with a 20 Mbit/s target. No flag or configuration file is needed. Existing
+Installer 0.3.7 / PC 0.3.5 / Frame 0.3.2 selects lossy HEVC masks by default
+with a 20 Mbit/s user ceiling and an adaptive share of the native stream budget. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
 decoder on the Frame. The ordinary image keeps its native dimensions, encoder,
-foveation and reprojection. Install both updated components through the paired
-setup. This candidate is software-tested; headset quality and 90 Hz performance
+foveation and reprojection. Use the normal guided setup; this candidate changes only the PC sender.
+The unchanged Frame component must not be written or restarted. This candidate is software-tested; headset quality and 90 Hz performance
 have not yet been established for this codec.
 
 ## Windows installation and selection
 
-Run the normal dev installer and apply the paired update:
+Run the normal dev installer and apply the offered PC update:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get.ps1 | iex
@@ -27,7 +27,8 @@ update; its default zero means preserve the preference, not disable HEVC:
 ```
 
 The override is written only when the installed PC DLL matches the target package.
-The existing Apply step controls the paired update and coordinated Frame restart.
+The existing Apply step updates changed components; this PC-only update leaves
+the unchanged Frame untouched.
 The bootstrap never starts PC SteamVR. Alternatively, from this checkout after
 installing, select the mode with existing Python:
 
@@ -37,8 +38,8 @@ py -3 .\tools\configure_mask_codec.py --bitrate 20
 
 Start PC SteamVR again and launch Venture through its MR command file. The fixed
 PC file `%LOCALAPPDATA%\steam-link-native-passthrough\mask-codec.conf` stores the
-override; it creates no version directories. Its bitrate is an NVENC target,
-not a guaranteed ceiling on encoded access units or total network traffic.
+override; it creates no version directories. Its bitrate is a user ceiling for the adaptive encoder target, not a guaranteed
+ceiling on encoded access units or total network traffic.
 To return to the established lossless codec:
 
 ```powershell
@@ -225,3 +226,50 @@ A host-only synthetic cloud comparison improved from about28 to125frames/s at
 1152x4608. Snapdragon performance and smooth headset playback after this update
 still need the maintainer's next device test. Close SteamVR after the scene and
 retain both PC logs and the Frame journal's `HEVC mask pipeline` counters.
+
+## Shared mask/image rate control (0.3.7)
+
+The latest PC0.3.4/Frame0.3.2 Battlemarked run transported and decoded7921 HEVC
+masks, without decoder refusal or pool backpressure. The pool reused four
+contexts; average/max worker time was23.588/68.485ms. That establishes transport
+and overlapping decoding on this device, not an independent application-FPS
+or perceptual-quality measurement. The user still reports severe pixelation.
+The PC log explains RGB starvation: the mask averaged roughly44–46Mbit/s despite
+its20Mbit/s CBR target, while Steam's original requested budget fell to13–16Mbit/s.
+Subtracting the mask reservation repeatedly left the native image at1Mbit/s.
+
+PC0.3.5 uses VBR with equal average/maximum settings and one-frame VBV.
+NVIDIA documents that CBR ignores `maxBitRate`; VBR uses it, but neither an API
+target nor these tests establish a strict wire-byte cap. See the
+[NVENC programming guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/11.0/pdf/NVENC_VideoEncoder_API_ProgGuide.pdf).
+The adaptive mask budget is the lower of the user's ceiling and20% of the
+current original native stream target, with a100kbit/s encoder minimum.
+Authenticated added wire bytes (including escaping and frame certificates)
+close the loop over16 samples: observed overshoot lowers the private target;
+headroom permits gradual recovery. Native FPS changes greater than10% update
+the private encoder; small per-frame jitter does not trigger repeated updates.
+Dynamic RC uses the original NVENC table under the private encoder mutex,
+without flush/recreation or changing native source generation. Each accepted
+private submission retains its rate epoch; older in-flight outputs remain
+available for their exact frame and cannot contaminate new-rate feedback.
+An API rejection preserves the working encoder and reports `reconfigure`.
+
+For predominantly HEVC output, native RGB reservation uses the actual recent16
+outputs plus25% estimator headroom. It still includes raw fallback bytes and
+reports the full128-output peak separately; an isolated old spike no longer
+reduces RGB for128 frames. Legacy/lossless traffic retains its original peak
+reservation. The20% policy is a mask encoder allocation, not a promise of80%
+RGB under every burst, encoder limit or link condition. The native controller's
+original pre-deduction target remains the input, avoiding recursive subtraction.
+
+`HEVC mask rate:` now reports user ceiling, original stream target, adaptive
+mask budget, applied private target, measured added-wire mean, configured FPS
+and successful changes. `producer wire budget:` reports planned/mean/actual
+peak reservations and whether a peak exceeds the original total budget.
+Full resolution, all-IDR independence, range, exact source/frame/eye/lease
+proof and effects remain present; no mask thresholding or cloud removal is used.
+Lower alpha bitrate can increase alpha artifacts. The unchanged Frame decoder
+and its exact private libraries are reused byte for byte. This candidate's
+software regressions cover continuous in-flight RC, stale-rate observations,
+actual native augmentation/QoS calls and budget collapse/recovery; only the next
+headset test can establish whether image quality now meets the user's goal.

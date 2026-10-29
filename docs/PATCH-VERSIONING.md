@@ -1,9 +1,13 @@
 # Patch versions
 
-The October29 dev package is installer **0.3.6**, PC **0.3.4**, Frame **0.3.2**.
-Frame0.3.2 pipelines independent HEVC masks on a bounded four-worker pool,
+The October29 dev package is installer **0.3.7**, PC **0.3.5**, Frame **0.3.2**.
+PC0.3.5 adapts the private HEVC rate to the original total stream budget and
+actual added bytes, uses VBR maximum/one-frame VBV, and shortens the controlled
+metadata reservation while preserving the actual peak in diagnostics. The
+Frame payload is unchanged, so this is a PC-only update without Frame restart.
+Installer0.3.6 introduced Frame0.3.2, which pipelines independent HEVC masks on a bounded four-worker pool,
 reuses flushed per-epoch contexts and keeps IPC/image/Ready processing responsive.
-PC0.3.4 and the exact private codec pair are unchanged.
+Its PC0.3.4 and the exact private codec pair were unchanged.
 Installer0.3.5 paired PC0.3.4/Frame0.3.1 to admit the observed NVENC multi-slice
 IDR and unused SPS reference declarations through an optional negotiated bit.
 Earlier PC-only updates0.3.1–0.3.3 distinguished API/output validation, accepted

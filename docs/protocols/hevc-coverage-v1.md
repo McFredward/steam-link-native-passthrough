@@ -140,3 +140,17 @@ These are software controls. Independent NVENC output, concurrent RGB/mask
 encoder availability, Frame decoder latency, bandwidth behavior and Spirit
 Sling image quality still require coordinated hardware tests. No device is
 installed or restarted by these tests.
+
+## Sender rate policy (PC0.3.5)
+
+Wire syntax, dimensions, all-IDR independence and exact native-frame proof are
+unchanged. The20Mbit/s default is a user ceiling. The private VBR encoder target
+uses at most20% of the original pre-deduction native stream target (100kbit/s
+minimum), then corrects observed added-byte overshoot. Sixteen authenticated
+wire-byte samples drive feedback; an accepted submission carries its own rate
+epoch so outputs from before a reconfiguration cannot alter the new controller.
+Dynamic RC never flushes or changes a source/frame identity. Predominantly HEVC
+metadata is reserved from recent actual bytes plus estimator headroom, with
+fallback spikes included and the longer actual peak separately reported.
+Lossless/old-peer reservation is unchanged. These are rate estimates, never mask
+permission or a strict network cap. The Frame0.3.2 payload is unchanged.

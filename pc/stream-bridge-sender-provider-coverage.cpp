@@ -137,7 +137,7 @@ struct SenderCoverage::Impl {
     MaskHevcEncoder maskEncoder;MaskHevcSurfaces maskSurfaces;
     MaskHevcSyntaxTraceSlot syntaxTrace;
     bool hevcRequested=false;std::uint32_t hevcBitrate=20000000;
-    unsigned nextHevcStage=0;
+    unsigned nextHevcStage=0;std::atomic<bool> lastControlledMetadata{false};
     std::atomic<bool> hevcPrepared{false},hevcAvailable{false},hevcDirty{false},hevcPeerReady{false};
     std::uint64_t hevcContract=0,hevcGeneration=0;std::uint32_t hevcPid=0;
     std::atomic<std::uint64_t> hevcEncoded{0},hevcPending{0},hevcRefused{0},hevcSyntaxRefused{0};
@@ -216,7 +216,7 @@ struct SenderCoverage::Impl {
             release(owned->resources.input);owned->receipt={};owned.publish(Stages::Phase::Retired);}
     }
     static bool augment(Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& output,void* opaque){
-        auto& s=*static_cast<Impl*>(opaque);if(!e.exactInput||!e.submission||e.width>8192||e.height>8192)return s.gates.refuse(CoverageGate::InputReceipt);
+        auto& s=*static_cast<Impl*>(opaque);s.lastControlledMetadata.store(false,std::memory_order_relaxed);if(!e.exactInput||!e.submission||e.width>8192||e.height>8192)return s.gates.refuse(CoverageGate::InputReceipt);
         FrameDescriptor descriptor{e.submission,e.encoderGeneration,static_cast<std::uint16_t>(e.width),static_cast<std::uint16_t>(e.height)};
         std::uint64_t ordinaryContract=0;std::uint32_t ordinaryPid=0;
         const auto certify=[&](CoverageEncoding kind,Bytes mask){
@@ -231,7 +231,7 @@ struct SenderCoverage::Impl {
         if(!e.coverageSessionAuthorized){s.gates.refuse(CoverageGate::CoverageSession);const bool certified=certify(CoverageEncoding::None,{});if(!certified)s.gates.refuse(CoverageGate::FrameCertificate);return certified;}
         if(!s.enabled)return s.gates.refuse(CoverageGate::Prepared);
         std::vector<std::uint8_t> pixels,encoded;CoverageEncoding encoding=CoverageEncoding::None;
-        std::uint32_t maskPid=0;std::uint64_t maskContract=0;std::uint64_t hevcEncodeUs=0;
+        std::uint32_t maskPid=0;std::uint64_t maskContract=0;std::uint64_t hevcEncodeUs=0,hevcRateEpoch=0;
         {
             // Reading excludes reuse/resize of exactly this stage. It does not
             // own the render/cold mutex while Map copies and inverts 5 MiB.
@@ -254,7 +254,7 @@ struct SenderCoverage::Impl {
                         s.hevcCollectAgeUs.store(age,std::memory_order_relaxed);
                         auto maximum=s.hevcMaxCollectAgeUs.load(std::memory_order_relaxed);
                         if(age>maximum)s.hevcMaxCollectAgeUs.compare_exchange_strong(maximum,age,std::memory_order_relaxed);
-                        const auto result=s.maskEncoder.tryTake(gpu.hevcKey,au);
+                        const auto result=s.maskEncoder.tryTake(gpu.hevcKey,au,&hevcRateEpoch);
                         if(result==MaskHevcTake::Ready){
                             if(wrapHevcCoverage({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight,encoded)){
                                 encoding=CoverageEncoding::HevcIntra;maskPid=slot.pid;maskContract=slot.contract;
@@ -305,6 +305,8 @@ struct SenderCoverage::Impl {
                 // Only publish the still-current capture; no stale mask leaves
                 // this callback even when its original GPU readback was valid.
                 if(!s.sourceCurrent(maskContract,maskPid)){output.clear();s.gates.refuse(CoverageGate::SourceRevoked);return false;}
+                s.lastControlledMetadata.store(hevc,std::memory_order_relaxed);
+                if(hevc&&output.size()>=e.originalAccessUnitBytes)s.maskEncoder.observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes);
                 s.lastPid=maskPid;s.state=7;s.gates.payload(candidate.size,encoded.size(),output.size(),static_cast<unsigned>(encoding),std::size_t(e.width)*e.height,encodeUs);s.gates.signal(CoverageSignal::CertifiedMasks);
                 if(!hevc&&s.maskCapture.active()){
                     capture::Metadata sample{};sample.frame=descriptor.sourceFrame;sample.encoderGeneration=descriptor.encoderGeneration;
@@ -407,7 +409,7 @@ struct SenderCoverage::Impl {
         hevcContract=hevcGeneration=0;hevcPid=0;
         nextHevcStage=0;
         const bool surfaces=maskSurfaces.prepareCold(device,target);
-        const MaskHevcConfig config{width,height,qos.frameRateNum,qos.frameRateDen,hevcBitrate,static_cast<std::uint32_t>(MaximumHevcCoverageBitstreamBytes)};
+        const MaskHevcConfig config{width,height,qos.frameRateNum,qos.frameRateDen,hevcBitrate,static_cast<std::uint32_t>(MaximumHevcCoverageBitstreamBytes),qos.known?qos.requestedAverageBitRate:0};
         const bool ready=surfaces&&maskEncoder.configure(device,config,maskSurfaces.textures(),original);
         hevcPrepared.store(ready,std::memory_order_release);
         if(ready)hevcAvailable.store(true,std::memory_order_release);
@@ -578,7 +580,7 @@ struct SenderCoverage::Impl {
 };
 std::atomic<SenderCoverage::Impl*> SenderCoverage::Impl::instance{nullptr};
 SenderCoverage::SenderCoverage(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c):impl_(new Impl(d,b,c)){
-    b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get()});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));}});
+    b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get()});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));},[](void* context)noexcept{return static_cast<Impl*>(context)->lastControlledMetadata.load(std::memory_order_relaxed);}});
 }
 SenderCoverage::~SenderCoverage(){stop();(void)impl_.release();} // callbacks/COM retained until process exit
 bool SenderCoverage::configure(std::uintptr_t module)noexcept{std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->module||!module)return false;impl_->module=module;return true;}
@@ -602,6 +604,10 @@ void SenderCoverage::tick()noexcept{
     // Read only the atomic revision when unchanged. Actual draws still require
     // their exact frame registry epoch, resources and live source contract;
     // this observation never authorizes rendering or retains a changed source.
+    if(s.enabled&&s.hevcRequested&&s.hevcPrepared.load(std::memory_order_acquire)&&count==1){
+        const auto qos=s.boundary.encoderQos(actual.encoder,actual.generation);
+        (void)s.maskEncoder.updateRate(qos.frameRateNum,qos.frameRateDen,qos.known?qos.requestedAverageBitRate:0,s.hevcBitrate);
+    }
     if(s.enabled&&s.prepared&&count==1&&actual.width==s.width&&actual.height==s.height&&s.direct.inventoryRevision()==s.inventoryEpoch&&s.dispatchOwned()&&!s.hevcDirty.load(std::memory_order_acquire))return;
     const auto inventory=s.direct.inventory();
     std::unique_lock<std::mutex> lock(s.mutex,std::try_to_lock);if(!lock||s.stopped||!s.module)return;
