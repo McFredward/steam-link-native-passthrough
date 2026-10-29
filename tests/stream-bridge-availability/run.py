@@ -31,7 +31,7 @@ def main():
     fixture = cache / 'renderer.cpp'
     fixture.write_text(original.replace(needle, 'int inheritedRendererMain(int argc,char** argv)') + '\n' + (here / 'renderer_timing.cpp').read_text())
     flags = ['c++', '-std=c++17', '-O1', '-Wall', '-Wextra', '-Wpedantic', '-Werror', '-Wno-missing-field-initializers', '-I' + str(root), '-I' + str(root / 'layer'), '-pthread']
-    shared = [root / f for f in ['bridge/stream_bridge_frame.cpp', 'bridge/stream_bridge_compression.cpp', 'bridge/stream_bridge_auth.cpp', 'bridge/stream_bridge_protocol.cpp', 'bridge/hevc_bridge_sei.cpp']]
+    shared = [root / f for f in ['bridge/stream_bridge_frame.cpp', 'bridge/stream_bridge_hevc_coverage.cpp', 'bridge/stream_bridge_compression.cpp', 'bridge/stream_bridge_auth.cpp', 'bridge/stream_bridge_protocol.cpp', 'bridge/hevc_bridge_sei.cpp']]
     zstd=cache/'zstd.o'
     subprocess.run(['cc','-std=c99','-O1','-w','-DZSTD_DISABLE_ASM','-DZSTDLIB_VISIBILITY=','-c',str(root/'third_party/zstd/zstd.c'),'-o',str(zstd)],check=True)
     shared.append(zstd)

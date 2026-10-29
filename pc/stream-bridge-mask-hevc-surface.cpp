@@ -30,14 +30,14 @@ struct Saved {
     explicit Saved(ID3D11DeviceContext* context):c(context){
         // Dynamic shader linkage and OM UAVs are not part of this conversion
         // contract. Refuse without changing native state rather than losing them.
-        UINT n=0;c->VSGetShader(&vs,nullptr,&n);compatible&=n==0;
-        n=0;c->PSGetShader(&ps,nullptr,&n);compatible&=n==0;
-        n=0;c->GSGetShader(&gs,nullptr,&n);compatible&=n==0;
-        n=0;c->HSGetShader(&hs,nullptr,&n);compatible&=n==0;
-        n=0;c->DSGetShader(&ds,nullptr,&n);compatible&=n==0;
+        UINT n=0;c->VSGetShader(&vs,nullptr,&n);compatible=compatible&&n==0;
+        n=0;c->PSGetShader(&ps,nullptr,&n);compatible=compatible&&n==0;
+        n=0;c->GSGetShader(&gs,nullptr,&n);compatible=compatible&&n==0;
+        n=0;c->HSGetShader(&hs,nullptr,&n);compatible=compatible&&n==0;
+        n=0;c->DSGetShader(&ds,nullptr,&n);compatible=compatible&&n==0;
         std::array<ID3D11UnorderedAccessView*,8> uavs{};
         c->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,0,8,uavs.data());
-        for(auto*& u:uavs){compatible&=u==nullptr;release(u);}
+        for(auto*& u:uavs){compatible=compatible&&u==nullptr;release(u);}
         c->IAGetInputLayout(&layout);c->IAGetPrimitiveTopology(&topology);
         c->RSGetState(&raster);c->RSGetViewports(&count,viewports.data());
         c->OMGetBlendState(&blend,factor,&mask);c->OMGetDepthStencilState(&depth,&stencil);

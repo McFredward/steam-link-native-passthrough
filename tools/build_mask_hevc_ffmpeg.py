@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import shutil
 import tarfile
 import tempfile
 
@@ -48,6 +49,14 @@ def main():
     if not source.exists():
         with tarfile.open(args.archive) as archive:
             archive.extractall(output, filter='data')
+    # A reused editable extraction is not provenance by itself. Check every
+    # upstream regular source file against the authenticated release bytes.
+    with tarfile.open(args.archive) as archive:
+        for member in archive.getmembers():
+            if member.isfile():
+                actual=output/member.name
+                if not actual.is_file() or pin(actual)!=hashlib.sha256(archive.extractfile(member).read()).hexdigest():
+                    raise RuntimeError('Extracted FFmpeg source differs: ' + member.name)
     build = output / 'objects'
     build.mkdir(exist_ok=True)
     flags = ['--prefix=' + str(prefix), '--build-suffix=-sfnp-mask',
@@ -57,12 +66,16 @@ def main():
              '--disable-avdevice', '--disable-avfilter', '--disable-avformat',
              '--disable-swresample', '--disable-swscale', '--enable-avcodec',
              '--enable-avutil', '--enable-decoder=hevc', '--enable-pic',
-             '--extra-ldflags=-Wl,-rpath,$ORIGIN -Wl,-Bsymbolic-functions']
+             '--extra-ldflags=-Wl,-Bsymbolic-functions']
     if args.cross_prefix:
         flags += ['--enable-cross-compile', '--arch=aarch64', '--target-os=linux',
                   '--cross-prefix=' + args.cross_prefix]
     else:
         flags += ['--disable-x86asm']
+    previous=output/'recipe.json'
+    if previous.exists() and json.loads(previous.read_text())['flags']!=flags:
+        shutil.rmtree(build)
+        build.mkdir()
     subprocess.run([str(source / 'configure'), *flags], cwd=build, check=True, timeout=120)
     subprocess.run(['make', '-j4'], cwd=build, check=True, timeout=600)
     subprocess.run(['make', 'install'], cwd=build, check=True, timeout=60)

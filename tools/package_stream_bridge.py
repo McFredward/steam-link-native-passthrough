@@ -53,20 +53,26 @@ def required_sources(root=ROOT):
                    'pc/stream-bridge-sender-provider.vrdrivermanifest',
                    'tools/package_stream_bridge.py','tools/package_stream_link_setup.py',
                    'tools/package_setup_dependencies.py','tools/package_setup_textual.py',
-                   'packaging/setup-textual.json','packaging/setup-python.json','packaging/setup-openssh.json'}|
+                   'packaging/setup-textual.json','packaging/setup-python.json','packaging/setup-openssh.json',
+                   'packaging/mask-ffmpeg.json','tools/build_mask_hevc_ffmpeg.py',
+                   'third_party/ffmpeg/COPYING.LGPLv2.1'}|
                   {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES})
 
 
-def own_artifacts(engine,pc_provider,frame_layer,frame_selector):
+def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None):
     artifacts={name:engine.read(path) for name,path in
                [('pc_provider',pc_provider),('frame_layer',frame_layer),('frame_selector',frame_selector)]}
+    if mask_decoder is not None:
+        engine.require(type(mask_decoder)is dict and set(mask_decoder)=={'mask_codec','mask_util'},
+                       'A complete private mask decoder pair is required.')
+        artifacts.update({name:engine.read(path) for name,path in mask_decoder.items()})
     pc=artifacts['pc_provider'];engine.require(len(pc)>=128 and pc[:2]==b'MZ','The PC provider must be the reviewed x64 DLL.')
     offset=struct.unpack_from('<I',pc,60)[0]
     engine.require(offset<=len(pc)-26 and pc[offset:offset+4]==b'PE\0\0' and
                    struct.unpack_from('<H',pc,offset+4)[0]==0x8664 and
                    struct.unpack_from('<H',pc,offset+24)[0]==0x20b and
                    struct.unpack_from('<H',pc,offset+22)[0]&0x2000,'Unsupported PC provider architecture or image kind.')
-    for name in ('frame_layer','frame_selector'):
+    for name in ('frame_layer','frame_selector',*(('mask_codec','mask_util') if mask_decoder is not None else ())):
         raw=artifacts[name]
         engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and
                        struct.unpack_from('<HH',raw,16)==(3,183),'Unsupported Frame shared library architecture or image kind.')
@@ -105,7 +111,7 @@ def validation(engine,profile,profile_raw,artifacts,receipts):
 
 
 def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,openssh_zip,
-          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None):
+          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None):
     engine=load('sfnp_bridge_package_engine',root/'setup/steam_link_setup.py')
     bridge=load('sfnp_bridge_package_install',root/'setup/stream_bridge_install.py')
     shared=load('sfnp_bridge_package_runtime',root/'tools/package_stream_link_setup.py')
@@ -123,7 +129,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     version=bridge.patch_version(source_bytes['VERSION'].decode('ascii').strip())
     engine.require(version is not None,'An installer semantic version is required.')
     components=patch_versions(engine,bridge,source_bytes['PATCH_VERSIONS.json'])
-    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector)
+    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder)
     engine.require(profile['artifacts']=={name:pin(raw) for name,raw in artifacts.items()},
                    'A native artifact differs from the reviewed runtime profile.')
     pc,frame=profile['pc'],profile['frame']
@@ -137,6 +143,9 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
              'pc-provider/driver.vrdrivermanifest':source_bytes['pc/stream-bridge-sender-provider.vrdrivermanifest'],
              'frame/'+bridge.LIBRARY:artifacts['frame_layer'],
              'frame/libsfnp_stream_launch.so':artifacts['frame_selector']}
+    if mask_decoder is not None:
+        payload.update({'frame/libavcodec-sfnp-mask.so.62':artifacts['mask_codec'],
+                        'frame/libavutil-sfnp-mask.so.60':artifacts['mask_util']})
     payload.update({name:source_bytes[name.removeprefix('frame/')] for name in bridge.TOOLS|bridge.PROFILES})
     if channel is None:
         import subprocess
@@ -180,6 +189,9 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
            'LICENSE':source_bytes['LICENSE'],
            'third_party/lz4/LICENSE':source_bytes['third_party/lz4/LICENSE'],
            'third_party/zstd/LICENSE':source_bytes['third_party/zstd/LICENSE']}
+    if mask_decoder is not None:
+        for name in ('third_party/ffmpeg/COPYING.LGPLv2.1','packaging/mask-ffmpeg.json','tools/build_mask_hevc_ffmpeg.py'):
+            files[name]=source_bytes[name]
     for name in ('steam_link_setup_auth.py','steam_link_setup_askpass_client.py','steam-link-askpass.sh'):
         files['setup/'+name]=source_bytes['setup/'+name]
     engine.require(askpass_exe is not None,'The included Windows sign-in helper is required.')
@@ -245,9 +257,13 @@ def main(argv=None):
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--release',action='store_true')
     parser.add_argument('--validation-receipt',action='append',type=Path,default=[])
+    parser.add_argument('--mask-codec',type=Path)
+    parser.add_argument('--mask-util',type=Path)
     args=parser.parse_args(argv)
+    if bool(args.mask_codec)!=bool(args.mask_util):parser.error('Supply both --mask-codec and --mask-util.')
+    decoder={'mask_codec':args.mask_codec,'mask_util':args.mask_util} if args.mask_codec else None
     raw,receipt=build(args.pc_provider,args.frame_layer,args.frame_selector,args.runtime_profile,args.python_zip,args.openssh_zip,
-                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe)
+                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder)
     sidecar=args.output.with_suffix(args.output.suffix+'.receipt.json')
     if args.output.exists() or sidecar.exists():raise ValueError('An output or receipt already exists; it was preserved.')
     publish(args.output,raw)

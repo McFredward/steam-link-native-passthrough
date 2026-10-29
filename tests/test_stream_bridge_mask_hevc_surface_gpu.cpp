@@ -37,9 +37,9 @@ void run(ID3D11Device* device,ID3D11DeviceContext* context,UINT width,UINT heigh
         const auto* bytes=static_cast<const unsigned char*>(mapped.pData);
         bool exact=true;
         for(UINT y=0;y<height;++y)for(UINT x=0;x<width;++x)
-            exact&=bytes[std::size_t(y)*mapped.RowPitch+x]==255-input[std::size_t(y)*width+x];
+            exact=exact&&bytes[std::size_t(y)*mapped.RowPitch+x]==255-input[std::size_t(y)*width+x];
         for(UINT y=0;y<height/2;++y)for(UINT x=0;x<width;++x)
-            exact&=bytes[std::size_t(height+y)*mapped.RowPitch+x]==128;
+            exact=exact&&bytes[std::size_t(height+y)*mapped.RowPitch+x]==128;
         context->Unmap(staging.p,0);need(exact,"all256 alpha codes full-range and neutral UV exact");
     }
     need(!surfaces.write(context,4),"invalid slot refused");

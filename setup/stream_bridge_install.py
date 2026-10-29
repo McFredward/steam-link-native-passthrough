@@ -84,6 +84,7 @@ TOOLS = frozenset('frame/tools/'+name+'.py' for name in (
 PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
+MASK_CODEC_FILES = frozenset({'frame/libavcodec-sfnp-mask.so.62','frame/libavutil-sfnp-mask.so.60'})
 GENERATED = {'coverage.spv': {'bytes':7420,'sha256':'37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3'},
              'camera-only.spv': {'bytes':7072,'sha256':'a8f7c2a375abb3f8d5188fdf129c00b2a2a1b13f3f3d8e7620b0a833510ea8ee'}}
 # Removal/recovery allowlist only. These files are never generated, installed or
@@ -231,6 +232,10 @@ class Bundle:
                            'Unknown package logging default.')
         pc_files=PC_FILES|({'pc-provider/'+LOG_DEFAULT} if self.logging else set())
         frame_defaults=FRAME_DEFAULTS if self.logging else frozenset()
+        # Optional complete pair for the negotiated HEVC mask codec. Existing
+        # lossless-only bundles/receipts remain readable without these files.
+        mask_files=set(v['files'])&MASK_CODEC_FILES
+        engine.require(not mask_files or mask_files==MASK_CODEC_FILES,'Incomplete private mask decoder library pair.')
         self.protocol = engine.protocol(v['bridge_protocol'])
         engine.records(v['files'])
         self.files = {}
@@ -248,13 +253,17 @@ class Bundle:
         engine.require(type(self.frame)is dict and set(self.frame)-{'version'}=={'reviewed','files','runtime_files','generated'} and
                        type(self.frame['reviewed'])is bool and type(self.frame['files'])is list and
                        len(self.frame['files'])==len(set(self.frame['files'])) and
-                       set(self.frame['files'])==TOOLS|PROFILES|frame_defaults|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} and
+                       set(self.frame['files'])==TOOLS|PROFILES|frame_defaults|mask_files|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} and
                        self.frame['generated']==GENERATED and
                        {'frame/'+LIBRARY,'frame/tools/native_fragment_stream_coverage.py',
                         'frame/tools/native_fragment_count1_interface.py','frame/libsfnp_stream_launch.so',
                         'frame/tools/compositor_startup_health.py'}<=set(self.frame['files']) and
-                       all(n in PROFILES|frame_defaults|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} or re.fullmatch(r'frame/tools/[a-z0-9_]+[.]py',n)
+                       all(n in PROFILES|frame_defaults|mask_files|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} or re.fullmatch(r'frame/tools/[a-z0-9_]+[.]py',n)
                            for n in self.frame['files']), 'Unsupported Frame connection package.')
+        for name in mask_files:
+            raw=self.files[name]
+            engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and raw[18:20]==b'\xb7\x00',
+                           'Unsupported private AArch64 mask decoder library.')
         engine.require(set(self.files)==set(self.pc['files'])|set(self.frame['files']),
                        'Unknown executable or shader payload in package.')
         if self.logging:
@@ -904,7 +913,7 @@ class FrameInstall:
                   self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
                   self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK}
         names={LIBRARY,'libsfnp_stream_launch.so','coverage.spv','camera-only.spv','receiver.conf','launch.conf',
-               'receiver.enable','pairings/active.json','install.json',CAMERA_CONFIG,'camera-session.pause',LOG_DEFAULT}|{n.removeprefix('frame/') for n in TOOLS|PROFILES}|RETIRED_FRAME_FILES
+               'receiver.enable','pairings/active.json','install.json',CAMERA_CONFIG,'camera-session.pause',LOG_DEFAULT}|{n.removeprefix('frame/') for n in TOOLS|PROFILES|MASK_CODEC_FILES}|RETIRED_FRAME_FILES
         def allowed(path):
             if path in external:return True
             if legacy_helper.allowed(self.home,path):return True
@@ -1015,6 +1024,7 @@ class FrameInstall:
         if state:
             operations={op['path']:op['after'] for op in state['operations']}
             pins={name:bundle.value['files']['frame/'+name] for name in (LIBRARY,'libsfnp_stream_launch.so')}
+            pins.update({name.removeprefix('frame/'):bundle.value['files'][name] for name in MASK_CODEC_FILES if name in bundle.files})
             if state.get('activation_mode','active')=='active':pins.update(bundle.frame['generated'])
             for name,pin in pins.items():
                 value=operations.get(str(self.root/name))
@@ -1298,7 +1308,7 @@ class FrameInstall:
             self.root/'receiver.conf':MARKER+private_ipv4(address).encode()+b'\n'+str(port).encode()+b'\n',
             self.root/'pairings'/ (pair['pair_id']+'.json'):self.e.encoded(pair),
             self.root/'pairings/active.json':self.e.encoded({'schema':self.e.ACTIVE,'pair_id':pair['pair_id']}),
-            **{self.root/Path(name).relative_to('frame'):bundle.files[name] for name in TOOLS|PROFILES|FRAME_DEFAULTS if name in bundle.files}}
+            **{self.root/Path(name).relative_to('frame'):bundle.files[name] for name in TOOLS|PROFILES|FRAME_DEFAULTS|MASK_CODEC_FILES if name in bundle.files}}
 
     def activation_paths(self):
         return {self.root/name for name in ('receiver.enable','launch.conf','coverage.spv','camera-only.spv',CAMERA_CONFIG)}|{
@@ -1489,7 +1499,7 @@ class FrameInstall:
                # Publish opt-in after all code/configuration/pairing writes.
                'receiver.enable':MARKER}
         for name in bundle.frame['files']:
-            if name in TOOLS|PROFILES|FRAME_DEFAULTS:files[str(Path(name).relative_to('frame'))]=bundle.files[name]
+            if name in TOOLS|PROFILES|FRAME_DEFAULTS|MASK_CODEC_FILES:files[str(Path(name).relative_to('frame'))]=bundle.files[name]
         operations=self.legacy_operations()
         for name,raw in files.items():operations.append(self.tx.operation(self.root/name,raw))
         manifest=self.config/'vulkan/implicit_layer.d'/MANIFEST
@@ -1611,7 +1621,7 @@ class FrameInstall:
                 self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK:self.camera_dropin()}
         wanted.update({self.root/name:raw for name,raw in outputs.items()})
         wanted.update({self.root/Path(name).relative_to('frame'):bundle.files[name]
-                       for name in TOOLS|PROFILES|FRAME_DEFAULTS if name in bundle.files})
+                       for name in TOOLS|PROFILES|FRAME_DEFAULTS|MASK_CODEC_FILES if name in bundle.files})
         if current.get('activation_mode')=='inactive':
             wanted.update({self.root/'receiver.enable':MARKER,
                 self.root/'launch.conf':b'SFNP_STREAM_LAUNCH/1\n'+str(self.steamvr/bundle.frame['runtime_files']['vrlink']['path']).encode()+b'\n'+str(self.root/'libsfnp_stream_launch.so').encode()+b'\n'+str(self.root/LIBRARY).encode()+b'\n',

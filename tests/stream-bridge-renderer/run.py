@@ -20,7 +20,7 @@ def main():
  renderer=source/'layer/stream_bridge_renderer.cpp';pool=source/'layer/stream_bridge_coverage_gpu.cpp'
  zstd=cache/'zstd.o'
  subprocess.run(['cc','-std=c99','-O1','-w','-DZSTD_DISABLE_ASM','-DZSTDLIB_VISIBILITY=','-c',str(root/'third_party/zstd/zstd.c'),'-o',str(zstd)],check=True)
- shared=[root/f for f in ['bridge/stream_bridge_frame.cpp','bridge/stream_bridge_compression.cpp','bridge/stream_bridge_auth.cpp','bridge/stream_bridge_protocol.cpp','bridge/hevc_bridge_sei.cpp']]
+ shared=[root/f for f in ['bridge/stream_bridge_frame.cpp', 'bridge/stream_bridge_hevc_coverage.cpp','bridge/stream_bridge_compression.cpp','bridge/stream_bridge_auth.cpp','bridge/stream_bridge_protocol.cpp','bridge/hevc_bridge_sei.cpp']]
  shared.append(zstd)
  args=[str(a.vs.resolve()),str(a.ps.resolve()),str(a.coverage.resolve())]
  if a.camera_only_recovery_only:args+=['camera-only-recovery']

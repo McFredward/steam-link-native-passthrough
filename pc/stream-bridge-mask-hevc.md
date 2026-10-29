@@ -88,9 +88,9 @@ initialization failure, and failed-flush resource retention/retry. It does not
 prove hardware compression quality, NVENC Main syntax or Frame compatibility.
 
 ```sh
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -DSFNP_MASK_HEVC_HOST_TEST -I. -isystem /path/to/pinned-sdk11.1 pc/stream-bridge-mask-hevc.cpp tests/test_stream_bridge_mask_hevc.cpp -o build/test_stream_bridge_mask_hevc
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -DSFNP_MASK_HEVC_HOST_TEST -I. -isystem /path/to/pinned-sdk11.1 pc/stream-bridge-mask-hevc.cpp tests/test_stream_bridge_mask_hevc_encoder.cpp -o build/test_stream_bridge_mask_hevc
 build/test_stream_bridge_mask_hevc
-g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -DSFNP_MASK_HEVC_HOST_TEST -I. -isystem /path/to/pinned-sdk11.1 pc/stream-bridge-mask-hevc.cpp tests/test_stream_bridge_mask_hevc.cpp -o build/test_stream_bridge_mask_hevc_sanitize
+g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -DSFNP_MASK_HEVC_HOST_TEST -I. -isystem /path/to/pinned-sdk11.1 pc/stream-bridge-mask-hevc.cpp tests/test_stream_bridge_mask_hevc_encoder.cpp -o build/test_stream_bridge_mask_hevc_sanitize
 ASAN_OPTIONS=detect_leaks=1 build/test_stream_bridge_mask_hevc_sanitize
 x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I. -isystem /path/to/pinned-sdk11.1 -c pc/stream-bridge-mask-hevc.cpp -o build/stream-bridge-mask-hevc.o
 ```

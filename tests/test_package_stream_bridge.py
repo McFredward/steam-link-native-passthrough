@@ -76,6 +76,27 @@ class Tests(unittest.TestCase):
         value={'schema':p.VALIDATION,'result':'PASS','runtime_profile_sha256':p.pin(self.path.read_bytes())['sha256'],'source_revision':self.profile['source_revision'],'source_pins':self.profile['source_pins'],'artifacts':self.profile['artifacts'],'checks':{n:True for n in (checks or p.CHECKS)},'hardware_verified':False}
         path=self.base/'validation.json';path.write_bytes(encoded(value));return path
 
+    def test_private_hevc_decoder_pair_is_artifact_bound(self):
+        decoder={name:self.base/(name+'.so') for name in ('mask_codec','mask_util')}
+        for name,path in decoder.items():
+            path.write_bytes(elf()+name.encode())
+            self.profile['artifacts'][name]=p.pin(path.read_bytes())
+        self.save_profile()
+        raw,receipt=self.build(mask_decoder=decoder,release=True,validation_receipts=[self.validation()])
+        self.assertTrue(receipt['native_installable'])
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            for key,name in (('mask_codec','frame/libavcodec-sfnp-mask.so.62'),('mask_util','frame/libavutil-sfnp-mask.so.60')):
+                self.assertEqual(archive.read(name),decoder[key].read_bytes())
+            self.assertIn('GNU LESSER GENERAL PUBLIC LICENSE',archive.read('third_party/ffmpeg/COPYING.LGPLv2.1').decode())
+        decoder['mask_util'].write_bytes(elf()+b'changed private dependency')
+        with self.assertRaises(ValueError):self.build(mask_decoder=decoder)
+
+    def test_partial_or_wrong_architecture_hevc_pair_is_refused(self):
+        codec=self.base/'mask.so';codec.write_bytes(elf())
+        with self.assertRaises(ValueError):self.build(mask_decoder={'mask_codec':codec})
+        codec.write_bytes(pe(True))
+        with self.assertRaises(ValueError):self.build(mask_decoder={'mask_codec':codec,'mask_util':codec})
+
     def test_default_prototype_exact_payload_no_native_shader(self):
         raw,receipt=self.build();self.assertEqual(receipt['readiness'],'prototype');self.assertFalse(receipt['native_installable']);self.assertFalse(receipt['hardware_verified']);self.assertFalse(receipt['online_bootstrap_currently_accepts_schema'])
         with zipfile.ZipFile(io.BytesIO(raw)) as z:

@@ -17,6 +17,7 @@ add_library(sfnp_stream_bridge STATIC
     bridge/stream_bridge_auth.cpp
     bridge/stream_bridge_capacity.cpp
     bridge/stream_bridge_frame.cpp
+    bridge/stream_bridge_hevc_coverage.cpp
     bridge/stream_bridge_compression.cpp
     bridge/hevc_bridge_sei.cpp
     pc/stream-bridge-sender.cpp
@@ -30,6 +31,9 @@ else()
 endif()
 
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
+    add_executable(test_stream_bridge_hevc_coverage tests/test_stream_bridge_hevc_coverage.cpp)
+    target_link_libraries(test_stream_bridge_hevc_coverage PRIVATE sfnp_stream_bridge)
+    add_test(NAME stream_bridge_hevc_coverage COMMAND test_stream_bridge_hevc_coverage)
     add_executable(test_stream_bridge_logging tests/stream_bridge_logging_test.cpp)
     target_include_directories(test_stream_bridge_logging PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     add_test(NAME stream_bridge_logging COMMAND test_stream_bridge_logging)
