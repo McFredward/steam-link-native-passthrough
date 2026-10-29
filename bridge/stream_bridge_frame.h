@@ -20,7 +20,7 @@ struct FrameDescriptor {
     // current decoded-image lease can exempt that picture from MR recovery.
     std::uint8_t cameraRecovery=0;
 };
-enum class CoverageEncoding:std::uint8_t { None=0,Raw=1,Rle=2,RleLz4=3,RleZstd=4,RawZstd=5 };
+enum class CoverageEncoding:std::uint8_t { None=0,Raw=1,Rle=2,RleLz4=3,RleZstd=4,RawZstd=5,HevcIntra=6 };
 struct CertifiedAccessUnit {
     FrameDescriptor descriptor{};
     Nonce binding{};
@@ -53,5 +53,8 @@ bool encodeCoverageRle(Bytes raw,std::vector<std::uint8_t>& output);
 // Compression/decompression runs on cold workers, never a compositor thread.
 bool encodeBestCoverage(Bytes raw,bool allowRleLz4,CoverageEncoding& encoding,std::vector<std::uint8_t>& output,bool allowRleZstd=false,bool allowRawZstd=false);
 bool decodeCertifiedCoverage(const CertifiedAccessUnit&,std::vector<std::uint8_t>& output);
+// HEVC requires a separately prepared real decoder on its cold worker; these
+// portable lossless helpers refuse it transactionally. An authenticated HEVC
+// payload/hash is not proof that a decoder produced usable samples.
 bool decodeCertifiedCoverage(const CertifiedAccessUnit&,std::vector<std::uint8_t>& output,CoverageRange&);
 } // namespace stream_bridge

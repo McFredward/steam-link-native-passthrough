@@ -118,6 +118,9 @@ public:
     void requestStatus() noexcept;
     bool pollNotice(Notice&) noexcept;
     Snapshot snapshot() const noexcept;
+    std::uint64_t negotiatedCapabilities() const noexcept {
+        return active_&&healthy_&&handshake_.confirmed()?handshake_.negotiatedCapabilities():0;
+    }
 
 private:
     struct ProbeEntry {

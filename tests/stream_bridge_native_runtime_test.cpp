@@ -41,7 +41,7 @@ struct Fixture {
     sb::ControlRuntime producer;nd::ReceiverWorker worker;sb::Handshake sender;
     sb::LocalConfig local{};sb::LocalSendAuthority authority{};std::uint64_t content=0,sourceFrame=1000;
     Fixture(){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
-        r.offered=r.required=sb::KnownCapabilities;
+        r.offered=r.required=sb::KnownCapabilities&~sb::CapHevcIntraCoverage;
         std::strcpy(r.address.data(),"127.0.0.1");check(producer.prepare(r)==sb::ControlStatus::Listening,"actual producer transport");
         check(producer.localConfig(local,authority),"actual producer signing session");
         check(sender.begin(local,authority.channel)==sb::Status::Ok,"actual full-capability producer handshake");}
@@ -90,7 +90,7 @@ struct Fixture {
             capture.push_back({nd::CaptureKind::Decoded,23,73,0,token,7,21,token});pump();}
         check(sender.confirmed()&&worker.status().state==nd::RuntimeState::PeerConfirmed,"actual video certificate plus real reverse socket confirms peer");}
     void relisten(std::uint16_t port){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
-        r.offered=r.required=sb::KnownCapabilities;r.port=port;std::strcpy(r.address.data(),"127.0.0.1");
+        r.offered=r.required=sb::KnownCapabilities&~sb::CapHevcIntraCoverage;r.port=port;std::strcpy(r.address.data(),"127.0.0.1");
         check(producer.prepare(r)==sb::ControlStatus::Listening&&producer.localConfig(local,authority),"actual fresh producer control admission on same configured endpoint");
         sender.reset();check(sender.begin(local,authority.channel)==sb::Status::Ok,"new real paired binding after route reconnect");}
 };

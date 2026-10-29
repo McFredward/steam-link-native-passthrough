@@ -12,10 +12,10 @@ constexpr std::size_t MessageBytes=80;
 constexpr std::uint64_t CapNegotiation=1, CapAnnexBSei=2,
     CapSourceAssociation=4, CapOpaqueFallback=8, CapExplicitCoverage=16,
     CapRleLz4=32, CapRleZstd=64, CapCameraOnlyRecovery=128, CapRawZstd=256,
-    CapOrdinaryVideoPicture=512;
+    CapOrdinaryVideoPicture=512, CapHevcIntraCoverage=1024;
 // Native deployment requires the original six bits. Zstd is independently
 // optional: older peers keep the original intersection and encoding route.
-constexpr std::uint64_t KnownCapabilities=1023;
+constexpr std::uint64_t KnownCapabilities=2047;
 constexpr std::uint64_t NativeRequiredCapabilities=63;
 constexpr std::uint64_t RequiredCapabilities=CapNegotiation|CapAnnexBSei|CapOpaqueFallback;
 enum class Role : std::uint8_t { Producer=1, Receiver=2 };

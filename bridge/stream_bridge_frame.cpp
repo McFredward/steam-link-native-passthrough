@@ -1,4 +1,5 @@
 #include "stream_bridge_frame.h"
+#include "stream_bridge_hevc_coverage.h"
 #include "stream_bridge_compression.h"
 #include "hevc_bridge_sei.h"
 #include "../receiver/sha256.h"
@@ -82,6 +83,7 @@ bool coverageValid(const FrameDescriptor& d,CoverageEncoding encoding,Bytes b){
     if(encoding==CoverageEncoding::RleLz4){std::vector<std::uint8_t> rle;return decompressCoverageRle(b,size,rle);}
     if(encoding==CoverageEncoding::RleZstd){std::vector<std::uint8_t> rle;return decompressCoverageRleZstd(b,size,rle);}
     if(encoding==CoverageEncoding::RawZstd){std::vector<std::uint8_t> raw;return decompressCoverageRawZstd(b,size,raw);}
+    if(encoding==CoverageEncoding::HevcIntra){HevcCoverageView view;return inspectHevcCoverage(b,d.codedWidth,d.codedHeight,view);}
     if(encoding!=CoverageEncoding::Rle||b.size%2)return false;
     std::size_t decoded=0;for(std::size_t i=0;i<b.size;i+=2){if(!b.data[i]||b.data[i]>size-decoded)return false;decoded+=b.data[i];}return decoded==size;
 }
@@ -139,7 +141,7 @@ FrameStatus inspectMetadata(Bytes payload,AuthSession& auth,CertifiedAccessUnit&
     if(!payload.data||payload.size>MaximumAccessUnitBytes)return FrameStatus::InvalidArgument;
     if(payload.size<FrameCertificateBytes)return FrameStatus::Malformed;
     const auto* h=payload.data;
-    if(std::memcmp(h,"SFV1",4)||h[4]!=1||h[5]>std::uint8_t(CoverageEncoding::RawZstd)||get(h+6,2)!=FrameCertificateBytes)return FrameStatus::Malformed;
+    if(std::memcmp(h,"SFV1",4)||h[4]!=1||h[5]>std::uint8_t(CoverageEncoding::HevcIntra)||get(h+6,2)!=FrameCertificateBytes)return FrameStatus::Malformed;
     if(h[72]>3)return FrameStatus::Malformed;
     for(unsigned i=73;i<80;++i)if(h[i])return FrameStatus::Malformed;
     CertifiedAccessUnit result;result.descriptor={get(h+40,8),get(h+48,8),std::uint16_t(get(h+64,2)),std::uint16_t(get(h+66,2)),h[72]};
@@ -209,7 +211,7 @@ bool decodeCertifiedCoverage(const CertifiedAccessUnit& frame,std::vector<std::u
 }
 bool decodeCertifiedCoverage(const CertifiedAccessUnit& frame,std::vector<std::uint8_t>& output,CoverageRange& range){
     const auto& d=frame.descriptor;Bytes b{frame.coverage.data(),frame.coverage.size()};
-    if(!descriptorValid(d)||frame.coverageEncoding==CoverageEncoding::None)return false;
+    if(!descriptorValid(d)||frame.coverageEncoding==CoverageEncoding::None||frame.coverageEncoding==CoverageEncoding::HevcIntra)return false;
     std::vector<std::uint8_t> rle;
     if(frame.coverageEncoding==CoverageEncoding::RawZstd){
         std::vector<std::uint8_t> raw;if(!decompressCoverageRawZstd(b,std::size_t(d.codedWidth)*d.codedHeight,raw))return false;

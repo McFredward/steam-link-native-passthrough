@@ -55,7 +55,7 @@ struct Files{
     void restore(){write(producer/"active.json",active);write(receiver/"active.json",active);write(producer/(std::string(pairId)+".json"),credential("producer"));write(receiver/(std::string(pairId)+".json"),credential("receiver"));}
     ~Files(){std::error_code ignored;std::filesystem::remove_all(root,ignored);}
 };
-sb::ControlRequest request(const std::filesystem::path& path,sb::Role role){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=role;r.buildId=711;r.pairingsDirectory=path;std::strcpy(r.address.data(),"127.0.0.1");r.video={nonce(90),5};return r;}
+sb::ControlRequest request(const std::filesystem::path& path,sb::Role role){sb::ControlRequest r;r.explicitlyEnabled=true;r.hevcIntraCoverageEnabled=true;r.role=role;r.buildId=711;r.pairingsDirectory=path;std::strcpy(r.address.data(),"127.0.0.1");r.video={nonce(90),5};return r;}
 sb::AuthPayload wire(const sb::Message& m){sb::AuthPayload p{};check(sb::encode(m,p)==sb::Status::Ok,"actual protocol encode");return p;}
 tx::VerifiedSource source(){tx::VerifiedSource s;s.verified=s.ordinaryStream=s.completeAccessUnit=true;s.codec=tx::VerifiedSource::Codec::HevcAnnexB;s.moduleSha256[0]=1;s.apiVersion=0x7102000b;s.encoderGeneration=9;return s;}
 const std::vector<std::uint8_t> ordinary{0,0,0,1,0x26,1,0x80,0x11,0x22};
@@ -94,6 +94,12 @@ void defaultsAndAddress(){
 }
 void capabilities(){
     Files files;sb::ControlRuntime runtime;auto req=request(files.producer,sb::Role::Producer);
+    req.offered=sb::KnownCapabilities;req.required=sb::NativeRequiredCapabilities;req.hevcIntraCoverageEnabled=false;
+    check(runtime.prepare(req)==sb::ControlStatus::Listening,"knowing optional lossy bit does not enable it");
+    sb::LocalConfig cold;check(runtime.configuredLocal(cold)&&!(cold.offered&sb::CapHevcIntraCoverage),"unprepared/default quality mode does not advertise HEVC");
+    req.required=sb::KnownCapabilities;
+    check(runtime.prepare(req)==sb::ControlStatus::AddressRefused,"required HEVC cannot override missing explicit prepared opt-in");
+    req.hevcIntraCoverageEnabled=true;
     req.offered=req.required=sb::KnownCapabilities;
     check(runtime.prepare(req)==sb::ControlStatus::Listening,"actual full image capabilities configured");
     sb::LocalConfig local;check(runtime.configuredLocal(local)&&local.offered==sb::KnownCapabilities&&local.required==sb::KnownCapabilities,"capabilities retained through real configuration");
