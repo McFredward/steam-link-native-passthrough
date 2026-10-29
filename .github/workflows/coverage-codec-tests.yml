@@ -4,6 +4,8 @@ on:
     branches: [dev]
     paths:
       - 'bridge/stream_bridge_frame.*'
+      - 'bridge/stream_bridge_hevc_coverage.*'
+      - 'tests/test_stream_bridge_hevc_coverage.cpp'
       - 'bridge/stream_bridge_compression.*'
       - 'third_party/zstd/**'
       - 'tests/test_stream_bridge_entropy.cpp'
@@ -16,6 +18,8 @@ on:
   pull_request:
     paths:
       - 'bridge/stream_bridge_frame.*'
+      - 'bridge/stream_bridge_hevc_coverage.*'
+      - 'tests/test_stream_bridge_hevc_coverage.cpp'
       - 'bridge/stream_bridge_compression.*'
       - 'third_party/zstd/**'
       - 'tests/test_stream_bridge_entropy.cpp'
@@ -41,15 +45,15 @@ jobs:
         shell: bash
         run: |
           cmake -S . -B build/codec -DFRAME_STREAM_BRIDGE_ONLY=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/codec --config Release --parallel 4 --target test_stream_bridge_compression test_stream_bridge_entropy test_stream_bridge_frame test_stream_bridge_decode_cost
-          ctest --test-dir build/codec -C Release --output-on-failure -R '^stream_bridge_(compression|entropy|frame|decode_cost)$'
+          cmake --build build/codec --config Release --parallel 4 --target test_stream_bridge_compression test_stream_bridge_entropy test_stream_bridge_frame test_stream_bridge_decode_cost test_stream_bridge_hevc_coverage
+          ctest --test-dir build/codec -C Release --output-on-failure -R '^stream_bridge_(compression|entropy|frame|decode_cost|hevc_coverage)$'
       - name: Check bounded malformed blocks under ASan and UBSan
         if: runner.os == 'Linux'
         shell: bash
         run: |
           cmake -S . -B build/codec-asan -DFRAME_STREAM_BRIDGE_ONLY=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Debug '-DCMAKE_C_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer' '-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer'
-          cmake --build build/codec-asan --parallel 4 --target test_stream_bridge_compression test_stream_bridge_entropy test_stream_bridge_frame test_stream_bridge_decode_cost
-          ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build/codec-asan --output-on-failure -R '^stream_bridge_(compression|entropy|frame|decode_cost)$'
+          cmake --build build/codec-asan --parallel 4 --target test_stream_bridge_compression test_stream_bridge_entropy test_stream_bridge_frame test_stream_bridge_decode_cost test_stream_bridge_hevc_coverage
+          ASAN_OPTIONS=detect_leaks=1 ctest --test-dir build/codec-asan --output-on-failure -R '^stream_bridge_(compression|entropy|frame|decode_cost|hevc_coverage)$'
           build/codec/test_stream_bridge_compression --benchmark > build/codec-benchmark.log
           build/codec/test_stream_bridge_entropy --benchmark > build/entropy-benchmark.log
       - name: Preserve concise validation results

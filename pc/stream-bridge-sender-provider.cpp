@@ -14,6 +14,7 @@
 #include "stream-bridge-sender-provider-directmode.h"
 #include "stream-bridge-sender-provider-runtime.h"
 #include "stream-bridge-sender-provider-coverage.h"
+#include "stream-bridge-mask-config.h"
 #include "stream-bridge-sender-provider-sourceipc.h"
 #include "bridge/stream_bridge_log.h"
 #include <atomic>
@@ -27,6 +28,16 @@
 namespace {
 using stream_bridge::sender::NvencBoundary;
 using stream_bridge::sender::NvencFactory;
+std::uint32_t maskCodecRate(const std::filesystem::path& root){
+    const auto path=root/L"mask-codec.conf";
+    const auto file=CreateFileW(path.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_FLAG_OPEN_REPARSE_POINT,nullptr);
+    if(file==INVALID_HANDLE_VALUE)return 0;
+    BY_HANDLE_FILE_INFORMATION info{};LARGE_INTEGER size{};char bytes[64]{};DWORD used=0;
+    const bool regular=GetFileInformationByHandle(file,&info)&&info.nNumberOfLinks==1&&
+        !(info.dwFileAttributes&(FILE_ATTRIBUTE_DIRECTORY|FILE_ATTRIBUTE_REPARSE_POINT))&&GetFileSizeEx(file,&size)&&size.QuadPart>0&&size.QuadPart<=64;
+    const bool read=regular&&ReadFile(file,bytes,static_cast<DWORD>(size.QuadPart),&used,nullptr)&&used==size.QuadPart;
+    CloseHandle(file);return read?stream_bridge::sender::maskHevcBitrate({bytes,used}):0;
+}
 constexpr std::array<std::uint8_t,32> ExpectedHash{{0x1e,0x84,0x6b,0xe0,0x41,0x03,0x97,0x98,
  0x58,0x0a,0x91,0x45,0x23,0x71,0xf6,0x28,0x8c,0x61,0x4f,0xb4,0xc1,0x52,0x12,0x6b,
  0x13,0x7e,0x2c,0x69,0x3f,0xb7,0x7e,0xef}};
@@ -184,6 +195,8 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         try {const auto root=std::filesystem::path(appData)/L"steam-link-native-passthrough";
             stream_bridge::logging::configureCold(root/L"pc-provider/logging-default.conf",root/L"logging.conf");
             coverage_.configureMaskCapture(root);
+            const auto hevcRate=maskCodecRate(root);coverage_.configureHevcMask(hevcRate);
+            if(hevcRate)report("lossy HEVC mask mode requested; waiting for independent NVENC setup and compatible Frame");
             request_.pairingsDirectory=root/L"pairings";}
         catch(...){CoTaskMemFree(appData);return false;}
         CoTaskMemFree(appData);request_.port=static_cast<std::uint16_t>(port);request_.explicitlyEnabled=true;runtime_.configure(request_);return true;
@@ -453,10 +466,21 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 static_cast<unsigned long long>(stats.certifiedMasks),static_cast<unsigned long long>(stats.maskedVideoBytes),
                 static_cast<unsigned long long>(stats.maskRleBytes),static_cast<unsigned long long>(stats.maskedWireBytes),static_cast<unsigned long long>(stats.maxMaskedWireBytes));report(text,stream_bridge::logging::Level::Debug);
             std::snprintf(text,sizeof text,
-                "coverage encoding: raw-mask-bytes=%llu, encoded-coverage-bytes=%llu; frames raw/rle/lz4/zstd/raw-zstd=%llu/%llu/%llu/%llu/%llu; encode-us=%llu/max%llu; lossless, approximate counters",
+                "coverage encoding: raw-mask-bytes=%llu, encoded-coverage-bytes=%llu; frames raw/rle/lz4/zstd/raw-zstd/hevc=%llu/%llu/%llu/%llu/%llu/%llu; cpu-encode/collect-us=%llu/max%llu; approximate counters",
                 static_cast<unsigned long long>(stats.maskRawBytes),static_cast<unsigned long long>(stats.maskEncodedBytes),
                 static_cast<unsigned long long>(stats.maskEncodingFrames[1]),static_cast<unsigned long long>(stats.maskEncodingFrames[2]),static_cast<unsigned long long>(stats.maskEncodingFrames[3]),static_cast<unsigned long long>(stats.maskEncodingFrames[4]),static_cast<unsigned long long>(stats.maskEncodingFrames[5]),
+                static_cast<unsigned long long>(stats.maskEncodingFrames[6]),
                 static_cast<unsigned long long>(stats.lastEncodeUs),static_cast<unsigned long long>(stats.maxEncodeUs));report(text,stream_bridge::logging::Level::Debug);
+            const auto hevc=coverage_.hevcMaskStats();
+            if(hevc.requested){
+                char hevcText[512]{};
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask: prepared=%u, available=%u, target-bit/s=%u, native-status=%d; encoded=%llu, pending=%llu, refused=%llu, syntax-refused=%llu; submission-to-poll-us=%llu/max%llu; IDR-only; not GPU encode latency",
+                    unsigned(hevc.prepared),unsigned(hevc.available),hevc.bitRate,hevc.nativeStatus,
+                    static_cast<unsigned long long>(hevc.encoded),static_cast<unsigned long long>(hevc.pending),
+                    static_cast<unsigned long long>(hevc.refused),static_cast<unsigned long long>(hevc.syntaxRefused),
+                    static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs));
+                report(hevcText,stream_bridge::logging::Level::Debug);
+            }
             std::snprintf(text,sizeof text,
                 "coverage lifecycle refusals: render-lock=%llu, copy-pair=%llu, stage-full=%llu, input=%llu, stage=%llu, session=%llu, source=%llu/%llu, rle=%llu, certificate=%llu",
                 refused(stream_bridge::sender::CoverageGate::Lock),refused(stream_bridge::sender::CoverageGate::CopyPair),refused(stream_bridge::sender::CoverageGate::StageFull),
@@ -486,7 +510,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         };
         for(;;){
             {std::lock_guard<std::mutex> guard(mutex_);if(stopped_)break;}
-            try{coverage_.tick();runtime_.tick();
+            try{coverage_.tick();
+                const bool hevc=coverage_.hevcAvailable();
+                if(request_.hevcIntraCoverageEnabled!=hevc){request_.hevcIntraCoverageEnabled=hevc;runtime_.configure(request_);}
+                runtime_.tick();
                 if(request_.explicitlyEnabled){stream_bridge::LocalConfig config;stream_bridge::LocalSendAuthority authority;stream_bridge::sender::SourceIpcState state;
                     const auto encoder=runtime_.encoder();
                     if(encoder.peerConfirmed&&encoder.probeObserved&&runtime_.control().peerVerified()&&runtime_.control().localConfig(config,authority)){state.binding=authority.channel.binding;state.generation=encoder.generation;state.compatible=true;}

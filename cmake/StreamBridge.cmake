@@ -108,6 +108,18 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
         if(NOT SFNP_NVENC_HEADER_HASH STREQUAL "be0c29a41ae3260fd016a9001fd959e747bac93ad21411759736abba4ffdea86")
             message(FATAL_ERROR "The explicit NVENC SDK header differs from the reviewed11.1 pin")
         endif()
+        # The real encoder state machine with explicit fake OS/NVENC ports;
+        # this never opens a GPU or proves a hardware-generated bitstream.
+        add_executable(test_stream_bridge_mask_hevc_encoder
+            tests/test_stream_bridge_mask_hevc_encoder.cpp pc/stream-bridge-mask-hevc.cpp)
+        target_compile_definitions(test_stream_bridge_mask_hevc_encoder PRIVATE SFNP_MASK_HEVC_HOST_TEST=1)
+        target_include_directories(test_stream_bridge_mask_hevc_encoder SYSTEM PRIVATE ${SFNP_NVENC_SDK_DIRECTORY})
+        target_compile_options(test_stream_bridge_mask_hevc_encoder PRIVATE -Wall -Wextra -Wpedantic -Werror)
+        target_link_libraries(test_stream_bridge_mask_hevc_encoder PRIVATE sfnp_stream_bridge Threads::Threads)
+        if(NOT CMAKE_CROSSCOMPILING)
+            add_test(NAME stream_bridge_mask_hevc_encoder COMMAND test_stream_bridge_mask_hevc_encoder)
+        endif()
+
         add_library(sfnp_stream_sender_boundary STATIC
             pc/stream-bridge-sender-provider-core.cpp pc/stream-bridge-sender-provider-runtime.cpp)
         target_include_directories(sfnp_stream_sender_boundary SYSTEM PUBLIC ${SFNP_NVENC_SDK_DIRECTORY})
@@ -243,4 +255,86 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME mask_capture_readers COMMAND ${Python3_EXECUTABLE} -B
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_capture_masks.py
         $<TARGET_FILE:test_stream_bridge_mask_capture> $<TARGET_FILE:check_mask_capture>)
+endif()
+
+# The Frame decoder is a separate private library. No implicit header search,
+# downloads, system-library fallback or direct libavcodec/libavutil link.
+set(SFNP_MASK_HEVC_INCLUDE_DIRECTORY "" CACHE PATH "Explicit reviewed FFmpeg8 public include directory (codec62/util60)")
+set(SFNP_MASK_HEVC_HOST_CODEC_LIBRARY "" CACHE FILEPATH "Explicit host libavcodec62 for real software mask tests")
+set(SFNP_MASK_HEVC_HOST_UTILITY_LIBRARY "" CACHE FILEPATH "Explicit host libavutil60 for real software mask tests")
+set(SFNP_MASK_HEVC_HOST_FFMPEG_EXECUTABLE "" CACHE FILEPATH "Explicit host ffmpeg with CPU libx265 for synthetic test fixtures")
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_library(sfnp_mask_hevc_decoder STATIC receiver/stream_bridge_mask_hevc.cpp)
+    set_target_properties(sfnp_mask_hevc_decoder PROPERTIES
+        POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
+    target_include_directories(sfnp_mask_hevc_decoder PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(sfnp_mask_hevc_decoder PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    target_link_libraries(sfnp_mask_hevc_decoder PUBLIC sfnp_stream_bridge PRIVATE ${CMAKE_DL_LIBS})
+    if(SFNP_MASK_HEVC_INCLUDE_DIRECTORY)
+        foreach(header libavcodec/avcodec.h libavcodec/version_major.h libavutil/frame.h libavutil/version.h)
+            if(NOT EXISTS "${SFNP_MASK_HEVC_INCLUDE_DIRECTORY}/${header}")
+                message(FATAL_ERROR "Explicit HEVC decoder headers are incomplete: ${header}")
+            endif()
+        endforeach()
+        # The implementation also statically checks these public ABI majors.
+        file(STRINGS "${SFNP_MASK_HEVC_INCLUDE_DIRECTORY}/libavcodec/version_major.h"
+            SFNP_MASK_HEVC_CODEC_MAJOR REGEX "^#define[ \t]+LIBAVCODEC_VERSION_MAJOR[ \t]+62([ \t]|$)")
+        file(STRINGS "${SFNP_MASK_HEVC_INCLUDE_DIRECTORY}/libavutil/version.h"
+            SFNP_MASK_HEVC_UTILITY_MAJOR REGEX "^#define[ \t]+LIBAVUTIL_VERSION_MAJOR[ \t]+60([ \t]|$)")
+        if(NOT SFNP_MASK_HEVC_CODEC_MAJOR OR NOT SFNP_MASK_HEVC_UTILITY_MAJOR)
+            message(FATAL_ERROR "Explicit HEVC decoder headers must expose the reviewed FFmpeg8 codec62/util60 ABI")
+        endif()
+        target_include_directories(sfnp_mask_hevc_decoder SYSTEM PRIVATE ${SFNP_MASK_HEVC_INCLUDE_DIRECTORY})
+        target_compile_definitions(sfnp_mask_hevc_decoder PRIVATE SFNP_MASK_HEVC_ENABLED=1)
+        if(BUILD_TESTING)
+            add_executable(test_stream_bridge_mask_hevc tests/test_stream_bridge_mask_hevc.cpp)
+            target_link_libraries(test_stream_bridge_mask_hevc PRIVATE sfnp_mask_hevc_decoder)
+            target_compile_options(test_stream_bridge_mask_hevc PRIVATE -Wall -Wextra -Wpedantic -Werror)
+            # Includes the production Process implementation through its fixture;
+            # do not also compile layer/stream_bridge_process.cpp into this target.
+            add_executable(test_stream_bridge_mask_hevc_ingress
+                tests/mask-hevc/process_ingress.cpp
+                receiver/stream_bridge_native_decode.cpp receiver/stream_bridge_native_loader.cpp
+                receiver/stream_bridge_native_runtime.cpp receiver/stream_bridge_native_images.cpp
+                receiver/stream_bridge_local.cpp receiver/stream_bridge_camera_client.cpp)
+            target_include_directories(test_stream_bridge_mask_hevc_ingress PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/layer)
+            target_compile_options(test_stream_bridge_mask_hevc_ingress PRIVATE -Wall -Wextra -Wpedantic -Werror)
+            target_link_libraries(test_stream_bridge_mask_hevc_ingress PRIVATE
+                sfnp_mask_hevc_decoder sfnp_stream_bridge_control Threads::Threads ${CMAKE_DL_LIBS})
+            if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+                enable_language(ASM)
+                target_sources(test_stream_bridge_mask_hevc_ingress PRIVATE receiver/stream_bridge_native_decode_entry.S)
+            endif()
+        endif()
+    endif()
+elseif(SFNP_MASK_HEVC_INCLUDE_DIRECTORY)
+    message(FATAL_ERROR "The optional HEVC mask decoder requires Linux")
+endif()
+
+set(SFNP_MASK_HEVC_HOST_INPUT_COUNT 0)
+foreach(input SFNP_MASK_HEVC_HOST_CODEC_LIBRARY SFNP_MASK_HEVC_HOST_UTILITY_LIBRARY SFNP_MASK_HEVC_HOST_FFMPEG_EXECUTABLE)
+    if(${input})
+        math(EXPR SFNP_MASK_HEVC_HOST_INPUT_COUNT "${SFNP_MASK_HEVC_HOST_INPUT_COUNT}+1")
+        if(NOT EXISTS "${${input}}" OR IS_DIRECTORY "${${input}}")
+            message(FATAL_ERROR "Explicit HEVC host fixture input is not a file: ${input}")
+        endif()
+    endif()
+endforeach()
+if(SFNP_MASK_HEVC_HOST_INPUT_COUNT GREATER 0)
+    if(NOT SFNP_MASK_HEVC_HOST_INPUT_COUNT EQUAL 3)
+        message(FATAL_ERROR "HEVC host fixtures require explicit codec, utility and ffmpeg paths together")
+    endif()
+    if(NOT BUILD_TESTING OR CMAKE_CROSSCOMPILING OR NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR NOT SFNP_MASK_HEVC_INCLUDE_DIRECTORY)
+        message(FATAL_ERROR "HEVC host fixtures require a native Linux test build and explicit FFmpeg8 headers")
+    endif()
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    # The runner owns a TemporaryDirectory and never opens NVENC/V4L2 devices.
+    add_test(NAME stream_bridge_mask_hevc_real COMMAND ${Python3_EXECUTABLE} -B
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/mask-hevc/run.py
+        --decoder $<TARGET_FILE:test_stream_bridge_mask_hevc>
+        --ingress $<TARGET_FILE:test_stream_bridge_mask_hevc_ingress>
+        --ffmpeg ${SFNP_MASK_HEVC_HOST_FFMPEG_EXECUTABLE}
+        --codec ${SFNP_MASK_HEVC_HOST_CODEC_LIBRARY}
+        --utility ${SFNP_MASK_HEVC_HOST_UTILITY_LIBRARY})
+    set_tests_properties(stream_bridge_mask_hevc_real PROPERTIES TIMEOUT 120)
 endif()

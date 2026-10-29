@@ -22,7 +22,8 @@ target_compile_options(VkLayer_steam_link_bridge PRIVATE
     -Wall -Wextra -Wpedantic -Werror -Wno-missing-field-initializers -fvisibility=hidden)
 target_link_options(VkLayer_steam_link_bridge PRIVATE -Wl,--no-undefined -Wl,-z,nodelete
     -Wl,-Bsymbolic-functions "-Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/layer/stream_bridge_exports.map")
-target_link_libraries(VkLayer_steam_link_bridge PRIVATE sfnp_stream_bridge_control Threads::Threads ${CMAKE_DL_LIBS})
+target_link_libraries(VkLayer_steam_link_bridge PRIVATE
+    sfnp_stream_bridge_control sfnp_mask_hevc_decoder Threads::Threads ${CMAKE_DL_LIBS})
 # Keep the companion's C++ runtime private when it shares a loader process
 # with Steam's own runtime. Only the three Vulkan entry points are exported.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")

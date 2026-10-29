@@ -42,6 +42,18 @@ void run(ID3D11Device* device,ID3D11DeviceContext* context,UINT width,UINT heigh
             exact=exact&&bytes[std::size_t(height+y)*mapped.RowPitch+x]==128;
         context->Unmap(staging.p,0);need(exact,"all256 alpha codes full-range and neutral UV exact");
     }
+    if(device->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1){
+        D3D11_BUFFER_DESC bufferDesc{};bufferDesc.ByteWidth=16;bufferDesc.Usage=D3D11_USAGE_DEFAULT;
+        bufferDesc.BindFlags=D3D11_BIND_UNORDERED_ACCESS;bufferDesc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;bufferDesc.StructureByteStride=4;
+        Hold<ID3D11Buffer> buffer;need(SUCCEEDED(device->CreateBuffer(&bufferDesc,nullptr,&buffer.p)),"high-slot UAV buffer");
+        D3D11_UNORDERED_ACCESS_VIEW_DESC view{};view.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;view.Buffer.NumElements=4;
+        Hold<ID3D11UnorderedAccessView> uav;need(SUCCEEDED(device->CreateUnorderedAccessView(buffer.p,&view,&uav.p)),"high-slot UAV view");
+        const UINT preserve=0xffffffffu;
+        context->OMSetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,63,1,&uav.p,&preserve);
+        need(!surfaces.write(context,0),"slot63 UAV refuses conversion without changing native state");
+        Hold<ID3D11UnorderedAccessView> observed;context->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,63,1,&observed.p);
+        need(observed.p==uav.p,"slot63 UAV binding preserved");context->ClearState();
+    }
     need(!surfaces.write(context,4),"invalid slot refused");
     surfaces.resetCold();need(!surfaces.write(context,0),"retired surface refused");
     context->ClearState();context->Flush();
@@ -49,7 +61,8 @@ void run(ID3D11Device* device,ID3D11DeviceContext* context,UINT width,UINT heigh
 }
 int main(){try{
     Hold<ID3D11Device> device;Hold<ID3D11DeviceContext> context;
-    need(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device.p,nullptr,&context.p)),"actual WARP D3D11 device");
+    const D3D_FEATURE_LEVEL levels[]{D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};
+    need(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,levels,2,D3D11_SDK_VERSION,&device.p,nullptr,&context.p)),"actual WARP D3D11 device");
     run(device.p,context.p,256,8);run(device.p,context.p,1152,4608);
     std::puts("Owned full-size R8-to-NV12 GPU conversion and native pipeline restoration PASS");return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"Mask HEVC surface test failed: %s\n",e.what());return 1;}}

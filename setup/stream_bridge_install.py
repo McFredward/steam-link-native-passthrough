@@ -1024,7 +1024,15 @@ class FrameInstall:
         if state:
             operations={op['path']:op['after'] for op in state['operations']}
             pins={name:bundle.value['files']['frame/'+name] for name in (LIBRARY,'libsfnp_stream_launch.so')}
-            pins.update({name.removeprefix('frame/'):bundle.value['files'][name] for name in MASK_CODEC_FILES if name in bundle.files})
+            # Remote inventory uses ReadOnlyView, which carries pins only.
+            # Optional libraries are a complete owned group, not a target subset:
+            # removing that group also requires a paired Frame transaction.
+            recorded_masks={name for name in MASK_CODEC_FILES
+                if operations.get(str(self.root/Path(name).relative_to('frame'))) is not None}
+            target_masks=set(bundle.value['files'])&MASK_CODEC_FILES
+            mask_pair_current=recorded_masks==target_masks
+            patch_current=patch_current and mask_pair_current
+            pins.update({name.removeprefix('frame/'):bundle.value['files'][name] for name in target_masks})
             if state.get('activation_mode','active')=='active':pins.update(bundle.frame['generated'])
             for name,pin in pins.items():
                 value=operations.get(str(self.root/name))
@@ -1032,7 +1040,7 @@ class FrameInstall:
                 patch_current=patch_current and len(raw)==pin['bytes'] and self.e.sha(raw)==pin['sha256']
         # The complete Frame payload is independent of the global bundle pin.
         # A changed PC DLL/installer does not make unchanged Frame files stale.
-        component_files_current=state is not None
+        component_files_current=state is not None and mask_pair_current
         if state:
             for name in bundle.frame['files']:
                 owned=operations.get(str(self.root/Path(name).relative_to('frame')))
@@ -1353,6 +1361,12 @@ class FrameInstall:
                 op=next(item for item in current['operations'] if item['path']==str(path))
                 wanted[path]=base64.b64decode(op['after']['bytes'],validate=True)
         operations=e.parse(e.encoded(current))['operations'];by_path={op['path']:op for op in operations};changes=[]
+        # A target can withdraw the optional pair. Keep initial predecessors for
+        # Uninstall and checkpoint both removals for exact update Undo. Unknown
+        # unrecorded files remain untouched; only current receipt paths retire.
+        for name in MASK_CODEC_FILES:
+            path=self.root/Path(name).relative_to('frame')
+            if name not in bundle.files and str(path) in by_path:wanted[path]=None
         for path,raw in wanted.items():
             observed=self.tx.current(path);desired=None if raw is None else {'kind':'file','bytes':base64.b64encode(raw).decode()}
             if str(path) not in by_path:
@@ -1628,8 +1642,14 @@ class FrameInstall:
                 self.config/'vulkan/implicit_layer.d'/MANIFEST:e.encoded(layer_manifest(self.root/LIBRARY)),
                 self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf':self.dropin()})
         operations=e.parse(e.encoded(current))['operations'];by_path={op['path']:op for op in operations};changes=[]
+        # A target can withdraw the optional pair. Keep initial predecessors for
+        # Uninstall and checkpoint both removals for exact update Undo. Unknown
+        # unrecorded files remain untouched; only current receipt paths retire.
+        for name in MASK_CODEC_FILES:
+            path=self.root/Path(name).relative_to('frame')
+            if name not in bundle.files and str(path) in by_path:wanted[path]=None
         for path,raw in wanted.items():
-            observed=self.tx.current(path);desired={'kind':'file','bytes':base64.b64encode(raw).decode()}
+            observed=self.tx.current(path);desired=None if raw is None else {'kind':'file','bytes':base64.b64encode(raw).decode()}
             if str(path) in by_path:by_path[str(path)]['after']=desired
             else:
                 op=self.tx.operation(path,raw);operations.append(op);by_path[str(path)]=op
@@ -1689,7 +1709,8 @@ class FrameInstall:
                 artifacts=(self.root/LIBRARY,self.root/'libsfnp_stream_launch.so',self.root/'receiver.enable',
                     self.config/'vulkan/implicit_layer.d'/MANIFEST,
                     self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
-                    self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK)
+                    self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK,
+                    *(self.root/Path(name).relative_to('frame') for name in MASK_CODEC_FILES))
                 self.e.require(not any(os.path.lexists(path) for path in artifacts),
                     'The Frame removal receipt is missing; remaining patch components were preserved and complete uninstall could not be verified.')
             return {'reason':'not_installed','automatic_restart':False}

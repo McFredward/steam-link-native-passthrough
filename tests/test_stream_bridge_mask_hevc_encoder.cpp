@@ -1,5 +1,7 @@
 #include "pc/stream-bridge-mask-hevc.h"
 #include "pc/stream-bridge-mask-hevc-platform.h"
+#include "pc/stream-bridge-mask-hevc-stage.h"
+#include "pc/stream-bridge-sender-provider-coverage-stages.h"
 #include <nvEncodeAPI.h>
 #include <algorithm>
 #include <cstdio>
@@ -233,6 +235,19 @@ int main(){
         if(control==10)x.api.version=0;
         if(control==11)x.api.nvEncLockBitstream=nullptr;
         check(!x.configure()&&!x.encoder.configured(),"unsupported capability/configuration or partial allocation fails closed");resetAndCheck(x);
+    }
+    {
+        using Stages=CoverageStages<MaskHevcStageState>;
+        Stages stages;auto captured=stages.capture(9);check(bool(captured),"source stage is captured before mask pool reconfiguration");
+        captured->receipt.input=9;captured->receipt.contract=17;captured->receipt.present=1;captured->receipt.width=64;captured->receipt.height=64;
+        captured->resources.hevcSurfaceReady=true;captured->resources.hevcSubmitted=true;captured->resources.hevcKey.submission=7;
+        captured.publish(Stages::Phase::Captured);
+        {Stages::PoolClaim maintenance;check(stages.maintenance(maintenance),"cold pool can retain an unbound captured A8 receipt");invalidateMaskHevcStages(maintenance);}
+        check(stages.bind(9,64,64,7,reinterpret_cast<void*>(17),3,1),"retained original A8 receipt still binds to exact native input");
+        auto bound=stages.read(7,reinterpret_cast<void*>(17),3);check(bool(bound),"exact retained native stage is readable");
+        check(!bound->resources.hevcSurfaceReady&&!bound->resources.hevcSubmitted&&!bound->resources.hevcKey.submission,
+            "captured NV12 write/key cannot survive cold pool replacement or failed reset");
+        check(bound->receipt.contract==17&&bound->receipt.present==1,"NV12 invalidation preserves independent current A8 source proof");
     }
     std::printf("mask HEVC private-session lifetime/association tests: %u checks passed; no hardware codec claim\n",checks);
 }

@@ -31,6 +31,7 @@ on:
       - 'tests/test_setup_workflow.py'
       - 'tests/test_pc_only_setup.py'
       - 'tests/test_package_stream_bridge.py'
+      - 'tests/test_mask_hevc_install.py'
       - 'tests/test_logging_channel.py'
       - 'tools/publish_logging_channel.py'
       - 'tests/test_steam_link_setup.py'
@@ -75,6 +76,7 @@ on:
       - 'tests/test_setup_workflow.py'
       - 'tests/test_pc_only_setup.py'
       - 'tests/test_package_stream_bridge.py'
+      - 'tests/test_mask_hevc_install.py'
       - 'tests/test_logging_channel.py'
       - 'tools/publish_logging_channel.py'
       - 'tests/test_steam_link_setup.py'
@@ -139,6 +141,7 @@ jobs:
           python -B tests/test_native_passthrough_setup.py
           python -B tests/test_steam_link_setup.py
           python -B tests/test_stream_bridge_install.py
+          python -B tests/test_mask_hevc_install.py
           python -B tests/test_setup_session.py
           python -B tests/test_setup_log.py
           python -B tests/test_setup_tui.py

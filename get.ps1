@@ -1,7 +1,7 @@
-param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview)
+param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview, [ValidateRange(0,200)][int] $HevcMaskBitrate = 0)
 # Online entry point. Runs from Invoke-RestMethod | Invoke-Expression too.
 & {
-    param([bool] $sfnpInspection, [bool] $sfnpManage, [bool] $sfnpBridgePreview)
+    param([bool] $sfnpInspection, [bool] $sfnpManage, [bool] $sfnpBridgePreview, [int] $sfnpHevcMaskBitrate)
     $ErrorActionPreference = 'Stop'
     Set-StrictMode -Version 2
     $sfnpStage = $null
@@ -262,6 +262,18 @@ param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview)
         elseif ($sfnpManage) { $sfnpArguments += '--manage' }
         & $python @sfnpArguments
         Require-Sfnp ($LASTEXITCODE -eq 0) 'The setup assistant stopped. Check its displayed log and recovery status.'
+        if ($sfnpHevcMaskBitrate -gt 0) {
+            Require-Sfnp (-not ($sfnpInspection -or $sfnpManage -or $sfnpBridgePreview)) 'HEVC mask selection requires normal paired setup.'
+            $sfnpInstalledProvider = Join-Path $env:LOCALAPPDATA 'steam-link-native-passthrough/pc-provider/bin/win64/driver_steam_link_native_passthrough.dll'
+            $sfnpTargetProvider = Join-Path $target 'pc-provider/bin/win64/driver_steam_link_native_passthrough.dll'
+            if ((Test-Path -LiteralPath $sfnpInstalledProvider -PathType Leaf) -and
+                (Get-FileHash -LiteralPath $sfnpInstalledProvider -Algorithm SHA256).Hash -ceq (Get-FileHash -LiteralPath $sfnpTargetProvider -Algorithm SHA256).Hash) {
+                & $python '-I' '-B' (Join-Path $target 'tools/configure_mask_codec.py') '--bitrate' $sfnpHevcMaskBitrate
+                Require-Sfnp ($LASTEXITCODE -eq 0) 'The PC update is present, but HEVC mask selection failed.'
+            } else {
+                Write-Host 'The target PC update was not applied. The mask codec selection was preserved.'
+            }
+        }
     } catch {
         Write-Host ('Setup could not finish: ' + $_.Exception.Message) -ForegroundColor Red
         Write-Host 'Run setup again to check its saved state or continue recovery. Device actions require the assistant confirmation.'
@@ -271,4 +283,4 @@ param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview)
             Remove-Item -LiteralPath $sfnpStage -Recurse -Force
         }
     }
-} ([bool] $InspectionOnly) ([bool] $Manage) ([bool] $BridgePreview)
+} ([bool] $InspectionOnly) ([bool] $Manage) ([bool] $BridgePreview) $HevcMaskBitrate

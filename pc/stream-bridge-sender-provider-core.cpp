@@ -307,6 +307,10 @@ NVENCSTATUS NVENCAPI NvencBoundary::encode(void* encoder,NV_ENC_PIC_PARAMS* para
             for(auto& m:s->maps)if(m.mapped==params->inputBuffer)for(auto& r:s->resources)if(r.registered==m.registered&&r.generation==m.resourceGeneration&&r.width==params->inputWidth&&r.height==params->inputHeight&&r.width==s->width&&r.height==s->height&&r.format==params->bufferFmt){
                 for(auto& p:s->submissions)if(!p.evidence.submission){identity=++s->nextIdentity;p.evidence={encoder,generation,identity,r.native,r.generation,m.generation,m.mapped,params->outputBitstream,params->inputTimeStamp,r.width,r.height,r.subresource,r.format,true};
                     p.evidence.qos=s->qosObservation;p.evidence.qos.encodeOverlappedReconfigure=s->reconfiguring;
+                    // Planning only: avoid an unused companion encode for old
+                    // peers. Lock independently recomputes current authority.
+                    p.evidence.lossyCoverageAuthorized=s->adapter.mutualConfirmed()&&s->adapter.probeObserved()
+                        &&(s->adapter.handshake().negotiatedCapabilities()&CapHevcIntraCoverage)!=0;
                     if(self.inputObserver_.capture)try{self.inputObserver_.capture(p.evidence,self.inputObserver_.context);}catch(...){}
                     if(s->reconfiguring)count(self.reconfigureStats_.overlappingInputs);
                     break;}

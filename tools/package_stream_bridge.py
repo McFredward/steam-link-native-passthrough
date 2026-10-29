@@ -55,6 +55,7 @@ def required_sources(root=ROOT):
                    'tools/package_setup_dependencies.py','tools/package_setup_textual.py',
                    'packaging/setup-textual.json','packaging/setup-python.json','packaging/setup-openssh.json',
                    'packaging/mask-ffmpeg.json','tools/build_mask_hevc_ffmpeg.py',
+                   'tools/configure_mask_codec.py',
                    'third_party/ffmpeg/COPYING.LGPLv2.1'}|
                   {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES})
 
@@ -189,6 +190,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
            'LICENSE':source_bytes['LICENSE'],
            'third_party/lz4/LICENSE':source_bytes['third_party/lz4/LICENSE'],
            'third_party/zstd/LICENSE':source_bytes['third_party/zstd/LICENSE']}
+    files['tools/configure_mask_codec.py']=source_bytes['tools/configure_mask_codec.py']
     if mask_decoder is not None:
         for name in ('third_party/ffmpeg/COPYING.LGPLv2.1','packaging/mask-ffmpeg.json','tools/build_mask_hevc_ffmpeg.py'):
             files[name]=source_bytes[name]

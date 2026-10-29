@@ -1,0 +1,56 @@
+name: Negotiated HEVC mask decoder
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'receiver/stream_bridge_mask_hevc.*'
+      - 'layer/stream_bridge_process.*'
+      - 'bridge/stream_bridge_hevc_coverage.*'
+      - 'tests/mask-hevc/**'
+      - 'tests/test_stream_bridge_mask_hevc.cpp'
+      - 'tools/build_mask_hevc_ffmpeg.py'
+      - 'packaging/mask-ffmpeg.json'
+      - 'cmake/StreamBridge*.cmake'
+      - '.github/workflows/mask-hevc-tests.yml'
+  pull_request:
+    paths:
+      - 'receiver/stream_bridge_mask_hevc.*'
+      - 'layer/stream_bridge_process.*'
+      - 'bridge/stream_bridge_hevc_coverage.*'
+      - 'tests/mask-hevc/**'
+      - 'tests/test_stream_bridge_mask_hevc.cpp'
+      - 'tools/build_mask_hevc_ffmpeg.py'
+      - 'packaging/mask-ffmpeg.json'
+      - 'cmake/StreamBridge*.cmake'
+      - '.github/workflows/mask-hevc-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-decoder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare reviewed private decoder and synthetic encoder inputs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg libvulkan-dev
+          mkdir -p build/ffmpeg-input
+          curl --fail --location --retry 3 --max-time 60 https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz -o build/ffmpeg-input/release.tar.xz
+          curl --fail --location --retry 3 --max-time 60 https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz.asc -o build/ffmpeg-input/release.asc
+          curl --fail --location --retry 3 --max-time 60 https://ffmpeg.org/ffmpeg-devel.asc -o build/ffmpeg-input/key.asc
+          python3 -B tools/build_mask_hevc_ffmpeg.py --archive build/ffmpeg-input/release.tar.xz --signature build/ffmpeg-input/release.asc --key build/ffmpeg-input/key.asc --output build/private-codec --cross-prefix '' >build/ffmpeg-build.log 2>&1
+      - name: Build actual software decoder and authenticated native ingress
+        run: |
+          cmake -S . -B build/hevc -DFRAME_STREAM_BRIDGE_ONLY=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DSFNP_MASK_HEVC_INCLUDE_DIRECTORY="$PWD/build/private-codec/install/include" -DSFNP_MASK_HEVC_HOST_CODEC_LIBRARY="$PWD/build/private-codec/install/lib/libavcodec-sfnp-mask.so.62" -DSFNP_MASK_HEVC_HOST_UTILITY_LIBRARY="$PWD/build/private-codec/install/lib/libavutil-sfnp-mask.so.60" -DSFNP_MASK_HEVC_HOST_FFMPEG_EXECUTABLE=/usr/bin/ffmpeg
+          cmake --build build/hevc --parallel 4 --target test_stream_bridge_hevc_coverage test_stream_bridge_mask_hevc test_stream_bridge_mask_hevc_ingress
+          ctest --test-dir build/hevc --output-on-failure -R '^stream_bridge_(hevc_coverage|mask_hevc_real)$'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: owned-hevc-decoder-evidence
+          path: |
+            build/hevc/Testing/Temporary/LastTest.log
+            build/private-codec/recipe.json
+            build/ffmpeg-build.log

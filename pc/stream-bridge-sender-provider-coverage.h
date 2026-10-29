@@ -62,7 +62,7 @@ struct CoverageGateStats {
     std::uint32_t lastQueryResult=0,lastReadbackResult=0;
     std::uint64_t maskedVideoBytes=0,maskedWireBytes=0,maskRleBytes=0,maxMaskedWireBytes=0;
     std::uint64_t maskEncodedBytes=0,maskRawBytes=0,lastEncodeUs=0,maxEncodeUs=0;
-    std::array<std::uint64_t,6> maskEncodingFrames{};
+    std::array<std::uint64_t,7> maskEncodingFrames{};
     std::array<std::uint64_t,static_cast<unsigned>(SourceContractStatus::Count)> sourceRefusals{},sourceProcessPairs{};
     std::uint32_t sourceCauses=0;
     bool contextTableReadable=false,contextTableStable=false,nativeDeviceSame=false;
@@ -148,7 +148,7 @@ private:
     std::atomic<std::uint64_t> submittedReadbacks_{},queryReady_{},queryPending_{},queryErrors_{},queryAge_{},maxQueryAge_{};
     std::atomic<std::uint64_t> maskedVideoBytes_{},maskedWireBytes_{},maskRleBytes_{},maxMaskedWireBytes_{};
     std::atomic<std::uint64_t> maskEncodedBytes_{},maskRawBytes_{},encodeDuration_{},maxEncodeDuration_{};
-    std::array<std::atomic<std::uint64_t>,6> maskEncodingFrames_{};
+    std::array<std::atomic<std::uint64_t>,7> maskEncodingFrames_{};
     // Contention can lose diagnostic samples; snapshots are intentionally not
     // coherent frame proofs. No caller may use them to authorize rendering.
     std::array<std::atomic<std::uint64_t>,static_cast<unsigned>(CoverageSignal::Count)> signals_{};
@@ -196,6 +196,12 @@ private:
 // Process-lifetime native GPU observer. Construct before publishing the NVENC
 // factory; tick runs only on the cold provider worker. All refusals leave native
 // video alone. ready is source-mode preparation, never selected-image proof.
+struct HevcMaskStats {
+    bool requested=false,prepared=false,available=false;
+    std::uint32_t bitRate=0;int nativeStatus=0;
+    std::uint64_t encoded=0,pending=0,refused=0,syntaxRefused=0;
+    std::uint64_t submissionToPollUs=0,maxSubmissionToPollUs=0;
+};
 class SenderCoverage {
 public:
     SenderCoverage(DirectModeBoundary&,NvencBoundary&,ControlRuntime&);
@@ -206,6 +212,9 @@ public:
     bool configure(std::uintptr_t verifiedNativeModule,const NativeImageLayout&)noexcept;
     void tick()noexcept;
     void configureMaskCapture(const std::filesystem::path& privateRoot)noexcept; // Cold, explicit request only.
+    void configureHevcMask(std::uint32_t bitrate)noexcept; // Cold startup only; zero disables.
+    bool hevcAvailable()const noexcept;
+    HevcMaskStats hevcMaskStats()const noexcept;
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
     void stop()noexcept;
     bool ready(std::uint32_t processId)const noexcept;

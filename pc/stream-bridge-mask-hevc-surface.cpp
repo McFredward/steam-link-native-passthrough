@@ -27,7 +27,7 @@ struct Saved {
     std::array<D3D11_VIEWPORT,16> viewports{};UINT count=16;
     ID3D11Predicate* predicate=nullptr;BOOL predication=FALSE;
     bool compatible=true,changed=false;
-    explicit Saved(ID3D11DeviceContext* context):c(context){
+    explicit Saved(ID3D11DeviceContext* context,UINT uavCount):c(context){
         // Dynamic shader linkage and OM UAVs are not part of this conversion
         // contract. Refuse without changing native state rather than losing them.
         UINT n=0;c->VSGetShader(&vs,nullptr,&n);compatible=compatible&&n==0;
@@ -35,9 +35,9 @@ struct Saved {
         n=0;c->GSGetShader(&gs,nullptr,&n);compatible=compatible&&n==0;
         n=0;c->HSGetShader(&hs,nullptr,&n);compatible=compatible&&n==0;
         n=0;c->DSGetShader(&ds,nullptr,&n);compatible=compatible&&n==0;
-        std::array<ID3D11UnorderedAccessView*,8> uavs{};
-        c->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,0,8,uavs.data());
-        for(auto*& u:uavs){compatible=compatible&&u==nullptr;release(u);}
+        std::array<ID3D11UnorderedAccessView*,64> uavs{};
+        c->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,0,uavCount,uavs.data());
+        for(UINT i=0;i<uavCount;++i){compatible=compatible&&uavs[i]==nullptr;release(uavs[i]);}
         c->IAGetInputLayout(&layout);c->IAGetPrimitiveTopology(&topology);
         c->RSGetState(&raster);c->RSGetViewports(&count,viewports.data());
         c->OMGetBlendState(&blend,factor,&mask);c->OMGetDepthStencilState(&depth,&stencil);
@@ -115,8 +115,10 @@ bool MaskHevcSurfaces::prepareCold(ID3D11Device* device,ID3D11Texture2D* input)n
 }
 bool MaskHevcSurfaces::write(ID3D11DeviceContext* context,unsigned slot)noexcept{
     auto& s=*impl_;if(!context||slot>=s.textures.size()||!s.source||!s.textures[slot])return false;
-    ID3D11Device* device=nullptr;context->GetDevice(&device);const bool same=device==s.device;release(device);if(!same)return false;
-    Saved saved(context);if(!saved.compatible)return false;saved.changed=true;
+    ID3D11Device* device=nullptr;context->GetDevice(&device);const bool same=device==s.device;
+    const UINT uavCount=device&&device->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1?64:8;
+    release(device);if(!same)return false;
+    Saved saved(context,uavCount);if(!saved.compatible)return false;saved.changed=true;
     const FLOAT neutral[4]{128.f/255.f,128.f/255.f,128.f/255.f,128.f/255.f};
     context->ClearRenderTargetView(s.chroma[slot],neutral);
     context->OMSetRenderTargets(1,&s.luma[slot],nullptr);
