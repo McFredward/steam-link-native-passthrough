@@ -96,7 +96,10 @@ void idr(Bits& b,const Sequence& s,const Picture& p){
     bool disabled=p.disabledFilter;if(p.overrideFilter&&b.bit()){disabled=b.bit();if(!disabled){b.se(-6,6);b.se(-6,6);}}
     if(p.loop&&(luma||chroma||!disabled))b.bit();
     if(p.wpp){const auto count=b.ue(8192);if(count){const auto bits=b.ue(31)+1;for(unsigned i=0;i<count;++i)b.u(bits);}}
-    b.align();need(b.remaining()); // CABAC validity is independently established by the real decoder.
+    // Entropy is consumed by the real decoder. Neither this header parser nor
+    // a decoder returning an unflagged picture certifies complete CABAC syntax.
+    // Byte completeness comes from the owned native Lock and signed payload.
+    b.align();need(b.remaining());
 }
 bool startCode(Bytes b,std::size_t from,std::size_t& offset,std::size_t& length){
     for(std::size_t i=from;i+2<b.size;++i)if(!b.data[i]&&!b.data[i+1]){

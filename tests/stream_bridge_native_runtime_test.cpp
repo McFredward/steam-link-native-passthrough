@@ -1,4 +1,6 @@
 #include "receiver/stream_bridge_native_runtime.h"
+#include "bridge/stream_bridge_hevc_coverage.h"
+#include "stream_bridge_hevc_fixture.h"
 #include "receiver/stream_bridge_native_loader.h"
 #include "pc/stream-bridge-sender.h"
 #include <algorithm>
@@ -36,19 +38,19 @@ struct Fixture {
     nd::DecodeProvider* ownedNative=nullptr;std::vector<nd::DecodedFrame> decodedFrames;
     std::vector<nd::CaptureObservation> unavailableFrames;nd::SourceIdentity unavailableSource{};
     nd::SnapshotStats counts{};unsigned polls=0,capturePolls=0,randomCalls=0,certified=0,decoded=0;
-    bool randomFails=false,routeReady=true,publishGapAfterEmptyPoll=false,leaseCurrent=true;unsigned leaseChecks=0;std::uint64_t clock=100;std::vector<nd::RuntimeNotice> notices;std::vector<nd::CaptureObservation> invalidations;
+    bool randomFails=false,routeReady=true,publishGapAfterEmptyPoll=false,leaseCurrent=true,hevcReady=false;unsigned leaseChecks=0;std::uint64_t clock=100;std::vector<nd::RuntimeNotice> notices;std::vector<nd::CaptureObservation> invalidations;
     nd::DecodedFrame lastDecoded{};nd::CertifiedFrame lastCertified{};sb::CertifiedAccessUnit retained{};
     sb::ControlRuntime producer;nd::ReceiverWorker worker;sb::Handshake sender;
-    sb::LocalConfig local{};sb::LocalSendAuthority authority{};std::uint64_t content=0,sourceFrame=1000;
-    Fixture(){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
-        r.offered=r.required=sb::KnownCapabilities&~sb::CapHevcIntraCoverage;
+    sb::LocalConfig local{};sb::LocalSendAuthority authority{};std::uint64_t content=0,sourceFrame=1000;std::vector<sb::VerifiedControl> echoes;
+    explicit Fixture(bool hevc=false):hevcReady(hevc){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
+        r.offered=sb::KnownCapabilities;r.required=sb::KnownCapabilities&~sb::CapHevcIntraCoverage;r.hevcIntraCoverageEnabled=hevc;
         std::strcpy(r.address.data(),"127.0.0.1");check(producer.prepare(r)==sb::ControlStatus::Listening,"actual producer transport");
         check(producer.localConfig(local,authority),"actual producer signing session");
         check(sender.begin(local,authority.channel)==sb::Status::Ok,"actual full-capability producer handshake");}
     static tx::VerifiedSource source(){tx::VerifiedSource s;s.verified=s.ordinaryStream=s.completeAccessUnit=true;s.codec=tx::VerifiedSource::Codec::HevcAnnexB;s.moduleSha256[0]=1;s.apiVersion=0x7102000b;s.encoderGeneration=81;return s;}
     nd::RuntimeRequest request(){nd::RuntimeRequest r;r.explicitlyEnabled=true;r.buildId=712;r.pairingsDirectory=files.receiver;r.producerPort=producer.localPort();std::strcpy(r.producerAddress.data(),"127.0.0.1");
         r.imageRoutePrepared=[](void* v) noexcept{return static_cast<Fixture*>(v)->routeReady;};r.imageRouteContext=this;
-        r.callbacks={onCertified,onDecoded,onCapture,onNotice,this,onUnavailable};return r;}
+        r.callbacks={onCertified,onDecoded,onCapture,onNotice,this,onUnavailable};r.hevcIntraCoverageReady=hevcReady;return r;}
     nd::SourceProvider provider(){return {poll,pollCapture,stats,random,this,monotonic,currentCapture};}
     static std::uint64_t monotonic(void* v) noexcept{return static_cast<Fixture*>(v)->clock;}
     static bool poll(nd::Observation& out,std::uint8_t* destination,std::size_t capacity,void* v) noexcept {
@@ -69,7 +71,9 @@ struct Fixture {
     }
     static void onNotice(const nd::RuntimeNotice& n,void* v) noexcept{static_cast<Fixture*>(v)->notices.push_back(n);}
     void enqueue(std::vector<std::uint8_t> coded,std::uint32_t token,std::uint64_t pool=7){nd::Observation o{23,2,static_cast<std::uint32_t>(coded.size()),pool,++content,token,false,4096};input.push_back({o,std::move(coded)});}
-    void pump(){for(unsigned i=0;i<80;++i){worker.tick();producer.tick();sb::VerifiedControl got{};while(producer.pollVerified(got))check(sender.receive(bytes(got.payload),got.channel)==sb::Status::Ok,"actual verified reverse handshake");}}
+    void pump(){for(unsigned i=0;i<80;++i){worker.tick();producer.tick();sb::VerifiedControl got{};while(producer.pollVerified(got)){
+        sb::ProbeMessage probe;if(sb::decodeProbe(bytes(got.payload),probe)==sb::Status::Ok){echoes.push_back(got);continue;}
+        check(sender.receive(bytes(got.payload),got.channel)==sb::Status::Ok,"actual verified reverse handshake");}}}
     std::vector<std::uint8_t> signedDiscovery(){sb::Message message{};check(sender.next(message)==sb::Status::Ok,"actual producer discovery action");
         sb::AuthPayload plain{};check(sb::encode(message,plain)==sb::Status::Ok,"actual producer full-capability encoding");
         std::vector<std::uint8_t> envelope,coded;const auto sealer=producer.senderSealer();
@@ -90,7 +94,7 @@ struct Fixture {
             capture.push_back({nd::CaptureKind::Decoded,23,73,0,token,7,21,token});pump();}
         check(sender.confirmed()&&worker.status().state==nd::RuntimeState::PeerConfirmed,"actual video certificate plus real reverse socket confirms peer");}
     void relisten(std::uint16_t port){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
-        r.offered=r.required=sb::KnownCapabilities&~sb::CapHevcIntraCoverage;r.port=port;std::strcpy(r.address.data(),"127.0.0.1");
+        r.offered=sb::KnownCapabilities;r.required=sb::KnownCapabilities&~sb::CapHevcIntraCoverage;r.hevcIntraCoverageEnabled=hevcReady;r.port=port;std::strcpy(r.address.data(),"127.0.0.1");
         check(producer.prepare(r)==sb::ControlStatus::Listening&&producer.localConfig(local,authority),"actual fresh producer control admission on same configured endpoint");
         sender.reset();check(sender.begin(local,authority.channel)==sb::Status::Ok,"new real paired binding after route reconnect");}
 };
@@ -607,5 +611,53 @@ void transportRecoveryRejectsOldProof(){
     check(auth.randomCalls==1&&auth.worker.status().control==sb::ControlStatus::AuthenticationRefused&&auth.certified==0,
         "transport retry never retries authenticated-control rejection or grants pixels");
 }
+void completeCodedProbe(Fixture& f){
+    sb::ProbeTracker tracker;sb::ProbeMessage probe;sb::Nonce token{};token.fill(39);
+    check(tracker.begin(f.sender,1,token,probe)==sb::Status::Ok,"real producer probe requires the actual confirmed handshake");
+    sb::AuthPayload plain{};check(sb::encodeProbe(probe,plain)==sb::Status::Ok,"real probe payload");
+    const auto sealer=f.producer.senderSealer();std::vector<std::uint8_t> envelope,withProbe,certified;
+    check(sealer.seal(bytes(plain),envelope,sealer.context)&&sb::appendOwned(bytes(ordinary),bytes(envelope),withProbe)==sb::SeiStatus::Ok,"real pair-authenticated probe is physically included in this original RGB AU");
+    const std::array<std::uint8_t,2> rle{{16,255}};
+    check(f.producer.certifyAccessUnit(bytes(withProbe),{++f.sourceFrame,81,4,4},sb::CoverageEncoding::Rle,bytes(rle),certified),"discovery remains lossless until optional HEVC source probe completes");
+    f.enqueue(certified,61);f.pump();
+    check(f.echoes.size()==1&&tracker.acceptEcho(f.sender,bytes(f.echoes.front().payload),f.echoes.front().channel)==sb::Status::Ok&&tracker.observed(),"only actual observed authenticated probe returns the exact native echo");
 }
-int main(int argc,char** argv){try{if(argc==2&&std::strcmp(argv[1],"--native-restart")==0){actualNativeRestart();std::cout<<checks<<" actual native restart checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-burst")==0){actualNativeBurst();std::cout<<checks<<" actual native burst checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-validity")==0){earlyDecodedValidity();std::cout<<checks<<" early decoded validity checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-decoded")==0){earlyDecodedOrdering();std::cout<<checks<<" early decoded checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--pool-order")==0){sameFdPoolOrdering();std::cout<<checks<<" pool-order checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--route-gaps")==0){routeQuarantineAndBackoff();std::cout<<checks<<" route-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--live-switch")==0){liveDecoderSwitch();std::cout<<checks<<" live-switch checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--known-gap")==0){knownGapRecovery();std::cout<<checks<<" known-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-disposition")==0){actualNativeTerminalDisposition();std::cout<<checks<<" actual native terminal disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--capture-disposition")==0){terminalCaptureDisposition();std::cout<<checks<<" terminal capture disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--ordinary-gap")==0){ordinaryWithoutCapture();std::cout<<checks<<" no-capture checks PASS\n";return 0;}offAndPreparation();actualNativeBurst();actualNativeTerminalDisposition();actualNativeRestart();earlyDecodedOrdering();earlyDecodedValidity();realVideoAndCapture();unprovedInputs();ordinaryWithoutCapture();terminalCaptureDisposition();knownGapRecovery();routeQuarantineAndBackoff();liveDecoderSwitch();sameFdPoolOrdering();lifecycleAndLoss();ambiguityAndBound();imageRouteAdmission();lateTransportReadiness();transportRecoveryRejectsOldProof();std::cout<<checks<<" hosted native receiver checks PASS\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+void hevcCapabilityAndProbeGates(){
+    const std::vector<std::uint8_t> annexB(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());
+    std::vector<std::uint8_t> mask;check(sb::wrapHevcCoverage(bytes(annexB),64,64,mask),"actual owned Main IDR mask fixture");
+    Fixture modern(true);modern.negotiate();
+    check((modern.sender.negotiatedCapabilities()&sb::CapHevcIntraCoverage)!=0,"prepared optional decoder and sender negotiate HEVC without requiring it");
+    const auto frame=[&](Fixture& f){std::vector<std::uint8_t> coded;
+        check(f.producer.certifyAccessUnit(bytes(ordinary),{++f.sourceFrame,81,64,64},sb::CoverageEncoding::HevcIntra,bytes(mask),coded,true),"actual current prepared signer can certify opted-in HEVC bytes");return coded;};
+    const auto before=modern.certified;modern.enqueue(frame(modern),60);modern.pump();
+    check(modern.certified==before&&modern.worker.status().state==nd::RuntimeState::PeerConfirmed,"confirmed capability alone cannot publish HEVC before real coded probe observation");
+    completeCodedProbe(modern);
+    const auto accepted=modern.certified;modern.enqueue(frame(modern),62);modern.pump();
+    check(modern.certified==accepted+1&&modern.retained.coverageEncoding==sb::CoverageEncoding::HevcIntra&&modern.retained.descriptor.codedWidth==64,"fully confirmed negotiated+observed source admits its exact HEVC frame certificate");
+    const auto decoded=modern.decoded;modern.capture.push_back({nd::CaptureKind::Decoded,23,73,0,62,7,21,62});modern.pump();
+    check(modern.decoded==decoded+1&&modern.lastDecoded.descriptor.sourceFrame==modern.retained.descriptor.sourceFrame,"HEVC certificate still joins only its exact current native decoded CAPTURE token");
+
+    Fixture early(true);early.start();const auto discovery=early.signedDiscovery();std::vector<std::uint8_t> earlyCoded;
+    check(early.producer.certifyAccessUnit(bytes(discovery),{++early.sourceFrame,81,64,64},sb::CoverageEncoding::HevcIntra,bytes(mask),earlyCoded,true),"fault-injected early Codec6 is genuinely source/MAC-bound");
+    early.enqueue(earlyCoded,10);early.pump();
+    check(early.certified==0&&!early.sender.confirmed(),"prepared codecs plus authenticated producer HELLO cannot bypass mutual confirmation");
+    Fixture noCapability;noCapability.hevcReady=true;noCapability.negotiate();completeCodedProbe(noCapability);
+    check(!(noCapability.sender.negotiatedCapabilities()&sb::CapHevcIntraCoverage),"ready receiver cannot make a default lossless sender negotiate Codec6");
+    sb::Pairing ownPair;sb::AuthSession bypassSigner;
+    check(sb::loadPrivatePairing(noCapability.files.producer,sb::Role::Producer,ownPair)==sb::CredentialStatus::Ok&&bypassSigner.prepareProducer(ownPair,noCapability.authority.channel.binding)==sb::AuthStatus::Ok,"fault control owns the real current producer key/binding but bypasses its mode guard");
+    std::vector<std::uint8_t> forged;
+    check(sb::appendCertifiedFrame(bytes(ordinary),{++noCapability.sourceFrame,81,64,64},sb::CoverageEncoding::HevcIntra,bytes(mask),bypassSigner,forged)==sb::FrameStatus::Ok,"unnegotiated Codec6 fault is still validly authenticated and correctly framed");
+    const auto noCapBefore=noCapability.certified;noCapability.enqueue(forged,63);noCapability.pump();
+    check(noCapability.certified==noCapBefore&&noCapability.worker.status().state==nd::RuntimeState::PeerConfirmed,"receiver capability check independently rejects MAC-valid Codec6 after a real probe when bit1024 was never negotiated");
+    Fixture missingDecoder(true);missingDecoder.hevcReady=false;missingDecoder.negotiate();
+    check(!(missingDecoder.sender.negotiatedCapabilities()&sb::CapHevcIntraCoverage),"unprepared receiver keeps the complete old lossless capability intersection");
+    const auto old=missingDecoder.certified;missingDecoder.enqueue(frame(missingDecoder),60);missingDecoder.pump();
+    check(missingDecoder.certified==old&&missingDecoder.worker.status().state==nd::RuntimeState::PeerConfirmed,"receiver independently rejects MAC-valid forged Codec6 without its own prepared decoder/capability");
+    Fixture legacy;legacy.negotiate();std::vector<std::uint8_t> untouched{51};
+    check(!legacy.producer.certifyAccessUnit(bytes(ordinary),{71,81,64,64},sb::CoverageEncoding::HevcIntra,bytes(mask),untouched,true)&&untouched==std::vector<std::uint8_t>{51},"caller cannot force Codec6 into a producer with default lossless quality mode");
+    modern.producer.stop();untouched={51};
+    check(!modern.producer.certifyAccessUnit(bytes(ordinary),{72,81,64,64},sb::CoverageEncoding::HevcIntra,bytes(mask),untouched,true)&&untouched==std::vector<std::uint8_t>{51},"stop revokes the lossy signer as well as all original session proof");
+}
+
+}
+int main(int argc,char** argv){try{if(argc==2&&std::strcmp(argv[1],"--hevc-gates")==0){hevcCapabilityAndProbeGates();std::cout<<checks<<" HEVC source/capability gate checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-restart")==0){actualNativeRestart();std::cout<<checks<<" actual native restart checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-burst")==0){actualNativeBurst();std::cout<<checks<<" actual native burst checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-validity")==0){earlyDecodedValidity();std::cout<<checks<<" early decoded validity checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-decoded")==0){earlyDecodedOrdering();std::cout<<checks<<" early decoded checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--pool-order")==0){sameFdPoolOrdering();std::cout<<checks<<" pool-order checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--route-gaps")==0){routeQuarantineAndBackoff();std::cout<<checks<<" route-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--live-switch")==0){liveDecoderSwitch();std::cout<<checks<<" live-switch checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--known-gap")==0){knownGapRecovery();std::cout<<checks<<" known-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-disposition")==0){actualNativeTerminalDisposition();std::cout<<checks<<" actual native terminal disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--capture-disposition")==0){terminalCaptureDisposition();std::cout<<checks<<" terminal capture disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--ordinary-gap")==0){ordinaryWithoutCapture();std::cout<<checks<<" no-capture checks PASS\n";return 0;}hevcCapabilityAndProbeGates();offAndPreparation();actualNativeBurst();actualNativeTerminalDisposition();actualNativeRestart();earlyDecodedOrdering();earlyDecodedValidity();realVideoAndCapture();unprovedInputs();ordinaryWithoutCapture();terminalCaptureDisposition();knownGapRecovery();routeQuarantineAndBackoff();liveDecoderSwitch();sameFdPoolOrdering();lifecycleAndLoss();ambiguityAndBound();imageRouteAdmission();lateTransportReadiness();transportRecoveryRejectsOldProof();std::cout<<checks<<" hosted native receiver checks PASS\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

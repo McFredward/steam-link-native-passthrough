@@ -61,6 +61,13 @@ void parser(){
         rejected(syntax(o),"unsupported profile/8bit/chroma/extent/DPB/reorder/RPS/range/slice/PPS mismatch refused");}
     Options o;o.first=false;rejected(syntax(o),"dependent/nonfirst IDR slice refused");o={};o.tiles=true;rejected(syntax(o),"tiles are outside the initial single-slice contract");
     auto huge=real;huge.resize(sb::MaximumHevcCoverageBitstreamBytes+1);rejected(huge,"compressed input bound enforced before allocation");
+    check(sb::wrapHevcCoverage(bytes(real),64,64,wrapped),"restore real owned input for bounded malformed-prefix corpus");
+    unsigned random=43;
+    for(unsigned i=0;i<4096;++i){auto changed=wrapped;for(unsigned j=0;j<4;++j){random=random*1664525u+1013904223u;const auto at=sb::HevcCoverageHeaderBytes+(random%real.size());random=random*1664525u+1013904223u;changed[at]^=std::uint8_t(1u<<(random%8));}
+        view=unchanged;const bool okay=sb::inspectHevcCoverage(bytes(changed),64,64,view);
+        // CABAC mutations can remain structurally valid; authentication and a
+        // real decoder independently handle those. Refusals stay transactional.
+        check(okay||(view.annexB.data==unchanged.annexB.data&&view.width==unchanged.width),"bounded malformed HEVC corpus cannot partially publish a failed view");}
 }
 void authentication(){
     sb::Pairing pair;pair.role=sb::Role::Producer;pair.pairId.fill(23);pair.key.fill(19);sb::Nonce binding{},connection{};binding.fill(7);connection.fill(9);

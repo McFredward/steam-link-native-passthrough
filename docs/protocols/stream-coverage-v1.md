@@ -18,7 +18,7 @@ unsigned little-endian. Its dedicated `user_data_unregistered` SEI UUID is
 |---:|---:|---|
 | 0 | 4 | ASCII `SFV1` |
 | 4 | 1 | Version 1 |
-| 5 | 1 | Coverage encoding: None 0, Raw 1, RLE 2, RLE+LZ4 3, optional RLE+Zstd 4, raw+Zstd 5 |
+| 5 | 1 | Coverage encoding: None 0, Raw 1, RLE 2, RLE+LZ4 3, optional RLE+Zstd 4, raw+Zstd 5, optional lossy HEVC intra6 |
 | 6 | 2 | Header length 176 |
 | 8 | 16 | Authenticated pair identity |
 | 24 | 16 | Current session binding |
@@ -85,6 +85,14 @@ emits zero game RGBA; otherwise it retains ordinary opaque output. The decoder h
 native submit checks remain independent. See the
 [continuity record](../development/FRAME-CONTINUITY.md) for publication order,
 failure handling, measured runs and hardware limits.
+
+Optional encoding6, explicitly authorized on October29, permits lossy pixel
+values while retaining exact source/frame/eye/image association. Its signed
+encoded-payload hash has the same meaning as the existing codecs; successful
+HEVC decoding is an additional independent gate. It is never selected by the
+lossless chooser or enabled merely by knowing a capability bit. See the
+[intra HEVC contract](hevc-coverage-v1.md) for the envelope, opt-in/readiness,
+strict independent-picture subset and remaining hardware evidence.
 
 ## Optional RLE/Zstd encoding 4
 
