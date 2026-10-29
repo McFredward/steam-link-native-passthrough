@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20151238,
-    "sha256": "c617899ff2dc0a0b38750a4ae0ff548d32ba4b037395642c3f5e877afe275172"
+    "bytes": 20151420,
+    "sha256": "0945ec97e591dbc3f0a25454330ab05da7206763459b9a006d8d3eb20c88deae"
   },
   "artifacts": {
     "frame_layer": {
@@ -22,12 +22,12 @@
     },
     "pc_provider": {
       "bytes": 2060800,
-      "sha256": "2a3aa5e2b5468b214e1189c4300d451ab8c2647543a9f4599b08fd909c64aa69"
+      "sha256": "ecab52ebaecb5eca57f66a22bd9d2558bcaba07cd3430faed0aafcc3f683ad30"
     }
   },
   "component_versions": {
-    "frame": "0.2.19",
-    "pc": "0.2.22"
+    "frame": "0.3.0",
+    "pc": "0.3.0"
   },
   "device_actions": false,
   "hardware_verified": false,
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11054,
-    "sha256": "4404da6df8b5e7f4df4ab7c5bf8030e9896420d3b417414899840848848602b7"
+    "sha256": "9752a0820c26735e5a605c83f4c75b06c76b161aae92f497b6c83348b5735af9"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -46,12 +46,12 @@
       "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
     },
     "PATCH_VERSIONS.json": {
-      "bytes": 80,
-      "sha256": "6df7b067e9ba5d4c9ed08b9c659645d0658e1e340af135ba45122a2501858aaf"
+      "bytes": 78,
+      "sha256": "465e70392e49568ddebde90ff62917502664d570a8386b3b3881458fe2dbc117"
     },
     "VERSION": {
-      "bytes": 7,
-      "sha256": "13b377964e3a32083a6f53e6c4a9c0e4d81594f31035faed41aba7c4cb340e0f"
+      "bytes": 6,
+      "sha256": "d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0"
     },
     "packaging/mask-ffmpeg.json": {
       "bytes": 452,
@@ -174,8 +174,8 @@
       "sha256": "b4e7d5e63484e9a45658302a735749cd2c09d697192662c05048b966a3b3eea3"
     },
     "tools/configure_mask_codec.py": {
-      "bytes": 2677,
-      "sha256": "178c8498a4fa67a715cdf953b917c42cf74d40ff0ed9ef1413af72634fa2013f"
+      "bytes": 2791,
+      "sha256": "25c36853b9e912d7edf253c96ea7fe3636d5168ed05b9be4dfa81cd6ac7f8add"
     },
     "tools/native_fragment_count1_interface.py": {
       "bytes": 2874,
@@ -222,7 +222,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "4357c272c731b84729398f1fe7a9818639dd5172",
+  "source_revision": "3dd49c69dc4052d55efeae15111ce9b80527cc57",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -240,9 +240,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8090,
-        "sha256": "754d769dbca52be4bf88f33a1e8284d8bd026acc2c902fb25366b695282d5633"
+        "sha256": "5494ead7fcb255bb31593638b39005c27c17424d9cbba76e4a85deefb8d14483"
       }
     }
   ],
-  "version": "0.2.23"
+  "version": "0.3.0"
 }
