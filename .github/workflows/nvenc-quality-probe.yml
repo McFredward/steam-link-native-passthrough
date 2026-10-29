@@ -1,0 +1,62 @@
+name: Offline NVIDIA mask quality probe
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'tests/mask-hevc/nvenc_quality_probe.cpp'
+      - 'tests/mask-hevc/probe_pattern.h'
+      - 'pc/stream-bridge-mask-hevc*'
+      - 'tools/build_nvenc_quality_probe.sh'
+      - 'tools/analyze_nvenc_quality_probe.py'
+      - 'tools/test-mask-encoder.ps1'
+      - 'tests/test_nvenc_quality_probe.py'
+      - '.github/workflows/nvenc-quality-probe.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-analysis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install numpy
+      - run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Source pattern and strict offline analysis controls
+        run: |
+          mkdir -p build
+          c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I. tests/mask-hevc/nvenc_quality_probe.cpp -o build/probe-pattern
+          test "$(build/probe-pattern)" = 'pattern_fingerprint=590f27c6912fb95/8b09404605f50045; bytes=7962624'
+          python -B tests/test_nvenc_quality_probe.py
+  windows-native:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Pinned NVENC API declaration
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/sdk | Out-Null
+          Invoke-WebRequest 'https://raw.githubusercontent.com/FFmpeg/nv-codec-headers/43d91706e097565f57b311e567f0219838bcc2f6/include/ffnvcodec/nvEncodeAPI.h' -OutFile build/sdk/nvEncodeAPI.h
+          if ((Get-FileHash build/sdk/nvEncodeAPI.h).Hash.ToLowerInvariant() -ne 'be0c29a41ae3260fd016a9001fd959e747bac93ad21411759736abba4ffdea86') { throw 'SDK declaration pin mismatch' }
+      - name: Compile real Windows probe and production encoder; execute input selftest
+        shell: cmd
+        run: |
+          clang-cl /nologo /std:c++17 /O2 /EHsc /W4 /WX /I. /imsvcbuild/sdk tests/mask-hevc/nvenc_quality_probe.cpp pc/stream-bridge-mask-hevc.cpp /Fe:build\probe.exe /Fo:build\ /link d3d11.lib dxgi.lib uuid.lib winmm.lib
+          if errorlevel 1 exit /b 1
+          build\probe.exe --selftest >build\pattern.log
+          if errorlevel 1 exit /b 1
+          findstr /c:"pattern_fingerprint=590f27c6912fb95/8b09404605f50045; bytes=7962624" build\pattern.log
+          exit /b %ERRORLEVEL%
+      - name: Parse Windows PowerShell entry when present
+        shell: powershell
+        run: |
+          if (Test-Path tools/test-mask-encoder.ps1) {
+            $errors = $null; $tokens = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/test-mask-encoder.ps1), [ref]$tokens, [ref]$errors) | Out-Null
+            if ($errors.Count) { throw ($errors | Out-String) }
+          }

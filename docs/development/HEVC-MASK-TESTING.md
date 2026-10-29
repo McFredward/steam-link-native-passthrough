@@ -333,3 +333,50 @@ Frame decode/backpressure together. Repeated1Mbit/s image starvation, persistent
 new grain or broken effects fails acceptance, even if transport counters pass.
 Software causal/contract tests can validate the controller and identities; only
 a coordinated headset test establishes this visual acceptance.
+
+## Hardware rate-response comparison after0.3.8
+
+The next Spirit Sling run confirms the controller fix:43 successful private RC
+updates for11754 HEVC masks, without pending polls, output/syntax refusal or
+lossless fallback. It still fails the visual goal. For thousands of current-rate
+outputs,100kbit/s requested target produces about23–27Mbit/s. Reported average
+QP is around35–37 (lifetime maximum frame-average42), while native RGB repeatedly
+reaches1Mbit/s. Fewer RC calls alone has not fixed image quality. This does not
+prove a particular driver bug, maximum per-block QP, or that temporal coding will
+meet the actual game's quality/latency constraints.
+
+`tools/test-mask-encoder.ps1` runs a separate, finite, offline GPU comparison on
+Windows with SteamVR and Venture closed. Its binary uses the unchanged production
+private encoder frontend and explicitly labelled original-API overrides; none is
+linked into or enabled in the installed provider. All modes receive the same96
+synthetic full-resolution NV12 inputs: fine foliage/holes, moving rain, fractional
+fog and a full-range ramp. Every uploaded Y/UV byte is checked by actual cold GPU
+readback before encoding. This is a GPU diagnostic, not a VR rendering hot path.
+
+Compare initial20Mbit/s, fresh1Mbit/s and100kbit/s, dynamic20Mbit/s→100kbit/s,
+automatic GOP1 IDR, infinite GOP with every frame forced IDR, P3/quarter-resolution
+multipass and P3/multipass IPPP8. The last IPPP mode is diagnostic only: the current
+runtime's IDR guard still refuses its P pictures. It does not establish Frame
+compatibility or permit reusing a stale/currently unproved mask. No live runtime
+configuration, Frame files, pairing or services are changed by the probe.
+
+Results go into `%LOCALAPPDATA%\steam-link-native-passthrough\encoder-probe-results.zip`.
+The script verifies the immutable download size/SHA256, records native stdout and
+stderr even on a failure and archives small per-frame traces, one owned source
+R8 image and bounded last-GOP prefixes. Temporary GPU inputs and the downloaded
+executable are removed; retained outputs use one fixed directory. Nominal encoded
+bits at90Hz and submission-to-poll are not measured network/end-to-end latency or
+concurrent RGB/mask encoder throughput. Source files and the pinned SDK/build
+recipe reproduce the binary.
+
+On the analysis host:
+
+```sh
+python3 -B tools/analyze_nvenc_quality_probe.py /private/encoder-probe-results.zip --output /private/quality-analysis.json
+```
+
+The analyzer uses real CPU FFmpeg decoding and the exact last source frame to
+compare full-range Y, fractional-alpha error and changed0/255 endpoints. It keeps
+synthetic results separate from actual-game/headset evidence. Hardware target
+response and matched decoded pixels should guide the next runtime codec change,
+rather than shipping another unmeasured bitrate/preset change.
