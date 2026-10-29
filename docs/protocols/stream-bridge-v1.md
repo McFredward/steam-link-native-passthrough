@@ -60,9 +60,9 @@ nonzero reserved fields and invalid enums are rejected transactionally.
 Known capabilities are negotiation1, Annex-B SEI2, exact source association4,
 opaque fallback8, explicit coverage16, lossless RLE+LZ4 coverage32 and optional
 lossless RLE+Zstd coverage64, camera-only recovery128, raw+Zstd coverage256 and
-ordinary decoded-video pictures512 and optional intra HEVC coverage1024. The portable
+ordinary decoded-video pictures512 and optional intra HEVC coverage1024 plus extended intra-slice syntax2048. The portable
 mandatory baseline is1|2|8 =11. The installed sender and receiver currently both
-require the original six bits (63) and offer1023 by default; bit1024 is offered
+require the original six bits (63) and offer1023 by default; bits1024/2048 are offered
 only after explicit sender quality-mode/encoder preparation or actual receiver
 decoder readiness. An older peer without bit32 cannot activate
 their paired route. This is separate from the project semantic version.

@@ -310,7 +310,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::encode(void* encoder,NV_ENC_PIC_PARAMS* para
                     // Planning only: avoid an unused companion encode for old
                     // peers. Lock independently recomputes current authority.
                     p.evidence.lossyCoverageAuthorized=s->adapter.mutualConfirmed()&&s->adapter.probeObserved()
-                        &&(s->adapter.handshake().negotiatedCapabilities()&CapHevcIntraCoverage)!=0;
+                        &&hevcIntraSlicesNegotiated(s->adapter.handshake().negotiatedCapabilities());
                     if(self.inputObserver_.capture)try{self.inputObserver_.capture(p.evidence,self.inputObserver_.context);}catch(...){}
                     if(s->reconfiguring)count(self.reconfigureStats_.overlappingInputs);
                     break;}
@@ -357,7 +357,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::lock(void* encoder,NV_ENC_LOCK_BITSTREAM* pa
         evidence.rawEntropyCoverageAuthorized=evidence.coverageSessionAuthorized
             &&(s->adapter.handshake().negotiatedCapabilities()&CapRawZstd)!=0;
         evidence.lossyCoverageAuthorized=evidence.coverageSessionAuthorized
-            &&(s->adapter.handshake().negotiatedCapabilities()&CapHevcIntraCoverage)!=0;
+            &&hevcIntraSlicesNegotiated(s->adapter.handshake().negotiatedCapabilities());
         evidence.cameraOnlyRecoveryAuthorized=evidence.coverageSessionAuthorized
             &&(s->adapter.handshake().negotiatedCapabilities()&CapCameraOnlyRecovery)!=0;
         evidence.ordinaryVideoAuthorized=evidence.cameraOnlyRecoveryAuthorized

@@ -96,7 +96,7 @@ void capabilities(){
     Files files;sb::ControlRuntime runtime;auto req=request(files.producer,sb::Role::Producer);
     req.offered=sb::KnownCapabilities;req.required=sb::NativeRequiredCapabilities;req.hevcIntraCoverageEnabled=false;
     check(runtime.prepare(req)==sb::ControlStatus::Listening,"knowing optional lossy bit does not enable it");
-    sb::LocalConfig cold;check(runtime.configuredLocal(cold)&&!(cold.offered&sb::CapHevcIntraCoverage),"unprepared/default quality mode does not advertise HEVC");
+    sb::LocalConfig cold;check(runtime.configuredLocal(cold)&&!(cold.offered&(sb::CapHevcIntraCoverage|sb::CapHevcIntraSlices)),"unprepared/default quality mode does not advertise HEVC");
     req.required=sb::KnownCapabilities;
     check(runtime.prepare(req)==sb::ControlStatus::AddressRefused,"required HEVC cannot override missing explicit prepared opt-in");
     req.hevcIntraCoverageEnabled=true;

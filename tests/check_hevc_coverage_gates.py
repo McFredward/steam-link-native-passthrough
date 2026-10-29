@@ -44,7 +44,7 @@ def main():
          'false', 'test_stream_bridge_native_runtime', ['--hevc-gates'],
          'receiver capability check independently rejects MAC-valid Codec6'),
         ('implicit_opt_in', 'bridge/stream_bridge_control.cpp',
-         'request.hevcIntraCoverageEnabled?request.offered:(request.offered&~CapHevcIntraCoverage)',
+         'request.hevcIntraCoverageEnabled?request.offered:(request.offered&~(CapHevcIntraCoverage|CapHevcIntraSlices))',
          'request.offered', 'test_stream_bridge_native_runtime', ['--hevc-gates'],
          'ready receiver cannot make a default lossless sender negotiate Codec6'),
         ('missing_encoded_payload_hash', 'bridge/stream_bridge_frame.cpp',

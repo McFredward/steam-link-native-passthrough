@@ -7,18 +7,22 @@ association remain exact. Existing encodings0–5 retain their original behavior
 This contract does not establish NVENC availability, a measured bitrate saving,
 Frame decoder throughput or headset image quality.
 
-`CapHevcIntraCoverage` is optional bit1024. Neither installed peer adds it to the
-required baseline63. Knowing the bit never advertises or enables it by itself.
+`CapHevcIntraCoverage` is optional bit1024; `CapHevcIntraSlices` is optional
+bit2048 for the extended parser (independent slices and unused explicit SPS
+reference sets). The current NVENC sender requires both bits to keep an older
+strict decoder on the existing lossless route. A new decoder can still accept
+an original single-slice Codec6 picture from an older sender. Neither bit is added to the required baseline63. Knowing a bit never
+advertises or enables it by itself.
 The producer must explicitly select the quality mode and prepare its owned
 encoder. The receiver must actually prepare its owned cold decoder. The
 `ControlRequest.hevcIntraCoverageEnabled` default is false; preparation masks
-bit1024 from offered capabilities until enabled. A required-but-unprepared bit
+both HEVC bits from offered capabilities until enabled. A required-but-unprepared bit
 is refused. Receiver readiness propagates through the default-false
 `RuntimeRequest.hevcIntraCoverageReady`.
 
 The producer's `lossyCoverageAuthorized` is derived from the same current native
 output evidence as ordinary coverage: current encoder generation, mutually
-confirmed handshake, actual coded probe/echo and negotiated bit1024. The caller
+confirmed handshake, actual coded probe/echo and negotiated bits1024/2048. The caller
 must supply this evidence explicitly to `certifyAccessUnit`; prepared settings
 alone are insufficient. The receiver independently checks prepared readiness,
 its actual confirmed handshake, observed coded probe and negotiated bit before
@@ -72,16 +76,22 @@ of decoded R8. The stricter negotiated complete native RGB-plus-metadata AU
 capacity remains mandatory and can be much smaller than these parser limits.
 
 NAL/RBSP parsing requires layer0 and temporal0, exactly one VPS/SPS/PPS in that
-order, and exactly one first-slice IDR of type19 or20. An optional initial AUD
-must declare an I picture. Both parameter-set profiles must actually be Main;
+order, and exactly one IDR picture of type19 or20, containing up to four
+independent I slices. Only its first slice has the first-slice flag. Subsequent
+slices must keep the same IDR type, PPS and no-output flag, with strictly
+increasing CTB addresses inside the ceil-rounded SPS coding-block extent. An optional
+initial AUD must declare an I picture. Both parameter-set profiles must actually be Main;
 the SPS must actually specify8-bit4:2:0 and exactly the signed dimensions.
 VPS/SPS permit only one temporal layer, at most4 DPB pictures and zero reorder.
-The SPS has no short/long-term reference-picture sets, PCM, custom scaling
-lists, conformance crop, default display crop or extensions. Its VUI explicitly
+The SPS can declare up to64 explicit unused short-term reference sets, each
+limited to its bounded DPB and cumulative absolute POC distance32768. All used
+flags must be zero; predicted sets and long-term references remain refused.
+IDR slices cannot select these declarations or reference another mask. The SPS
+has no PCM, custom scaling lists, conformance crop, default display crop or extensions. Its VUI explicitly
 declares full-range progressive Y. The PPS has no dependent slices, tiles,
 custom scaling lists or extensions. The actual slice header must reference
 that PPS and declare an output I slice. Bounded WPP entry points are allowed.
-P/B pictures, CRA, extra pictures/slices, SEI and other codecs are refused.
+P/B pictures, CRA, extra pictures, dependent or excess slices, SEI and other codecs are refused.
 
 This strict initial subset avoids implicit parameter-set caches or temporal
 dependencies. It deliberately rejects unsupported valid HEVC variations rather

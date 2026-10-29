@@ -405,7 +405,7 @@ void run(){
     check(retirementValid,"all retirement callbacks carry an exact submission identity");
     table.nvEncDestroyEncoder(handle);bridge.stop();check(!bridge.encoderStates()[0].encoder,"destroyed source epoch not exposed to worker");
 }
-void olderCodecPeer(){
+void olderCodecPeer(bool originalHevc=false){
     allowAugment=true; // Independent process, no state inherited from run().
     NvencBoundary bridge({{1}});activeBoundary=&bridge;bridge.setOutputAugmenter({augment,nullptr});
     NV_ENCODE_API_FUNCTION_LIST table{};table.version=NV_ENCODE_API_FUNCTION_LIST_VER;
@@ -419,8 +419,9 @@ void olderCodecPeer(){
     NV_ENC_MAP_INPUT_RESOURCE mp{};mp.version=NV_ENC_MAP_INPUT_RESOURCE_VER;mp.registeredResource=reg;table.nvEncMapInputResource(handle,&mp);
     NV_ENC_PIC_PARAMS pic{};pic.version=NV_ENC_PIC_PARAMS_VER;pic.inputBuffer=mapped;pic.outputBitstream=output;
     pic.inputWidth=pic.inputHeight=64;pic.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;
-    auto local=localConfig();local.required&=~(CapRleLz4|CapRleZstd|CapCameraOnlyRecovery|CapRawZstd|CapOrdinaryVideoPicture|CapHevcIntraCoverage);
-    auto remote=local;remote.role=Role::Receiver;remote.nonce[0]=111;remote.offered&=~(CapRleLz4|CapRleZstd|CapCameraOnlyRecovery|CapRawZstd|CapOrdinaryVideoPicture|CapHevcIntraCoverage);
+    auto local=localConfig();local.required&=~(CapRleLz4|CapRleZstd|CapCameraOnlyRecovery|CapRawZstd|CapOrdinaryVideoPicture|CapHevcIntraCoverage|CapHevcIntraSlices);
+    auto remote=local;remote.role=Role::Receiver;remote.nonce[0]=111;remote.offered&=~(CapRleLz4|CapRleZstd|CapCameraOnlyRecovery|CapRawZstd|CapOrdinaryVideoPicture|CapHevcIntraCoverage|CapHevcIntraSlices);
+    if(originalHevc){local.required=NativeRequiredCapabilities;remote.required=NativeRequiredCapabilities;remote.offered=KnownCapabilities&~CapHevcIntraSlices;}
     Handshake peer;check(peer.begin(remote,authority())==Status::Ok&&bridge.requestDiscovery(handle,local,authority()),"explicit optional-codec deployment starts older compatible peer");
     auto frame=[&](){++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);NV_ENC_LOCK_BITSTREAM value{};
         value.version=NV_ENC_LOCK_BITSTREAM_VER;value.outputBitstream=output;table.nvEncLockBitstream(handle,&value);return value;};
@@ -437,7 +438,9 @@ void olderCodecPeer(){
     table.nvEncUnlockBitstream(handle,output);ProbeMessage probe,echo;
     check(decodeProbe({body.data(),body.size()},probe)==Status::Ok&&makeProbeEcho(peer,probe,authority(),echo)==Status::Ok,"legacy peer echoes exact observed probe");
     std::array<std::uint8_t,ProbeBytes> bytes{};check(encodeProbe(echo,bytes)==Status::Ok&&bridge.receiveEcho(handle,{bytes.data(),bytes.size()},authority())==Status::Ok,"legacy actual echo accepted");
-    frame();check(observed.coverageSessionAuthorized&&!observed.compressedCoverageAuthorized&&!observed.entropyCoverageAuthorized&&!observed.cameraOnlyRecoveryAuthorized&&!observed.rawEntropyCoverageAuthorized&&!observed.ordinaryVideoAuthorized&&!observed.lossyCoverageAuthorized,"actual exact Lock allows ordinary coverage but never unnegotiated LZ4 for an older peer");
+    frame();
+    if(originalHevc)check(observed.coverageSessionAuthorized&&observed.compressedCoverageAuthorized&&observed.entropyCoverageAuthorized&&observed.cameraOnlyRecoveryAuthorized&&observed.rawEntropyCoverageAuthorized&&observed.ordinaryVideoAuthorized&&!observed.lossyCoverageAuthorized,"actual Lock preserves all negotiated lossless routes but refuses extended NVENC masks for an original single-slice HEVC receiver");
+    else check(observed.coverageSessionAuthorized&&!observed.compressedCoverageAuthorized&&!observed.entropyCoverageAuthorized&&!observed.cameraOnlyRecoveryAuthorized&&!observed.rawEntropyCoverageAuthorized&&!observed.ordinaryVideoAuthorized&&!observed.lossyCoverageAuthorized,"actual exact Lock allows ordinary coverage but never unnegotiated LZ4 for an older peer");
     check(observed.qos.revision&&!observed.qos.known&&!observed.qos.budgetApplied
         &&!observed.qos.requestedAverageBitRate&&!observed.qos.appliedAverageBitRate,
         "NULL-config initialization reports unknown preset rates instead of inventing an effective configuration");
@@ -446,4 +449,4 @@ void olderCodecPeer(){
 }
 // The native API table is a process-lifetime singleton. Run legacy negotiation
 // in a separate process instead of relying on optimized stack-address reuse.
-int main(int argc,char** argv){try{if(argc==2&&!std::strcmp(argv[1],"--legacy-codec"))olderCodecPeer();else run();std::printf("sender public input association: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"input association failed after %u: %s\n",checks,e.what());return 1;}}
+int main(int argc,char** argv){try{if(argc==2&&!std::strcmp(argv[1],"--legacy-codec"))olderCodecPeer();else if(argc==2&&!std::strcmp(argv[1],"--old-hevc-codec"))olderCodecPeer(true);else run();std::printf("sender public input association: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"input association failed after %u: %s\n",checks,e.what());return 1;}}

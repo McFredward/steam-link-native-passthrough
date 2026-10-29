@@ -8,9 +8,9 @@
 namespace hevc=stream_bridge_mask_hevc;
 namespace {
 std::vector<std::uint8_t> codedFixture(const std::filesystem::path& path){std::ifstream file(path,std::ios::binary);return {std::istreambuf_iterator<char>(file),{}};}
-std::uint64_t sendHevc(HandoffFixture& f,const std::vector<std::uint8_t>& payload,unsigned damage=0){
+std::uint64_t sendHevc(HandoffFixture& f,const std::vector<std::uint8_t>& payload,unsigned damage=0,unsigned width=64,unsigned height=64){
     const auto frame=f.nextFrame++;
-    const sb::FrameDescriptor descriptor{frame,41,64,64,1};
+    const sb::FrameDescriptor descriptor{frame,41,std::uint16_t(width),std::uint16_t(height),1};
     const std::vector<std::uint8_t> original{0,0,0,1,0x40,1,0x91,0x80,0,0,1,0x02,1,0x80,0x42,0x80,0,0};
     std::vector<std::uint8_t> video;
     check(sb::appendCertifiedFrame({original.data(),original.size()},descriptor,sb::CoverageEncoding::HevcIntra,{payload.data(),payload.size()},f.sender,video)==sb::FrameStatus::Ok,"HEVC input has actual signed original video AU and normative mask envelope");
@@ -49,5 +49,20 @@ void ingress(const hevc::Libraries& libraries,const std::filesystem::path& fixtu
     f.queue(true,0,false);f.cycle();
     check(first.decoded==2&&second.decoded==2&&legacy.certificates==1&&first.pixels==std::vector<std::uint8_t>(32,127),"unavailable HEVC backend preserves existing lossless single-expansion and legacy dispatch");
 }
+void multisliceIngress(const hevc::Libraries& libraries,const std::filesystem::path& fixtures){
+    HandoffFixture f(false);TransientPublication first,second;
+    f.display.consumers[0]={&first,TransientPublication::legacyCallback,nullptr,nullptr,TransientPublication::admitted,nullptr,TransientPublication::decodedCallback};
+    f.display.consumers[1]={&second,TransientPublication::legacyCallback,nullptr,nullptr,TransientPublication::admitted,nullptr,TransientPublication::decodedCallback};
+    check(f.display.maskHevc.prepareCold(libraries),"multi-slice ingress prepares actual decoder");
+    const auto coded=codedFixture(fixtures/"slices.hevc");std::vector<std::uint8_t> payload;
+    check(sb::wrapHevcCoverage({coded.data(),coded.size()},256,256,payload),"real two-slice IDR and unused SPS reference set enter signed transport");
+    const auto frame=sendHevc(f,payload,0,256,256);
+    check(first.decoded==1&&second.decoded==1&&first.frame==frame&&second.frame==frame&&first.address==second.address&&first.pixels.size()==65536,"both consumers share exactly one full decoded mask for the authenticated frame");
+    unsigned error=0;for(unsigned i=0;i<first.pixels.size();++i)error=std::max(error,unsigned(std::abs(int(first.pixels[i])-int(i%256))));
+    check(error<=2&&first.pixels==second.pixels,"both real entropy-coded slices contribute the expected full-range luma");
+    sendHevc(f,payload,3,256,256);
+    check(first.decoded==1&&f.display.flow[unsigned(renderer::Flow::AuthenticationRefused)]==1,"changed second-slice entropy cannot publish another authenticated mask");
 }
-int main(int argc,char** argv){try{if(argc!=4)return 2;ingress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);std::printf("%u real authenticated HEVC Ingress checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+
+}
+int main(int argc,char** argv){try{if(argc!=4)return 2;ingress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);multisliceIngress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);std::printf("%u real authenticated HEVC Ingress checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

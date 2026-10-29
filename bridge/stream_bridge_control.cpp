@@ -96,7 +96,7 @@ void ControlRuntime::stop() noexcept{std::lock_guard<std::mutex> lock(impl_->mut
 ControlStatus ControlRuntime::prepare(const ControlRequest& request) noexcept{
     std::lock_guard<std::mutex> lock(impl_->mutex);impl_->close(ControlStatus::Disabled);
     if(!request.explicitlyEnabled)return impl_->state;
-    const auto offered=request.hevcIntraCoverageEnabled?request.offered:(request.offered&~CapHevcIntraCoverage);
+    const auto offered=request.hevcIntraCoverageEnabled?request.offered:(request.offered&~(CapHevcIntraCoverage|CapHevcIntraSlices));
     if((request.role!=Role::Producer&&request.role!=Role::Receiver)||!request.buildId
         ||(request.offered&~KnownCapabilities)||(request.required&~offered)
         ||(request.required&RequiredCapabilities)!=RequiredCapabilities

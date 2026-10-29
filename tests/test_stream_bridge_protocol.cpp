@@ -98,6 +98,20 @@ void hevcOptionalNegotiation(){
     p.reset();require(!p.negotiatedCapabilities(),"reset removes all HEVC negotiation evidence");
 }
 
+void hevcSlicesNegotiation(){
+    auto modern=config(Role::Producer);modern.offered=KnownCapabilities;modern.required=NativeRequiredCapabilities;
+    auto old=config(Role::Receiver);old.offered=2047;old.required=NativeRequiredCapabilities;
+    Handshake p,r;require(p.begin(modern,channel())==Status::Ok&&r.begin(old,channel())==Status::Ok,"original HEVC peer and extended sender retain original required baseline");
+    for(const auto kind:{Kind::Hello,Kind::Ack,Kind::Commit}){relay(p,r,kind);relay(r,p,kind);}
+    require(p.confirmed()&&(p.negotiatedCapabilities()&CapHevcIntraCoverage)&&!hevcIntraSlicesNegotiated(p.negotiatedCapabilities()),"old single-slice receiver cannot authorize extended NVENC output; sender keeps exact lossless route");
+    old.offered=KnownCapabilities;Handshake a,b;
+    require(a.begin(modern,channel())==Status::Ok&&b.begin(old,channel())==Status::Ok,"both extended peers prepared");
+    require(!hevcIntraSlicesNegotiated(a.negotiatedCapabilities()),"offered extension is not confirmed HEVC authority");
+    for(const auto kind:{Kind::Hello,Kind::Ack,Kind::Commit}){relay(a,b,kind);relay(b,a,kind);}
+    require(hevcIntraSlicesNegotiated(a.negotiatedCapabilities())&&hevcIntraSlicesNegotiated(b.negotiatedCapabilities()),"both committed peers select extended syntax");
+    require(!hevcIntraSlicesNegotiated(CapHevcIntraSlices),"extension alone cannot grant HEVC");
+}
+
 void probe(){
     Handshake p,r;ProbeTracker t;ProbeMessage request;require(t.begin(p,7,nonce(90),request)==Status::OutOfOrder,"probe needs mutual handshake");confirmed(p,r);require(t.begin(r,7,nonce(90),request)==Status::RoleMismatch,"only producer sends probe");require(t.begin(p,7,nonce(90),request)==Status::Ok&&!t.observed(),"fresh probe prepared");
     std::array<std::uint8_t,ProbeBytes> payload{};require(encodeProbe(request,payload)==Status::Ok,"encode probe");
@@ -109,4 +123,4 @@ void probe(){
     auto bad=payload;bad[72]=1;const auto saved=decoded;require(decodeProbe(view(bad),decoded)==Status::Malformed&&decoded.sequence==saved.sequence&&decoded.freshToken==saved.freshToken,"reserved probe bytes no output change");p.reset();require(t.acceptEcho(p,view(payload),channel())!=Status::Ok,"disconnect revokes old echo authority");t.reset();require(!t.observed(),"probe reset");
 }
 }
-int main(){try{goldens();invalidState();compressedCoverageNegotiation();entropyNegotiation();hevcOptionalNegotiation();probe();std::cout<<checks<<" stream bridge checks passed\n";return EXIT_SUCCESS;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return EXIT_FAILURE;}}
+int main(){try{goldens();invalidState();compressedCoverageNegotiation();entropyNegotiation();hevcOptionalNegotiation();hevcSlicesNegotiation();probe();std::cout<<checks<<" stream bridge checks passed\n";return EXIT_SUCCESS;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return EXIT_FAILURE;}}

@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.4 / PC 0.3.3 / Frame 0.3.0 selects lossy HEVC masks by default
+Installer 0.3.5 / PC 0.3.4 / Frame 0.3.1 selects lossy HEVC masks by default
 with a 20 Mbit/s target. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
@@ -172,3 +172,28 @@ inputs, with no GPL/nonfree components or source patches. See its `--help` for
 the offline build arguments; a blank `--cross-prefix` builds host test libraries.
 The namespaced libraries are independent of Valve binaries. The archive carries
 the original LGPL 2.1 text, exact source URL/hash and the reproducible build tool.
+
+## NVIDIA multi-slice parser correction (0.3.5)
+
+The PC0.3.3 Battlemarked log had3079 completed native outputs, no API or
+output-metadata refusals, but3079 syntax refusals and zero transmitted HEVC
+masks. Metadata reservation still reached219.42Mbit/s and the video floor1Mbit/s.
+The bounded trace identifies two independent IDR type19 slices for one
+1152x4608 picture, at CTB addresses0 and2592 (32-pixel CTBs,5184 total), plus
+one explicit unused SPS reference set. Both features were rejected by the
+initial parser. Removing optional AUD alone did not fix this test.
+
+PC0.3.4 and Frame0.3.1 share a bounded parser for up to four increasing
+independent I slices of one IDR picture and explicit unused SPS reference sets.
+Every slice must match the picture's IDR type, PPS and output policy. P/B/CRA,
+second pictures, dependent slices, tiles, active references and out-of-range,
+duplicate or reordered CTB addresses remain refused. The private NVENC session,
+full-resolution mask, quantization target and exact source/frame proof are unchanged.
+
+Both new components are needed: the sender requires negotiated extension bit2048
+alongside1024 before selecting this mask format; an old receiver retains the
+lossless route. Real CPU fixtures with two slices and an unused SPS reference
+set decode and traverse authenticated Process ingress. The tall fixture uses
+the observed1152x4608 extent. Private log header prefixes reproduce the parser
+correction but are not a complete entropy/decode fixture. Hardware transmission,
+Frame throughput and visible quality after this update still require a device test.

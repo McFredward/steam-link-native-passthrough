@@ -34,18 +34,21 @@ void unavailable(const hevc::Libraries& libs){
 void decode(const hevc::Libraries& libs,const fs::path& root){
     hevc::Decoder decoder;check(decoder.prepareCold(libs)&&decoder.ready(),"explicit matching public codec ABI loaded");
     hevc::DecodedMask output;std::vector<std::uint8_t> held;
-    for(const auto* name:{"zero","opaque","codes"}){
-        const auto coded=read(root/(std::string(name)+".hevc"));std::vector<std::uint8_t> payload;
-        check(sb::wrapHevcCoverage(bytes(coded),64,64,payload),"real software Main/full-range/single-IDR fixture passes normative envelope proof");
-        auto in=input(bytes(payload));const auto started=std::chrono::steady_clock::now();const auto status=decoder.decodeIntra(in,output);
+    for(const auto* name:{"zero","opaque","codes","slices","tall-slices"}){
+        const std::string fixture=name;const bool tall=fixture=="tall-slices",multi=tall||fixture=="slices";
+        const unsigned width=tall?1152:(multi?256:64),height=tall?4608:(multi?256:64);
+        const auto coded=read(root/(fixture+".hevc"));std::vector<std::uint8_t> payload;
+        if(multi){const auto units=nals(coded);check(std::count_if(units.begin(),units.end(),[](const auto& n){return n.type==19||n.type==20;})==2,"actual CPU fixture has two IDR slices rather than two pictures");}
+        check(sb::wrapHevcCoverage(bytes(coded),width,height,payload),"real software Main/full-range/one-picture fixture passes normative envelope proof");
+        auto in=input(bytes(payload));in.descriptor.codedWidth=width;in.descriptor.codedHeight=height;const auto started=std::chrono::steady_clock::now();const auto status=decoder.decodeIntra(in,output);
         if(status!=hevc::Status::Ok)std::fprintf(stderr,"%s decode refused: %s\n",name,hevc::statusName(status));
-        check(status==hevc::Status::Ok&&output.samples.size()==4096,"actual decoder produces exactly one full A8 extent");
+        check(status==hevc::Status::Ok&&output.samples.size()==std::size_t(width)*height,"actual decoder produces exactly one full A8 extent");
         check(output.source.connection==in.source.connection&&output.source.generation==in.source.generation&&output.descriptor.sourceFrame==41&&output.descriptor.encoderGeneration==11&&output.binding==in.binding,"decoded output retains exact source/frame/epoch/binding rather than a latest identity");
         if(std::string(name)=="zero")check(std::all_of(output.samples.begin(),output.samples.end(),[](auto b){return b==0;})&&output.range.minimum==0&&output.range.maximum==0,"zero luma remains zero coverage");
         else if(std::string(name)=="opaque")check(std::all_of(output.samples.begin(),output.samples.end(),[](auto b){return b==255;})&&output.range.minimum==255&&output.range.maximum==255,"255 luma remains opaque coverage");
         else{
             unsigned error=0;for(unsigned i=0;i<output.samples.size();++i)error=std::max(error,unsigned(std::abs(int(output.samples[i])-int(i%256))));
-            check(error<=2&&output.range.minimum==0&&output.range.maximum==255,"all256 alpha codes expose accidental limited-range/RGB scaling; QP0 fixture is still explicitly lossy");held=payload;
+            check(error<=2&&output.range.minimum==0&&output.range.maximum==255,"all256 alpha codes expose accidental limited-range/RGB scaling; QP0 fixture is still explicitly lossy");if(fixture=="codes")held=payload;
         }
         std::printf("fixture=%s decode-us=%lld bytes=%zu\n",name,static_cast<long long>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-started).count()),coded.size());
     }

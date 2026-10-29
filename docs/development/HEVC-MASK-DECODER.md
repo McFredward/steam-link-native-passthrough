@@ -2,7 +2,8 @@
 
 The new receiver adapter accepts only authenticated Codec6 `HevcIntra` payloads
 that pass the portable `SFHC` envelope/profile/extent check. The first route uses
-one complete HEVC Main 8-bit 4:2:0 IDR per mask, with its own VPS/SPS/PPS. P/B/CRA,
+one complete HEVC Main 8-bit 4:2:0 IDR per mask, with its own VPS/SPS/PPS and up to four independent slices. Unused explicit
+SPS reference sets are parsed but cannot grant inter-frame prediction. P/B/CRA,
 reordered pictures, conformance crops and references to another mask are refused.
 It trades inter-frame compression efficiency for independent recovery and exact
 frame association. It does not imply hardware decode or measured Frame90Hz.

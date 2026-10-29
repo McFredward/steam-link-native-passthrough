@@ -21,8 +21,8 @@ struct ControlRequest{
     // derive it from this socket, a key file or a local receive counter.
     VideoStreamContext video{};
     // Producer: explicit lossy quality mode plus a prepared owned encoder.
-    // Receiver: an actually prepared cold decoder. Merely knowing bit1024
-    // never advertises it. Required old peers remain usable without this bit.
+    // Receiver: an actually prepared cold decoder. Merely knowing bits1024/2048
+    // never advertises it. Required old peers remain usable without these bits.
     bool hevcIntraCoverageEnabled=false;
 };
 struct VerifiedControl{AuthPayload payload{};VerifiedChannel channel{};};
