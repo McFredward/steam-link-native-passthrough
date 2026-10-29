@@ -85,7 +85,7 @@ def main():
         flags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"] if args.sanitized else []
         native = [root / ("receiver/" + name + ".cpp") for name in
                   ("stream_bridge_native_decode", "stream_bridge_native_loader", "stream_bridge_native_runtime",
-                   "stream_bridge_native_images", "stream_bridge_local", "stream_bridge_camera_client")]
+                   "stream_bridge_native_images", "stream_bridge_local", "stream_bridge_camera_client", "stream_bridge_mask_hevc")]
         libraries = [args.libraries / ("libsfnp_stream_bridge" + name + ".a") for name in ("_control", "")]
         command = ["g++", "-std=c++17", "-Wall", "-Wextra", "-Wpedantic", "-Werror", "-pthread", *flags,
                    "-I" + str(root), "-I" + str(root / "layer"),
