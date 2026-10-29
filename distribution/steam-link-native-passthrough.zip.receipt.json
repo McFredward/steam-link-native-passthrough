@@ -1,12 +1,12 @@
 {
   "archive": {
-    "bytes": 20154337,
-    "sha256": "0df47ee3942fca8b7644973d3ba04b9cfd12a1cb0521f4979903c87617840665"
+    "bytes": 20160254,
+    "sha256": "15a0aa83ea026e84f2813593870f19373a996c724f060c7cfe65bc79de81c9ff"
   },
   "artifacts": {
     "frame_layer": {
-      "bytes": 3653240,
-      "sha256": "202e27694f4c1f0218a89c35fbdc387c9ce2997a65fabcdaa8cfbb664294649e"
+      "bytes": 3653144,
+      "sha256": "8553d62f27ca8dd297ef00ff9d318fc49a076eae4f2d0b1e04c40ad98e6f4a84"
     },
     "frame_selector": {
       "bytes": 73360,
@@ -21,13 +21,13 @@
       "sha256": "efc7a5c2104565a5b25802c503db99415c2e75f2c4797dbe689f834d1b86a076"
     },
     "pc_provider": {
-      "bytes": 2065920,
-      "sha256": "a0bf45b38e68778b2c3ac53c36fcaf10e5deeb6ae90469af2cbdb2e0e8a28ca0"
+      "bytes": 2067456,
+      "sha256": "d582c7a2f8794c4a4975188b716a1fd598841a21942d35706dbdbff65bdd0fc7"
     }
   },
   "component_versions": {
-    "frame": "0.3.0",
-    "pc": "0.3.3"
+    "frame": "0.3.1",
+    "pc": "0.3.4"
   },
   "device_actions": false,
   "hardware_verified": false,
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11054,
-    "sha256": "3159e8ad855becf4c825402a699adbc25026f9ae87f63322526c048acf539342"
+    "sha256": "9f645e9ef652621228b6f613d319facf98ca40f006a8a9db76a7b5b0371d2452"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -47,11 +47,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 78,
-      "sha256": "ae4465d14d44b6540a43c0f9d82c44570cc8e18765529e034ad01f9a033750f1"
+      "sha256": "ba0071c223e1e90f2bcdf8350725313420755dcc382ecca06139f3e906f66973"
     },
     "VERSION": {
       "bytes": 6,
-      "sha256": "027a61167f091a427fa7844dcac0c5141bafbcbdcadc7e04a93578147ab956f2"
+      "sha256": "d5d1d767be9218f02ebda081a83a2b2fede85055e910e5a94a09329966486fcc"
     },
     "packaging/mask-ffmpeg.json": {
       "bytes": 452,
@@ -222,7 +222,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "4aecbe101c9a80aa826000e22e85d8a6a62a1546",
+  "source_revision": "bb9cbd738cd307b57edb847079e7684b7a63c6d4",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -240,9 +240,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8090,
-        "sha256": "0014277c31e6699d31283d4bee4fdfe1f369eca88a802e9ae6af089a1b9604f7"
+        "sha256": "7a9c3531ca4c51a3f8aff3a70f7cebc6ec39cbb414004141f93f1bfabc7ec85d"
       }
     }
   ],
-  "version": "0.3.4"
+  "version": "0.3.5"
 }
