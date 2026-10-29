@@ -46,6 +46,9 @@ NVENCSTATUS NVENCAPI reconfigure(void* handle,NV_ENC_RECONFIGURE_PARAMS* params)
                 &&observed.submission==pendingQosInput.submission&&observed.inputTimestamp==pendingQosInput.inputTimestamp
                 &&observed.resourceGeneration==pendingQosInput.resourceGeneration&&observed.mapGeneration==pendingQosInput.mapGeneration,
                 "accepted frame completed DURING same-contract QoS retains its exact coverage receipt");
+            check(observed.qos.known&&observed.qos.revision==pendingQosInput.qos.revision
+                &&observed.qos.encodeOverlappedReconfigure,
+                "pending-output QoS overlap is explicit without replacing its captured configuration snapshot");
             check(nestedUnlock(handle,output)==NV_ENC_SUCCESS,"pending QoS completion releases only its real native output");
         }catch(...){failure=std::current_exception();}});
         completion.join();if(failure)std::rethrow_exception(failure);
@@ -57,6 +60,8 @@ NVENCSTATUS NVENCAPI reconfigure(void* handle,NV_ENC_RECONFIGURE_PARAMS* params)
         check(nestedLock(handle,&value)==NV_ENC_SUCCESS&&value.bitstreamBufferPtr!=au.data()
             &&captures==beforeCaptures+1&&augments==beforeAugments+1&&observed.exactInput&&observed.coverageSessionAuthorized,
             "native input accepted DURING same-contract QoS keeps its exact mask completion");
+        check(observed.qos.known&&observed.qos.encodeOverlappedReconfigure,
+            "Encode inside native Reconfigure reports ambiguous effective QoS without changing image admission");
         check(nestedUnlock(handle,output)==NV_ENC_SUCCESS,"input completed during QoS retires its own exact native lease");++qosBarriers;
     }
     if(unregisterInside)nestedUnregister(handle,reg);
@@ -98,11 +103,19 @@ void run(){
     check(bridge.encoderStates()[0].encoded,"only accepted original Encode admits cold runtime bootstrap");
     auto p=get();check(!observed.coverageSessionAuthorized&&!observed.compressedCoverageAuthorized&&!observed.entropyCoverageAuthorized&&!observed.cameraOnlyRecoveryAuthorized&&!observed.rawEntropyCoverageAuthorized&&!observed.ordinaryVideoAuthorized,"exact source input alone never authorizes a mask or compressed payload before negotiation");check(p.bitstreamBufferPtr==au.data()&&p.bitstreamSizeInBytes==au.size(),"configured augmenter refusal keeps original entire AU");
     check(observed.exactInput&&observed.resource==resource&&observed.encoder==encoder&&observed.mappedInput==mapped&&observed.output==output&&observed.inputTimestamp==pic.inputTimeStamp&&observed.width==1152&&observed.height==4608&&observed.subresource==0,"output exact public registry/map/encode timestamp tuple");
+    check(observed.qos.known&&observed.qos.revision&&observed.qos.revision==captured.qos.revision
+        &&observed.qos.frameRateNum==90&&observed.qos.frameRateDen==1
+        &&observed.qos.requestedAverageBitRate==10000000&&observed.qos.appliedAverageBitRate==10000000
+        &&!observed.qos.budgetApplied&&!observed.qos.encodeOverlappedReconfigure
+        &&observed.originalAccessUnitBytes==au.size()&&!captured.originalAccessUnitBytes,
+        "actual Encode freezes initial observed QoS and Lock adds original bytes before any SEI augmentation");
     check(observed.encoderGeneration==bridge.generation(handle)&&observed.resourceGeneration&&observed.mapGeneration>observed.resourceGeneration&&observed.submission>observed.mapGeneration&&observed.submission==captured.submission,"separate monotonically scoped resource/map/submission identities");release();check(retires==1,"input ledger retired at matching successful unlock");
     allowAugment=true;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(p.bitstreamBufferPtr!=au.data()&&p.bitstreamSizeInBytes==au.size()+1&&bridge.liveLeases()==1,"owned final augmentation borrowed through actual native lease");
     const auto* borrowed=static_cast<const std::uint8_t*>(p.bitstreamBufferPtr);check(std::memcmp(borrowed,au.data(),au.size())==0&&borrowed[au.size()]==0xab,"candidate preserves original bytes, independent final storage");
     unlockResult=NV_ENC_ERR_GENERIC;check(table.nvEncUnlockBitstream(handle,output)==unlockResult&&bridge.liveLeases()==1&&borrowed[au.size()]==0xab,"failed Unlock preserves final certificate/mask bytes");unlockResult=NV_ENC_SUCCESS;release();check(bridge.liveLeases()==0&&retires==2,"successful Unlock retires final augmentation and source ledger");
     wrongTimestamp=true;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"unmatched timestamp never guesses most recent source");wrongTimestamp=false;release();
+    check(!observed.qos.known&&!observed.qos.revision,
+        "unmatched native output cannot borrow a latest configuration snapshot");
     encodeResult=NV_ENC_ERR_GENERIC;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"failed actual Encode never produces input evidence");release();encodeResult=NV_ENC_SUCCESS;
     pic.inputWidth=100;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"extent mismatch preserves ordinary native output");release();pic.inputWidth=1152;
     table.nvEncUnmapInputResource(handle,mapped);table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"unmapped handle cannot regain resource identity");release();
@@ -121,6 +134,8 @@ void run(){
     auto sendFrame=[&](){++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);return get();};
     for(const auto kind:{Kind::Hello,Kind::Ack,Kind::Commit}){
         p=sendFrame();check(!observed.coverageSessionAuthorized,"handshake messages alone do not authorize coverage before probe");
+        check(observed.originalAccessUnitBytes==au.size()&&p.bitstreamSizeInBytes>observed.originalAccessUnitBytes,
+            "original AU diagnostics exclude discovery and final augmentation bytes already present in the candidate");
         std::vector<std::uint8_t> body;check(inspectOwned({static_cast<const std::uint8_t*>(p.bitstreamBufferPtr),p.bitstreamSizeInBytes},body)==SeiStatus::Ok,"actual coded AU carries exact discovery message");
         Message sent;check(decode({body.data(),body.size()},sent)==Status::Ok&&sent.kind==kind,"actual discovery order");release();
         check(peer.receive({body.data(),body.size()},authority())==Status::Ok,"independent peer consumes observed native output message");
@@ -193,11 +208,25 @@ void run(){
         &&observed.inputTimestamp==asynchronousInput.inputTimestamp&&observed.resourceGeneration==asynchronousInput.resourceGeneration
         &&observed.mapGeneration==asynchronousInput.mapGeneration&&observed.encoderGeneration==qosGeneration,
         "Encode(A), repeated QoS, asynchronous Lock(A) keeps only that exact original accepted receipt");release();
+    check(observed.qos.revision==asynchronousInput.qos.revision&&observed.qos.frameRateNum==90
+        &&observed.qos.appliedAverageBitRate==10000000&&observed.qos.encodeOverlappedReconfigure,
+        "later successful native QoS never relabels an earlier submitted frame with latest rate or FPS");
     p=sendFrame();check(observed.exactInput&&observed.coverageSessionAuthorized&&observed.submission>qosResources.submission,"fresh Encode after QoS owns a new exact authorized submission");
+    check(observed.qos.known&&observed.qos.revision>asynchronousInput.qos.revision
+        &&observed.qos.frameRateNum==120&&observed.qos.frameRateDen==1
+        &&observed.qos.requestedAverageBitRate==14000000&&observed.qos.appliedAverageBitRate==14000000
+        &&observed.qos.requestedMaximumBitRate==18000000&&observed.qos.appliedMaximumBitRate==18000000
+        &&!observed.qos.encodeOverlappedReconfigure,
+        "new submission observes only the last successful native rate and frame-rate configuration");
+    const auto acceptedQosObservation=observed.qos;
     const auto* qosBorrowed=static_cast<const std::uint8_t*>(p.bitstreamBufferPtr);check(qosBorrowed!=au.data()&&bridge.liveLeases()==1,"actual output bytes borrowed before further QoS");
     codecConfig.rcParams.averageBitRate=17000000;reconfigureResult=NV_ENC_ERR_INVALID_PARAM;
     check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_ERR_INVALID_PARAM&&bridge.generation(handle)==qosGeneration,"rejected same-contract dynamic bitrate retains ongoing actual encoder");
     check(qosBorrowed[au.size()]==0xab&&bridge.liveLeases()==1,"accepted/rejected QoS never frees borrowed Lock bytes");release();
+    p=sendFrame();
+    check(observed.qos.revision==acceptedQosObservation.revision&&observed.qos.appliedAverageBitRate==14000000
+        &&!observed.qos.encodeOverlappedReconfigure,
+        "rejected native QoS leaves the previous successful observation for later submissions");release();
     nestedEncode=table.nvEncEncodePicture;nestedLock=table.nvEncLockBitstream;nestedPic=&pic;inspectQos=true;
     reconfigureResult=NV_ENC_SUCCESS;table.nvEncReconfigureEncoder(handle,&qos);inspectQos=false;check(qosBarriers==1,"actual original-call QoS barrier exercised");
     p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"already unlocked in-call input cannot be replayed after QoS returns");release();
@@ -222,6 +251,27 @@ void run(){
     check(bridge.generation(handle)==qosGeneration&&bridge.encoderStates()[0].probeObserved,"budget-only change retains exact source and paired encoder proof");
     const auto rates=bridge.reconfigureStats();
     check(rates.budgeted==1&&rates.budgetAccepted==1&&!rates.budgetRejected&&rates.requestedVideoRate==100000000&&rates.appliedVideoRate==32800000&&rates.metadataRate==67200000,"cold accounting reports requested video, applied video and escaped metadata separately");
+    // A native controller may repeat its original target for every encoded
+    // frame. The wrapper must not feed its already reduced driver rate back
+    // into the next reservation, even after many successful reconfigurations.
+    constexpr unsigned repeatedBudgetCalls=128;
+    for(unsigned n=0;n<repeatedBudgetCalls;++n){
+        check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_SUCCESS
+            &&receivedRate==32800000&&receivedMaximum==52800000
+            &&receivedBuffer==273333&&receivedDelay==262400,
+            "repeated native targets subtract metadata once without compounding rate or VBV reductions");
+    }
+    check(!std::memcmp(&qos,&originalQos,sizeof qos)&&!std::memcmp(&codecConfig,&originalRateConfig,sizeof codecConfig)
+        &&bridge.generation(handle)==qosGeneration,
+        "repeated budget accounting preserves the original native target, config and source generation");
+    p=sendFrame();
+    check(observed.qos.known&&observed.qos.budgetApplied&&!observed.qos.encodeOverlappedReconfigure
+        &&observed.qos.requestedAverageBitRate==100000000&&observed.qos.appliedAverageBitRate==32800000
+        &&observed.qos.requestedMaximumBitRate==120000000&&observed.qos.appliedMaximumBitRate==52800000
+        &&observed.qos.requestedVbvBufferSize==1000000&&observed.qos.appliedVbvBufferSize==273333
+        &&observed.qos.requestedVbvInitialDelay==800000&&observed.qos.appliedVbvInitialDelay==262400
+        &&observed.qos.reservedMetadataBitRate==67200000&&observed.qos.meanMetadataBitRate==67200000,
+        "actual budgeted submission freezes original and forwarded rate VBV and metadata observations");release();
     augmentBytes=75000;p=sendFrame();release();
     check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_SUCCESS&&receivedRate==28000000,
         "one scene-transition metadata spike reserves its full peak at the next native QoS call");
@@ -248,8 +298,21 @@ void run(){
     reconfigureResult=NV_ENC_SUCCESS;qos.reInitEncodeParams.encodeConfig=nullptr;
     table.nvEncReconfigureEncoder(handle,&qos);
     check(receivedRateParams!=&qos&&receivedRate==32800000,"NULL-config QoS still accounts metadata against the caller's saved original config");
+    for(unsigned n=0;n<repeatedBudgetCalls;++n){
+        check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_SUCCESS
+            &&receivedRate==32800000&&receivedMaximum==52800000
+            &&receivedBuffer==273333&&receivedDelay==262400,
+            "repeated NULL-config calls retain original requested rates instead of recursively budgeting the driver copy");
+    }
+    p=sendFrame();
+    check(observed.qos.known&&observed.qos.budgetApplied&&observed.qos.requestedAverageBitRate==100000000
+        &&observed.qos.appliedAverageBitRate==32800000,
+        "NULL-config observation records saved caller target rather than a previously forwarded driver target");release();
     rateAuthority=0;table.nvEncReconfigureEncoder(handle,&qos);
     check(receivedRateParams!=&qos&&receivedRate==100000000&&receivedBuffer==1000000&&receivedDelay==800000,"NULL-config withdrawal explicitly restores the caller rate instead of retaining a previous adjusted driver rate");
+    p=sendFrame();check(observed.qos.known&&!observed.qos.budgetApplied&&!observed.qos.reservedMetadataBitRate
+        &&observed.qos.requestedAverageBitRate==100000000&&observed.qos.appliedAverageBitRate==100000000,
+        "policy withdrawal observation shows actual successful restoration without stale metadata reservation");release();
     qos.reInitEncodeParams.encodeConfig=&codecConfig;
     table.nvEncReconfigureEncoder(handle,&qos);
     check(receivedRateParams==&qos&&receivedRate==100000000,"EOF, opt-out or another v1 producer immediately restores the original native QoS path");
@@ -285,7 +348,7 @@ void run(){
     ++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"QoS never resurrects a resource unregistered by the native callback");release();
     table.nvEncRegisterResource(handle,&rr);table.nvEncMapInputResource(handle,&mp);
     p=sendFrame();check(observed.exactInput&&observed.coverageSessionAuthorized,"native re-registration gets fresh valid input after QoS");release();
-    const auto qosStats=bridge.reconfigureStats();check(qosStats.preservedSuccessful==22&&qosStats.preservedRejected==3,"cold QoS counters distinguish successes from rejected attempts");
+    const auto qosStats=bridge.reconfigureStats();check(qosStats.preservedSuccessful==22+2*repeatedBudgetCalls&&qosStats.preservedRejected==3,"cold QoS counters distinguish successes from rejected attempts");
     check(qosStats.overlappingInputs==1&&qosStats.overlappingOutputs==2,"cold counters identify exact completions across both QoS overlap schedules");
     const auto paddingStart=offsetof(NV_ENC_INITIALIZE_PARAMS,privDataSize)+sizeof qos.reInitEncodeParams.privDataSize;
     const auto paddingEnd=offsetof(NV_ENC_INITIALIZE_PARAMS,privData);
@@ -294,6 +357,7 @@ void run(){
         table.nvEncReconfigureEncoder(handle,&qos);check(bridge.generation(handle)==qosGeneration,"caller alignment padding is not mistaken for changed video contract");bytes[paddingStart]=0;
     }
     inspectDiscovery=true;
+    const auto beforeResetObservation=observed.qos.revision;
     reconfig.reInitEncodeParams=ip;reconfig.resetEncoder=1;reconfigureResult=NV_ENC_SUCCESS;
     check(table.nvEncReconfigureEncoder(handle,&reconfig)==NV_ENC_SUCCESS&&discoveryRevokedInside,"native successful Reconfigure sees old authority revoked before return");
     const auto state=bridge.encoderStates()[0];
@@ -301,6 +365,9 @@ void run(){
     p=get();check(!observed.exactInput&&!observed.coverageSessionAuthorized&&p.bitstreamBufferPtr==au.data(),"old submission cannot authorize new generation before fresh Encode");release();
     ++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);p=get();
     check(observed.exactInput&&!observed.coverageSessionAuthorized&&observed.encoderGeneration==state.generation&&observed.resourceGeneration>before.resourceGeneration&&observed.mapGeneration>before.mapGeneration&&observed.submission>before.submission,"retained native registrations/maps recover without re-registering but every metadata identity is fresh");release();
+    check(observed.qos.known&&observed.qos.revision>beforeResetObservation&&!observed.qos.budgetApplied
+        &&!observed.qos.encodeOverlappedReconfigure&&observed.qos.frameRateNum==90,
+        "reset encoder captures a fresh configuration observation without inheriting the old generation budget");
     check(bridge.receiveEcho(handle,{encodedEcho.data(),encodedEcho.size()},authority())!=Status::Ok,"old generation echo cannot restore image permission before cold runtime ticks");
     ++localNonce;check(bridge.requestDiscovery(handle,localConfig(),authority()),"fresh nonce negotiation can begin after actual native reconfigure");
     p=sendFrame();check(!observed.coverageSessionAuthorized,"fresh discovery does not inherit old session mask permission");release();
@@ -371,6 +438,9 @@ void olderCodecPeer(){
     check(decodeProbe({body.data(),body.size()},probe)==Status::Ok&&makeProbeEcho(peer,probe,authority(),echo)==Status::Ok,"legacy peer echoes exact observed probe");
     std::array<std::uint8_t,ProbeBytes> bytes{};check(encodeProbe(echo,bytes)==Status::Ok&&bridge.receiveEcho(handle,{bytes.data(),bytes.size()},authority())==Status::Ok,"legacy actual echo accepted");
     frame();check(observed.coverageSessionAuthorized&&!observed.compressedCoverageAuthorized&&!observed.entropyCoverageAuthorized&&!observed.cameraOnlyRecoveryAuthorized&&!observed.rawEntropyCoverageAuthorized&&!observed.ordinaryVideoAuthorized,"actual exact Lock allows ordinary coverage but never unnegotiated LZ4 for an older peer");
+    check(observed.qos.revision&&!observed.qos.known&&!observed.qos.budgetApplied
+        &&!observed.qos.requestedAverageBitRate&&!observed.qos.appliedAverageBitRate,
+        "NULL-config initialization reports unknown preset rates instead of inventing an effective configuration");
     table.nvEncUnlockBitstream(handle,output);table.nvEncDestroyEncoder(handle);bridge.stop();
 }
 }

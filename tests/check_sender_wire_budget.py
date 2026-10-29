@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore the original missing metadata budget and require the native QoS witness to fail."""
+"""Mutate budget/observation defects and require their actual native QoS witnesses to fail."""
 import argparse
 import hashlib
 import json
@@ -34,6 +34,18 @@ def main():
             'const auto metadata=s->wireBudget.reserve(authority,contract.frameRateNum,contract.frameRateDen);',
             'const auto metadata=s->wireBudget.average(authority,contract.frameRateNum,contract.frameRateDen);',
             'one scene-transition metadata spike reserves its full peak at the next native QoS call'),
+        'compounded-null-history': (
+            'saveContract(*s,contract,config,hasConfig,true);self.observeQos(*s,observation);count(self.reconfigureStats_.preservedSuccessful);',
+            'saveContract(*s,contract,(applyingBudget&&!params->reInitEncodeParams.encodeConfig)?budgetConfig:config,hasConfig,true);self.observeQos(*s,observation);count(self.reconfigureStats_.preservedSuccessful);',
+            'repeated NULL-config calls retain original requested rates instead of recursively budgeting the driver copy'),
+        'retroactive-latest-qos': (
+            's->encoded=true;evidence=matched->evidence;',
+            's->encoded=true;evidence=matched->evidence;{const bool overlap=evidence.qos.encodeOverlappedReconfigure;evidence.qos=s->qosObservation;evidence.qos.encodeOverlappedReconfigure=overlap;}',
+            'later successful native QoS never relabels an earlier submitted frame with latest rate or FPS'),
+        'hidden-pending-qos-overlap': (
+            'pending.evidence.qos.encodeOverlappedReconfigure=true;',
+            'pending.evidence.qos.encodeOverlappedReconfigure=false;',
+            'pending-output QoS overlap is explicit without replacing its captured configuration snapshot'),
     })
     results = {}
     with tempfile.TemporaryDirectory(prefix='native-continuity-', dir=output) as temporary:
@@ -62,7 +74,7 @@ def main():
         'controls': results,
         'device_access': False,
     }, indent=2) + '\n')
-    print('Unaccounted rate, unbounded VBV and averaged loading spikes each fail their production QoS witness.')
+    print('Rate, VBV, peak, recursive NULL history, retroactive QoS and hidden overlap mutations fail their native witnesses.')
 
 
 if __name__ == '__main__':

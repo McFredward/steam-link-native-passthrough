@@ -21,6 +21,17 @@ bool copyConfiguration(const NV_ENC_CONFIG* input,NV_ENC_CONFIG& output){
 #endif
 }
 void padding(void* object,std::size_t begin,std::size_t end){if(end>begin)std::memset(static_cast<unsigned char*>(object)+begin,0,end-begin);}
+NvencQosObservation qosObservation(const NV_ENC_INITIALIZE_PARAMS& init,const NV_ENC_CONFIG* requested,
+    const NV_ENC_CONFIG* applied,bool budgetApplied=false,std::uint32_t metadata=0,std::uint32_t meanMetadata=0){
+    NvencQosObservation result{};result.frameRateNum=init.frameRateNum;result.frameRateDen=init.frameRateDen;
+    if(!requested||!applied)return result;
+    result.known=true;result.budgetApplied=budgetApplied;
+    result.requestedAverageBitRate=requested->rcParams.averageBitRate;result.requestedMaximumBitRate=requested->rcParams.maxBitRate;
+    result.requestedVbvBufferSize=requested->rcParams.vbvBufferSize;result.requestedVbvInitialDelay=requested->rcParams.vbvInitialDelay;
+    result.appliedAverageBitRate=applied->rcParams.averageBitRate;result.appliedMaximumBitRate=applied->rcParams.maxBitRate;
+    result.appliedVbvBufferSize=applied->rcParams.vbvBufferSize;result.appliedVbvInitialDelay=applied->rcParams.vbvInitialDelay;
+    result.reservedMetadataBitRate=metadata;result.meanMetadataBitRate=meanMetadata;return result;
+}
 }
 static_assert(NVENCAPI_MAJOR_VERSION==11&&NVENCAPI_MINOR_VERSION==1,"SDK 11.1 only");
 static_assert(sizeof(void*)==8&&sizeof(NV_ENCODE_API_FUNCTION_LIST)==0x9f8,"64-bit table ABI");
@@ -43,7 +54,7 @@ void NvencBoundary::retireSubmissions(Session& s){
 }
 std::uint64_t NvencBoundary::revoke(Session& s,bool retainRegistrations){
     s.adapter.stop();s.initialized=false;s.hevc=false;s.encoded=false;
-    s.contractKnown=false;s.reconfiguring=false;s.wireBudget.reset();s.budgetApplied=false;retireSubmissions(s);
+    s.contractKnown=false;s.reconfiguring=false;s.wireBudget.reset();s.budgetApplied=false;s.qosObservation={};retireSubmissions(s);
     if(!retainRegistrations){s.maps={};s.resources={};}
     s.probeQueued=false;
     s.generation=nextGeneration_==std::numeric_limits<std::uint64_t>::max()?0:++nextGeneration_;
@@ -82,6 +93,10 @@ bool NvencBoundary::snapshotContract(const NV_ENC_INITIALIZE_PARAMS& input,NV_EN
 }
 void NvencBoundary::saveContract(Session& s,const NV_ENC_INITIALIZE_PARAMS& init,const NV_ENC_CONFIG& config,bool hasConfig,bool known){
     s.contract=init;s.contractConfig=config;s.contractHasConfig=hasConfig;s.contractKnown=known;
+}
+void NvencBoundary::observeQos(Session& s,NvencQosObservation observation){
+    if(nextQosRevision_==std::numeric_limits<std::uint64_t>::max()){s.qosObservation={};return;}
+    observation.revision=++nextQosRevision_;s.qosObservation=observation;
 }
 bool NvencBoundary::sameContract(const Session& s,const NV_ENC_INITIALIZE_PARAMS& init,const NV_ENC_CONFIG& config,bool hasConfig){
     if(!s.contractKnown||!s.initialized||!s.hevc||s.reconfiguring)return false;
@@ -149,6 +164,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::init(void* encoder,NV_ENC_INITIALIZE_PARAMS*
     if(auto s=self.find(encoder);s&&generation&&s->generation==generation){
         s->initialized=result==NV_ENC_SUCCESS&&admissible;s->hevc=s->initialized&&hevc;s->width=width;s->height=height;
         saveContract(*s,contract,config,hasConfig,s->hevc&&known);
+        if(s->hevc)self.observeQos(*s,known?qosObservation(contract,hasConfig?&config:nullptr,hasConfig?&config:nullptr):NvencQosObservation{});
     }
     return result;
 }
@@ -165,11 +181,16 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
     const bool known=hevc&&snapshotContract(*init,contract,config,hasConfig);
     std::uint64_t generation=0;bool qos=false;
     NV_ENC_RECONFIGURE_PARAMS budgeted{};NV_ENC_CONFIG budgetConfig{};bool applyBudget=false,applyingBudget=false;
+    NvencQosObservation observation{};
     {
         std::lock_guard<std::mutex> guard(self.mutex_);count(self.reconfigureStats_.total);
         self.reconfigureStats_.lastWidth=width;self.reconfigureStats_.lastHeight=height;
         self.reconfigureStats_.lastContractKnown=known;self.reconfigureStats_.lastResetEncoder=typed&&params->resetEncoder;self.reconfigureStats_.lastSameContract=false;
         if(auto s=self.find(encoder)){
+            // Native hardware may still own any accepted pending output. Only
+            // add an ambiguity flag; retain its captured pre-Encode scalars.
+            for(auto& pending:s->submissions)if(pending.evidence.submission&&!pending.locked)
+                pending.evidence.qos.encodeOverlappedReconfigure=true;
             const bool unchanged=known&&sameContract(*s,contract,config,hasConfig);self.reconfigureStats_.lastSameContract=unchanged;
             qos=self.enabled_&&unchanged&&!params->resetEncoder&&!params->reserved;
             if(qos){
@@ -203,6 +224,9 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                     budgeted=*params;budgetConfig=requestedConfig;
                     budgeted.reInitEncodeParams.encodeConfig=&budgetConfig;applyBudget=true;
                 }
+                observation=qosObservation(contract,haveConfig?&requestedConfig:nullptr,
+                    haveConfig?(applyBudget?&budgetConfig:&requestedConfig):nullptr,applyingBudget,
+                    applyingBudget?metadata:0,applyingBudget?s->wireBudget.average(authority,contract.frameRateNum,contract.frameRateDen):0);
 
             }else{generation=self.revoke(*s,hevc);count(self.reconfigureStats_.revoked);}
         }
@@ -224,7 +248,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                     s->budgetApplied=applyingBudget;
                     // NULL means retain the existing deep-copied configuration.
                     if(!hasConfig){config=s->contractConfig;hasConfig=s->contractHasConfig;}
-                    saveContract(*s,contract,config,hasConfig,true);count(self.reconfigureStats_.preservedSuccessful);
+                    saveContract(*s,contract,config,hasConfig,true);self.observeQos(*s,observation);count(self.reconfigureStats_.preservedSuccessful);
                 }else count(self.reconfigureStats_.preservedRejected);
             }else{self.revoke(*s);count(self.reconfigureStats_.revoked);}
         }else if(self.enabled_&&result==NV_ENC_SUCCESS&&hevc&&s->nextIdentity<=std::numeric_limits<std::uint64_t>::max()-64){
@@ -236,6 +260,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                 if(found){m.resourceGeneration=found->generation;m.generation=++s->nextIdentity;}else m={};
             }
             s->initialized=s->hevc=true;s->width=width;s->height=height;saveContract(*s,contract,config,hasConfig,known);
+            self.observeQos(*s,known?qosObservation(contract,hasConfig?&config:nullptr,hasConfig?&config:nullptr):NvencQosObservation{});
         }else{s->maps={};s->resources={};}
     }
     return result;
@@ -281,6 +306,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::encode(void* encoder,NV_ENC_PIC_PARAMS* para
             generation=s->generation;
             for(auto& m:s->maps)if(m.mapped==params->inputBuffer)for(auto& r:s->resources)if(r.registered==m.registered&&r.generation==m.resourceGeneration&&r.width==params->inputWidth&&r.height==params->inputHeight&&r.width==s->width&&r.height==s->height&&r.format==params->bufferFmt){
                 for(auto& p:s->submissions)if(!p.evidence.submission){identity=++s->nextIdentity;p.evidence={encoder,generation,identity,r.native,r.generation,m.generation,m.mapped,params->outputBitstream,params->inputTimeStamp,r.width,r.height,r.subresource,r.format,true};
+                    p.evidence.qos=s->qosObservation;p.evidence.qos.encodeOverlappedReconfigure=s->reconfiguring;
                     if(self.inputObserver_.capture)try{self.inputObserver_.capture(p.evidence,self.inputObserver_.context);}catch(...){}
                     if(s->reconfiguring)count(self.reconfigureStats_.overlappingInputs);
                     break;}
@@ -331,6 +357,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::lock(void* encoder,NV_ENC_LOCK_BITSTREAM* pa
         evidence.ordinaryVideoAuthorized=evidence.cameraOnlyRecoveryAuthorized
             &&(s->adapter.handshake().negotiatedCapabilities()&CapOrdinaryVideoPicture)!=0;
     }else count(self.outputStats_.unmatched);
+    evidence.originalAccessUnitBytes=params->bitstreamSizeInBytes;
     const Bytes original{static_cast<const std::uint8_t*>(params->bitstreamBufferPtr),params->bitstreamSizeInBytes};
     std::uint64_t ticket=0;
     try {

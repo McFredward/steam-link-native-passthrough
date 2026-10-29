@@ -9,6 +9,20 @@
 
 namespace stream_bridge::sender {
 using NvencFactory = NVENCSTATUS (NVENCAPI*)(NV_ENCODE_API_FUNCTION_LIST*);
+// Diagnostic scalars from the last successful public configuration call. This
+// is not exact hardware-effective rate, source permission or frame/image proof.
+// A pending Encode-to-Lock interval overlapping Reconfigure is ambiguous even
+// when its original snapshot is known; never replace it with a later config.
+struct NvencQosObservation {
+    std::uint64_t revision=0;
+    std::uint32_t frameRateNum=0,frameRateDen=0;
+    std::uint32_t requestedAverageBitRate=0,requestedMaximumBitRate=0;
+    std::uint32_t requestedVbvBufferSize=0,requestedVbvInitialDelay=0;
+    std::uint32_t appliedAverageBitRate=0,appliedMaximumBitRate=0;
+    std::uint32_t appliedVbvBufferSize=0,appliedVbvInitialDelay=0;
+    std::uint32_t reservedMetadataBitRate=0,meanMetadataBitRate=0;
+    bool known=false,budgetApplied=false,encodeOverlappedReconfigure=false;
+};
 struct NvencOutputEvidence {
     void* encoder=nullptr;std::uint64_t encoderGeneration=0,submission=0;
     void* resource=nullptr;std::uint64_t resourceGeneration=0,mapGeneration=0;
@@ -26,6 +40,9 @@ struct NvencOutputEvidence {
     bool rawEntropyCoverageAuthorized=false;
     bool cameraOnlyRecoveryAuthorized=false;
     bool ordinaryVideoAuthorized=false;
+    NvencQosObservation qos{};
+    // Successful native Lock's original bytes, before any owned SEI is added.
+    std::uint32_t originalAccessUnitBytes=0;
 };
 struct DeviceObserver {
     // Successful actual public Open session. Device is borrowed native identity;
@@ -101,6 +118,7 @@ private:
         NV_ENC_INITIALIZE_PARAMS contract{};NV_ENC_CONFIG contractConfig{};
         bool contractKnown=false,contractHasConfig=false,reconfiguring=false;
         WireBudget wireBudget;bool budgetApplied=false;
+        NvencQosObservation qosObservation{};
         struct Resource {NV_ENC_REGISTERED_PTR registered=nullptr;void* native=nullptr;std::uint64_t generation=0;std::uint32_t width=0,height=0,subresource=0;NV_ENC_BUFFER_FORMAT format=NV_ENC_BUFFER_FORMAT_UNDEFINED;};
         struct Map {NV_ENC_INPUT_PTR mapped=nullptr;NV_ENC_REGISTERED_PTR registered=nullptr;std::uint64_t generation=0,resourceGeneration=0;};
         struct Submission {NvencOutputEvidence evidence{};bool accepted=false,locked=false;};
@@ -115,6 +133,7 @@ private:
     static bool sameContract(const Session&,const NV_ENC_INITIALIZE_PARAMS&,const NV_ENC_CONFIG&,bool);
     void retireSubmissions(Session&);
     static void saveContract(Session&,const NV_ENC_INITIALIZE_PARAMS&,const NV_ENC_CONFIG&,bool,bool);
+    void observeQos(Session&,NvencQosObservation);
     static NVENCSTATUS NVENCAPI open(NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS*,void**);
     static NVENCSTATUS NVENCAPI init(void*,NV_ENC_INITIALIZE_PARAMS*);
     static NVENCSTATUS NVENCAPI reconfigure(void*,NV_ENC_RECONFIGURE_PARAMS*);
@@ -131,7 +150,7 @@ private:
     std::array<Session,4> sessions_{};
     std::array<std::uint8_t,32> hash_{};
     NV_ENCODE_API_FUNCTION_LIST original_{};
-    std::uint64_t nextGeneration_=0;ReconfigureStats reconfigureStats_{};OutputStats outputStats_{};
+    std::uint64_t nextGeneration_=0,nextQosRevision_=0;ReconfigureStats reconfigureStats_{};OutputStats outputStats_{};
     bool installed_=false,enabled_=true,inputHooks_=false;
     OutputAugmenter augmenter_{};InputObserver inputObserver_{};DeviceObserver deviceObserver_{};
 };
