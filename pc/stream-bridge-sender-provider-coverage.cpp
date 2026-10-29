@@ -1,4 +1,5 @@
 #include "stream-bridge-sender-provider-coverage.h"
+#include "stream-bridge-mask-capture.h"
 #include "bridge/stream_bridge_log.h"
 #include "stream-bridge-sender-provider-coverage-render.h"
 #include "stream-bridge-source-alpha-probe.h"
@@ -128,6 +129,7 @@ struct SenderCoverage::Impl {
     SourceContract sourceContract;
     SourceAlphaProbe sourceAlpha;
     MaskContentPublication maskContent;
+    capture::Writer maskCapture;
     ID3D11Texture2D* target=nullptr;ID3D11RenderTargetView* targetView=nullptr;ID3D11BlendState* blend=nullptr;
     std::uint32_t width=0,height=0;std::uint64_t activeSerial=0,activeEpoch=0;unsigned drawBits=0;std::uint64_t activeContract=0;bool invalid=false,poolReady=false;
     IUnknown* nativeOutput=nullptr;std::uint32_t activePid=0;
@@ -244,7 +246,23 @@ struct SenderCoverage::Impl {
                 // Only publish the still-current capture; no stale mask leaves
                 // this callback even when its original GPU readback was valid.
                 if(!s.sourceCurrent(maskContract,maskPid)){output.clear();s.gates.refuse(CoverageGate::SourceRevoked);return false;}
-                s.lastPid=maskPid;s.state=7;s.gates.payload(candidate.size,encoded.size(),output.size(),static_cast<unsigned>(encoding),pixels.size(),encodeUs);s.gates.signal(CoverageSignal::CertifiedMasks);return true;
+                s.lastPid=maskPid;s.state=7;s.gates.payload(candidate.size,encoded.size(),output.size(),static_cast<unsigned>(encoding),pixels.size(),encodeUs);s.gates.signal(CoverageSignal::CertifiedMasks);
+                if(s.maskCapture.active()){
+                    capture::Metadata sample{};sample.frame=descriptor.sourceFrame;sample.encoderGeneration=descriptor.encoderGeneration;
+                    sample.sourceContract=maskContract;sample.timestampUs=clockMicros();sample.pid=maskPid;
+                    sample.originalVideoBytes=e.originalAccessUnitBytes;sample.completeAuBytes=static_cast<std::uint32_t>(output.size());sample.encodeUs=encodeUs;
+                    sample.nativeInputTimestamp=e.inputTimestamp;
+                    const auto& qos=e.qos;sample.qosFlags=(qos.known?1u:0u)|(qos.budgetApplied?2u:0u)|(qos.encodeOverlappedReconfigure?4u:0u);
+                    sample.qosRevision=qos.revision;sample.frameRateNum=qos.frameRateNum;sample.frameRateDen=qos.frameRateDen;
+                    sample.requestedAverageBitRate=qos.requestedAverageBitRate;sample.requestedMaximumBitRate=qos.requestedMaximumBitRate;
+                    sample.requestedVbvBufferSize=qos.requestedVbvBufferSize;sample.requestedVbvInitialDelay=qos.requestedVbvInitialDelay;
+                    sample.appliedAverageBitRate=qos.appliedAverageBitRate;sample.appliedMaximumBitRate=qos.appliedMaximumBitRate;
+                    sample.appliedVbvBufferSize=qos.appliedVbvBufferSize;sample.appliedVbvInitialDelay=qos.appliedVbvInitialDelay;
+                    sample.reservedMetadataBitRate=qos.reservedMetadataBitRate;sample.meanMetadataBitRate=qos.meanMetadataBitRate;
+                    sample.width=descriptor.codedWidth;sample.height=descriptor.codedHeight;sample.encoding=encoding;
+                    s.maskCapture.offer(sample,std::move(encoded));
+                }
+                return true;
             }
         }
         // A positively identified desktop/compositor picture remains ordinary
@@ -481,7 +499,7 @@ bool SenderCoverage::configure(std::uintptr_t module,const NativeImageLayout& la
     impl_->module=module;impl_->nativeLayout=layout;impl_->adaptive=true;return true;
 }
 void SenderCoverage::tick()noexcept{
-    auto& s=*impl_;const auto encoders=s.boundary.encoderStates();
+    auto& s=*impl_;s.maskCapture.poll();const auto encoders=s.boundary.encoderStates();
     // Once prepared, an unchanged native encoder/inventory requires no render
     // metadata ownership. The old periodic diagnostic/worker lock alone could
     // invalidate a valid Map/Draw, even with no resource work to perform.
@@ -506,9 +524,11 @@ void SenderCoverage::tick()noexcept{
         s.refresh(inventory);
     }catch(...){s.prepared=false;s.state=5;}
 }
+void SenderCoverage::configureMaskCapture(const std::filesystem::path& root)noexcept{impl_->maskCapture.configure(root);}
 void SenderCoverage::sourceProcess(std::uint32_t pid,bool budget)noexcept{impl_->sourceContract.publish(pid,budget);}
 void SenderCoverage::stop()noexcept{
     auto& s=*impl_;s.sourceContract.publish(0);s.enabled=false;s.prepared=false;s.lastPid=0;s.preparedPid=0;s.state=8;
+    s.maskCapture.stop(); // Cold owner only; no disk work or joining in native callbacks.
     std::lock_guard<std::mutex> lock(s.mutex);s.stopped=true;
     s.facade.restore();
     // No COM or staging release while a cached callback/borrowed AU can exist.

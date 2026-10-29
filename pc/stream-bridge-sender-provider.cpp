@@ -183,6 +183,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         if(FAILED(found)||!appData){report("private user data unavailable; ordinary video",stream_bridge::logging::Level::Warning);return false;}
         try {const auto root=std::filesystem::path(appData)/L"steam-link-native-passthrough";
             stream_bridge::logging::configureCold(root/L"pc-provider/logging-default.conf",root/L"logging.conf");
+            coverage_.configureMaskCapture(root);
             request_.pairingsDirectory=root/L"pairings";}
         catch(...){CoTaskMemFree(appData);return false;}
         CoTaskMemFree(appData);request_.port=static_cast<std::uint16_t>(port);request_.explicitlyEnabled=true;runtime_.configure(request_);return true;

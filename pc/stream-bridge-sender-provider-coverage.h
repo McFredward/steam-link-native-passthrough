@@ -1,4 +1,5 @@
 #pragma once
+#include <filesystem>
 #include "stream-bridge-native-image.h"
 #include "stream-bridge-sender-provider-directmode.h"
 #include "stream-bridge-sender-provider-core.h"
@@ -204,6 +205,7 @@ public:
     bool configure(std::uintptr_t verifiedNativeModule)noexcept;
     bool configure(std::uintptr_t verifiedNativeModule,const NativeImageLayout&)noexcept;
     void tick()noexcept;
+    void configureMaskCapture(const std::filesystem::path& privateRoot)noexcept; // Cold, explicit request only.
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
     void stop()noexcept;
     bool ready(std::uint32_t processId)const noexcept;
