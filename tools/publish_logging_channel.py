@@ -40,7 +40,7 @@ def retarget(raw,channel):
     for name in DEFAULTS:
         if bundle['files'].get(name)!=pin(files[name]):raise ValueError('Logging payload differs')
     logging={'channel':channel,'level':'Debug' if channel=='dev' else 'Important'}
-    if any(pin(files[name])!=expected for name,expected in bundle['files'].items()):raise ValueError('Native bundle integrity differs')
+    if any(name not in files or pin(files[name])!=expected for name,expected in bundle['files'].items()):raise ValueError('Native bundle integrity differs')
     native={'pc_provider':'pc-provider/bin/win64/driver_steam_link_native_passthrough.dll','frame_layer':'frame/libVkLayer_steam_link_bridge.so','frame_selector':'frame/libsfnp_stream_launch.so'}
     decoder={'mask_codec':'frame/libavcodec-sfnp-mask.so.62','mask_util':'frame/libavutil-sfnp-mask.so.60'}
     if any(name in files for name in decoder.values()):
