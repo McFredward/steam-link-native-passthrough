@@ -38,7 +38,7 @@ class Tests(unittest.TestCase):
         new=members(quiet);self.assertEqual(set(old),set(new))
         for n in p.DEFAULTS:self.assertEqual(new[n],b'Important\n')
         for n in old:
-            if n.endswith(('.dll','.so','.exe','.py','.sh')):self.assertEqual(old[n],new[n],n)
+            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n:self.assertEqual(old[n],new[n],n)
         self.assertEqual(json.loads(new['stream-bridge-bundle.json'])['logging'],{'channel':'main','level':'Important'})
         same,changed=p.retarget(quiet,'main');self.assertFalse(changed);self.assertEqual(same,quiet)
         verbose,changed=p.retarget(quiet,'dev');self.assertTrue(changed)
@@ -46,6 +46,15 @@ class Tests(unittest.TestCase):
         outer=json.loads(new['bootstrap-package.json']);self.assertEqual(outer['files'],{n:p.pin(b) for n,b in new.items() if n!='bootstrap-package.json'})
 
     def test_fixed_native_setup_bytes_and_validated_outer_pins(self):self.check_roundtrip(self.fixture())
+    def test_complete_private_decoder_pair_keeps_exact_bytes(self):
+        files=members(self.fixture());files.pop('bootstrap-package.json')
+        bundle=json.loads(files['stream-bridge-bundle.json']);source=json.loads(files['stream-bridge-package-source.json'])
+        for role,name in {'mask_codec':'frame/libavcodec-sfnp-mask.so.62','mask_util':'frame/libavutil-sfnp-mask.so.60'}.items():
+            files[name]=(role+'-fixture').encode();bundle['files'][name]=p.pin(files[name]);source['native_artifacts'][role]=p.pin(files[name])
+        files['stream-bridge-bundle.json']=p.encoded(bundle);files['stream-bridge-package-source.json']=p.encoded(source)
+        self.check_roundtrip(archive(files))
+        files.pop('frame/libavutil-sfnp-mask.so.60')
+        with self.assertRaises(ValueError):p.retarget(archive(files),'dev')
     def test_wrong_channel_rejected(self):
         with self.assertRaises(ValueError):p.retarget(self.fixture(),'feature/guess')
     def test_changed_payload_refused_even_on_matching_channel(self):

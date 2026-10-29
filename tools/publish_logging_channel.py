@@ -42,6 +42,10 @@ def retarget(raw,channel):
     logging={'channel':channel,'level':'Debug' if channel=='dev' else 'Important'}
     if any(pin(files[name])!=expected for name,expected in bundle['files'].items()):raise ValueError('Native bundle integrity differs')
     native={'pc_provider':'pc-provider/bin/win64/driver_steam_link_native_passthrough.dll','frame_layer':'frame/libVkLayer_steam_link_bridge.so','frame_selector':'frame/libsfnp_stream_launch.so'}
+    decoder={'mask_codec':'frame/libavcodec-sfnp-mask.so.62','mask_util':'frame/libavutil-sfnp-mask.so.60'}
+    if any(name in files for name in decoder.values()):
+        if not all(name in files for name in decoder.values()):raise ValueError('Incomplete private mask decoder pair')
+        native.update(decoder)
     if source['native_artifacts']!={role:pin(files[name]) for role,name in native.items()}:raise ValueError('Native artifact provenance differs')
     if bundle['logging']==logging:return raw,False
     before=dict(files)
