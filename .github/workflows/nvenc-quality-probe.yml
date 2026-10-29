@@ -10,6 +10,8 @@ on:
       - 'tools/analyze_nvenc_quality_probe.py'
       - 'tools/test-mask-encoder.ps1'
       - 'tests/test_nvenc_quality_probe.py'
+      - 'tests/test_nvenc_quality_probe_entry.ps1'
+      - 'distribution/nvenc-quality-probe.zip'
       - '.github/workflows/nvenc-quality-probe.yml'
   workflow_dispatch:
 permissions:
@@ -60,3 +62,14 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path tools/test-mask-encoder.ps1), [ref]$tokens, [ref]$errors) | Out-Null
             if ($errors.Count) { throw ($errors | Out-String) }
           }
+      - name: Execute the exact published MinGW binary and Windows PowerShell entry fixtures
+        shell: powershell
+        run: |
+          if (Test-Path distribution/nvenc-quality-probe.zip) {
+            Expand-Archive distribution/nvenc-quality-probe.zip build/published-probe
+            $build = Get-Content -Raw build/published-probe/probe-build.json | ConvertFrom-Json
+            if ((Get-FileHash build/published-probe/sfnp-nvenc-quality-probe.exe).Hash.ToLowerInvariant() -cne $build.binary.sha256) { throw 'Delivered binary hash mismatch.' }
+            $pattern = & build/published-probe/sfnp-nvenc-quality-probe.exe --selftest
+            if ($LASTEXITCODE -ne 0 -or $pattern.Trim() -cne 'pattern_fingerprint=590f27c6912fb95/8b09404605f50045; bytes=7962624') { throw 'Delivered binary pattern selftest failed.' }
+          }
+          if (Test-Path tools/test-mask-encoder.ps1) { & tests/test_nvenc_quality_probe_entry.ps1 }

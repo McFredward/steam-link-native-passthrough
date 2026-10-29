@@ -19,3 +19,13 @@ The archive's own source revision describes its native/setup contents; a later
 bootstrap-only commit does not require rebuilding unchanged native components.
 An archive mismatch aborts before extraction. Updating an installed device still
 requires the assistant's inspection and explicit Apply confirmation.
+
+`nvenc-quality-probe.zip` is a separate, finite, owned synthetic GPU diagnostic.
+It is not an installed native patch or a paired update; `VERSION` and native
+component versions remain unchanged. Its build descriptor identifies the exact
+probe source, input generator, production encoder frontend and binary hash.
+`tools/test-mask-encoder.ps1` pins its immutable archive and executable before
+execution. The existing runtime is not configured, installed or restarted.
+Windows CI executes the exact delivered binary's input selftest and exercises
+native error-log collection/cleanup plus tampered-download refusal. Real NVENC
+measurements require the maintainer's NVIDIA GPU; CI does not claim that result.

@@ -1,0 +1,50 @@
+{
+  "actual_gpu_measurements_available": false,
+  "archive": {
+    "bytes": 740721,
+    "sha256": "63a2d3146f5e07f40279b83d628d212884a7772a157b08228e9d1e1f2d45223c"
+  },
+  "binary": {
+    "bytes": 2811261,
+    "sha256": "01616a1ff325d8836aba244e0d6293d2b45c3d480934c28b2739ea86e3f9ed5b"
+  },
+  "production_frontend_unchanged_from": "6003f30230f59e1cd4cb93e83010fc483cadfa52",
+  "schema": "sfnp-nvenc-quality-probe-build-v1",
+  "scope": "Standalone synthetic GPU comparison only; API overrides are never linked into installed runtime. The current runtime still rejects diagnostic P pictures.",
+  "sdk_header": {
+    "bytes": 241580,
+    "sha256": "be0c29a41ae3260fd016a9001fd959e747bac93ad21411759736abba4ffdea86"
+  },
+  "source_ci": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/40970177067",
+  "source_pins": {
+    "pc/stream-bridge-mask-hevc-platform.h": {
+      "bytes": 1053,
+      "sha256": "d1db852360f58d6796187e8b6167b4f11157c02106697e788921a6b540bdf71f"
+    },
+    "pc/stream-bridge-mask-hevc-rate.h": {
+      "bytes": 4515,
+      "sha256": "00b71195c73ccd09d844ddc56d5ee6749adfd8bccd42e04ddde38fd7b7c5288d"
+    },
+    "pc/stream-bridge-mask-hevc.cpp": {
+      "bytes": 29768,
+      "sha256": "369711fa9abd6ba92d97c82fd15fc39349abf675a1b909317f66c3ec002079e0"
+    },
+    "pc/stream-bridge-mask-hevc.h": {
+      "bytes": 5815,
+      "sha256": "2bbe0fa86f769524c1368827f9ce3f9ba3f45eaa04a9419fd0e1e4fe2dc0c61f"
+    },
+    "tests/mask-hevc/nvenc_quality_probe.cpp": {
+      "bytes": 16919,
+      "sha256": "c2934ed0ce2536a2387017a25dbac7e9c5fea1c664311eb57784c71e252264c4"
+    },
+    "tests/mask-hevc/probe_pattern.h": {
+      "bytes": 1750,
+      "sha256": "e9e9e7e2ab472820081153b922d06f38a09c5996f0e000c2842c0529510bc92a"
+    },
+    "tools/build_nvenc_quality_probe.sh": {
+      "bytes": 1534,
+      "sha256": "bcaae466e677e902f2414fc2bfbda51eb7cc391750599a228a446c74cfe7cbc8"
+    }
+  },
+  "source_revision": "306fc9c96e0cd2617fd7afd28665e0ea744ff61e"
+}
