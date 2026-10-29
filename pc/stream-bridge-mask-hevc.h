@@ -25,6 +25,28 @@ struct MaskHevcConfig {
     std::uint32_t bitRate=0,maxAccessUnitBytes=2u*1024u*1024u;
 };
 enum class MaskHevcTake { Unavailable,Busy,Missing,Pending,Ready,Refused };
+enum class MaskHevcFailure : unsigned {
+    None,Setup,MapInput,MapOutput,EncodePicture,LockBitstream,OutputValidation,
+    UnlockBitstream,UnmapInput,PollEvent,Flush,FlushWait
+};
+inline const char* maskHevcFailureName(MaskHevcFailure stage)noexcept{
+    switch(stage){
+    case MaskHevcFailure::None:return "none";case MaskHevcFailure::Setup:return "setup";
+    case MaskHevcFailure::MapInput:return "map-input";case MaskHevcFailure::MapOutput:return "map-output";
+    case MaskHevcFailure::EncodePicture:return "encode-picture";case MaskHevcFailure::LockBitstream:return "lock-bitstream";
+    case MaskHevcFailure::OutputValidation:return "output-validation";case MaskHevcFailure::UnlockBitstream:return "unlock-bitstream";
+    case MaskHevcFailure::UnmapInput:return "unmap-input";case MaskHevcFailure::PollEvent:return "poll-event";
+    case MaskHevcFailure::Flush:return "flush";case MaskHevcFailure::FlushWait:return "flush-wait";
+    }return "unknown";
+}
+// Fixed diagnostic storage only. These approximate snapshots never authorize
+// a frame. Rejection bits: timestamp1,type2,structure4,hardware8,pointer16,size32,copy64.
+struct MaskHevcDiagnostics {
+    MaskHevcFailure stage=MaskHevcFailure::None;
+    int nativeStatus=0;
+    std::uint32_t rejectedFields=0,pictureType=0,pictureStruct=0,hardwareStatus=0,bytes=0;
+    std::uint64_t expectedTimestamp=0,returnedTimestamp=0,mapped=0,submitted=0,locked=0,ready=0;
+};
 
 // Separate Windows/D3D11 HEVC Main8 session. Each output is an independent
 // IDR with repeated VPS/SPS/PPS. Y is supplied full range; UV must already be
@@ -62,6 +84,7 @@ public:
     bool reset()noexcept;
     bool configured()const noexcept;
     int lastNvencStatus()const noexcept;
+    MaskHevcDiagnostics diagnostics()const noexcept;
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

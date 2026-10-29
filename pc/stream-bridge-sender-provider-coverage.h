@@ -6,6 +6,7 @@
 #include "stream-bridge-source-contract.h"
 #include "stream-bridge-source-alpha-stats.h"
 #include "stream-bridge-mask-content.h"
+#include "stream-bridge-mask-hevc.h"
 #include "bridge/stream_bridge_control.h"
 #include <memory>
 #include <limits>
@@ -197,6 +198,7 @@ private:
 // factory; tick runs only on the cold provider worker. All refusals leave native
 // video alone. ready is source-mode preparation, never selected-image proof.
 struct HevcMaskStats {
+    MaskHevcDiagnostics diagnostics{};
     bool requested=false,prepared=false,available=false;
     std::uint32_t bitRate=0;int nativeStatus=0;
     std::uint64_t encoded=0,pending=0,refused=0,syntaxRefused=0;

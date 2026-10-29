@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.1 / PC 0.3.0 / Frame 0.3.0 selects lossy HEVC masks by default
+Installer 0.3.2 / PC 0.3.1 / Frame 0.3.0 selects lossy HEVC masks by default
 with a 20 Mbit/s target. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
@@ -72,6 +72,29 @@ load the owned adjacent `libavcodec-sfnp-mask.so.62` and
 `libavutil-sfnp-mask.so.60`; it never borrows a mismatching system FFmpeg ABI.
 Compare RGB quality, mask artifacts, frame continuity and decoder load together.
 An encoded bitrate reduction alone is not a headset-quality result.
+
+### A configured encoder can still fall back on every frame
+
+The October29 Battlemarked test with PC0.3.0 produced **zero transmitted HEVC
+masks** and5112 mask-output refusals. Lossless metadata reservation peaked
+at221.33Mbit/s; five sampled updates reduced the image to1Mbit/s. This test
+therefore did not exercise lossy-mask image quality. `prepared=1`, `available=1`
+and `target-bit/s=20000000` describe setup, not successful HEVC output.
+
+PC0.3.1 is a diagnostic update, not a confirmed remedy for that refusal. The
+new `HEVC mask detail:` line separates API-call failures (`map-input`,
+`encode-picture`, `lock-bitstream`, cleanup) from `output-validation` after a
+successful lock. It reports actual API status, mapped/submitted/locked/ready
+counts, rejected field bits, expected/returned timestamp, picture type/structure,
+hardware status and byte count. A local output check no longer fabricates
+NVIDIA's invalid-parameter status8. The exact timestamp, IDR, progressive-frame,
+hardware-status, pointer and size checks remain mandatory. Lifetime diagnostic
+snapshots are approximate and never establish frame association.
+
+For the next short test, close SteamVR after the affected scene to include the
+final counters in `vrserver.txt`. Successful HEVC transmission must increment
+both `encoded` and the `coverage encoding:` HEVC frame count. A lower mask
+bitrate cannot be assessed while those counts remain zero.
 
 The existing optional A8 diagnostic capture remains an original-sample source
 for encodings 1–5. It deliberately does not label lossy decoded HEVC as original

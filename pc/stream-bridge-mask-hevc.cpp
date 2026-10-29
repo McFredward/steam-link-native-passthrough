@@ -83,22 +83,37 @@ struct MaskHevcEncoder::Impl {
     std::uint64_t nextToken=1,sourceContract=0,encoderGeneration=0,highestSubmission=0;
     std::uint32_t processId=0;
     mutable std::mutex mutex;std::atomic<bool> healthy{false};std::atomic<int> status{int(NV_ENC_SUCCESS)};
-    bool success(NVENCSTATUS result)noexcept{
-        if(result!=NV_ENC_SUCCESS)status.store(int(result),std::memory_order_relaxed);
+    std::atomic<unsigned> failureStage{0},failureFields{0},outputType{0},outputStruct{0},hardwareStatus{0},outputBytes{0};
+    std::atomic<int> failureStatus{0};
+    std::atomic<std::uint64_t> expectedTimestamp{0},returnedTimestamp{0},mappedCount{0},submittedCount{0},lockedCount{0},readyCount{0};
+    void record(MaskHevcFailure stage,NVENCSTATUS result,unsigned fields=0,
+                const NV_ENC_LOCK_BITSTREAM* output=nullptr,std::uint64_t expected=0)noexcept{
+        failureStatus.store(int(result),std::memory_order_relaxed);failureFields.store(fields,std::memory_order_relaxed);
+        expectedTimestamp.store(expected,std::memory_order_relaxed);returnedTimestamp.store(output?output->outputTimeStamp:0,std::memory_order_relaxed);
+        outputType.store(output?unsigned(output->pictureType):0,std::memory_order_relaxed);
+        outputStruct.store(output?unsigned(output->pictureStruct):0,std::memory_order_relaxed);
+        hardwareStatus.store(output?output->hwEncodeStatus:0,std::memory_order_relaxed);
+        outputBytes.store(output?output->bitstreamSizeInBytes:0,std::memory_order_relaxed);
+        failureStage.store(unsigned(stage),std::memory_order_relaxed);
+    }
+    bool success(NVENCSTATUS result,MaskHevcFailure stage=MaskHevcFailure::Setup)noexcept{
+        if(result!=NV_ENC_SUCCESS){status.store(int(result),std::memory_order_relaxed);record(stage,result);}
         return result==NV_ENC_SUCCESS;
     }
-    bool fail(NVENCSTATUS result)noexcept{status.store(int(result),std::memory_order_relaxed);healthy.store(false,std::memory_order_release);return false;}
+    bool fail(NVENCSTATUS result,MaskHevcFailure stage=MaskHevcFailure::Setup)noexcept{
+        status.store(int(result),std::memory_order_relaxed);record(stage,result);healthy.store(false,std::memory_order_release);return false;
+    }
     Slot* find(const MaskHevcKey& key)noexcept{for(auto& s:slots)if(s.phase!=Phase::Free&&s.key==key)return &s;return nullptr;}
     Slot* find(ID3D11Texture2D* texture)noexcept{for(auto& s:slots)if(s.texture==texture)return &s;return nullptr;}
     bool notified(Slot& s)noexcept{
         if(s.notified)return true;
-        const int result=os.pollEvent(s.event);if(result<0)return fail(NV_ENC_ERR_GENERIC);
+        const int result=os.pollEvent(s.event);if(result<0)return fail(NV_ENC_ERR_GENERIC,MaskHevcFailure::PollEvent);
         s.notified=result==1;return s.notified;
     }
     bool releaseMapped(Slot& s)noexcept{
         if(s.mapped){
             const auto result=api.nvEncUnmapInputResource(session,s.mapped);
-            if(!success(result))return fail(result);
+            if(result!=NV_ENC_SUCCESS)return fail(result,MaskHevcFailure::UnmapInput);
             s.mapped=nullptr;
         }
         s.phase=Phase::Free;s.key={};s.token=0;s.notified=false;return true;
@@ -110,20 +125,29 @@ struct MaskHevcEncoder::Impl {
         NV_ENC_LOCK_BITSTREAM lock{};lock.version=NV_ENC_LOCK_BITSTREAM_VER;lock.outputBitstream=s.output;lock.doNotWait=1;
         const auto result=api.nvEncLockBitstream(session,&lock);status.store(int(result),std::memory_order_relaxed);
         if(result==NV_ENC_ERR_LOCK_BUSY||result==NV_ENC_ERR_ENCODER_BUSY)return MaskHevcTake::Pending;
-        if(result!=NV_ENC_SUCCESS){fail(result);return MaskHevcTake::Refused;}
+        if(result!=NV_ENC_SUCCESS){fail(result,MaskHevcFailure::LockBitstream);return MaskHevcTake::Refused;}
+        lockedCount.fetch_add(1,std::memory_order_relaxed);
         s.locked=true;
-        bool valid=lock.outputTimeStamp==s.token&&lock.pictureType==NV_ENC_PIC_TYPE_IDR
-            &&lock.pictureStruct==NV_ENC_PIC_STRUCT_FRAME&&lock.hwEncodeStatus==0&&lock.bitstreamBufferPtr
-            &&lock.bitstreamSizeInBytes&&lock.bitstreamSizeInBytes<=config.maxAccessUnitBytes;
+        const unsigned rejected=(lock.outputTimeStamp!=s.token?1u:0u)|(lock.pictureType!=NV_ENC_PIC_TYPE_IDR?2u:0u)
+            |(lock.pictureStruct!=NV_ENC_PIC_STRUCT_FRAME?4u:0u)|(lock.hwEncodeStatus?8u:0u)
+            |(!lock.bitstreamBufferPtr?16u:0u)|(!lock.bitstreamSizeInBytes||lock.bitstreamSizeInBytes>config.maxAccessUnitBytes?32u:0u);
+        const auto expected=s.token;bool valid=rejected==0;
         if(valid&&out)try{
             const auto* bytes=static_cast<const std::uint8_t*>(lock.bitstreamBufferPtr);
             out->assign(bytes,bytes+lock.bitstreamSizeInBytes);
         }catch(...){valid=false;out->clear();}
         const auto unlocked=api.nvEncUnlockBitstream(session,s.output);
-        if(!success(unlocked)){if(out)out->clear();fail(unlocked);return MaskHevcTake::Refused;}
+        if(unlocked!=NV_ENC_SUCCESS){if(out)out->clear();fail(unlocked,MaskHevcFailure::UnlockBitstream);return MaskHevcTake::Refused;}
         s.locked=false;
         if(!releaseMapped(s)){if(out)out->clear();return MaskHevcTake::Refused;}
-        if(!valid){status.store(int(NV_ENC_ERR_INVALID_PARAM),std::memory_order_relaxed);if(out)out->clear();return MaskHevcTake::Refused;}
+        if(!valid){
+            // A successful API call with rejected output is our validation
+            // failure, never a fabricated NV_ENC_ERR_INVALID_PARAM from NVIDIA.
+            record(MaskHevcFailure::OutputValidation,NV_ENC_SUCCESS,rejected?rejected:64u,&lock,expected);
+            if(out)out->clear();
+            return MaskHevcTake::Refused;
+        }
+        if(out)readyCount.fetch_add(1,std::memory_order_relaxed);
         return out?MaskHevcTake::Ready:MaskHevcTake::Refused;
     }
     // Cold and quiesced only. No OS/event wait is reachable from hot methods.
@@ -133,12 +157,12 @@ struct MaskHevcEncoder::Impl {
             if(!flushStarted){
                 if(!os.resetEvent(flushEvent))return fail(NV_ENC_ERR_GENERIC);
                 NV_ENC_PIC_PARAMS eos{};eos.version=NV_ENC_PIC_PARAMS_VER;eos.encodePicFlags=NV_ENC_PIC_FLAG_EOS;eos.completionEvent=flushEvent;
-                flushStarted=success(api.nvEncEncodePicture(session,&eos));
+                flushStarted=success(api.nvEncEncodePicture(session,&eos),MaskHevcFailure::Flush);
             }
             if(flushStarted){
                 // Keep all handles and COM references alive if even the cold
                 // flush deadline is missed. A retry waits on this SAME event.
-                if(!os.waitEventCold(flushEvent))return fail(NV_ENC_ERR_LOCK_BUSY);
+                if(!os.waitEventCold(flushEvent))return fail(NV_ENC_ERR_LOCK_BUSY,MaskHevcFailure::FlushWait);
             }else{
                 // Failed EOS is not a completion proof. Only individually
                 // signaled accepted outputs may be released without it.
@@ -264,17 +288,21 @@ bool MaskHevcEncoder::submit(const MaskHevcKey& key)noexcept{
     auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);if(!guard||!p.healthy)return false;
     auto* s=p.find(key);if(!s||s->phase!=Impl::Phase::Staged)return false;
     NV_ENC_MAP_INPUT_RESOURCE map{};map.version=NV_ENC_MAP_INPUT_RESOURCE_VER;map.registeredResource=s->registered;
-    if(!p.success(p.api.nvEncMapInputResource(p.session,&map))||!map.mappedResource||map.mappedBufferFmt!=NV_ENC_BUFFER_FORMAT_NV12){
+    const auto mapped=p.api.nvEncMapInputResource(p.session,&map);
+    if(!p.success(mapped,MaskHevcFailure::MapInput)||!map.mappedResource||map.mappedBufferFmt!=NV_ENC_BUFFER_FORMAT_NV12){
+        if(mapped==NV_ENC_SUCCESS)p.record(MaskHevcFailure::MapOutput,mapped);
         if(map.mappedResource)s->mapped=map.mappedResource;
         p.releaseMapped(*s);return false;
     }
     s->mapped=map.mappedResource;
+    p.mappedCount.fetch_add(1,std::memory_order_relaxed);
     NV_ENC_PIC_PARAMS pic{};pic.version=NV_ENC_PIC_PARAMS_VER;pic.inputWidth=p.config.width;pic.inputHeight=p.config.height;
     pic.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;pic.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;pic.inputBuffer=s->mapped;
     pic.outputBitstream=s->output;pic.completionEvent=s->event;pic.inputTimeStamp=s->token;pic.frameIdx=std::uint32_t(s->token);
     pic.encodePicFlags=NV_ENC_PIC_FLAG_FORCEIDR|NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
     const auto result=p.api.nvEncEncodePicture(p.session,&pic);p.status.store(int(result),std::memory_order_relaxed);
-    if(result!=NV_ENC_SUCCESS&&result!=NV_ENC_ERR_NEED_MORE_INPUT){p.releaseMapped(*s);return false;}
+    if(result!=NV_ENC_SUCCESS&&result!=NV_ENC_ERR_NEED_MORE_INPUT){p.record(MaskHevcFailure::EncodePicture,result);p.releaseMapped(*s);return false;}
+    p.submittedCount.fetch_add(1,std::memory_order_relaxed);
     s->phase=Impl::Phase::Submitted;p.submittedAny=true;return true;
 }
 MaskHevcTake MaskHevcEncoder::tryTake(const MaskHevcKey& key,std::vector<std::uint8_t>& out)noexcept{
@@ -293,4 +321,13 @@ void MaskHevcEncoder::cancel(const MaskHevcKey& key)noexcept{
 bool MaskHevcEncoder::reset()noexcept{std::lock_guard<std::mutex> guard(impl_->mutex);return impl_->clear();}
 bool MaskHevcEncoder::configured()const noexcept{return impl_->healthy.load(std::memory_order_acquire);}
 int MaskHevcEncoder::lastNvencStatus()const noexcept{return impl_->status.load(std::memory_order_relaxed);}
+MaskHevcDiagnostics MaskHevcEncoder::diagnostics()const noexcept{
+    const auto& p=*impl_;MaskHevcDiagnostics d{};
+    d.stage=static_cast<MaskHevcFailure>(p.failureStage.load(std::memory_order_relaxed));d.nativeStatus=p.failureStatus.load(std::memory_order_relaxed);
+    d.rejectedFields=p.failureFields.load(std::memory_order_relaxed);d.pictureType=p.outputType.load(std::memory_order_relaxed);
+    d.pictureStruct=p.outputStruct.load(std::memory_order_relaxed);d.hardwareStatus=p.hardwareStatus.load(std::memory_order_relaxed);
+    d.bytes=p.outputBytes.load(std::memory_order_relaxed);d.expectedTimestamp=p.expectedTimestamp.load(std::memory_order_relaxed);
+    d.returnedTimestamp=p.returnedTimestamp.load(std::memory_order_relaxed);d.mapped=p.mappedCount.load(std::memory_order_relaxed);
+    d.submitted=p.submittedCount.load(std::memory_order_relaxed);d.locked=p.lockedCount.load(std::memory_order_relaxed);d.ready=p.readyCount.load(std::memory_order_relaxed);return d;
+}
 }

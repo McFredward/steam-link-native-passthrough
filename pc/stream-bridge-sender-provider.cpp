@@ -484,6 +484,16 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     static_cast<unsigned long long>(hevc.refused),static_cast<unsigned long long>(hevc.syntaxRefused),
                     static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs));
                 report(hevcText,stream_bridge::logging::Level::Debug);
+                const auto& diagnostic=hevc.diagnostics;
+                std::snprintf(hevcText,sizeof hevcText,
+                    "HEVC mask detail: mapped/submitted/locked/ready=%llu/%llu/%llu/%llu; last-failure=%s, api-status=%d, rejected-fields=0x%x; output expected/returned-timestamp=%llu/%llu, picture-type/struct=%u/%u, hardware-status=%u, bytes=%u; field bits timestamp1/type2/structure4/hardware8/pointer16/size32/copy64; lifetime approximate counters",
+                    static_cast<unsigned long long>(diagnostic.mapped),static_cast<unsigned long long>(diagnostic.submitted),
+                    static_cast<unsigned long long>(diagnostic.locked),static_cast<unsigned long long>(diagnostic.ready),
+                    stream_bridge::sender::maskHevcFailureName(diagnostic.stage),diagnostic.nativeStatus,diagnostic.rejectedFields,
+                    static_cast<unsigned long long>(diagnostic.expectedTimestamp),static_cast<unsigned long long>(diagnostic.returnedTimestamp),
+                    diagnostic.pictureType,diagnostic.pictureStruct,diagnostic.hardwareStatus,diagnostic.bytes);
+                report(hevcText,diagnostic.stage==stream_bridge::sender::MaskHevcFailure::None?
+                    stream_bridge::logging::Level::Debug:stream_bridge::logging::Level::Warning);
             }
             std::snprintf(text,sizeof text,
                 "coverage lifecycle refusals: render-lock=%llu, copy-pair=%llu, stage-full=%llu, input=%llu, stage=%llu, session=%llu, source=%llu/%llu, rle=%llu, certificate=%llu",

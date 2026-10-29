@@ -32,7 +32,8 @@ struct Fixture {
     NV_ENCODE_API_FUNCTION_LIST api{};MaskHevcConfig config{1152,4608,90,1,20000000,2u*1024u*1024u};
     unsigned opened=0,destroyed=0,created=0,registered=0,locks=0,unmaps=0,coldWaits=0,eos=0,privateEncodes=0,polled=0;
     bool async=true,nv12=true,failOpen=false,failInit=false,failPreset=false,mapFail=false,encodeBusy=false,lockBusy=false;
-    bool wrongStamp=false,wrongType=false,hwFailure=false,reenter=false,eosFail=false,flushWaitFail=false;std::uint32_t outputSize=0;
+    bool wrongStamp=false,wrongType=false,wrongStruct=false,nullOutput=false,emptyOutput=false,hwFailure=false,reenter=false,eosFail=false,flushWaitFail=false;std::uint32_t outputSize=0;
+    NVENCSTATUS mapStatus=NV_ENC_SUCCESS,encodeStatus=NV_ENC_SUCCESS,lockStatus=NV_ENC_SUCCESS;
     int failResource=-1,failBuffer=-1,failEvent=-1;
     MaskHevcEncoder encoder;
     Fixture();
@@ -87,12 +88,13 @@ NVENCSTATUS NVENCAPI createBuffer(void* s,NV_ENC_CREATE_BITSTREAM_BUFFER* p){aut
 NVENCSTATUS NVENCAPI destroyBuffer(void* s,NV_ENC_OUTPUT_PTR p){f(s);auto& o=*static_cast<Output*>(p);check(!o.locked&&(!o.submitted||o.complete),"destroy after GPU completion/unlock");o.allocated=false;return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI regEvent(void* s,NV_ENC_EVENT_PARAMS*){auto& x=f(s);return int(x.events.size())==x.failEvent?NV_ENC_ERR_EVENT_NOT_REGISTERD:NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI unregEvent(void* s,NV_ENC_EVENT_PARAMS*){f(s);return NV_ENC_SUCCESS;}
-NVENCSTATUS NVENCAPI map(void* s,NV_ENC_MAP_INPUT_RESOURCE* p){auto& x=f(s);if(x.mapFail)return NV_ENC_ERR_MAP_FAILED;auto& r=*static_cast<Resource*>(p->registeredResource);check(r.registered&&!r.mapped,"map fixed free input only");r.mapped=true;p->mappedResource=&r;p->mappedBufferFmt=NV_ENC_BUFFER_FORMAT_NV12;return NV_ENC_SUCCESS;}
+NVENCSTATUS NVENCAPI map(void* s,NV_ENC_MAP_INPUT_RESOURCE* p){auto& x=f(s);if(x.mapStatus!=NV_ENC_SUCCESS)return x.mapStatus;if(x.mapFail)return NV_ENC_ERR_MAP_FAILED;auto& r=*static_cast<Resource*>(p->registeredResource);check(r.registered&&!r.mapped,"map fixed free input only");r.mapped=true;p->mappedResource=&r;p->mappedBufferFmt=NV_ENC_BUFFER_FORMAT_NV12;return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI unmap(void* s,NV_ENC_INPUT_PTR p){auto& x=f(s);auto& r=*static_cast<Resource*>(p);check(r.mapped,"unmap actual live input");r.mapped=false;++x.unmaps;return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI encode(void* s,NV_ENC_PIC_PARAMS* p){
     auto& x=f(s);
     if(p->encodePicFlags&NV_ENC_PIC_FLAG_EOS){++x.eos;if(x.eosFail)return NV_ENC_ERR_GENERIC;for(auto& o:x.outputs)if(o.submitted){o.complete=true;o.event->signaled=true;}static_cast<Event*>(p->completionEvent)->signaled=true;return NV_ENC_SUCCESS;}
     if(x.encodeBusy)return NV_ENC_ERR_ENCODER_BUSY;
+    if(x.encodeStatus!=NV_ENC_SUCCESS)return x.encodeStatus;
     ++x.privateEncodes;auto& o=*static_cast<Output*>(p->outputBitstream);
     check(p->encodePicFlags==(NV_ENC_PIC_FLAG_FORCEIDR|NV_ENC_PIC_FLAG_OUTPUT_SPSPPS)&&p->pictureStruct==NV_ENC_PIC_STRUCT_FRAME,"every submitted picture forces independent IDR and parameter sets");
     check(p->completionEvent&&p->inputBuffer&&p->bufferFmt==NV_ENC_BUFFER_FORMAT_NV12,"async GPU input, no upload/readback");
@@ -102,10 +104,12 @@ NVENCSTATUS NVENCAPI encode(void* s,NV_ENC_PIC_PARAMS* p){
 NVENCSTATUS NVENCAPI lock(void* s,NV_ENC_LOCK_BITSTREAM* p){
     auto& x=f(s);++x.locks;check(p->doNotWait==1,"lock must never wait");auto& o=*static_cast<Output*>(p->outputBitstream);
     check(o.complete,"lock only after signaled completion");if(x.lockBusy)return NV_ENC_ERR_LOCK_BUSY;
+    if(x.lockStatus!=NV_ENC_SUCCESS)return x.lockStatus;
     if(x.reenter){std::vector<std::uint8_t> bytes{99};check(x.encoder.tryTake(x.key(1),bytes)==MaskHevcTake::Busy&&bytes.empty(),"hot reentry refuses without waiting or exposing stale data");}
     o.locked=true;p->outputTimeStamp=o.token+(x.wrongStamp?1:0);p->pictureType=x.wrongType?NV_ENC_PIC_TYPE_P:NV_ENC_PIC_TYPE_IDR;
-    p->pictureStruct=NV_ENC_PIC_STRUCT_FRAME;p->hwEncodeStatus=x.hwFailure?1:0;p->bitstreamBufferPtr=o.bytes.data();
-    p->bitstreamSizeInBytes=x.outputSize?x.outputSize:std::uint32_t(o.bytes.size());return NV_ENC_SUCCESS;
+    p->pictureStruct=x.wrongStruct?NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM:NV_ENC_PIC_STRUCT_FRAME;
+    p->hwEncodeStatus=x.hwFailure?1:0;p->bitstreamBufferPtr=x.nullOutput?nullptr:o.bytes.data();
+    p->bitstreamSizeInBytes=x.emptyOutput?0:(x.outputSize?x.outputSize:std::uint32_t(o.bytes.size()));return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI unlock(void* s,NV_ENC_OUTPUT_PTR p){f(s);auto& o=*static_cast<Output*>(p);check(o.locked,"unlock actual locked buffer");o.locked=false;o.submitted=false;return NV_ENC_SUCCESS;}
 Fixture::Fixture(){
@@ -169,12 +173,33 @@ int main(){
         x.lockBusy=true;std::vector<std::uint8_t> out{99};check(x.encoder.tryTake(key,out)==MaskHevcTake::Pending&&out.empty(),"driver lock busy is a nonblocking pending result");
         x.lockBusy=false;check(x.encoder.tryTake(key,out)==MaskHevcTake::Ready,"consumed auto-reset event remains recorded for retry");resetAndCheck(x);
     }
-    for(unsigned control=0;control<4;++control){
+    for(unsigned control=0;control<7;++control){
         Fixture x;check(x.configure(),"configure malformed-output fixture");const auto key=x.key(1);
         check(x.encoder.beginStage(key,&x.textures[0])&&x.encoder.submit(key),"submit malformed-output control");x.complete(0);
-        x.wrongStamp=control==0;x.wrongType=control==1;x.hwFailure=control==2;if(control==3)x.outputSize=x.config.maxAccessUnitBytes+1;
+        x.wrongStamp=control==0;x.wrongType=control==1;x.wrongStruct=control==2;x.hwFailure=control==3;
+        x.nullOutput=control==4;x.emptyOutput=control==5;if(control==6)x.outputSize=x.config.maxAccessUnitBytes+1;
         std::vector<std::uint8_t> out{99};check(x.encoder.tryTake(key,out)==MaskHevcTake::Refused&&out.empty(),"wrong timestamp/P-frame/hardware error/oversized AU never returns mask");
+        const auto diagnostic=x.encoder.diagnostics();
+        check(diagnostic.stage==MaskHevcFailure::OutputValidation&&diagnostic.nativeStatus==0&&x.encoder.lastNvencStatus()==0,
+            "local output rejection is distinguishable from NVIDIA invalid-parameter status8");
+        check(diagnostic.rejectedFields==(control<6?(1u<<control):32u),"every rejected output field has its own fixed bit");
+        check(diagnostic.expectedTimestamp==x.outputs[0].token&&diagnostic.returnedTimestamp==x.outputs[0].token+(control==0?1:0),"diagnostics preserve exact expected and observed output timestamps");
+        check(diagnostic.mapped==1&&diagnostic.submitted==1&&diagnostic.locked==1&&diagnostic.ready==0,"output rejection counters locate successful native operations");
         check(!x.resources[0].mapped&&!x.outputs[0].locked,"malformed output still releases completed resources");resetAndCheck(x);
+    }
+    for(unsigned stage=0;stage<3;++stage){
+        Fixture x;check(x.configure(),"configure actual status8 origin fixture");
+        if(stage==0)x.mapStatus=NV_ENC_ERR_INVALID_PARAM;
+        if(stage==1)x.encodeStatus=NV_ENC_ERR_INVALID_PARAM;
+        if(stage==2)x.lockStatus=NV_ENC_ERR_INVALID_PARAM;
+        const auto key=x.key(1);check(x.encoder.beginStage(key,&x.textures[0]),"stage actual native failure fixture");
+        const bool submitted=x.encoder.submit(key);check(submitted==(stage==2),"only lock failure follows an accepted submission");
+        if(submitted){x.complete(0);std::vector<std::uint8_t> out{99};check(x.encoder.tryTake(key,out)==MaskHevcTake::Refused&&out.empty(),"native lock failure exposes no bytes");}
+        const auto diagnostic=x.encoder.diagnostics();
+        const MaskHevcFailure expected[]={MaskHevcFailure::MapInput,MaskHevcFailure::EncodePicture,MaskHevcFailure::LockBitstream};
+        check(diagnostic.stage==expected[stage]&&diagnostic.nativeStatus==8&&diagnostic.rejectedFields==0,"actual status8 names its native call without inventing a metadata failure");
+        check(diagnostic.mapped==(stage>0?1u:0u)&&diagnostic.submitted==(stage==2?1u:0u)&&diagnostic.locked==0,"failed native call never increments its success counter");
+        resetAndCheck(x);
     }
     for(unsigned control=0;control<2;++control){
         Fixture x;check(x.configure(),"configure submission-error fixture");x.mapFail=control==0;x.encodeBusy=control==1;const auto key=x.key(1);

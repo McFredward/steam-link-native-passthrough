@@ -624,6 +624,7 @@ HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
     stats.nativeStatus=s.maskEncoder.lastNvencStatus();stats.encoded=s.hevcEncoded.load(std::memory_order_relaxed);
     stats.pending=s.hevcPending.load(std::memory_order_relaxed);stats.refused=s.hevcRefused.load(std::memory_order_relaxed);
     stats.syntaxRefused=s.hevcSyntaxRefused.load(std::memory_order_relaxed);
+    stats.diagnostics=s.maskEncoder.diagnostics();
     stats.submissionToPollUs=s.hevcCollectAgeUs.load(std::memory_order_relaxed);
     stats.maxSubmissionToPollUs=s.hevcMaxCollectAgeUs.load(std::memory_order_relaxed);return stats;
 }
