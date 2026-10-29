@@ -46,7 +46,7 @@ jobs:
       - name: Compile real Windows probe and production encoder; execute input selftest
         shell: cmd
         run: |
-          clang-cl /nologo /std:c++17 /O2 /EHsc /W4 /WX /I. /imsvcbuild/sdk tests/mask-hevc/nvenc_quality_probe.cpp pc/stream-bridge-mask-hevc.cpp /Fe:build\probe.exe /Fo:build\ /link d3d11.lib dxgi.lib uuid.lib winmm.lib
+          clang-cl /nologo /std:c++17 /O2 /EHsc /W4 /WX /DNOMINMAX /DWIN32_LEAN_AND_MEAN /I. /imsvcbuild/sdk tests/mask-hevc/nvenc_quality_probe.cpp pc/stream-bridge-mask-hevc.cpp /Fe:build\probe.exe /Fo:build\ /link d3d11.lib dxgi.lib uuid.lib winmm.lib
           if errorlevel 1 exit /b 1
           build\probe.exe --selftest >build\pattern.log
           if errorlevel 1 exit /b 1

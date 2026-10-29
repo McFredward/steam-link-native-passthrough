@@ -31,7 +31,14 @@ def archive_files(path):
             name=info.filename
             if '/' in name or '\\' in name or name in ('.','..') or not re.fullmatch(r'[A-Za-z0-9_.-]+',name):
                 raise ValueError('Probe archive must have flat owned filenames')
-        return {i.filename:archive.read(i) for i in infos}
+        files={i.filename:archive.read(i) for i in infos}
+        if 'probe-manifest.json' in files:
+            manifest=json.loads(files['probe-manifest.json'])
+            expected={name:{'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest()} for name,raw in files.items()
+                      if name not in ('probe-manifest.json','.sfnp-probe-owned')}
+            if manifest.get('schema')!='sfnp-nvenc-probe-files-v1' or manifest.get('files')!=expected:
+                raise ValueError('Probe result file pins differ from the recorded run')
+        return files
 
 def decode_last(encoded,width,height):
     with tempfile.TemporaryDirectory(prefix='sfnp-quality-decode-') as temporary:

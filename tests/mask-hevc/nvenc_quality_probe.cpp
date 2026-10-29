@@ -59,7 +59,7 @@ constexpr Mode Modes[]{
     {"p3-qres-vbr-20m",20000000,false,false,true,true},
     {"p3-qres-ippp8-vbr-20m",20000000,false,false,true,true,true},
 };
-struct Observation {bool present=false;unsigned bytes=0,qp=0,type=0;std::uint64_t timestamp=0;};
+struct Observation {bool present=false;unsigned bytes=0,qp=0,type=0;std::uint64_t timestamp=0;bool validMetadata=false;};
 struct Port {
     NV_ENCODE_API_FUNCTION_LIST real{};const Mode* mode=nullptr;void* session=nullptr;
     NV_ENC_INITIALIZE_PARAMS init{};NV_ENC_CONFIG config{};Observation last{};
@@ -93,7 +93,7 @@ NVENCSTATUS NVENCAPI lock(void* session,NV_ENC_LOCK_BITSTREAM* output){
     auto& p=*active;
     // This is an offline API observation, not a certified/current image. Copy
     // the diagnostic before the production guard rejects a comparison P frame.
-    p.last={true,output->bitstreamSizeInBytes,output->frameAvgQP,unsigned(output->pictureType),output->outputTimeStamp};
+    p.last={true,output->bitstreamSizeInBytes,output->frameAvgQP,unsigned(output->pictureType),output->outputTimeStamp,output->bitstreamBufferPtr&&output->pictureStruct==NV_ENC_PIC_STRUCT_FRAME&&(output->hwEncodeStatus==0||output->hwEncodeStatus==2)};
     if(output->bitstreamBufferPtr&&output->bitstreamSizeInBytes&&output->bitstreamSizeInBytes<=2u*1024u*1024u){
         if(output->pictureType==NV_ENC_PIC_TYPE_IDR){p.prefix.clear();p.prefixHasKey=true;p.prefixFrames=0;}
         if(p.prefixHasKey&&p.prefixFrames<16&&p.prefix.size()+output->bitstreamSizeInBytes<=8u*1024u*1024u){
@@ -138,7 +138,7 @@ bool runMode(const Mode& mode,ID3D11Device* device,ID3D11DeviceContext* context,
         const auto begin=std::chrono::steady_clock::now();require(encoder.beginStage(key,raw[index])&&encoder.submit(key),"Private encode submission failed");
         MaskHevcTake result=MaskHevcTake::Pending;
         while(result==MaskHevcTake::Pending||result==MaskHevcTake::Busy){result=encoder.tryTake(key,output);if(result==MaskHevcTake::Pending||result==MaskHevcTake::Busy){require(std::chrono::steady_clock::now()-begin<std::chrono::seconds(5),"NVENC completion timed out");Sleep(1);}}
-        require(port.last.present&&port.last.timestamp==frame+1&&port.last.bytes&&port.last.bytes<=2u*1024u*1024u,"No complete exactly timestamped native output");
+        require(port.last.present&&port.last.validMetadata&&port.last.timestamp==frame+1&&port.last.bytes&&port.last.bytes<=2u*1024u*1024u,"No complete exactly timestamped native output");
         if(result!=MaskHevcTake::Ready){require((mode.predicted||mode.automatic||mode.longGop||mode.p3)&&result==MaskHevcTake::Refused&&(port.last.type==NV_ENC_PIC_TYPE_P||port.last.type==NV_ENC_PIC_TYPE_I),"Production output validation refused a non-comparison output");++intraGuardRefusals;}
         if(port.last.type==NV_ENC_PIC_TYPE_P)++pFrames;
         require(port.last.qp<=51,"Driver reported unknown QP; preserve prior traces for analysis");
