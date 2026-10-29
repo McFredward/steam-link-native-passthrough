@@ -159,7 +159,9 @@ class Checkpoint:
         raw=e.read(self.path,LIMIT,private=True)
         e.require(e.parse(raw)==old,'The setup checkpoint changed before continuation could be recorded.')
         updated={**old,'continuation':{**marker,'previous':e.sha(raw)}}
-        e.put(self.path,e.encoded(updated),raw,limit=LIMIT)
+        updated_raw=e.encoded(updated)
+        e.require(len(updated_raw)<=LIMIT,'Setup recovery checkpoint exceeds its bound.')
+        e.put(self.path,updated_raw,raw,limit=LIMIT)
         self._sync_directory()
         self.value()
         return updated['continuation']['id']

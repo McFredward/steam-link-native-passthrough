@@ -3,6 +3,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT=Path(__file__).resolve().parents[1]
 def load(name,path):
@@ -54,6 +55,15 @@ class RecoveryLimits(unittest.TestCase):
             checkpoint=c.Checkpoint(s,path,lambda _:False,lambda _:None,lambda *_:None)
             with self.assertRaisesRegex(s.SetupError,'Bounded ordinary file'):checkpoint.value()
             self.assertEqual(path.stat().st_size,c.LIMIT+1)
+
+    def test_continuation_cannot_grow_a_valid_checkpoint_past_its_bound(self):
+        with tempfile.TemporaryDirectory(prefix='sfnp-checkpoint-growth-') as temporary:
+            path=Path(temporary)/'setup-restore.json'
+            checkpoint=c.Checkpoint(s,path,lambda _:False,lambda _:None,lambda *_:None)
+            checkpoint.begin('update',[],[]);original=s.read(path)
+            with mock.patch.object(c,'LIMIT',len(original)):
+                with self.assertRaisesRegex(s.SetupError,'exceeds its bound'):checkpoint.reconcile('a'*64)
+            self.assertEqual(s.read(path),original)
 
 
 if __name__=='__main__':unittest.main()
