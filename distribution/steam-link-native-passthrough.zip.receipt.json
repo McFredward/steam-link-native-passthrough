@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20151420,
-    "sha256": "0945ec97e591dbc3f0a25454330ab05da7206763459b9a006d8d3eb20c88deae"
+    "bytes": 20151540,
+    "sha256": "a3460062bc511c1f491df95f042f25d26ce1c81cdc546815d9fad1fb6873c7e8"
   },
   "artifacts": {
     "frame_layer": {
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11054,
-    "sha256": "9752a0820c26735e5a605c83f4c75b06c76b161aae92f497b6c83348b5735af9"
+    "sha256": "f69b9838ba9917ffdc01d5a79c4ac4ec4fcd46acf184b117126fc4d4500e4b4c"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -51,7 +51,7 @@
     },
     "VERSION": {
       "bytes": 6,
-      "sha256": "d915cc95d6ca8f47ae297713ed46d4e5c5d99ddd29fc3c61e263bdf305f2b5b0"
+      "sha256": "79e3f22ca37c7fdf4c29ae3648d6b008c3cb6547260a453409275470919dc674"
     },
     "packaging/mask-ffmpeg.json": {
       "bytes": 452,
@@ -90,8 +90,8 @@
       "sha256": "a4974678c286dbf95aa609698ef9569c877baec353d18eda90ce118453f4e919"
     },
     "setup/steam_link_setup.py": {
-      "bytes": 70640,
-      "sha256": "78062683174663e02733ecdb712f435765e693f2ae9737246423a6a0870978b6"
+      "bytes": 70844,
+      "sha256": "cd8e21d0ce7bb05a0cd262d0a5aa8a0171e70cf033460e97a08a64be8f0024e8"
     },
     "setup/steam_link_setup_askpass_client.py": {
       "bytes": 3466,
@@ -102,8 +102,8 @@
       "sha256": "fa497fcb37f7647ba129b3ed8ed59ce016f0a86edcd8432e715e43ffc8c22db6"
     },
     "setup/steam_link_setup_checkpoint.py": {
-      "bytes": 19664,
-      "sha256": "5fef8e691db01a3619734b9208695193f07e14a6474821f011a5379d1101715d"
+      "bytes": 19846,
+      "sha256": "320b3e958c52b16cb1b1c610e267869584dce277c73a1ae8dd91c8e5ccdd1a2e"
     },
     "setup/steam_link_setup_frame.py": {
       "bytes": 21103,
@@ -222,7 +222,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "3dd49c69dc4052d55efeae15111ce9b80527cc57",
+  "source_revision": "f3f3949db120a2607c364db6b04ad46ec100ee02",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -240,9 +240,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8090,
-        "sha256": "5494ead7fcb255bb31593638b39005c27c17424d9cbba76e4a85deefb8d14483"
+        "sha256": "d4d44a2b76458db4cd147c3fd5051422820c4e5f1c720df17c258ca6d84efd1e"
       }
     }
   ],
-  "version": "0.3.0"
+  "version": "0.3.1"
 }
