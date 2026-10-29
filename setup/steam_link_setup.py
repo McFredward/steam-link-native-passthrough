@@ -217,12 +217,13 @@ def verify_private_acl(path):
         kernel.LocalFree(value)
 
 
-def put(path, raw, expected=None):
+def put(path, raw, expected=None, *, limit=MAX_FILE):
+    """Use the caller's file bound for both exact predecessor checks."""
     path = no_links(path)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     no_links(path.parent)
     if os.path.lexists(path):
-        require(expected is not None and read(path) == expected, 'Changed or foreign setup file preserved.')
+        require(expected is not None and read(path,limit) == expected, 'Changed or foreign setup file preserved.')
     else:
         require(expected is None, 'Expected setup file is missing.')
     temporary = path.with_name('.' + path.name + '.' + secrets.token_hex(8))
@@ -237,7 +238,7 @@ def put(path, raw, expected=None):
         # The private file is fully flushed before the checked atomic publish.
         os.close(descriptor)
         descriptor = None
-        require((read(path) if os.path.lexists(path) else None) == expected, 'Setup file changed before publication.')
+        require((read(path,limit) if os.path.lexists(path) else None) == expected, 'Setup file changed before publication.')
         os.replace(temporary, path)
     finally:
         if descriptor is not None:
@@ -246,9 +247,10 @@ def put(path, raw, expected=None):
             temporary.unlink()
 
 
-def remove_owned(path, raw):
+def remove_owned(path, raw, *, limit=MAX_FILE):
+    """Remove exact owned bytes under the same bound used to read them."""
     if os.path.lexists(path):
-        require(read(path) == raw, 'Changed file preserved during rollback.')
+        require(read(path,limit) == raw, 'Changed file preserved during rollback.')
         path.unlink()
 
 

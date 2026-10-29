@@ -348,8 +348,8 @@ class Files(fixtures.Tests):
         checkpoint.begin('update',[checkpoint.operation(path,[helper.file_value(b'earlier attempt')])],[])
         checkpoint.reconcile('d'*64)
         ready=s.read(checkpoint.path);write=s.put
-        def lost_reply(target,raw,expected=None):
-            write(target,raw,expected)
+        def lost_reply(target,raw,expected=None,*,limit=s.MAX_FILE):
+            write(target,raw,expected,limit=limit)
             if target==checkpoint.path and s.parse(raw).get('continuation',{}).get('phase')=='active':
                 raise OSError('atomic journal published, reply lost')
         with mock.patch.object(s,'put',side_effect=lost_reply),self.assertRaises(OSError):

@@ -33,6 +33,7 @@ on:
       - 'tests/test_package_stream_bridge.py'
       - 'tests/test_mask_hevc_install.py'
       - 'tests/test_mask_codec_config.py'
+      - 'tests/test_setup_checkpoint_limits.py'
       - 'tools/configure_mask_codec.py'
       - 'tests/test_logging_channel.py'
       - 'tools/publish_logging_channel.py'
@@ -80,6 +81,7 @@ on:
       - 'tests/test_package_stream_bridge.py'
       - 'tests/test_mask_hevc_install.py'
       - 'tests/test_mask_codec_config.py'
+      - 'tests/test_setup_checkpoint_limits.py'
       - 'tools/configure_mask_codec.py'
       - 'tests/test_logging_channel.py'
       - 'tools/publish_logging_channel.py'
@@ -147,6 +149,7 @@ jobs:
           python -B tests/test_stream_bridge_install.py
           python -B tests/test_mask_hevc_install.py
           python -B tests/test_mask_codec_config.py
+          python -B tests/test_setup_checkpoint_limits.py
           python -B tests/test_setup_session.py
           python -B tests/test_setup_log.py
           python -B tests/test_setup_tui.py
@@ -202,6 +205,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Terminal menu checks failed.' }
           python -B tests/test_setup_pc.py
           if ($LASTEXITCODE -ne 0) { throw 'PC runtime control checks failed.' }
+          python -B tests/test_setup_checkpoint_limits.py
+          if ($LASTEXITCODE -ne 0) { throw 'Large checkpoint recovery checks failed.' }
           python -B tests/test_pc_only_setup.py
           if ($LASTEXITCODE -ne 0) { throw 'PC-only update and recovery checks failed.' }
           python -B tests/test_setup_workflow.py Files.test_pc_install_rollback_removes_only_its_new_credentials Files.test_pc_repair_rollback_preserves_original_receipt_and_missing_file Files.test_pc_update_retains_initial_uninstall_baseline_and_pairing Files.test_pc_update_rollback_restores_previous_version_and_owned_preferences

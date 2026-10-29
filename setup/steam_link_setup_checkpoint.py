@@ -159,7 +159,7 @@ class Checkpoint:
         raw=e.read(self.path,LIMIT,private=True)
         e.require(e.parse(raw)==old,'The setup checkpoint changed before continuation could be recorded.')
         updated={**old,'continuation':{**marker,'previous':e.sha(raw)}}
-        e.put(self.path,e.encoded(updated),raw)
+        e.put(self.path,e.encoded(updated),raw,limit=LIMIT)
         self._sync_directory()
         self.value()
         return updated['continuation']['id']
@@ -207,12 +207,12 @@ class Checkpoint:
             value.update(operations=list(by_path.values()),settings=list(by_key.values()),
                          continuation={k:v for k,v in {**handoff,'phase':'active','previous':e.sha(previous)}.items() if k!='retained'})
         raw=e.encoded(value);e.require(len(raw)<=LIMIT,'Setup recovery checkpoint exceeds its bound.')
-        e.put(self.path,raw,previous)
+        e.put(self.path,raw,previous,limit=LIMIT)
         self._sync_directory()
         try:self.value()
         except BaseException:
-            if previous is None:e.remove_owned(self.path,raw)
-            else:e.put(self.path,previous,raw)
+            if previous is None:e.remove_owned(self.path,raw,limit=LIMIT)
+            else:e.put(self.path,previous,raw,limit=LIMIT)
             self._sync_directory()
             raise
         return value
@@ -285,7 +285,7 @@ class Checkpoint:
     def finish(self,*,restored=False):
         if restored:self.verify_restored()
         value=self.value()
-        if value is not None:self.e.remove_owned(self.path,self.e.read(self.path,LIMIT,private=True))
+        if value is not None:self.e.remove_owned(self.path,self.e.read(self.path,LIMIT,private=True),limit=LIMIT)
 
 
 def file_value(raw,mode=0o600):

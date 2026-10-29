@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.0 / PC 0.3.0 / Frame 0.3.0 selects lossy HEVC masks by default
+Installer 0.3.1 / PC 0.3.0 / Frame 0.3.0 selects lossy HEVC masks by default
 with a 20 Mbit/s target. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC

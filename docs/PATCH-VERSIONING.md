@@ -1,6 +1,8 @@
 # Patch versions
 
-The October29 dev package is installer **0.3.0**, PC **0.3.0**, Frame **0.3.0**.
+The October29 dev package is installer **0.3.1**, PC **0.3.0**, Frame **0.3.0**.
+Installer0.3.1 fixes continuation and cleanup of recovery checkpoints larger
+than32MiB without changing the native companions or their HEVC default.
 This coordinated minor version identifies the paired HEVC mask update; the PC
 now selects HEVC by default. The unchanged private Frame decoder and renderer
 binaries retain their exact artifact pins from the first HEVC dev candidate.
