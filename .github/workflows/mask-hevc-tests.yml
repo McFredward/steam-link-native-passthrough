@@ -3,7 +3,7 @@ on:
   push:
     branches: [dev]
     paths:
-      - 'receiver/stream_bridge_mask_hevc.*'
+      - 'receiver/stream_bridge_mask_hevc*'
       - 'layer/stream_bridge_process.*'
       - 'bridge/stream_bridge_hevc_coverage.*'
       - 'tests/mask-hevc/**'
@@ -14,7 +14,7 @@ on:
       - '.github/workflows/mask-hevc-tests.yml'
   pull_request:
     paths:
-      - 'receiver/stream_bridge_mask_hevc.*'
+      - 'receiver/stream_bridge_mask_hevc*'
       - 'layer/stream_bridge_process.*'
       - 'bridge/stream_bridge_hevc_coverage.*'
       - 'tests/mask-hevc/**'
@@ -45,7 +45,7 @@ jobs:
         run: |
           cmake -S . -B build/hevc -DFRAME_STREAM_BRIDGE_ONLY=ON -DBUILD_TESTING=ON -DCMAKE_BUILD_TYPE=Release -DSFNP_MASK_HEVC_INCLUDE_DIRECTORY="$PWD/build/private-codec/install/include" -DSFNP_MASK_HEVC_HOST_CODEC_LIBRARY="$PWD/build/private-codec/install/lib/libavcodec-sfnp-mask.so.62" -DSFNP_MASK_HEVC_HOST_UTILITY_LIBRARY="$PWD/build/private-codec/install/lib/libavutil-sfnp-mask.so.60" -DSFNP_MASK_HEVC_HOST_FFMPEG_EXECUTABLE=/usr/bin/ffmpeg
           cmake --build build/hevc --parallel 4 --target test_stream_bridge_hevc_coverage test_stream_bridge_mask_hevc test_stream_bridge_mask_hevc_ingress
-          ctest --test-dir build/hevc --output-on-failure -R '^stream_bridge_(hevc_coverage|mask_hevc_real)$'
+          ctest --test-dir build/hevc --output-on-failure -R '^stream_bridge_(hevc_coverage|mask_hevc_real|process_lifecycle)$'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

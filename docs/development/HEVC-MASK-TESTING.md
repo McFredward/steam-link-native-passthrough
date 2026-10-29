@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.5 / PC 0.3.4 / Frame 0.3.1 selects lossy HEVC masks by default
+Installer 0.3.6 / PC 0.3.4 / Frame 0.3.2 selects lossy HEVC masks by default
 with a 20 Mbit/s target. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
@@ -197,3 +197,31 @@ set decode and traverse authenticated Process ingress. The tall fixture uses
 the observed1152x4608 extent. Private log header prefixes reproduce the parser
 correction but are not a complete entropy/decode fixture. Hardware transmission,
 Frame throughput and visible quality after this update still require a device test.
+
+## Receiver throughput correction (0.3.6)
+
+The next Battlemarked run finally transmitted927 HEVC masks and the Frame
+reported927 successful decodes with zero refusals. This establishes successful
+hardware codec transport/admission; it does not establish smooth playback.
+Sender progression fell to roughly30 output/rate updates per second during
+the scene and the user reported severe stutter; this is not an application-FPS
+measurement.
+The compositor bridge synchronously decoded each5.3MP mask while holding its
+IPC worker gate, constructing and destroying a decoder and its allocations for
+every picture. That serialized mask decode with image/Ready processing.
+
+Frame0.3.2 moves this work into four fixed independent picture workers with
+eight slots, reuses one flushed context per worker/epoch, retains pending
+certificates on full capacity and rejoins every completed mask to its exact
+current native receipt. The IPC worker continues processing decoded images and
+Ready acknowledgements while masks decode. ARM-vectorizable luma range
+reductions preserve every actual decoded byte. PC0.3.4 and both private FFmpeg
+libraries are unchanged; the paired installer needs to update the Frame layer.
+No bitrate or resolution reduction is used to obtain the speedup.
+
+The software test includes a complete signed HEVC/native-image/Ready handoff,
+withheld/wrong-frame GPU publication, full decoder capacity and cancellation.
+A host-only synthetic cloud comparison improved from about28 to125frames/s at
+1152x4608. Snapdragon performance and smooth headset playback after this update
+still need the maintainer's next device test. Close SteamVR after the scene and
+retain both PC logs and the Frame journal's `HEVC mask pipeline` counters.

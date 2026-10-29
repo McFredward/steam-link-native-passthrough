@@ -268,12 +268,12 @@ set(SFNP_MASK_HEVC_HOST_CODEC_LIBRARY "" CACHE FILEPATH "Explicit host libavcode
 set(SFNP_MASK_HEVC_HOST_UTILITY_LIBRARY "" CACHE FILEPATH "Explicit host libavutil60 for real software mask tests")
 set(SFNP_MASK_HEVC_HOST_FFMPEG_EXECUTABLE "" CACHE FILEPATH "Explicit host ffmpeg with CPU libx265 for synthetic test fixtures")
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    add_library(sfnp_mask_hevc_decoder STATIC receiver/stream_bridge_mask_hevc.cpp)
+    add_library(sfnp_mask_hevc_decoder STATIC receiver/stream_bridge_mask_hevc.cpp receiver/stream_bridge_mask_hevc_pool.cpp)
     set_target_properties(sfnp_mask_hevc_decoder PROPERTIES
         POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
     target_include_directories(sfnp_mask_hevc_decoder PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_options(sfnp_mask_hevc_decoder PRIVATE -Wall -Wextra -Wpedantic -Werror)
-    target_link_libraries(sfnp_mask_hevc_decoder PUBLIC sfnp_stream_bridge PRIVATE ${CMAKE_DL_LIBS})
+    target_link_libraries(sfnp_mask_hevc_decoder PUBLIC sfnp_stream_bridge PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
     if(SFNP_MASK_HEVC_INCLUDE_DIRECTORY)
         foreach(header libavcodec/avcodec.h libavcodec/version_major.h libavutil/frame.h libavutil/version.h)
             if(NOT EXISTS "${SFNP_MASK_HEVC_INCLUDE_DIRECTORY}/${header}")
@@ -294,6 +294,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             add_executable(test_stream_bridge_mask_hevc tests/test_stream_bridge_mask_hevc.cpp)
             target_link_libraries(test_stream_bridge_mask_hevc PRIVATE sfnp_mask_hevc_decoder)
             target_compile_options(test_stream_bridge_mask_hevc PRIVATE -Wall -Wextra -Wpedantic -Werror)
+            add_executable(mask_hevc_benchmark EXCLUDE_FROM_ALL tests/mask-hevc/benchmark.cpp)
+            target_link_libraries(mask_hevc_benchmark PRIVATE sfnp_mask_hevc_decoder)
+            target_compile_options(mask_hevc_benchmark PRIVATE -Wall -Wextra -Wpedantic -Werror)
             # Includes the production Process implementation through its fixture;
             # do not also compile layer/stream_bridge_process.cpp into this target.
             add_executable(test_stream_bridge_mask_hevc_ingress
@@ -341,4 +344,6 @@ if(SFNP_MASK_HEVC_HOST_INPUT_COUNT GREATER 0)
         --codec ${SFNP_MASK_HEVC_HOST_CODEC_LIBRARY}
         --utility ${SFNP_MASK_HEVC_HOST_UTILITY_LIBRARY})
     set_tests_properties(stream_bridge_mask_hevc_real PROPERTIES TIMEOUT 120)
+    add_test(NAME stream_bridge_process_lifecycle COMMAND test_stream_bridge_mask_hevc_ingress --process-lifecycle)
+    set_tests_properties(stream_bridge_process_lifecycle PROPERTIES TIMEOUT 30)
 endif()

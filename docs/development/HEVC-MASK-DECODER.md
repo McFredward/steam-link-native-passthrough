@@ -26,18 +26,25 @@ logging is quiet; existing bounded process counters report decode/refusal counts
 
 ## Data and admission
 
-The decoder runs on the existing compositor worker after certificate
-MAC/hash/binding/descriptor validation. An untrusted codec-selector byte chooses
+The compositor IPC worker verifies certificate MAC/hash/binding/descriptor
+first, then submits owned encoded copies to four fixed independent decoder
+workers with eight total slots. Full slots retain the authenticated input for
+a later cycle; IPC, image import and Ready handling never wait for a decode.
+An untrusted codec-selector byte chooses
 which authentication API to call; it never grants decode or image permission.
 Existing lossless masks retain their single-expansion fast path. Codec6 is never
 passed into a legacy consumer that only accepts compressed coverage callbacks.
 
-Each AU creates a fresh decoder context, so no previous mask can supply a missing
-parameter set or reference. The adapter supplies one packet with a serialized
+Each worker retains one decoder context per source/binding/encoder/extent epoch.
+`avcodec_flush_buffers` releases references between independent complete IDRs;
+all VPS/SPS/PPS are still required by the portable parser before decoding. Missing
+parameter sets cannot borrow a cached PPS. Entropy errors discard that context.
+Single-threaded decoder contexts avoid oversubscribing the fixed picture pool.
+The adapter supplies one packet with a serialized
 source connection/generation, encoder generation, actual submission ID, extent,
 policy and binding through FFmpeg's public `COPY_OPAQUE` contract. It requires the
-same returned identity and packet timestamp on exactly one decoded output, then
-drains the decoder and refuses extra outputs.
+same returned identity and a fresh nonwrapping per-call packet timestamp on exactly one decoded
+output, then drains the decoder and refuses extra outputs.
 
 Only the decoded 8-bit software Y plane is copied to A8, row by row using the
 returned stride and retained plane-buffer bounds. YUV420P/YUVJ420P/NV12 are the
@@ -55,8 +62,13 @@ complete native encoder Lock result. A malicious authenticated producer can also
 sign arbitrary Raw alpha; decoder error flags cannot protect against that trust
 boundary. No claim is made that every malformed signed entropy stream is detected.
 
-A failed Codec6 decode never publishes samples or retains a usable certificate
-receipt. Authenticated active-MR policy still requests camera-only recovery.
+An authenticated receipt may retain a native image while its mask is pending,
+but it cannot acknowledge Ready until the exact decoded coverage is uploaded
+and published by the existing GPU consumer. Completion rejoins the still-current
+source, binding, frame, extent, output pool, native token and content receipt.
+Completion order never selects a latest mask. Source/channel changes cancel
+queued/completed work and retire running old-epoch results. A failed Codec6
+decode never publishes samples or retains a usable certificate receipt. Authenticated active-MR policy still requests camera-only recovery.
 Ordinary game rendering continues to require the unchanged exact native RGB
 image/lease/eye proof and current camera grant. Successful mask decode alone
 cannot authorize composition.
@@ -67,14 +79,19 @@ cannot authorize composition.
 fixtures and an actual public libavcodec decode. It checks 0/255 endpoints,
 all256 alpha codes, source/epoch/frame/binding retention, PPS gaps, dependent or
 extra pictures, crops, limited-range metadata, malformed input, failure recovery
-and unavailable/wrong dependencies. QP0 fixtures are explicitly lossy, not a
+and unavailable/wrong dependencies. Repeated-IDR tests require one reusable
+context per epoch; pool tests check fixed capacity, owned packet copies, exact
+out-of-order frame identity and cancellation of queued/running/completed work. QP0 fixtures are explicitly lossy, not a
 lossless guarantee.
 
 `tests/mask-hevc/process_ingress.cpp` exercises the actual Process worker with real
 AU signatures, detached metadata and authenticated Unix transport. It checks one
 shared A8 expansion across decoded consumers, no legacy HEVC dispatch, rejected
 MAC/truncated/modified payloads, camera-only recovery with an unavailable decoder,
-and preserved legacy lossless dispatch. The existing process fixture supplies
+and preserved legacy lossless dispatch. A full-pool fixture requires the exact
+pending frame to retry without dropping it. Real native image leases and Ready
+IPC additionally prove that decoded HEVC alone or another frame's GPU publication
+cannot release native DQ. Channel revocation cannot publish a completed old mask. The existing process fixture supplies
 only its explicit final GPU-publication and camera-helper ports.
 
 `tests/mask-hevc/run.py` generates bounded temporary fixtures through the explicit
@@ -89,3 +106,19 @@ proved linear C01Q/UBWC luma layout. A future hardware mask adapter needs its ow
 supported decoder instance and positively negotiated plain output format, buffer
 bounds/crops, synchronization, lifetime and throughput checks. Do not reinterpret
 C01Q as NV12 or change the running RGB decoder to obtain mask pixels.
+
+## Explicit host timing
+
+Build `mask_hevc_benchmark` with the explicit private codec headers and libraries.
+It accepts `fresh|serial|pool CODEC_LIBRARY UTILITY_LIBRARY OWNED_HEVC WIDTH HEIGHT
+FRAMES`; timing stays outside pass/fail tests. It checks every returned identity,
+extent and decoded byte count, with fixed work and a30-second deadline. This is
+CPU-only codec evidence, never Frame throughput or native GPU/frame latency.
+The same1152x4608 synthetic cloud IDR measured about28frames/s with fresh
+single-threaded contexts and125frames/s with the fixed pool and vectorizable
+full-range reductions on the development host. No mask downsampling, quantizer,
+bitrate, source proof or native RGB setting changed for this comparison.
+
+Bounded debug logs include `HEVC mask pipeline`: submitted/backpressure/stale,
+context opens and mean/max per-worker microseconds. These are diagnostic
+snapshots; four workers can overlap, and mean worker time is not frame interval.

@@ -1,4 +1,7 @@
 #include "receiver/stream_bridge_mask_hevc.h"
+#include "receiver/stream_bridge_mask_hevc_pool.h"
+#include <thread>
+#include <set>
 #include "bridge/stream_bridge_hevc_coverage.h"
 #include <algorithm>
 #include <chrono>
@@ -69,5 +72,54 @@ void decode(const hevc::Libraries& libs,const fs::path& root){
     check(decoder.decodeIntra(in,output)==hevc::Status::Ok&&output.source.generation==27&&output.descriptor.encoderGeneration==31&&output.descriptor.sourceFrame==91&&output.binding[3]==22,"fresh independent AU recovers after bad payload and source restart without old decoder state");
     decoder.stopCold();check(!decoder.ready()&&decoder.decodeIntra(in,output)==hevc::Status::Unavailable,"cold stop revokes decoder availability");
 }
+void reuse(const hevc::Libraries& libs,const fs::path& root){
+    hevc::Decoder decoder;check(decoder.prepareCold(libs),"reusable decoder prepared");
+    std::array<std::vector<std::uint8_t>,3> payloads;
+    unsigned n=0;for(const auto* name:{"zero","opaque","codes"}){const auto coded=read(root/(std::string(name)+".hevc"));check(sb::wrapHevcCoverage(bytes(coded),64,64,payloads[n++]),"complete independent fixture wrapped");}
+    hevc::DecodedMask output;
+    for(unsigned i=0;i<24;++i){auto in=input(bytes(payloads[i%3]));in.descriptor.sourceFrame=100+i;in.descriptor.cameraRecovery=i%3;
+        check(decoder.decodeIntra(in,output)==hevc::Status::Ok&&output.descriptor.sourceFrame==100+i&&output.descriptor.cameraRecovery==i%3,"reused context cannot return prior frame or policy after EOF/flush");
+        const auto expected=i%3==0?0:(i%3==1?255:0);check(i%3==2?output.samples[0]<=2:output.samples[0]==expected,"alternating zero/opaque/fractional IDRs do not borrow reference pixels");}
+    const auto stats=decoder.statistics();check(stats.contextsOpened==1&&stats.attempts==24&&stats.decoded==24,"one decoder allocation serves repeated independent same-epoch IDRs");
+    const auto coded=read(root/"codes.hevc");auto missing=coded;
+    for(const auto& unit:nals(coded))if(unit.type==34){missing.erase(missing.begin()+unit.start,missing.begin()+unit.end);break;}
+    const auto invalid=unchecked(missing);auto absent=input(bytes(invalid));const auto before=output.samples;
+    check(decoder.decodeIntra(absent,output)==hevc::Status::InvalidEnvelope&&output.samples==before,"retained same-extent context cannot supply a missing PPS from an earlier packet");
+    auto recovered=input(bytes(payloads[1]));recovered.descriptor.sourceFrame=200;
+    check(decoder.decodeIntra(recovered,output)==hevc::Status::Ok&&output.range.minimum==255&&decoder.statistics().contextsOpened==1,"valid independent opaque IDR recovers without cached fractional pixels or a context rebuild");
+    auto in=input(bytes(payloads[0]));in.source.generation=13;in.descriptor.encoderGeneration=17;
+    check(decoder.decodeIntra(in,output)==hevc::Status::Ok&&decoder.statistics().contextsOpened==2&&output.source.generation==13,"source/encoder epoch change creates fresh bounded decoder state");
+    decoder.stopCold();check(decoder.prepareCold(libs)&&decoder.decodeIntra(in,output)==hevc::Status::Ok&&decoder.statistics().contextsOpened==3,"cold stop frees resources before explicit reprepare");
 }
-int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+void pool(const hevc::Libraries& libs,const fs::path& root){
+    hevc::Pool pool;check(!pool.ready()&&!pool.prepareCold({libs.utility,libs.utility}),"unprepared/wrong-ABI pool cannot enable decoding");
+    check(pool.prepareCold(libs)&&pool.ready(),"four explicitly prepared decoder workers start");
+    const auto coded=read(root/"slices.hevc");std::vector<std::uint8_t> payload;check(sb::wrapHevcCoverage(bytes(coded),256,256,payload),"real independent multi-slice fixture wrapped for bounded pool");
+    auto in=input(bytes(payload));in.descriptor.codedWidth=in.descriptor.codedHeight=256;
+    for(unsigned i=0;i<hevc::Pool::Capacity;++i){in.descriptor.sourceFrame=i+1;check(pool.submit(in),"fixed pool owns each queued input");}
+    check(!pool.submit(in),"completed-but-unconsumed slots still enforce the exact fixed capacity");
+    std::fill(payload.begin(),payload.end(),0); // Borrowed caller bytes may disappear immediately.
+    std::set<std::uint64_t> frames;const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+    while(frames.size()<hevc::Pool::Capacity&&std::chrono::steady_clock::now()<end){
+        hevc::Pool::Result result;if(!pool.take(result)){std::this_thread::yield();continue;}
+        check(result.status==hevc::Status::Ok&&result.identity.payload.data==nullptr&&result.decoded.samples.size()==65536,"workers decode owned copies and return no borrowed packet pointer");
+        check(result.identity.descriptor.sourceFrame==result.decoded.descriptor.sourceFrame&&frames.insert(result.decoded.descriptor.sourceFrame).second,"out-of-order completion preserves each exact frame once");
+        check(result.decoded.range.minimum==0&&result.decoded.range.maximum==255,"multi-slice fractional luma survives independent worker contexts");
+    }
+    check(frames.size()==hevc::Pool::Capacity,"all fixed outstanding jobs complete without a mask substitution");
+    check(pool.statistics().contextsOpened<=hevc::Pool::Workers&&pool.statistics().decoded==hevc::Pool::Capacity,"bounded workers reuse at most one context each");
+    check(sb::wrapHevcCoverage(bytes(coded),256,256,payload),"restore caller-owned packet");in.payload=bytes(payload);
+    for(unsigned i=0;i<hevc::Pool::Capacity;++i){in.descriptor.sourceFrame=100+i;check(pool.submit(in),"old source work queued before revocation");}
+    pool.cancel();in.source.generation=99;in.binding[0]=101;in.descriptor.sourceFrame=999;
+    const auto retryEnd=std::chrono::steady_clock::now()+std::chrono::seconds(5);bool submitted=false;
+    while(!(submitted=pool.submit(in))&&std::chrono::steady_clock::now()<retryEnd)std::this_thread::yield();
+    check(submitted,"new source can submit after bounded running old jobs retire");
+    bool received=false;
+    while(!received&&std::chrono::steady_clock::now()<retryEnd){hevc::Pool::Result result;if(!pool.take(result)){std::this_thread::yield();continue;}
+        check(result.status==hevc::Status::Ok&&result.decoded.source.generation==99&&result.decoded.descriptor.sourceFrame==999&&result.decoded.binding[0]==101,"revocation cannot publish queued/completed/running old-source results");received=true;}
+    check(received,"new source completes after revocation");pool.stopCold();hevc::Pool::Result result;
+    check(!pool.ready()&&!pool.submit(in)&&!pool.take(result),"explicit stop joins workers and revokes every outstanding result");
+}
+
+}
+int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);reuse(libraries,argv[3]);pool(libraries,argv[3]);std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

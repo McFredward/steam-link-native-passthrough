@@ -23,9 +23,13 @@ struct Libraries {std::filesystem::path codec,utility;};
 enum class Status {Ok,Unavailable,InvalidIdentity,InvalidEnvelope,DecoderRefused,
     InvalidOutput,WrongFrame,ExtraOutput,AllocationRefused};
 const char* statusName(Status)noexcept;
+struct Statistics {
+    std::uint64_t contextsOpened=0,attempts=0,decoded=0,totalMicros=0,maxMicros=0;
+};
 // Serialized cold-worker owner only. No file/device I/O, library loading or
-// decoding belongs in a renderer callback. Each AU has a fresh decoder context:
-// this adapter never accepts a reference to another mask's decoder state.
+// decoding belongs in a renderer callback. Reuse one bounded decoder and its
+// allocation/thread pools. Flush references between independent complete IDRs;
+// fresh packet tokens and COPY_OPAQUE still prove every exact returned frame.
 class Decoder {
 public:
     Decoder();~Decoder();
@@ -34,6 +38,7 @@ public:
     bool prepareInstalledCold()noexcept; // Only owned adjacent *-sfnp-mask libs.
     bool ready()const noexcept;
     Status decodeIntra(const Input&,DecodedMask&)noexcept; // Transactional.
+    Statistics statistics()const noexcept; // Serialized owner only, diagnostic.
     void stopCold()noexcept;
 private:
     struct Impl;std::unique_ptr<Impl> impl_;

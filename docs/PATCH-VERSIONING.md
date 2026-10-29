@@ -1,17 +1,17 @@
 # Patch versions
 
-The October29 dev package is installer **0.3.4**, PC **0.3.3**, Frame **0.3.0**.
-PC0.3.3 removes the optional mask AUD and records one bounded header diagnostic
-if actual NVENC syntax remains unsupported. The Frame payload stays identical.
-PC0.3.2 accepts NVENC's completed output state2 after exact completion and
-frame checks. This remains a PC-only update with identical Frame artifacts.
-PC0.3.1 distinguishes native HEVC API failures from local output refusals.
-Its PC-only update retains the exact Frame payload and existing HEVC selection.
-Installer0.3.1 fixes continuation and cleanup of recovery checkpoints larger
-than32MiB without changing the native companions or their HEVC default.
-This coordinated minor version identifies the paired HEVC mask update; the PC
-now selects HEVC by default. The unchanged private Frame decoder and renderer
-binaries retain their exact artifact pins from the first HEVC dev candidate.
+The October29 dev package is installer **0.3.6**, PC **0.3.4**, Frame **0.3.2**.
+Frame0.3.2 pipelines independent HEVC masks on a bounded four-worker pool,
+reuses flushed per-epoch contexts and keeps IPC/image/Ready processing responsive.
+PC0.3.4 and the exact private codec pair are unchanged.
+Installer0.3.5 paired PC0.3.4/Frame0.3.1 to admit the observed NVENC multi-slice
+IDR and unused SPS reference declarations through an optional negotiated bit.
+Earlier PC-only updates0.3.1–0.3.3 distinguished API/output validation, accepted
+completed NVENC state2 and captured bounded syntax headers. Installer0.3.1 also
+fixed recovery checkpoints larger than32MiB without changing native patches.
+HEVC masks have been the dev sender's default since0.3.0, with explicit lossless
+preferences retained. Versions identify changes; they never certify headset
+quality, throughput or successful runtime admission.
 
 The October22 stable release is installer **0.2.22**, PC **0.2.21**, Frame
 **0.2.18**. The current repository version files remain authoritative; the

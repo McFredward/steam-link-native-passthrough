@@ -6,6 +6,7 @@
 #include "../receiver/stream_bridge_native_loader.h"
 #include "../receiver/stream_bridge_camera_client.h"
 #include "../receiver/stream_bridge_mask_hevc.h"
+#include "../receiver/stream_bridge_mask_hevc_pool.h"
 #include "../bridge/stream_bridge_credentials.h"
 #include <algorithm>
 #include <atomic>
@@ -24,13 +25,19 @@ namespace local=stream_bridge_local;
 namespace native=stream_bridge_native;
 namespace stream_bridge_renderer {
 namespace {
-enum class Flow:unsigned {CertifiedCallback,CertifiedQueued,CertifiedQueueRefused,DecodedCallback,ImageMiss,LeaseMiss,NativeStale,BindingMiss,DecodedQueued,DecodedQueueRefused,CertifiedReceived,Authenticated,AuthenticationRefused,DecodedReceived,CertificateMiss,ReceivedLeaseMiss,KernelMiss,PicturesRetained,ReadyQueued,ReadyReceived,HandoffWait,HandoffReady,HandoffTimeout,CameraActive,CameraNone,CameraSource,CameraChannel,CameraLease,CameraDeferred,HandoffOverFrame,HandoffOverTwoFrames,HandoffOver50ms,HandoffUnavailable,HevcDecoded,HevcRefused,Count};
+enum class Flow:unsigned {CertifiedCallback,CertifiedQueued,CertifiedQueueRefused,DecodedCallback,ImageMiss,LeaseMiss,NativeStale,BindingMiss,DecodedQueued,DecodedQueueRefused,CertifiedReceived,Authenticated,AuthenticationRefused,DecodedReceived,CertificateMiss,ReceivedLeaseMiss,KernelMiss,PicturesRetained,ReadyQueued,ReadyReceived,HandoffWait,HandoffReady,HandoffTimeout,CameraActive,CameraNone,CameraSource,CameraChannel,CameraLease,CameraDeferred,HandoffOverFrame,HandoffOverTwoFrames,HandoffOver50ms,HandoffUnavailable,HevcDecoded,HevcRefused,HevcSubmitted,HevcBackpressure,HevcStale,Count};
 struct Process {
     std::mutex gate;std::condition_variable released;std::atomic<bool> peerConfirmed{false};int wake=-1;std::atomic<ProcessKind> kind{ProcessKind::Off};int directory=-1;
     std::filesystem::path root;std::array<ProcessConsumer,4> consumers{};
     local::Channel channel;local::LeaseWriter writer;native::NativeImages images;
     sb::AuthSession verifier;sb::VideoStreamContext verifiedSource{};
-    stream_bridge_mask_hevc::Decoder maskHevc;
+    stream_bridge_mask_hevc::Decoder maskHevc; // Video process readiness only.
+    stream_bridge_mask_hevc::Pool hevcPool;
+    struct PendingHevc {
+        enum class Phase {Empty,Waiting,Submitted};Phase phase=Phase::Empty;
+        native::SourceIdentity source{};std::uint64_t nativeToken=0,submittedContent=0;sb::CertifiedAccessUnit certificate;
+    };
+    std::array<PendingHevc,native::ReceiverWorker::PendingCapacity> pendingHevc{};
     std::array<local::Message,native::ReceiverWorker::PendingCapacity> masks{};
     std::array<LocalPicture,native::MaxDevices*native::MaxBuffers> pictures{};
     std::array<local::Message,native::MaxDevices*native::MaxBuffers> awaiting{},acknowledged{};
@@ -78,6 +85,13 @@ void reportFlowCold(Process& p){
         p.kind==ProcessKind::Vrlink?"video":"compositor",static_cast<unsigned long long>(p.handoffMaxMicros.load(std::memory_order_relaxed)),get(Flow::HandoffOverFrame),get(Flow::HandoffOverTwoFrames),get(Flow::HandoffOver50ms));
     std::fprintf(stderr,"[Steam Link Native Passthrough] independent HEVC mask decode %s: decoded/refused=%llu/%llu\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::HevcDecoded),get(Flow::HevcRefused));
+    if(p.kind==ProcessKind::Compositor){
+    const auto hevc=p.hevcPool.statistics();
+    std::fprintf(stderr,"[Steam Link Native Passthrough] HEVC mask pipeline %s: workers=%u, slots=%u; submitted/backpressure/stale=%llu/%llu/%llu; contexts=%llu; attempts=%llu; worker mean/max-us=%llu/%llu; diagnostic timings, not end-to-end latency\n",
+        p.kind==ProcessKind::Vrlink?"video":"compositor",stream_bridge_mask_hevc::Pool::Workers,stream_bridge_mask_hevc::Pool::Capacity,
+        get(Flow::HevcSubmitted),get(Flow::HevcBackpressure),get(Flow::HevcStale),static_cast<unsigned long long>(hevc.contextsOpened),static_cast<unsigned long long>(hevc.attempts),
+        static_cast<unsigned long long>(hevc.attempts?hevc.totalMicros/hevc.attempts:0),static_cast<unsigned long long>(hevc.maxMicros));
+    }
     std::fprintf(stderr,"[Steam Link Native Passthrough] camera demand %s: active/none=%llu/%llu; revoked source/channel=%llu/%llu; retired pool epoch=%llu; opaque deferred=%llu\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::CameraActive),get(Flow::CameraNone),get(Flow::CameraSource),get(Flow::CameraChannel),get(Flow::CameraLease),get(Flow::CameraDeferred));
 }
@@ -205,6 +219,46 @@ void sourceNotice(const native::RuntimeNotice& notice,void* context) noexcept{
         static_cast<unsigned long long>(notice.statistics.accepted),static_cast<unsigned long long>(notice.statistics.dropped),
         static_cast<unsigned long long>(notice.statistics.rejected),static_cast<unsigned long long>(notice.statistics.captureDropped));
 }
+void cancelHevc(Process& p){p.hevcPool.cancel();for(auto& pending:p.pendingHevc)pending={};}
+void submitHevc(Process& p){
+    for(unsigned n=0;n<stream_bridge_mask_hevc::Pool::Capacity;++n){
+        Process::PendingHevc* next=nullptr;
+        for(auto& pending:p.pendingHevc)if(pending.phase==Process::PendingHevc::Phase::Waiting&&(!next||pending.certificate.descriptor.sourceFrame<next->certificate.descriptor.sourceFrame))next=&pending;
+        if(!next)return;
+        const auto& c=next->certificate;
+        const stream_bridge_mask_hevc::Input input{next->source.stream,c.descriptor,c.binding,{c.coverage.data(),c.coverage.size()}};
+        if(!p.hevcPool.submit(input)){count(p,Flow::HevcBackpressure);return;} // Retain this exact authenticated job for the next cold cycle.
+        next->phase=Process::PendingHevc::Phase::Submitted;count(p,Flow::HevcSubmitted);
+    }
+}
+void collectHevc(Process& p){
+    stream_bridge_mask_hevc::Pool::Result result;
+    for(unsigned n=0;n<stream_bridge_mask_hevc::Pool::Capacity&&p.hevcPool.take(result);++n){
+        const auto index=result.identity.descriptor.sourceFrame%p.pendingHevc.size();auto& pending=p.pendingHevc[index];const auto& mask=p.masks[index];
+        if(pending.phase!=Process::PendingHevc::Phase::Submitted||!sameSource(p.verifiedSource,result.identity.source)
+            ||!sameSource(pending.source.stream,result.identity.source)||pending.certificate.binding!=result.identity.binding
+            ||!sameDescriptor(pending.certificate.descriptor,result.identity.descriptor)||!mask.peerConfirmed
+            ||!sameSource(mask.source.stream,pending.source.stream)||mask.source.outputPoolGeneration!=pending.source.outputPoolGeneration
+            ||mask.nativeTimestampToken!=pending.nativeToken||mask.submittedContent!=pending.submittedContent
+            ||mask.binding!=pending.certificate.binding||!sameDescriptor(mask.descriptor,pending.certificate.descriptor)){
+            if(pending.phase==Process::PendingHevc::Phase::Submitted&&sameSource(pending.source.stream,result.identity.source)
+                &&pending.certificate.binding==result.identity.binding&&sameDescriptor(pending.certificate.descriptor,result.identity.descriptor))pending={};
+            count(p,Flow::HevcStale);continue;
+        }
+        const auto& decoded=result.decoded;const auto& certificate=pending.certificate;
+        if(result.status!=stream_bridge_mask_hevc::Status::Ok||!sameSource(decoded.source,result.identity.source)
+            ||!sameDescriptor(decoded.descriptor,certificate.descriptor)||decoded.descriptor.cameraRecovery!=certificate.descriptor.cameraRecovery||decoded.binding!=certificate.binding
+            ||decoded.samples.size()!=std::size_t(certificate.descriptor.codedWidth)*certificate.descriptor.codedHeight){
+            p.masks[index]={};pending={};count(p,Flow::HevcRefused);continue;
+        }
+        // Authentication and decoder completion alone never grant an image.
+        // Consumers still require this certificate's exact current native lease
+        // and GPU publication before the existing Ready acknowledgement.
+        for(const auto& consumer:p.consumers)if(consumer.owner&&consumer.decodedCoverage&&(!consumer.admitted||consumer.admitted(consumer.owner)))
+            consumer.decodedCoverage(consumer.owner,certificate,{decoded.samples.data(),decoded.samples.size()},decoded.range);
+        pending={};count(p,Flow::HevcDecoded);
+    }
+}
 void consume(Process&p,local::Message& message){
     if(!message.peerConfirmed)return;
     if(message.kind==local::Kind::Ready){
@@ -224,7 +278,7 @@ void consume(Process&p,local::Message& message){
             const auto ready=p.verifier.prepareReceiver(pair,message.source.stream);sb::secureZero(pair.key.data(),pair.key.size());if(ready!=sb::AuthStatus::Ok){count(p,Flow::AuthenticationRefused);return;}
             if(!p.cameraRecovery.load(std::memory_order_acquire)){requestCamera(p,false,Flow::CameraSource);p.cameraPeer=false;}
             p.cameraDemand=false;p.cameraDeferred=false;
-            p.verifiedSource=message.source.stream;for(auto& old:p.masks)old={};for(auto& old:p.pictures)old={};p.currentLeases.reset();
+            cancelHevc(p);p.verifiedSource=message.source.stream;for(auto& old:p.masks)old={};for(auto& old:p.pictures)old={};p.currentLeases.reset();
         }
         const bool wantsDecoded=std::any_of(p.consumers.begin(),p.consumers.end(),[](const auto& consumer){return consumer.owner&&consumer.decodedCoverage&&(!consumer.admitted||consumer.admitted(consumer.owner));});
         sb::CertifiedAccessUnit certificate;std::vector<std::uint8_t> samples;sb::CoverageRange range;
@@ -243,19 +297,14 @@ void consume(Process&p,local::Message& message){
         // below establish demand; metadata alone only establishes peer proof.
         p.cameraPeer=true;
         if(certificate.coverageEncoding==sb::CoverageEncoding::HevcIntra){
-            // A valid active-source policy still requests camera-only recovery
-            // if this independent mask fails. Never hand compressed HEVC bytes
-            // to a legacy raw-coverage consumer or retain an unusable receipt.
-            if(!wantsDecoded){count(p,Flow::HevcRefused);return;}
-            stream_bridge_mask_hevc::DecodedMask decoded;
-            const stream_bridge_mask_hevc::Input input{message.source.stream,certificate.descriptor,certificate.binding,{certificate.coverage.data(),certificate.coverage.size()}};
-            if(p.maskHevc.decodeIntra(input,decoded)!=stream_bridge_mask_hevc::Status::Ok
-                ||!sameSource(decoded.source,input.source)||!sameDescriptor(decoded.descriptor,input.descriptor)
-                ||decoded.descriptor.cameraRecovery!=input.descriptor.cameraRecovery||decoded.binding!=input.binding){count(p,Flow::HevcRefused);return;}
-            samples.swap(decoded.samples);range=decoded.range;count(p,Flow::HevcDecoded);
+            if(!wantsDecoded||!p.hevcPool.ready()||std::size_t(certificate.descriptor.codedWidth)*certificate.descriptor.codedHeight>stream_bridge_mask_hevc::Pool::MaximumPixels){count(p,Flow::HevcRefused);return;}
+            const auto index=message.descriptor.sourceFrame%p.masks.size();
+            p.masks[index]=message;p.masks[index].descriptor.cameraRecovery=certificate.descriptor.cameraRecovery;p.coverageNeeded[index]=true;
+            auto& pending=p.pendingHevc[index];pending.source=message.source;pending.nativeToken=message.nativeTimestampToken;pending.submittedContent=message.submittedContent;pending.certificate=std::move(certificate);pending.phase=Process::PendingHevc::Phase::Waiting;
+            submitHevc(p);return;
         }
         const auto index=message.descriptor.sourceFrame%p.masks.size();
-        auto* target=&p.masks[index];*target=message;p.coverageNeeded[index]=certificate.coverageEncoding!=sb::CoverageEncoding::None;
+        p.pendingHevc[index]={};auto* target=&p.masks[index];*target=message;p.coverageNeeded[index]=certificate.coverageEncoding!=sb::CoverageEncoding::None;
         target->descriptor.cameraRecovery=certificate.descriptor.cameraRecovery;
         for(const auto& consumer:p.consumers)if(consumer.owner&&(!consumer.admitted||consumer.admitted(consumer.owner))){
             if(wantsDecoded&&consumer.decodedCoverage)consumer.decodedCoverage(consumer.owner,certificate,{samples.data(),samples.size()},range);
@@ -286,7 +335,7 @@ void workCycle(Process& p,local::State& previous) noexcept{
         const auto state=p.channel.state();
         const bool start=p.kind==ProcessKind::Vrlink||std::any_of(p.consumers.begin(),p.consumers.end(),[](const auto& c){return c.owner&&(!c.admitted||c.admitted(c.owner));});
         if(!start&&state!=local::State::Off){
-            p.cameraRecovery.store(false,std::memory_order_release);p.cameraPeer=false;p.cameraDemand=false;requestCamera(p,false,Flow::CameraChannel);p.camera.stopCold();
+            cancelHevc(p);p.cameraRecovery.store(false,std::memory_order_release);p.cameraPeer=false;p.cameraDemand=false;requestCamera(p,false,Flow::CameraChannel);p.camera.stopCold();
             if(p.connection)p.connection->store(false,std::memory_order_release);
             p.channel.stop();
         }
@@ -296,7 +345,7 @@ void workCycle(Process& p,local::State& previous) noexcept{
         }
         p.channel.tick();const auto current=p.channel.state();
         if(current!=previous){
-            p.cameraRecovery.store(false,std::memory_order_release);p.cameraPeer=false;p.cameraDemand=false;p.cameraDeferred=false;requestCamera(p,false,Flow::CameraChannel);
+            cancelHevc(p);p.cameraRecovery.store(false,std::memory_order_release);p.cameraPeer=false;p.cameraDemand=false;p.cameraDeferred=false;requestCamera(p,false,Flow::CameraChannel);
             if(p.connection)p.connection->store(false,std::memory_order_release);
             if(current==local::State::Connected)p.connection=std::make_shared<std::atomic<bool>>(true);
             if(current==local::State::Lost||current==local::State::Refused)p.writer.invalidateCurrentEpoch();
@@ -315,6 +364,7 @@ void workCycle(Process& p,local::State& previous) noexcept{
                 }
             }
         }
+        if(p.kind==ProcessKind::Compositor){collectHevc(p);submitHevc(p);}
         // Drain a bounded complete burst in this cycle. A second receive
         // without tick cannot parse the next certificate/decoded packet.
         local::Message message;
@@ -325,6 +375,7 @@ void workCycle(Process& p,local::State& previous) noexcept{
             message={};p.channel.tick();
         }
         if(p.kind==ProcessKind::Compositor){
+            collectHevc(p);submitHevc(p);
             if(p.currentLeases&&!p.currentLeases->epochCurrent(p.cameraEpoch)){
                 // A decoded-buffer epoch is not the authenticated source
                 // session. Keep its already acknowledged physical camera warm
@@ -436,7 +487,8 @@ bool prepareProcessCold() noexcept{
         p.kind.store(kind,std::memory_order_release);
         // Only the owned, ABI-matched adjacent codec can enable negotiation.
         // Missing optional libraries preserve all existing lossless routes.
-        const bool hevcReady=p.maskHevc.prepareInstalledCold();
+        const bool hevcReady=kind==ProcessKind::Vrlink?p.maskHevc.prepareInstalledCold():
+            p.hevcPool.prepareInstalledCold([](void* owner)noexcept{notify(*static_cast<Process*>(owner));},&p);
         if(!hevcReady)note(p,"independent HEVC mask decoder unavailable; existing coverage codecs retained",sb::logging::Level::Debug);
         if(kind==ProcessKind::Vrlink){
             if(!p.writer.prepareCold()){p.kind=ProcessKind::Off;return;}
@@ -466,7 +518,7 @@ void unregisterConsumerCold(void* owner) noexcept{
     auto* pointer=process();if(!pointer)return;auto&p=*pointer;std::lock_guard<std::mutex> lock(p.gate);
     for(auto& slot:p.consumers)if(slot.owner==owner)slot={};
     if(std::none_of(p.consumers.begin(),p.consumers.end(),[](const auto& c){return c.owner&&(!c.admitted||c.admitted(c.owner));})){
-        p.cameraRecovery.store(false,std::memory_order_release);p.cameraPeer=false;p.cameraDemand=false;requestCamera(p,false,Flow::CameraChannel);p.camera.stopCold();
+        cancelHevc(p);p.cameraRecovery.store(false,std::memory_order_release);p.cameraPeer=false;p.cameraDemand=false;requestCamera(p,false,Flow::CameraChannel);p.camera.stopCold();
         if(p.connection)p.connection->store(false,std::memory_order_release);
         p.channel.stop();
     }
