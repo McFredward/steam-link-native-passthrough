@@ -85,7 +85,8 @@ struct MaskHevcEncoder::Impl {
     MaskHevcRate rate;std::uint64_t rateEpoch=0;unsigned rateBackoff=0;
     NV_ENC_INITIALIZE_PARAMS rateInit{};NV_ENC_CONFIG rateConfig{};
     std::atomic<std::uint32_t> rateTarget{0},rateBudget{0},streamTarget{0},rateNum{0},rateDen{0},wireMean{0};
-    std::atomic<std::uint64_t> rateChanges{0};
+    std::atomic<std::uint64_t> rateChanges{0},qpSamples{0},qpSum{0};
+    std::atomic<std::uint32_t> lastQp{0},minQp{51},maxQp{0},rateSamples{0},lastEncodedBytes{0};
     std::uint32_t processId=0;
     mutable std::mutex mutex;std::atomic<bool> healthy{false};std::atomic<int> status{int(NV_ENC_SUCCESS)};
     std::atomic<unsigned> failureStage{0},failureFields{0},outputType{0},outputStruct{0},hardwareStatus{0},outputBytes{0};
@@ -157,7 +158,14 @@ struct MaskHevcEncoder::Impl {
             if(out)out->clear();
             return MaskHevcTake::Refused;
         }
-        if(out){readyCount.fetch_add(1,std::memory_order_relaxed);if(epoch)*epoch=encodedRateEpoch;}
+        if(out){
+            readyCount.fetch_add(1,std::memory_order_relaxed);if(epoch)*epoch=encodedRateEpoch;
+            lastEncodedBytes=lock.bitstreamSizeInBytes;
+            // Metadata only, never frame permission. This pinned API reports QP
+            // on successful locks; unknown values do not reject a valid mask.
+            if(lock.frameAvgQP<=51){lastQp=lock.frameAvgQP;qpSum.fetch_add(lock.frameAvgQP,std::memory_order_relaxed);qpSamples.fetch_add(1,std::memory_order_relaxed);
+                minQp=std::min(minQp.load(std::memory_order_relaxed),lock.frameAvgQP);maxQp=std::max(maxQp.load(std::memory_order_relaxed),lock.frameAvgQP);}
+        }
         return out?MaskHevcTake::Ready:MaskHevcTake::Refused;
     }
     // Cold and quiesced only. No OS/event wait is reachable from hot methods.
@@ -242,7 +250,7 @@ struct MaskHevcEncoder::Impl {
         if(!success(api.nvEncInitializeEncoder(session,&init)))return false;
         initialized=true;rateConfig=enc;rateInit=init;rateInit.encodeConfig=&rateConfig;
         if(rateEpoch==UINT64_MAX)return false;
-        ++rateEpoch;rateTarget=planned.target;rateBudget=planned.cap;streamTarget=c.streamBitRate;rateNum=c.frameRateNum;rateDen=c.frameRateDen;wireMean=0;
+        ++rateEpoch;rateTarget=planned.target;rateBudget=planned.cap;streamTarget=c.streamBitRate;rateNum=c.frameRateNum;rateDen=c.frameRateDen;wireMean=0;rateSamples=0;
         flushEvent=os.createEvent();if(!flushEvent)return false;
         NV_ENC_EVENT_PARAMS event{};event.version=NV_ENC_EVENT_PARAMS_VER;event.completionEvent=flushEvent;
         if(!success(api.nvEncRegisterAsyncEvent(session,&event)))return false;
@@ -342,16 +350,20 @@ bool MaskHevcEncoder::updateRate(std::uint32_t num,std::uint32_t den,std::uint32
     enc.rcParams.vbvInitialDelay=enc.rcParams.vbvBufferSize;
     NV_ENC_RECONFIGURE_PARAMS params{};params.version=NV_ENC_RECONFIGURE_PARAMS_VER;params.reInitEncodeParams=p.rateInit;
     params.reInitEncodeParams.frameRateNum=plan.num;params.reInitEncodeParams.frameRateDen=plan.den;params.reInitEncodeParams.encodeConfig=&enc;
+    // SDK11.1 explicitly permits resetting firmware RC at an IDR. All private
+    // pictures are IDR already. This is not a GPU flush, session recreation or
+    // a change to source/image identity; old queued outputs retain their key.
+    params.resetEncoder=1;
     const auto result=p.api.nvEncReconfigureEncoder(p.session,&params);p.status.store(int(result),std::memory_order_relaxed);
     if(result!=NV_ENC_SUCCESS){p.record(MaskHevcFailure::Reconfigure,result);p.rateBackoff=MaskHevcRate::Window;return false;}
-    p.rateConfig=enc;p.rateInit=params.reInitEncodeParams;p.rateInit.encodeConfig=&p.rateConfig;p.config=config;
-    p.rate.commit(plan);++p.rateEpoch;p.rateTarget=plan.target;p.rateNum=plan.num;p.rateDen=plan.den;p.wireMean=0;
+    p.rateConfig=enc;p.rateInit=params.reInitEncodeParams;p.rateInit.encodeConfig=&p.rateConfig;p.config=config;p.config.frameRateNum=plan.num;p.config.frameRateDen=plan.den;
+    p.rate.commit(plan);++p.rateEpoch;p.rateTarget=plan.target;p.rateNum=plan.num;p.rateDen=plan.den;p.wireMean=0;p.rateSamples=0;
     p.rateChanges.fetch_add(1,std::memory_order_relaxed);return true;
 }
-void MaskHevcEncoder::observeAddedBytes(std::uint64_t epoch,std::size_t bytes)noexcept{
+void MaskHevcEncoder::observeAddedBytes(std::uint64_t epoch,std::size_t bytes,std::uint32_t fpsNum,std::uint32_t fpsDen)noexcept{
     auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
     if(!guard||!p.healthy||!epoch||epoch!=p.rateEpoch)return;
-    p.rate.observe(bytes);const auto current=p.rate.current();p.wireMean=p.rate.observed(current.num,current.den);
+    p.rate.observe(bytes,fpsNum,fpsDen);p.rateSamples=p.rate.samplesSinceChange();const auto current=p.rate.current();p.wireMean=p.rate.observed(current.num,current.den);
     if(p.rateBackoff)--p.rateBackoff;
 }
 
@@ -373,6 +385,8 @@ MaskHevcDiagnostics MaskHevcEncoder::diagnostics()const noexcept{
     d.returnedTimestamp=p.returnedTimestamp.load(std::memory_order_relaxed);d.mapped=p.mappedCount.load(std::memory_order_relaxed);
     d.submitted=p.submittedCount.load(std::memory_order_relaxed);d.locked=p.lockedCount.load(std::memory_order_relaxed);d.ready=p.readyCount.load(std::memory_order_relaxed);
     d.rateTarget=p.rateTarget.load(std::memory_order_relaxed);d.rateBudget=p.rateBudget.load(std::memory_order_relaxed);d.streamTarget=p.streamTarget.load(std::memory_order_relaxed);
-    d.frameRateNum=p.rateNum.load(std::memory_order_relaxed);d.frameRateDen=p.rateDen.load(std::memory_order_relaxed);d.wireMean=p.wireMean.load(std::memory_order_relaxed);d.rateChanges=p.rateChanges.load(std::memory_order_relaxed);return d;
+    d.frameRateNum=p.rateNum.load(std::memory_order_relaxed);d.frameRateDen=p.rateDen.load(std::memory_order_relaxed);d.wireMean=p.wireMean.load(std::memory_order_relaxed);d.rateChanges=p.rateChanges.load(std::memory_order_relaxed);
+    d.qpSamples=p.qpSamples.load(std::memory_order_relaxed);d.qpSum=p.qpSum.load(std::memory_order_relaxed);d.lastQp=p.lastQp.load(std::memory_order_relaxed);
+    d.minQp=d.qpSamples?p.minQp.load(std::memory_order_relaxed):0;d.maxQp=p.maxQp.load(std::memory_order_relaxed);d.rateSamples=p.rateSamples.load(std::memory_order_relaxed);d.lastEncodedBytes=p.lastEncodedBytes.load(std::memory_order_relaxed);return d;
 }
 }

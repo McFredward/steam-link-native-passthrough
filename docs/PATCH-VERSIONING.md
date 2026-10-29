@@ -1,6 +1,12 @@
 # Patch versions
 
-The October29 dev package is installer **0.3.7**, PC **0.3.5**, Frame **0.3.2**.
+The October29 dev package is installer **0.3.8**, PC **0.3.6**, Frame **0.3.2**.
+PC0.3.6 prevents private mask encoder reconfiguration from starving its own
+feedback under native FPS/target jitter. Decisions use completed pictures and a
+median clock, with separate reduction/recovery intervals, firmware RC reset at
+IDR and periodic actual output QP diagnostics. Frame0.3.2 stays byte-identical.
+The quality acceptance target includes dense rain and fine foliage in Venture
+Spirit Sling; this version is a software-tested candidate, not that acceptance.
 PC0.3.5 adapts the private HEVC rate to the original total stream budget and
 actual added bytes, uses VBR maximum/one-frame VBV, and shortens the controlled
 metadata reservation while preserving the actual peak in diagnostics. The

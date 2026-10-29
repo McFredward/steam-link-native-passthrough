@@ -306,7 +306,7 @@ struct SenderCoverage::Impl {
                 // this callback even when its original GPU readback was valid.
                 if(!s.sourceCurrent(maskContract,maskPid)){output.clear();s.gates.refuse(CoverageGate::SourceRevoked);return false;}
                 s.lastControlledMetadata.store(hevc,std::memory_order_relaxed);
-                if(hevc&&output.size()>=e.originalAccessUnitBytes)s.maskEncoder.observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes);
+                if(hevc&&output.size()>=e.originalAccessUnitBytes)s.maskEncoder.observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes,e.qos.frameRateNum,e.qos.frameRateDen);
                 s.lastPid=maskPid;s.state=7;s.gates.payload(candidate.size,encoded.size(),output.size(),static_cast<unsigned>(encoding),std::size_t(e.width)*e.height,encodeUs);s.gates.signal(CoverageSignal::CertifiedMasks);
                 if(!hevc&&s.maskCapture.active()){
                     capture::Metadata sample{};sample.frame=descriptor.sourceFrame;sample.encoderGeneration=descriptor.encoderGeneration;

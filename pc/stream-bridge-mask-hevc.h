@@ -49,7 +49,8 @@ struct MaskHevcDiagnostics {
     std::uint32_t rejectedFields=0,pictureType=0,pictureStruct=0,hardwareStatus=0,bytes=0;
     std::uint64_t expectedTimestamp=0,returnedTimestamp=0,mapped=0,submitted=0,locked=0,ready=0;
     std::uint32_t rateTarget=0,rateBudget=0,streamTarget=0,frameRateNum=0,frameRateDen=0,wireMean=0;
-    std::uint64_t rateChanges=0;
+    std::uint64_t rateChanges=0,qpSamples=0,qpSum=0;
+    std::uint32_t lastQp=0,minQp=0,maxQp=0,rateSamples=0,lastEncodedBytes=0;
 };
 
 // Separate Windows/D3D11 HEVC Main8 session. Each output is an independent
@@ -84,9 +85,10 @@ public:
     MaskHevcTake tryTake(const MaskHevcKey&,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch=nullptr)noexcept;
     // Cold, opportunistic and only between private submissions. No resource
     // recreation, flush, source-generation change or invalidation on API failure.
+    // Reset only firmware RC state at an already mandatory IDR.
     bool updateRate(std::uint32_t num,std::uint32_t den,std::uint32_t streamBitRate,std::uint32_t userLimit)noexcept;
     // Hot, bounded try-lock. Exact added wire bytes from this rate epoch only.
-    void observeAddedBytes(std::uint64_t rateEpoch,std::size_t bytes)noexcept;
+    void observeAddedBytes(std::uint64_t rateEpoch,std::size_t bytes,std::uint32_t fpsNum=0,std::uint32_t fpsDen=0)noexcept;
     void cancel(const MaskHevcKey&)noexcept;
     // Cold/quiesced; waits at most2s for the NVENC flush event. On false,
     // deactivates but retains the bounded GPU-live session; retry cold later.

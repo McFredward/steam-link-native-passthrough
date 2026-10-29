@@ -1,6 +1,6 @@
 # HEVC mask test candidate
 
-Installer 0.3.7 / PC 0.3.5 / Frame 0.3.2 selects lossy HEVC masks by default
+Installer 0.3.8 / PC 0.3.6 / Frame 0.3.2 selects lossy HEVC masks by default
 with a 20 Mbit/s user ceiling and an adaptive share of the native stream budget. No flag or configuration file is needed. Existing
 explicit bitrate and lossless preferences override this default.
 It uses a separate original NVENC session on the PC and a private software HEVC
@@ -241,7 +241,7 @@ Subtracting the mask reservation repeatedly left the native image at1Mbit/s.
 PC0.3.5 uses VBR with equal average/maximum settings and one-frame VBV.
 NVIDIA documents that CBR ignores `maxBitRate`; VBR uses it, but neither an API
 target nor these tests establish a strict wire-byte cap. See the
-[NVENC programming guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/11.0/pdf/NVENC_VideoEncoder_API_ProgGuide.pdf).
+[NVENC programming guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.1/nvenc-video-encoder-api-prog-guide/index.html).
 The adaptive mask budget is the lower of the user's ceiling and20% of the
 current original native stream target, with a100kbit/s encoder minimum.
 Authenticated added wire bytes (including escaping and frame certificates)
@@ -273,3 +273,63 @@ and its exact private libraries are reused byte for byte. This candidate's
 software regressions cover continuous in-flight RC, stale-rate observations,
 actual native augmentation/QoS calls and budget collapse/recovery; only the next
 headset test can establish whether image quality now meets the user's goal.
+
+## Completed-output control and rain acceptance (0.3.8)
+
+The maintainer's next test used Venture's Spirit Sling MR route, including
+rain. The native coded1152x4608 extent stayed constant; source textures reached
+4783x4783. The PC compositor recorded20252 presents/169 drops, target90Hz,
+application CPU/GPU5.483/4.379ms. This is host presentation evidence, not Android
+application FPS or end-to-end latency. The sender certified19432 HEVC masks and
+20 lossless fallbacks, with no API/output/syntax refusal;16 polls were pending.
+Frame renderer decode/upload increased from21813 to41265, matching19452 masks,
+with no rejected masks. These counters do not establish acceptable visual quality.
+
+The image became pixelated during rain. Around23:04:00–23:04:30, several native
+RGB targets again reached1Mbit/s while metadata mean remained roughly15–23Mbit/s.
+The private encoder had accepted5253 rate changes, often losing its sixteen
+current-rate measurements before that many outputs completed. A local causal
+control with native FPS jitter makes the old policy reconfigure1200 times in
+1600 worker ticks, despite only1200 new output samples. With a deterministic responsive encoder
+plant, the new controller makes one update and converges from roughly44 to18Mbit/s;
+the old controller remains near44Mbit/s. This is a software
+reproduction of feedback starvation, not a measurement of the user's GPU.
+
+PC0.3.6 changes that policy:
+
+* Median FPS comes from the last16 successful, certified output observations,
+  using each input's captured native QoS. A latest cold-tick value alone cannot
+  move the private clock or erase feedback.
+* Normal reductions/FPS changes require64 completed outputs. A greater-than2x
+  budget collapse can use16. Growth requires128, with a25% maximum step and
+ 12.5% target hysteresis. No output means no private RC update.
+* Each actual private reconfigure requests the documented firmware RC reset at
+  an IDR. All private pictures already have exact IDR/parameter-set validation.
+  No session, resource, source generation or current-image permission is reset;
+  no GPU flush/drain is introduced. Outstanding outputs retain their submission
+  keys and rate epoch, including across a rejected API request.
+* The cold worker reports actual `frameAvgQP` last/lifetime min/mean/max,
+  successful sample count and output size beside target/actual wire data every
+  five seconds. Unknown QP metadata never rejects otherwise valid current data.
+  This sampling is independent of the sparse source-gate diagnostic reports.
+
+NVIDIA documents the internal RC reset separately from changing a source or
+flushing queued images in its
+[SDK programming guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/13.1/nvenc-video-encoder-api-prog-guide/index.html).
+The independent full-resolution HEVC wire contract, existing lossless preferences,
+per-picture source/frame/eye/image proof and Frame payload are unchanged.
+A bitrate target is still not a proven wire cap. In particular, if actual QP is
+already at its limit and wire output exceeds the budget, further target reduction
+cannot by itself establish adequate quality. Temporal coding or another measured
+compression change would need a separately tested reference/recovery contract.
+
+The acceptance goal is a stable, fluid, sharp passthrough image during sustained
+rain, clouds/particles and fine foliage, preserving visible transparency and
+small holes. Use the same Spirit Sling rain scene for at least60s, then inspect
+foliage with a still and moving head. Retain original scene resolution and
+settings. Compare RGB sharpness, alpha sparkle/halos, continuity, actual wire
+bytes, applied/actual QP, private rate-change count, native image bitrate and
+Frame decode/backpressure together. Repeated1Mbit/s image starvation, persistent
+new grain or broken effects fails acceptance, even if transport counters pass.
+Software causal/contract tests can validate the controller and identities; only
+a coordinated headset test establishes this visual acceptance.

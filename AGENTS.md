@@ -55,6 +55,14 @@
   a headset test. The maintainer confirmed real GloomhavenVR native passthrough
   with Build686 on 2026-10-17. That temporary-process hardware result does not
   establish persistent-installation, update safety or arbitrary-game support.
+- The maintainer's 2026-10-29 visual acceptance target is a stable, fluid, sharp
+  passthrough image during dense rain, clouds/particles and fine foliage, including
+  Venture Spirit Sling. Preserve visible transparency, effects and small holes.
+  Successful setup/transport or a lower mask bitrate alone does not complete this
+  goal. Repeated RGB starvation, persistent new grain or broken effects fails
+  acceptance. Report software evidence separately from a matched headset test;
+  compare actual output bytes/quality with the same source frames when isolating
+  lossy-codec artifacts.
 - Keep allocations, queued frames, reassembly and logging bounded. No file I/O,
   socket waits or shader compilation on a compositor rendering thread.
 - The maintainer's 2026-10-19 continuity requirement makes every active-MR game

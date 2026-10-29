@@ -154,3 +154,15 @@ metadata is reserved from recent actual bytes plus estimator headroom, with
 fallback spikes included and the longer actual peak separately reported.
 Lossless/old-peer reservation is unchanged. These are rate estimates, never mask
 permission or a strict network cap. The Frame0.3.2 payload is unchanged.
+
+## Completed-output rate decisions (PC0.3.6)
+
+No wire or decoder change. Sixteen recent authenticated output-byte/FPS samples
+form the estimator; at least64 completed outputs permit a normal private RC
+change,16 permit a greater-than2x budget collapse, and128 permit growth. Cold
+poll count never authorizes a rate change. Median captured input FPS replaces
+instantaneous cold QoS jitter for the private clock. Firmware RC is reset at
+an already-mandatory IDR through the original public API, without replacing
+GPU resources or source/frame keys. Per-submission rate epochs still reject
+older measurements. Actual QP metadata is diagnostic only and never replaces
+successful event/token/IDR validation or current native image proof.

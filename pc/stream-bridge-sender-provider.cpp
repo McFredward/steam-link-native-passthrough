@@ -327,6 +327,39 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             reportedSuccess=stats.preservedSuccessful!=0;reportedRejection=stats.preservedRejected!=0;reportedRevoke=stats.revoked!=0;
             nextReconfigureReport=stats.total>~std::uint64_t(0)/8?~std::uint64_t(0):stats.total*8;
         };
+        auto nextHevcReport=std::chrono::steady_clock::time_point{};
+        const auto reportHevc=[&](bool final){
+            const auto now=std::chrono::steady_clock::now();if(!final&&now<nextHevcReport)return;
+            nextHevcReport=now+std::chrono::seconds(5);
+            const auto hevc=coverage_.hevcMaskStats();
+            if(hevc.requested){
+                char hevcText[512]{};
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask: prepared=%u, available=%u, target-bit/s=%u, native-status=%d; encoded=%llu, pending=%llu, refused=%llu, syntax-refused=%llu; submission-to-poll-us=%llu/max%llu; IDR-only; not GPU encode latency",
+                    unsigned(hevc.prepared),unsigned(hevc.available),hevc.bitRate,hevc.nativeStatus,
+                    static_cast<unsigned long long>(hevc.encoded),static_cast<unsigned long long>(hevc.pending),
+                    static_cast<unsigned long long>(hevc.refused),static_cast<unsigned long long>(hevc.syntaxRefused),
+                    static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs));
+                report(hevcText,stream_bridge::logging::Level::Debug);
+                const auto& diagnostic=hevc.diagnostics;
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask quality: lifetime-QP last/min/mean/max=%u/%u/%.2f/%u; valid-QP-samples=%llu; last-encoded-bytes=%u; outputs-since-rate-change=%u; RC reset at IDR; diagnostics only",
+                    diagnostic.lastQp,diagnostic.minQp,diagnostic.qpSamples?double(diagnostic.qpSum)/double(diagnostic.qpSamples):0.0,diagnostic.maxQp,
+                    static_cast<unsigned long long>(diagnostic.qpSamples),diagnostic.lastEncodedBytes,diagnostic.rateSamples);
+                report(hevcText,stream_bridge::logging::Level::Debug);
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask rate: user-ceiling/stream-target/mask-budget/applied=%u/%u/%u/%u bit/s; added-wire-mean=%u bit/s; configured-fps=%u/%u; changes=%llu; VBR maximum plus measured feedback; not a guaranteed wire cap",
+                    hevc.bitRate,diagnostic.streamTarget,diagnostic.rateBudget,diagnostic.rateTarget,diagnostic.wireMean,diagnostic.frameRateNum,diagnostic.frameRateDen,static_cast<unsigned long long>(diagnostic.rateChanges));
+                report(hevcText,stream_bridge::logging::Level::Debug);
+                std::snprintf(hevcText,sizeof hevcText,
+                    "HEVC mask detail: mapped/submitted/locked/ready=%llu/%llu/%llu/%llu; last-failure=%s, api-status=%d, rejected-fields=0x%x; output expected/returned-timestamp=%llu/%llu, picture-type/struct=%u/%u, hardware-status=%u, bytes=%u; field bits timestamp1/type2/structure4/hardware8/pointer16/size32/copy64; lifetime approximate counters",
+                    static_cast<unsigned long long>(diagnostic.mapped),static_cast<unsigned long long>(diagnostic.submitted),
+                    static_cast<unsigned long long>(diagnostic.locked),static_cast<unsigned long long>(diagnostic.ready),
+                    stream_bridge::sender::maskHevcFailureName(diagnostic.stage),diagnostic.nativeStatus,diagnostic.rejectedFields,
+                    static_cast<unsigned long long>(diagnostic.expectedTimestamp),static_cast<unsigned long long>(diagnostic.returnedTimestamp),
+                    diagnostic.pictureType,diagnostic.pictureStruct,diagnostic.hardwareStatus,diagnostic.bytes);
+                report(hevcText,diagnostic.stage==stream_bridge::sender::MaskHevcFailure::None?
+                    stream_bridge::logging::Level::Debug:stream_bridge::logging::Level::Warning);
+            }
+
+        };
         auto nextBudgetReport=std::chrono::steady_clock::time_point{};std::uint64_t budgetReports=0;
         const auto reportWireBudget=[&](bool final){
             const auto now=std::chrono::steady_clock::now();if(!final&&now<nextBudgetReport)return;
@@ -491,29 +524,6 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 static_cast<unsigned long long>(stats.maskEncodingFrames[1]),static_cast<unsigned long long>(stats.maskEncodingFrames[2]),static_cast<unsigned long long>(stats.maskEncodingFrames[3]),static_cast<unsigned long long>(stats.maskEncodingFrames[4]),static_cast<unsigned long long>(stats.maskEncodingFrames[5]),
                 static_cast<unsigned long long>(stats.maskEncodingFrames[6]),
                 static_cast<unsigned long long>(stats.lastEncodeUs),static_cast<unsigned long long>(stats.maxEncodeUs));report(text,stream_bridge::logging::Level::Debug);
-            const auto hevc=coverage_.hevcMaskStats();
-            if(hevc.requested){
-                char hevcText[512]{};
-                std::snprintf(hevcText,sizeof hevcText,"HEVC mask: prepared=%u, available=%u, target-bit/s=%u, native-status=%d; encoded=%llu, pending=%llu, refused=%llu, syntax-refused=%llu; submission-to-poll-us=%llu/max%llu; IDR-only; not GPU encode latency",
-                    unsigned(hevc.prepared),unsigned(hevc.available),hevc.bitRate,hevc.nativeStatus,
-                    static_cast<unsigned long long>(hevc.encoded),static_cast<unsigned long long>(hevc.pending),
-                    static_cast<unsigned long long>(hevc.refused),static_cast<unsigned long long>(hevc.syntaxRefused),
-                    static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs));
-                report(hevcText,stream_bridge::logging::Level::Debug);
-                const auto& diagnostic=hevc.diagnostics;
-                std::snprintf(hevcText,sizeof hevcText,"HEVC mask rate: user-ceiling/stream-target/mask-budget/applied=%u/%u/%u/%u bit/s; added-wire-mean=%u bit/s; configured-fps=%u/%u; changes=%llu; VBR maximum plus measured feedback; not a guaranteed wire cap",
-                    hevc.bitRate,diagnostic.streamTarget,diagnostic.rateBudget,diagnostic.rateTarget,diagnostic.wireMean,diagnostic.frameRateNum,diagnostic.frameRateDen,static_cast<unsigned long long>(diagnostic.rateChanges));
-                report(hevcText,stream_bridge::logging::Level::Debug);
-                std::snprintf(hevcText,sizeof hevcText,
-                    "HEVC mask detail: mapped/submitted/locked/ready=%llu/%llu/%llu/%llu; last-failure=%s, api-status=%d, rejected-fields=0x%x; output expected/returned-timestamp=%llu/%llu, picture-type/struct=%u/%u, hardware-status=%u, bytes=%u; field bits timestamp1/type2/structure4/hardware8/pointer16/size32/copy64; lifetime approximate counters",
-                    static_cast<unsigned long long>(diagnostic.mapped),static_cast<unsigned long long>(diagnostic.submitted),
-                    static_cast<unsigned long long>(diagnostic.locked),static_cast<unsigned long long>(diagnostic.ready),
-                    stream_bridge::sender::maskHevcFailureName(diagnostic.stage),diagnostic.nativeStatus,diagnostic.rejectedFields,
-                    static_cast<unsigned long long>(diagnostic.expectedTimestamp),static_cast<unsigned long long>(diagnostic.returnedTimestamp),
-                    diagnostic.pictureType,diagnostic.pictureStruct,diagnostic.hardwareStatus,diagnostic.bytes);
-                report(hevcText,diagnostic.stage==stream_bridge::sender::MaskHevcFailure::None?
-                    stream_bridge::logging::Level::Debug:stream_bridge::logging::Level::Warning);
-            }
             std::snprintf(text,sizeof text,
                 "coverage lifecycle refusals: render-lock=%llu, copy-pair=%llu, stage-full=%llu, input=%llu, stage=%llu, session=%llu, source=%llu/%llu, rle=%llu, certificate=%llu",
                 refused(stream_bridge::sender::CoverageGate::Lock),refused(stream_bridge::sender::CoverageGate::CopyPair),refused(stream_bridge::sender::CoverageGate::StageFull),
@@ -524,6 +534,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             std::snprintf(text,sizeof text,
                 "coverage context: hook-slots=0x%x, table-readable=%u, table-stable=%u, native-device-pointer=%u, facade-slots=%u, native-dispatch-mutations=%u",
                 stats.contextHookSlots,unsigned(stats.contextTableReadable),unsigned(stats.contextTableStable),unsigned(stats.nativeDeviceSame),stats.contextFacadeSlots,stats.nativeDispatchMutations);report(text,stream_bridge::logging::Level::Debug);
+
         };
         std::uint32_t reportedFailures=0;
         unsigned recoveryReports=0;bool recoveringTransport=false;
@@ -567,7 +578,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 }
                 last=runtime_.state();reportState(stream_bridge::sender::runtimeStateName(last));
             }
-            if(request_.explicitlyEnabled){reportReconfigure(false);reportWireBudget(false);reportCoverage(false);reportFailure();}
+            if(request_.explicitlyEnabled){reportReconfigure(false);reportWireBudget(false);reportHevc(false);reportCoverage(false);reportFailure();}
             std::unique_lock<std::mutex> guard(mutex_);changed_.wait_for(guard,std::chrono::milliseconds(8),[this]{return stopped_;});
         }
         report("sender worker stopping");
@@ -575,6 +586,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         report(coverage_.stateName());
         reportReconfigure(true);
         reportWireBudget(true);
+        reportHevc(true);
         reportCoverage(true);
         reportFailure();
         sourceIpc_.stop();runtime_.stop();

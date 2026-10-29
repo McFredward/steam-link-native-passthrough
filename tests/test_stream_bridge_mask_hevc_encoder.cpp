@@ -40,7 +40,7 @@ struct Fixture {
     bool async=true,nv12=true,failOpen=false,failInit=false,failPreset=false,mapFail=false,encodeBusy=false,lockBusy=false;
     bool wrongStamp=false,wrongType=false,wrongStruct=false,nullOutput=false,emptyOutput=false,hwFailure=false,reenter=false,eosFail=false,flushWaitFail=false;std::uint32_t outputSize=0;
     NVENCSTATUS mapStatus=NV_ENC_SUCCESS,encodeStatus=NV_ENC_SUCCESS,lockStatus=NV_ENC_SUCCESS;
-    std::uint32_t hardwareStatus=2;
+    std::uint32_t hardwareStatus=2,averageQp=24;
     int failResource=-1,failBuffer=-1,failEvent=-1;
     MaskHevcEncoder encoder;
     Fixture();
@@ -87,7 +87,7 @@ NVENCSTATUS NVENCAPI init(void* s,NV_ENC_INITIALIZE_PARAMS* p){
 }
 NVENCSTATUS NVENCAPI reconfigure(void* s,NV_ENC_RECONFIGURE_PARAMS* p){
     auto& x=f(s);++x.rateChanges;
-    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&!p->resetEncoder&&!p->forceIDR,"private rate update does not reset or force a new source epoch");
+    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&p->resetEncoder&&!p->forceIDR,"private reconfigure resets firmware RC at IDR, without changing source or resources");
     const auto& i=p->reInitEncodeParams;const auto& c=*i.encodeConfig;
     check(i.encodeWidth==x.config.width&&i.encodeHeight==x.config.height&&i.enableEncodeAsync&&i.enablePTD,"rate update preserves dimensions and asynchronous ownership");
     check(c.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR&&c.rcParams.averageBitRate==c.rcParams.maxBitRate&&c.gopLength==1&&c.encodeCodecConfig.hevcConfig.idrPeriod==1,"rate change preserves explicit ceiling and independent mask pictures");
@@ -125,7 +125,7 @@ NVENCSTATUS NVENCAPI lock(void* s,NV_ENC_LOCK_BITSTREAM* p){
     if(x.reenter){std::vector<std::uint8_t> bytes{99};check(x.encoder.tryTake(x.key(1),bytes)==MaskHevcTake::Busy&&bytes.empty(),"hot reentry refuses without waiting or exposing stale data");}
     o.locked=true;p->outputTimeStamp=o.token+(x.wrongStamp?1:0);p->pictureType=x.wrongType?NV_ENC_PIC_TYPE_P:NV_ENC_PIC_TYPE_IDR;
     p->pictureStruct=x.wrongStruct?NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM:NV_ENC_PIC_STRUCT_FRAME;
-    p->hwEncodeStatus=x.hwFailure?1:x.hardwareStatus;p->bitstreamBufferPtr=x.nullOutput?nullptr:o.bytes.data();
+    p->frameAvgQP=x.averageQp;p->hwEncodeStatus=x.hwFailure?1:x.hardwareStatus;p->bitstreamBufferPtr=x.nullOutput?nullptr:o.bytes.data();
     p->bitstreamSizeInBytes=x.emptyOutput?0:(x.outputSize?x.outputSize:std::uint32_t(o.bytes.size()));return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI unlock(void* s,NV_ENC_OUTPUT_PTR p){f(s);auto& o=*static_cast<Output*>(p);check(o.locked,"unlock actual locked buffer");o.locked=false;o.submitted=false;return NV_ENC_SUCCESS;}
@@ -161,25 +161,28 @@ MaskHevcPlatform maskHevcTestPlatform()noexcept{
 }
 namespace {
 void dynamicRate(){
-    Fixture x;check(x.configure(),"configure explicit capped VBR encoder");
-    const auto first=x.key(1);check(x.encoder.beginStage(first,&x.textures[0])&&x.encoder.submit(first),"original current-frame input submitted before a rate change");
-    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.rateChanges==1,"cold dynamic RC progresses while an earlier exact output remains outstanding");
+    Fixture x;check(x.configure(),"configure capped VBR encoder");
+    const auto first=x.key(1);check(x.encoder.beginStage(first,&x.textures[0])&&x.encoder.submit(first),"exact frame submitted before private rate change");
+    check(x.encoder.updateRate(120,1,13000000,20000000)&&!x.rateChanges,"cold ticks cannot reconfigure before actual mask measurements");
+    for(unsigned n=0;n<MaskHevcRate::DecisionFrames;++n){const auto key=x.key(n+2);check(x.encoder.beginStage(key,&x.textures[1])&&x.encoder.submit(key),"simultaneous exact feedback frame submitted");x.complete(1);
+        std::vector<std::uint8_t> bytes;std::uint64_t epoch=0;check(x.encoder.tryTake(key,bytes,&epoch)==MaskHevcTake::Ready,"fresh exact feedback completes");x.encoder.observeAddedBytes(epoch,30000,90,1);}
+    check(x.encoder.updateRate(120,1,13000000,20000000)&&x.rateChanges==1&&x.lastRate<=2600000,"measured rate change progresses while an earlier exact output remains outstanding");
     x.complete(0);std::vector<std::uint8_t> bytes;std::uint64_t oldEpoch=0;
-    check(x.encoder.tryTake(first,bytes,&oldEpoch)==MaskHevcTake::Ready&&oldEpoch,"matching original output retains its submission rate epoch across a rate update");
-    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.lastRate==2600000,"13Mbps stream gives at most2.6Mbps to mask, preserving RGB share");
-    check(x.opened==1&&!x.destroyed&&!x.coldWaits&&x.registered==4,"rate change reuses exact fixed resources without flush or session recreation");
-    x.encoder.observeAddedBytes(oldEpoch,100000);check(!x.encoder.diagnostics().wireMean,"old encoded bytes cannot contaminate a newly applied rate epoch");
-    const auto second=x.key(2);check(x.encoder.beginStage(second,&x.textures[0])&&x.encoder.submit(second),"fresh frame uses same source/encoder/resource contract after rate change");x.complete(0);std::uint64_t epoch=0;
-    check(x.encoder.tryTake(second,bytes,&epoch)==MaskHevcTake::Ready&&epoch!=oldEpoch,"rate epoch is independent of unchanged exact frame binding");
-    for(unsigned i=0;i<MaskHevcRate::Window;++i)x.encoder.observeAddedBytes(epoch,8000); //5.76Mbps observed at90Hz, above2.6Mbps grant.
-    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.lastRate<1300000,"actual byte feedback corrects hardware overshoot instead of trusting a configured target");
-    const auto changes=x.rateChanges;check(x.encoder.updateRate(91,1,13000000,20000000)&&x.rateChanges==changes,"small native FPS jitter does not recreate/reconfigure the encoder each frame");
-    check(x.encoder.updateRate(120,1,13000000,20000000)&&x.lastRateNum==120,"real nominal FPS change updates the private encoder without losing frame ownership");
+    check(x.encoder.tryTake(first,bytes,&oldEpoch)==MaskHevcTake::Ready&&oldEpoch,"old in-flight output keeps exact submission epoch after firmware RC reset");
+    check(x.opened==1&&!x.destroyed&&!x.coldWaits&&x.registered==4,"rate change reuses fixed session/resources without GPU flush");
+    x.encoder.observeAddedBytes(oldEpoch,100000);check(!x.encoder.diagnostics().wireMean,"old-rate bytes cannot contaminate new firmware settings");
+    const auto second=x.key(100);check(x.encoder.beginStage(second,&x.textures[0])&&x.encoder.submit(second),"fresh source/resource contract survives rate change");x.complete(0);std::uint64_t epoch=0;
+    check(x.encoder.tryTake(second,bytes,&epoch)==MaskHevcTake::Ready&&epoch!=oldEpoch,"rate epoch changes independently of exact frame binding");
+    auto d=x.encoder.diagnostics();check(d.qpSamples==MaskHevcRate::DecisionFrames+2&&d.lastQp==24&&d.minQp==24&&d.maxQp==24&&d.qpSum==d.qpSamples*24,"actual successful output QP is counted without granting frame permission");
+    for(unsigned n=0;n<MaskHevcRate::DecisionFrames;++n)x.encoder.observeAddedBytes(epoch,8000,90,1);
+    check(x.encoder.updateRate(120,1,13000000,20000000)&&x.lastRate<1300000&&x.lastRateNum==90,"measured bytes correct overshoot while instantaneous120Hz jitter is ignored");
     x.rateStatus=NV_ENC_ERR_INVALID_PARAM;const auto prior=x.encoder.diagnostics().rateTarget;
-    check(!x.encoder.updateRate(120,1,2000000,20000000)&&x.encoder.configured()&&x.encoder.diagnostics().rateTarget==prior,"failed rate reconfigure preserves working actual configuration and source");
-    check(x.encoder.diagnostics().stage==MaskHevcFailure::Reconfigure,"real private rate API failure has separate bounded diagnostics");
+    for(unsigned n=0;n<MaskHevcRate::Window;++n)x.encoder.observeAddedBytes(epoch+1,8000,90,1);
+    check(!x.encoder.updateRate(90,1,2000000,20000000)&&x.encoder.configured()&&x.encoder.diagnostics().rateTarget==prior,"private API rejection retains working encoder and applied target");
+    check(x.encoder.diagnostics().stage==MaskHevcFailure::Reconfigure,"real firmware RC failure has its own diagnostics");
     resetAndCheck(x);
 }
+
 }
 
 int main(int argc,char** argv){
@@ -208,6 +211,13 @@ int main(int argc,char** argv){
         producer.join();if(!taken)taken=concurrent.take(trace);
         check(published&&taken&&trace.width==64&&trace.height==64&&trace.count==4,"cross-thread header publication is coherent and consumed once");
         check(!concurrent.take(trace),"cross-thread snapshot cannot be consumed twice");
+    }
+    for(const auto qp:{0u,24u,51u,0xffffffffu}){
+        Fixture x;x.averageQp=qp;check(x.configure(),"configure actual QP metadata boundary test");
+        const auto key=x.key(1);check(x.encoder.beginStage(key,&x.textures[0])&&x.encoder.submit(key),"QP diagnostic never supplies missing source input");
+        x.complete(0);std::vector<std::uint8_t> bytes;check(x.encoder.tryTake(key,bytes)==MaskHevcTake::Ready,"unknown QP never rejects otherwise validated exact output");
+        const auto d=x.encoder.diagnostics();check(d.qpSamples==(qp<=51?1u:0u)&&d.lastEncodedBytes==x.outputs[0].bytes.size(),"only valid reported QP enters bounded successful-output diagnostics");
+        resetAndCheck(x);
     }
     for(const auto hardwareStatus:{2u,0u,1u,3u,8u,0xffffffffu}){
         Fixture x;x.config.width=x.config.height=64;x.hardwareStatus=hardwareStatus;
