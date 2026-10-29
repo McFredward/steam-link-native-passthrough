@@ -102,6 +102,10 @@ public:
     void setInputObserver(InputObserver);
     void setDeviceObserver(DeviceObserver);
     std::array<EncoderState,4> encoderStates()const;
+    // Cold copies only. A private companion encoder must use original entry
+    // points, never recurse into this boundary's discovery/input wrappers.
+    bool nativeFunctionTable(NV_ENCODE_API_FUNCTION_LIST&)const;
+    NvencQosObservation encoderQos(void*,std::uint64_t generation)const;
     ReconfigureStats reconfigureStats()const; // Cold worker snapshot; no hot-path logging.
     OutputStats outputStats()const;
     // Revokes only that observed encoder generation; borrowed output stays alive.

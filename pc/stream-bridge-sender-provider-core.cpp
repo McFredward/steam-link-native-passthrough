@@ -435,6 +435,15 @@ void NvencBoundary::setOutputAugmenter(OutputAugmenter value){std::lock_guard<st
 ReconfigureStats NvencBoundary::reconfigureStats()const{std::lock_guard<std::mutex> guard(mutex_);return reconfigureStats_;}
 OutputStats NvencBoundary::outputStats()const{std::lock_guard<std::mutex> guard(mutex_);return outputStats_;}
 std::array<EncoderState,4> NvencBoundary::encoderStates()const{std::lock_guard<std::mutex> guard(mutex_);std::array<EncoderState,4> result{};for(unsigned i=0;i<sessions_.size();++i)result[i]={sessions_[i].encoder,sessions_[i].generation,sessions_[i].initialized&&sessions_[i].hevc,sessions_[i].adapter.mutualConfirmed(),sessions_[i].adapter.probeObserved(),sessions_[i].width,sessions_[i].height,sessions_[i].encoded};return result;}
+bool NvencBoundary::nativeFunctionTable(NV_ENCODE_API_FUNCTION_LIST& output)const{
+    std::lock_guard<std::mutex> guard(mutex_);if(!installed_||!enabled_||!inputHooks_)return false;
+    output=original_;return true;
+}
+NvencQosObservation NvencBoundary::encoderQos(void* encoder,std::uint64_t generation)const{
+    std::lock_guard<std::mutex> guard(mutex_);
+    for(const auto& session:sessions_)if(session.encoder==encoder&&encoder&&session.generation==generation&&session.initialized&&session.hevc)return session.qosObservation;
+    return {};
+}
 void NvencBoundary::revokeDiscovery(void* encoder,std::uint64_t generation){std::lock_guard<std::mutex> guard(mutex_);if(auto s=find(encoder);s&&s->generation==generation){s->adapter.stop();s->probeQueued=false;s->probeSequence=0;s->probeToken={};}}
 void NvencBoundary::stop(){std::lock_guard<std::mutex> guard(mutex_);enabled_=false;for(auto& s:sessions_)revoke(s);}
 bool NvencBoundary::wrapped()const{std::lock_guard<std::mutex> guard(mutex_);return installed_;}
