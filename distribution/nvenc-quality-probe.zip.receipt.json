@@ -1,13 +1,14 @@
 {
   "actual_gpu_measurements_available": false,
   "archive": {
-    "bytes": 740721,
-    "sha256": "63a2d3146f5e07f40279b83d628d212884a7772a157b08228e9d1e1f2d45223c"
+    "bytes": 740678,
+    "sha256": "62a6102fa207b045be96ba1937d1622c23234c81af592e31c16e026ae1b58fc0"
   },
   "binary": {
-    "bytes": 2811261,
-    "sha256": "01616a1ff325d8836aba244e0d6293d2b45c3d480934c28b2739ea86e3f9ed5b"
+    "bytes": 2811773,
+    "sha256": "f4988f6b665c6bc89f5858a75d52838bc0ae32b1d6bc4577fbd7d3fb26ffd140"
   },
+  "cases": 10,
   "production_frontend_unchanged_from": "6003f30230f59e1cd4cb93e83010fc483cadfa52",
   "schema": "sfnp-nvenc-quality-probe-build-v1",
   "scope": "Standalone synthetic GPU comparison only; API overrides are never linked into installed runtime. The current runtime still rejects diagnostic P pictures.",
@@ -15,7 +16,6 @@
     "bytes": 241580,
     "sha256": "be0c29a41ae3260fd016a9001fd959e747bac93ad21411759736abba4ffdea86"
   },
-  "source_ci": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/40970177067",
   "source_pins": {
     "pc/stream-bridge-mask-hevc-platform.h": {
       "bytes": 1053,
@@ -34,8 +34,8 @@
       "sha256": "2bbe0fa86f769524c1368827f9ce3f9ba3f45eaa04a9419fd0e1e4fe2dc0c61f"
     },
     "tests/mask-hevc/nvenc_quality_probe.cpp": {
-      "bytes": 16919,
-      "sha256": "c2934ed0ce2536a2387017a25dbac7e9c5fea1c664311eb57784c71e252264c4"
+      "bytes": 17051,
+      "sha256": "a21a0ca8d5351cf2ec81f4d245b8a2b3c4dae12929a5bcfc4667140f9e138d54"
     },
     "tests/mask-hevc/probe_pattern.h": {
       "bytes": 1750,
@@ -46,5 +46,5 @@
       "sha256": "bcaae466e677e902f2414fc2bfbda51eb7cc391750599a228a446c74cfe7cbc8"
     }
   },
-  "source_revision": "306fc9c96e0cd2617fd7afd28665e0ea744ff61e"
+  "source_revision": "1b6e0dd73587c99fab16e1c0362b0cb741bf87d8"
 }
