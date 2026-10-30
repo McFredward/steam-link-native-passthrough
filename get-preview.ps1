@@ -1,13 +1,13 @@
 # Compatibility alias for the same paired-only setup. The assistant checks both devices before offering changes.
 & {
     $ErrorActionPreference = 'Stop'
-    $source = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/fcba1d181aba9949827ae42972f178bcacba451d/get.ps1' -TimeoutSec 30
+    $source = Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/5bd99a1318b35e0f1f644ca67ba1481af5a56351/get.ps1' -TimeoutSec 30
     if ($source -isnot [string]) { throw 'Unexpected setup bootstrap response.' }
     $hasher = [Security.Cryptography.SHA256]::Create()
     try {
         $digest = ([BitConverter]::ToString($hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($source)))).Replace('-', '').ToLowerInvariant()
     } finally { $hasher.Dispose() }
-    if ($digest -cne '19d2c038c8dcce5902d26b7efea1ad9817d0ae9ca658312d87c399820c4ec28c') {
+    if ($digest -cne '9491f29f8b176a2fd75aa8c92ac49198565da20b4b600c6e22c853cce9eb6a23') {
         throw 'Setup bootstrap differs from the reviewed revision. Nothing was run.'
     }
     & ([scriptblock]::Create($source)) -BridgePreview
