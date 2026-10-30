@@ -1,12 +1,12 @@
 {
   "archive": {
-    "bytes": 20177228,
-    "sha256": "becedd114619d60d603cfaedcd31a5583fb34e8d27a9df675cfb7e181d6fb763"
+    "bytes": 20190270,
+    "sha256": "527275b81a631096e38c70cecc4cd3f47c2fec03e824492a37b9a6f4a2ce5003"
   },
   "artifacts": {
     "frame_layer": {
-      "bytes": 3722576,
-      "sha256": "dd3084bfb73b96980ced9f9c60c6b807093ea5492b4234840b774e920c2c8d04"
+      "bytes": 3723168,
+      "sha256": "f1a6a23d9cf2bbc2a6f6018fa0c4e47380590d819a87ff6b59d0f668d4502aa9"
     },
     "frame_selector": {
       "bytes": 73360,
@@ -21,13 +21,13 @@
       "sha256": "efc7a5c2104565a5b25802c503db99415c2e75f2c4797dbe689f834d1b86a076"
     },
     "pc_provider": {
-      "bytes": 2075136,
-      "sha256": "6a056e35e3cabb409823c48b45474c2c0b51351805bfc7ca91b3276ef7e2a779"
+      "bytes": 2083840,
+      "sha256": "130038a7767e535ebf1c8be240963a35572900270c0cabed2e4180a21a14a1c2"
     }
   },
   "component_versions": {
-    "frame": "0.3.2",
-    "pc": "0.3.6"
+    "frame": "0.3.3",
+    "pc": "0.3.7"
   },
   "device_actions": false,
   "hardware_verified": false,
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11054,
-    "sha256": "69db4db20b8864fae4c4b82b8f42055e06d86f17258dec56d7e097a27b9b1790"
+    "sha256": "8468e1376adc61c5f57b71cda0a6228acd5e7c6f59b887e9deb187f29ff03c69"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -47,11 +47,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 78,
-      "sha256": "5453922026e4f32b1866134194ffe53e60bf3cd33746a0ef0a3d824ee33025d8"
+      "sha256": "84dc252f75810a9528f143aa6884eaeeb6a06a03b3b171992be9de7e85b9c293"
     },
     "VERSION": {
       "bytes": 6,
-      "sha256": "ad5adcac95aff5c3ad7deea82369f78901765729dbc12933056cad1483e27f39"
+      "sha256": "6fe6f0c68d9a83ebbdb529c1782664c4934fb9f5a63215ab5ad29250d72fe5ed"
     },
     "packaging/mask-ffmpeg.json": {
       "bytes": 452,
@@ -222,7 +222,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "cde1ac86ec165919c94f84a7ab7bceb5e2fd99b2",
+  "source_revision": "54702910c776679f86fbf58a9c2a5beb8080b9ab",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -240,9 +240,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8090,
-        "sha256": "426b212f6cc149e1233d06816fb3bcb1097423235830ec708b36119f2ecf5972"
+        "sha256": "1d7df32dad9868693db88ffb0f3eb7f27456ea4203045a5467da702d96b28dec"
       }
     }
   ],
-  "version": "0.3.8"
+  "version": "0.3.9"
 }
