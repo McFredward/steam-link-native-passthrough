@@ -148,6 +148,7 @@ void reuse(const hevc::Libraries& libs,const fs::path& root){
         check(decoder.decodeIntra(in,output)==hevc::Status::Ok&&output.descriptor.sourceFrame==100+i&&output.descriptor.cameraRecovery==i%3,"reused context cannot return prior frame or policy after EOF/flush");
         const auto expected=i%3==0?0:(i%3==1?255:0);check(i%3==2?output.samples[0]<=2:output.samples[0]==expected,"alternating zero/opaque/fractional IDRs do not borrow reference pixels");}
     const auto stats=decoder.statistics();check(stats.contextsOpened==1&&stats.attempts==24&&stats.decoded==24,"one decoder allocation serves repeated independent same-epoch IDRs");
+    check(stats.sampleBufferGrows==2&&stats.sampleBufferReuses==22,"transactional alternating output buffers stop full R8 storage growth after two successful pictures");
     const auto coded=read(root/"codes.hevc");auto missing=coded;
     for(const auto& unit:nals(coded))if(unit.type==34){missing.erase(missing.begin()+unit.start,missing.begin()+unit.end);break;}
     const auto invalid=unchecked(missing);auto absent=input(bytes(invalid));const auto before=output.samples;
@@ -176,6 +177,20 @@ void pool(const hevc::Libraries& libs,const fs::path& root){
     check(frames.size()==hevc::Pool::Capacity,"all fixed outstanding jobs complete without a mask substitution");
     check(pool.statistics().contextsOpened<=hevc::Pool::Workers&&pool.statistics().decoded==hevc::Pool::Capacity,"bounded workers reuse at most one context each");
     check(sb::wrapHevcCoverage(bytes(coded),256,256,payload),"restore caller-owned packet");in.payload=bytes(payload);
+    hevc::Pool::Result recycled;unsigned sent=0,receivedReuse=0;
+    const auto reuseEnd=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+    while(receivedReuse<64&&std::chrono::steady_clock::now()<reuseEnd){
+        while(sent<64){in.descriptor.sourceFrame=300+sent;if(!pool.submit(in))break;++sent;}
+        while(pool.take(recycled)){
+            check(recycled.status==hevc::Status::Ok&&recycled.decoded.descriptor.sourceFrame==recycled.identity.descriptor.sourceFrame,"recycled R8 storage retains exact fresh decoded identity");
+            for(std::size_t i=0;i<recycled.decoded.samples.size();++i)check(std::abs(int(recycled.decoded.samples[i])-int(i%256))<=2,"every reused fractional-alpha byte still matches the same owned source");
+            ++receivedReuse;
+        }
+        std::this_thread::yield();
+    }
+    const auto reused=pool.statistics();
+    check(receivedReuse==64&&reused.sampleBufferReuses>32&&reused.sampleBufferGrows<=2*(hevc::Pool::Capacity+hevc::Pool::Workers+1),"persistent consumer returns full R8 buffers to the bounded pool instead of per-picture growth");
+    check(reused.started==reused.collected&&reused.collected==hevc::Pool::Capacity+64,"queue and collection timings account for every completed pool input");
     for(unsigned i=0;i<hevc::Pool::Capacity;++i){in.descriptor.sourceFrame=100+i;check(pool.submit(in),"old source work queued before revocation");}
     pool.cancel();in.source.generation=99;in.binding[0]=101;in.descriptor.sourceFrame=999;
     const auto retryEnd=std::chrono::steady_clock::now()+std::chrono::seconds(5);bool submitted=false;

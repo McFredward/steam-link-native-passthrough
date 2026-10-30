@@ -1,9 +1,61 @@
 # HEVC mask test candidate
 
-Installer **0.3.13 / PC 0.3.11 / Frame 0.3.3** prefers negotiated temporal HEVC
+Installer **0.3.14 / PC 0.3.11 / Frame 0.3.4** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
-preferences still override the default. This candidate updates only the PC sender.
-Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
+preferences still override the default. This candidate updates the Frame receiver.
+Run the normal guided dev setup and apply the offered update while the Frame is awake.
+The PC native provider is byte-identical to 0.3.13.
+
+## Frame R8 buffer reuse and continuing pipeline timing (0.3.14)
+
+The previous receiver repeatedly allocated/zeroed a full decoded R8 output buffer
+and freed completed buffers at collection. Frame0.3.4 keeps a decoder-private
+spare and returns the previously consumed owned buffer to a free fixed pool slot.
+The Process retains its result between cold-worker cycles so recycling continues
+across calls. Capacity remains four workers/eight jobs, with no added queued
+pictures. Private buffer capacity is bounded by those owners and the existing
+maximum mask extent; this is not a claim of lower retained RAM. Cancellation and
+shutdown still discard revoked jobs. Caller output stays unchanged on decoder
+failure; successful publication still copies every decoded Y byte exactly.
+
+Source/frame/eye/extent, native-image lease, camera grant and scheduled GPU mask
+ownership checks are unchanged, as are the exact Ready receipt and handoff timeout.
+No alpha threshold, smoothing, resolution reduction, skipped loop filter or codec
+quality setting is introduced. Sender, shaders, private FFmpeg and launch selector
+are unchanged.
+
+Debug diagnostics now continue during active progress at a five-second cadence
+after the bounded startup milestone reports. Previously, the lifetime 48-report
+limit/exponential progression could hide the relevant running interval. Additional
+cumulative measurements separate worker queue wait, decode, completion-to-collection,
+publication CPU work and video handoff duration, and count R8 buffer growth/reuse.
+They are separate stages, not additive end-to-end measurements. Publication time
+covers consumer validation/staging/scheduling, not the later GPU fence duration.
+
+Software checks use the actual private FFmpeg8.1.3 decoder: all42 host tests pass,
+including 4,194,814 decoder checks, fresh identity/transactional-failure cases,
+72 pooled pictures and every alpha byte in 64 reused fractional-alpha pictures.
+Restoring per-picture decoder allocation or dropping the pool recycling makes
+the new storage-growth assertions fail. ASan/UBSan uses a host-only loader copy
+without RTLD_DEEPBIND because sanitizers reject that loader flag; production
+loading is unchanged and the external FFmpeg libraries are not instrumented.
+
+Alternating baseline/current host-only tests repeat identical 1152x4608 owned
+HEVC IDRs, checking equal full R8 output SHA256 and exact frame identity. Five
+128-picture smooth fractional-ramp runs show median serial elapsed time
+947,120 -> 884,062 us (-6.7%), pool 255,726 -> 245,193 us (-4.1%). After13 pool
+buffer grows, the remaining115 results reuse storage. A harder gradient IDR
+with only16 pictures shows -0.7% serial/+1.8% pool elapsed, so this does not
+establish a universal throughput gain or a Frame latency improvement. These are
+CPU-only synthetic inputs, not NVIDIA P8 rain captures or headset measurements.
+No post-update hardware smoothness or rain-quality improvement is claimed.
+
+For the next comparison keep the same refresh rate, resolution and manual100
+Mbps setting used in the last run. Play the same dense-rain scene for 2–3 minutes
+and collect the usual PC ZIP plus Frame journals with debug timing. Compare fresh
+counter deltas for each process generation and active interval, especially
+handoffs over11/22ms, queue/collect/publication times and RGB high-QP intervals.
+Stable, fluid, sharp passthrough in rain remains the acceptance target.
 
 ## Native ZIP result: manual mode confirmed, decoded-picture handoff delayed
 

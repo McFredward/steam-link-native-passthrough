@@ -13,6 +13,21 @@ namespace renderer=stream_bridge_renderer;
 namespace {
 unsigned checks=0;
 void check(bool valid,const char* message){++checks;if(!valid)throw std::runtime_error(message);}
+void reportCadence(){
+    renderer::ReportGate gate;
+    check(!gate.due(0,0,0),"no empty diagnostic report");
+    check(gate.due(1,1,1),"first bounded milestone remains visible");
+    check(!gate.due(2,1,1),"same progress cannot create a repeated report");
+    check(!gate.due(100,1,1),"cold worker ticks alone never count as data");
+    std::uint64_t bits=1;
+    for(unsigned i=1;i<63;++i){bits|=std::uint64_t(1)<<i;(void)gate.due(100+i,1,bits);}
+    check(!gate.due(1000,2,bits),"exhausted startup reports obey the periodic bound");
+    check(gate.due(5001000,2,bits),"active diagnostics continue after all startup reports are exhausted");
+    check(!gate.due(5001001,3,bits),"active progress cannot exceed one periodic report per five seconds");
+    check(gate.due(10001000,3,bits),"later masks remain observable in a persistent compositor");
+    check(!gate.due(20001000,3,bits),"unchanged idle process does not emit periodic duplicate data");
+    check(gate.due(20001001,4,bits),"new activity after a long idle is immediately observable");
+}
 struct Directory {
     std::filesystem::path path;
     Directory(){char name[]="/tmp/sfnp-process712-XXXXXX";check(mkdtemp(name)!=nullptr,"private fixture directory created");path=name;}
@@ -105,13 +120,14 @@ void telemetry(){
     invalid.kind=local::Kind::Decoded;renderer::consume(p,invalid);
     check(p.flow[unsigned(renderer::Flow::DecodedReceived)]==1&&p.flow[unsigned(renderer::Flow::CertificateMiss)]==1&&p.flow[unsigned(renderer::Flow::PicturesRetained)]==0,
         "decoded packet without exact certificate never counts as a retained local picture");
-    renderer::reportFlowCold(p);const auto first=p.flowLines;
+    renderer::reportFlowCold(p);const auto first=p.flowReports.reports();
     for(unsigned i=0;i<4096;++i)renderer::reportFlowCold(p);
-    check(first==1&&p.flowLines==first,"unchanged local flow never repeats cold status");
+    check(first==1&&p.flowReports.reports()==first,"unchanged local flow never repeats cold status");
     for(unsigned bit=1;bit<64;++bit){p.flow[unsigned(renderer::Flow::CertifiedCallback)]=std::uint64_t(1)<<bit;renderer::reportFlowCold(p);}
-    check(p.flowLines==48,"changed local status has an absolute per-process line bound");
+    check(p.flowReports.reports()==48,"changed startup status has an absolute initial report bound before periodic active reporting");
     renderer::recordHandoffDuration(p,11000);renderer::recordHandoffDuration(p,22000);renderer::recordHandoffDuration(p,50000);renderer::recordHandoffDuration(p,51000);renderer::recordHandoffDuration(p,2);
     check(p.handoffMaxMicros==51000&&p.flow[unsigned(renderer::Flow::HandoffOverFrame)]==3&&p.flow[unsigned(renderer::Flow::HandoffOverTwoFrames)]==2&&p.flow[unsigned(renderer::Flow::HandoffOver50ms)]==1,"bounded handoff diagnostics retain high-water latency and strict threshold counts without changing readiness");
+    check(p.handoffSamples==5&&p.handoffMicros==134002,"callback duration totals count each completed handoff without changing its permission");
 }
 // Exercise the production Process and its actual authenticated local sockets.
 // Only the final consumer's owned-storage publication is a controllable port;
@@ -343,4 +359,4 @@ void cameraRecoveryPolicy(){
 }
 
 }
-int main(int argc,char** argv){try{stream_bridge::logging::current.store(stream_bridge::logging::Level::Debug);const bool handoffOnly=argc==2&&std::strcmp(argv[1],"handoff")==0;if(!handoffOnly){noConsumers();consumerAdmission();sourceLossReconnect();telemetry();decodedDispatch();}exactHandoff();noneAndBurst();interruptedHandoff();unavailableHandoff();cameraHandoff();cameraPictureDemand();cameraRecoveryPolicy();std::printf("%u actual process lifecycle and exact handoff checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+int main(int argc,char** argv){try{stream_bridge::logging::current.store(stream_bridge::logging::Level::Debug);reportCadence();const bool handoffOnly=argc==2&&std::strcmp(argv[1],"handoff")==0;if(!handoffOnly){noConsumers();consumerAdmission();sourceLossReconnect();telemetry();decodedDispatch();}exactHandoff();noneAndBurst();interruptedHandoff();unavailableHandoff();cameraHandoff();cameraPictureDemand();cameraRecoveryPolicy();std::printf("%u actual process lifecycle and exact handoff checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

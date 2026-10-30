@@ -5,6 +5,8 @@ on:
     paths:
       - 'receiver/stream_bridge_mask_hevc*'
       - 'layer/stream_bridge_process.*'
+      - 'layer/stream_bridge_report_gate.h'
+      - 'tests/stream-bridge-process/**'
       - 'bridge/stream_bridge_hevc_coverage.*'
       - 'pc/stream-bridge-mask-hevc-parameters.h'
       - 'tests/mask-hevc/**'
@@ -17,6 +19,8 @@ on:
     paths:
       - 'receiver/stream_bridge_mask_hevc*'
       - 'layer/stream_bridge_process.*'
+      - 'layer/stream_bridge_report_gate.h'
+      - 'tests/stream-bridge-process/**'
       - 'bridge/stream_bridge_hevc_coverage.*'
       - 'pc/stream-bridge-mask-hevc-parameters.h'
       - 'tests/mask-hevc/**'

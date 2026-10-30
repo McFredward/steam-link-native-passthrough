@@ -1,6 +1,7 @@
 // Explicit host-only codec timing. No device probes, installs or live services.
 #include "receiver/stream_bridge_mask_hevc_pool.h"
 #include "bridge/stream_bridge_hevc_coverage.h"
+#include "receiver/sha256.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -25,7 +26,7 @@ int main(int argc,char** argv){try{
     input.descriptor={1,1,std::uint16_t(width),std::uint16_t(height),1};input.payload={payload.data(),payload.size()};
     h::Decoder decoder;h::Pool pool;
     if(!(mode=="pool"?pool.prepareCold(libraries):decoder.prepareCold(libraries)))throw std::runtime_error("explicit private backend unavailable");
-    std::set<std::uint64_t> completed;h::DecodedMask output;const auto started=Clock::now();
+    std::set<std::uint64_t> completed;h::DecodedMask output;h::Pool::Result pooled;const auto started=Clock::now();
     const auto deadline=started+std::chrono::seconds(30);std::uint64_t firstMicros=0;unsigned submitted=0;
     const auto accept=[&](const h::DecodedMask& result){
         if(result.source.connection!=input.source.connection||result.source.generation!=input.source.generation||result.binding!=input.binding
@@ -37,8 +38,8 @@ int main(int argc,char** argv){try{
     while(completed.size()<frames&&Clock::now()<deadline){
         if(mode=="pool"){
             while(submitted<frames){input.descriptor.sourceFrame=submitted+1;if(!pool.submit(input))break;++submitted;}
-            h::Pool::Result result;bool progress=false;
-            while(pool.take(result)){if(result.status!=h::Status::Ok)throw std::runtime_error(h::statusName(result.status));accept(result.decoded);progress=true;}
+            bool progress=false;
+            while(pool.take(pooled)){if(pooled.status!=h::Status::Ok)throw std::runtime_error(h::statusName(pooled.status));accept(pooled.decoded);progress=true;}
             if(!progress)std::this_thread::yield();
         }else{
             if(mode=="fresh"){decoder.stopCold();if(!decoder.prepareCold(libraries))throw std::runtime_error("fresh prepare refused");}
@@ -50,7 +51,14 @@ int main(int argc,char** argv){try{
     if(completed.size()!=frames)throw std::runtime_error("bounded decode deadline exceeded");
     const auto elapsed=std::chrono::duration_cast<std::chrono::microseconds>(Clock::now()-started).count();
     const auto stats=mode=="pool"?pool.statistics():decoder.statistics();
-    std::printf("{\"mode\":\"%s\",\"extent\":[%u,%u],\"encoded_bytes\":%zu,\"frames\":%u,\"elapsed_us\":%lld,\"first_result_us\":%llu,\"frames_per_second\":%.3f,\"contexts_opened\":%llu,\"identity_errors\":0,\"device_actions\":false}\n",
-        mode.c_str(),width,height,coded.size(),frames,static_cast<long long>(elapsed),static_cast<unsigned long long>(firstMicros),double(frames)*1000000/double(elapsed),static_cast<unsigned long long>(stats.contextsOpened));
+    const auto& pixels=mode=="pool"?pooled.decoded.samples:output.samples;
+    frame_receiver::Sha256 hash;hash.update(pixels.data(),pixels.size());const auto digest=hash.finish();char hex[65]{};
+    for(unsigned i=0;i<digest.size();++i)std::snprintf(hex+2*i,3,"%02x",unsigned(digest[i]));
+    std::uint64_t grows=0,reuses=0;
+#ifdef SFNP_BENCH_REUSE_COUNTERS
+    grows=stats.sampleBufferGrows;reuses=stats.sampleBufferReuses;
+#endif
+    std::printf("{\"mode\":\"%s\",\"extent\":[%u,%u],\"encoded_bytes\":%zu,\"frames\":%u,\"elapsed_us\":%lld,\"first_result_us\":%llu,\"frames_per_second\":%.3f,\"contexts_opened\":%llu,\"decoder_total_us\":%llu,\"R8_buffer_grows\":%llu,\"R8_buffer_reuses\":%llu,\"last_R8_sha256\":\"%s\",\"identity_errors\":0,\"device_actions\":false}\n",
+        mode.c_str(),width,height,coded.size(),frames,static_cast<long long>(elapsed),static_cast<unsigned long long>(firstMicros),double(frames)*1000000/double(elapsed),static_cast<unsigned long long>(stats.contextsOpened),static_cast<unsigned long long>(stats.totalMicros),static_cast<unsigned long long>(grows),static_cast<unsigned long long>(reuses),hex);
     return 0;
 }catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

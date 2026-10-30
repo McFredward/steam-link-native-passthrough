@@ -14,6 +14,9 @@ public:
     static constexpr std::size_t MaximumPixels=8u*1024u*1024u;
     struct Result {Input identity{};Status status=Status::Unavailable;DecodedMask decoded;};
     using Wake=void(*)(void*) noexcept;
+    struct PipelineStatistics:Statistics {
+        std::uint64_t started=0,collected=0,queueMicros=0,maxQueueMicros=0,collectMicros=0,maxCollectMicros=0;
+    };
     Pool();~Pool();
     Pool(const Pool&)=delete;Pool& operator=(const Pool&)=delete;
     bool prepareCold(const Libraries&,Wake=nullptr,void* context=nullptr)noexcept;
@@ -24,7 +27,7 @@ public:
     bool take(Result&)noexcept;
     void cancel()noexcept; // Revoke queued/completed work; running results retire.
     void stopCold()noexcept; // Cold quiescent owner only; joins bounded workers.
-    Statistics statistics()const noexcept;
+    PipelineStatistics statistics()const noexcept;
 private:
     struct Impl;std::unique_ptr<Impl> impl_;
 };

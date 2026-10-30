@@ -55,7 +55,8 @@ struct Decoder::Impl {
 #define FIELD(name) decltype(&::name) name=nullptr;
     SFNP_SYMBOLS(FIELD)
 #undef FIELD
-    void close(){work.reset();codec=nullptr;if(codecLibrary)dlclose(codecLibrary);if(utilityLibrary)dlclose(utilityLibrary);codecLibrary=utilityLibrary=nullptr;}
+    std::vector<std::uint8_t> spareSamples;
+    void close(){work.reset();std::vector<std::uint8_t>().swap(spareSamples);codec=nullptr;if(codecLibrary)dlclose(codecLibrary);if(utilityLibrary)dlclose(utilityLibrary);codecLibrary=utilityLibrary=nullptr;}
     template<class T> bool symbol(void* handle,T& target,const char* name){static_assert(sizeof(T)==sizeof(void*),"public POSIX function address");void* address=dlsym(handle,name);std::memcpy(&target,&address,sizeof target);return target!=nullptr;}
     bool prepare(const Libraries& paths){
         if(codec)return true;
@@ -146,6 +147,11 @@ struct Decoder::Impl {
         const auto used=std::uint64_t(f.linesize[0])*(view.height-1u)+view.width;
         if(plane<begin||plane-begin>buffer->size||used>buffer->size-(plane-begin))return Status::InvalidOutput;
         DecodedMask candidate;candidate.source=input.source;candidate.descriptor=input.descriptor;candidate.binding=input.binding;
+        // Keep publication transactional: the caller's previous pixels and
+        // identity remain untouched until every output/EOF check succeeds.
+        // A private spare avoids allocating/zeroing a full R8 image per frame.
+        candidate.samples=std::move(spareSamples);
+        const bool reuse=candidate.samples.capacity()>=std::size_t(view.width)*view.height;
         candidate.samples.resize(std::size_t(view.width)*view.height);
         for(unsigned y=0;y<view.height;++y){const auto* row=f.data[0]+std::size_t(y)*f.linesize[0];auto* target=candidate.samples.data()+std::size_t(y)*view.width;
             std::copy_n(row,view.width,target);
@@ -162,7 +168,10 @@ struct Decoder::Impl {
             const auto sent=avcodec_send_packet(w.context,nullptr);if(sent<0&&sent!=AVERROR_EOF)return Status::DecoderRefused;
             received=avcodec_receive_frame(w.context,w.frame);if(received>=0)return Status::ExtraOutput;if(received!=AVERROR_EOF)return Status::DecoderRefused;
         }
-        output=std::move(candidate);return Status::Ok;
+        spareSamples=std::move(output.samples);
+        output=std::move(candidate);
+        if(reuse)++stats.sampleBufferReuses;else ++stats.sampleBufferGrows;
+        return Status::Ok;
     }
 #endif
 };

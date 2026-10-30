@@ -3,11 +3,15 @@
 #include <array>
 #include <algorithm>
 #include <condition_variable>
+#include <chrono>
 #include <cstring>
 #include <mutex>
 #include <thread>
 
 namespace stream_bridge_mask_hevc {
+namespace {
+std::uint64_t clockMicros()noexcept{return std::uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
+}
 struct Pool::Impl {
     enum class Phase {Free,Queued,Running,Done};
     struct Chain {
@@ -20,7 +24,7 @@ struct Pool::Impl {
         }
     };
     struct Slot {
-        Phase phase=Phase::Free;std::uint64_t ticket=0,epoch=0;
+        Phase phase=Phase::Free;std::uint64_t ticket=0,epoch=0,queuedAt=0,completedAt=0;
         Input input{};Chain chain{};std::vector<std::uint8_t> encoded;Result result;
     };
     mutable std::mutex gate;std::condition_variable available;
@@ -29,6 +33,7 @@ struct Pool::Impl {
     std::array<Statistics,Workers*2> measurements{};
     std::array<Chain,Workers> chains{};std::array<std::uint64_t,Workers> decoderEpoch{};bool prepared=false,stopping=true;std::uint64_t epoch=1,nextTicket=0;
     Wake wake=nullptr;void* context=nullptr;
+    PipelineStatistics timing{};
     bool eligible(const Slot& slot,unsigned index)const noexcept{
         if(slot.phase!=Phase::Queued)return false;
         if(!slot.chain.temporal)return true;
@@ -48,6 +53,8 @@ struct Pool::Impl {
                 if(stopping)return;
                 for(auto& candidate:slots)if(eligible(candidate,index)&&(!slot||candidate.ticket<slot->ticket))slot=&candidate;
                 slot->phase=Phase::Running;temporal=slot->chain.temporal;
+                const auto now=clockMicros(),queued=now>=slot->queuedAt?now-slot->queuedAt:0;
+                ++timing.started;timing.queueMicros+=queued;timing.maxQueueMicros=std::max(timing.maxQueueMicros,queued);
                 if(temporal){chains[index]=slot->chain;reset=decoderEpoch[index]!=slot->epoch;decoderEpoch[index]=slot->epoch;}
             }
             auto& result=slot->result;result.identity=slot->input;result.identity.payload={};
@@ -57,7 +64,7 @@ struct Pool::Impl {
             bool publish=false;
             {
                 std::lock_guard<std::mutex> lock(gate);measurements[decoder]=decoders[decoder]->statistics();
-                if(!stopping&&slot->epoch==epoch){slot->phase=Phase::Done;publish=true;}
+                if(!stopping&&slot->epoch==epoch){slot->completedAt=clockMicros();slot->phase=Phase::Done;publish=true;}
                 else *slot={};
             }
             available.notify_all();if(publish&&wake)wake(context);
@@ -66,7 +73,7 @@ struct Pool::Impl {
     bool prepare(const Libraries* libraries,Wake callback,void* owner){
         if(prepared)return true;
         if(std::any_of(threads.begin(),threads.end(),[](const auto& thread){return thread.joinable();}))return false;
-        wake=callback;context=owner;measurements={};
+        wake=callback;context=owner;measurements={};timing={};
         for(auto& decoder:decoders){decoder=std::make_unique<Decoder>();if(!(libraries?decoder->prepareCold(*libraries):decoder->prepareInstalledCold()))return false;}
         stopping=false;prepared=true;
         for(unsigned i=0;i<Workers;++i)threads[i]=std::thread(&Impl::run,this,i);
@@ -105,14 +112,25 @@ bool Pool::submit(const Input& input)noexcept{
             // caller's packet memory while a worker decodes asynchronously.
             slot.encoded.assign(input.payload.data,input.payload.data+input.payload.size);
             slot.input=input;slot.input.payload={slot.encoded.data(),slot.encoded.size()};slot.epoch=impl_->epoch;slot.ticket=++impl_->nextTicket;
-            chain.cancelEpoch=impl_->epoch;slot.chain=chain;slot.phase=Impl::Phase::Queued;impl_->available.notify_all();return true;
+            chain.cancelEpoch=impl_->epoch;slot.chain=chain;slot.queuedAt=clockMicros();slot.phase=Impl::Phase::Queued;impl_->available.notify_all();return true;
         }
     }catch(...){}
     return false;
 }
 bool Pool::take(Result& output)noexcept{
     std::lock_guard<std::mutex> lock(impl_->gate);
-    for(auto& slot:impl_->slots)if(slot.phase==Impl::Phase::Done){output=std::move(slot.result);slot={};return true;}
+    for(auto& slot:impl_->slots)if(slot.phase==Impl::Phase::Done){
+        const auto now=clockMicros(),elapsed=now>=slot.completedAt?now-slot.completedAt:0;
+        ++impl_->timing.collected;impl_->timing.collectMicros+=elapsed;impl_->timing.maxCollectMicros=std::max(impl_->timing.maxCollectMicros,elapsed);
+        // take() already replaces the caller's old result. Recycle that owned
+        // storage into the free slot; no consumer or worker retains its view.
+        auto recycled=std::move(output.decoded.samples);
+        output=std::move(slot.result);
+        slot.input={};slot.chain={};slot.result={};slot.encoded.clear();
+        slot.result.decoded.samples=std::move(recycled);
+        slot.phase=Impl::Phase::Free;slot.ticket=slot.epoch=slot.queuedAt=slot.completedAt=0;
+        return true;
+    }
     return false;
 }
 void Pool::cancel()noexcept{
@@ -122,9 +140,9 @@ void Pool::cancel()noexcept{
     for(auto& slot:impl_->slots)if(slot.phase==Impl::Phase::Queued||slot.phase==Impl::Phase::Done)slot={};
 }
 void Pool::stopCold()noexcept{impl_->stop();}
-Statistics Pool::statistics()const noexcept{
-    std::lock_guard<std::mutex> lock(impl_->gate);Statistics result;
-    for(const auto& value:impl_->measurements){result.contextsOpened+=value.contextsOpened;result.attempts+=value.attempts;result.decoded+=value.decoded;result.totalMicros+=value.totalMicros;result.maxMicros=std::max(result.maxMicros,value.maxMicros);result.temporalDecoded+=value.temporalDecoded;result.missingReferences+=value.missingReferences;}
+Pool::PipelineStatistics Pool::statistics()const noexcept{
+    std::lock_guard<std::mutex> lock(impl_->gate);auto result=impl_->timing;
+    for(const auto& value:impl_->measurements){result.contextsOpened+=value.contextsOpened;result.attempts+=value.attempts;result.decoded+=value.decoded;result.totalMicros+=value.totalMicros;result.maxMicros=std::max(result.maxMicros,value.maxMicros);result.temporalDecoded+=value.temporalDecoded;result.missingReferences+=value.missingReferences;result.sampleBufferGrows+=value.sampleBufferGrows;result.sampleBufferReuses+=value.sampleBufferReuses;}
     return result;
 }
 } // namespace stream_bridge_mask_hevc

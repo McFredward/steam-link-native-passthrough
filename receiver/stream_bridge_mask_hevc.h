@@ -25,6 +25,7 @@ enum class Status {Ok,Unavailable,InvalidIdentity,InvalidEnvelope,DecoderRefused
 const char* statusName(Status)noexcept;
 struct Statistics {
     std::uint64_t contextsOpened=0,attempts=0,decoded=0,totalMicros=0,maxMicros=0,temporalDecoded=0,missingReferences=0;
+    std::uint64_t sampleBufferGrows=0,sampleBufferReuses=0;
 };
 // Serialized cold-worker owner only. No file/device I/O, library loading or
 // decoding belongs in a renderer callback. Reuse one bounded decoder and its

@@ -1,5 +1,6 @@
 #include "bridge/stream_bridge_log.h"
 #include "stream_bridge_process.h"
+#include "stream_bridge_report_gate.h"
 #include "../receiver/stream_bridge_native_image_runtime.h"
 #include "stream_bridge_artifacts.h"
 #include "pixel_snapshot_io.h"
@@ -33,6 +34,9 @@ struct Process {
     sb::AuthSession verifier;sb::VideoStreamContext verifiedSource{};
     stream_bridge_mask_hevc::Decoder maskHevc; // Video process readiness only.
     stream_bridge_mask_hevc::Pool hevcPool;
+    // take() recycles this previously consumed buffer into the fixed worker
+    // pool. No view escapes the synchronous coverage/upload callbacks.
+    stream_bridge_mask_hevc::Pool::Result hevcResult;
     struct PendingHevc {
         enum class Phase {Empty,Waiting,Submitted};Phase phase=Phase::Empty;
         native::SourceIdentity source{};std::uint64_t nativeToken=0,submittedContent=0;sb::CertifiedAccessUnit certificate;
@@ -53,10 +57,13 @@ struct Process {
     std::uint32_t channelNotices=0; // Written only by the local channel worker.
     std::array<std::atomic<std::uint64_t>,static_cast<unsigned>(Flow::Count)> flow{};
     std::atomic<std::uint64_t> handoffMaxMicros{0};
-    std::uint64_t flowMilestones=0;unsigned flowLevel=0,flowLines=0; // Local worker only.
+    std::atomic<std::uint64_t> handoffSamples{0},handoffMicros{0};
+    std::uint64_t publicationSamples=0,publicationMicros=0,maxPublicationMicros=0; // Local worker only.
+    ReportGate flowReports;
 };
 void count(Process& p,Flow flow){p.flow[static_cast<unsigned>(flow)].fetch_add(1,std::memory_order_relaxed);}
 void recordHandoffDuration(Process& p,std::uint64_t micros) noexcept{
+    p.handoffMicros.fetch_add(micros,std::memory_order_relaxed);p.handoffSamples.fetch_add(1,std::memory_order_relaxed);
     auto maximum=p.handoffMaxMicros.load(std::memory_order_relaxed);
     while(micros>maximum&&!p.handoffMaxMicros.compare_exchange_weak(maximum,micros,std::memory_order_relaxed)){}
     if(micros>11000)count(p,Flow::HandoffOverFrame);
@@ -69,13 +76,11 @@ void requestCamera(Process& p,bool wanted,Flow reason){
 }
 void reportFlowCold(Process& p){
     if(!sb::logging::debug())return;
-    if(p.flowLines>=48)return;
     std::array<std::uint64_t,static_cast<unsigned>(Flow::Count)> values{};std::uint64_t milestones=0,progress=0;
-    for(unsigned n=0;n<values.size();++n){values[n]=p.flow[n].load(std::memory_order_relaxed);if(values[n])milestones|=std::uint64_t(1)<<n;progress=std::max(progress,values[n]);}
+    for(unsigned n=0;n<values.size();++n){values[n]=p.flow[n].load(std::memory_order_relaxed);if(values[n])milestones|=std::uint64_t(1)<<n;progress+=values[n];}
     if(!milestones)return;
-    unsigned level=0;for(auto value=progress;value>1;value>>=1)++level;
-    if(!(milestones&~p.flowMilestones)&&level<=p.flowLevel)return;
-    p.flowMilestones|=milestones;p.flowLevel=std::max(level,p.flowLevel);++p.flowLines;
+    const auto now=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    if(!p.flowReports.due(std::uint64_t(now),progress,milestones))return;
     const auto get=[&](Flow f){return static_cast<unsigned long long>(values[static_cast<unsigned>(f)]);};
     std::fprintf(stderr,"[Steam Link Native Passthrough] local flow %s: certificate callbacks/queued/queue-refused=%llu/%llu/%llu; decoded callbacks/queued/queue-refused=%llu/%llu/%llu; source miss image/lease/current/binding=%llu/%llu/%llu/%llu; received certificate/authenticated/auth-refused=%llu/%llu/%llu; received decoded/retained=%llu/%llu; receive miss certificate/lease/kernel=%llu/%llu/%llu\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::CertifiedCallback),get(Flow::CertifiedQueued),get(Flow::CertifiedQueueRefused),get(Flow::DecodedCallback),get(Flow::DecodedQueued),get(Flow::DecodedQueueRefused),get(Flow::ImageMiss),get(Flow::LeaseMiss),get(Flow::NativeStale),get(Flow::BindingMiss),get(Flow::CertifiedReceived),get(Flow::Authenticated),get(Flow::AuthenticationRefused),get(Flow::DecodedReceived),get(Flow::PicturesRetained),get(Flow::CertificateMiss),get(Flow::ReceivedLeaseMiss),get(Flow::KernelMiss));
@@ -83,6 +88,9 @@ void reportFlowCold(Process& p){
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::ReadyQueued),get(Flow::ReadyReceived),get(Flow::HandoffWait),get(Flow::HandoffReady),get(Flow::HandoffTimeout),get(Flow::HandoffUnavailable));
     std::fprintf(stderr,"[Steam Link Native Passthrough] paired handoff latency %s: max-us=%llu; over-11ms/22ms/50ms=%llu/%llu/%llu; decoder callback only, not end-to-end latency\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",static_cast<unsigned long long>(p.handoffMaxMicros.load(std::memory_order_relaxed)),get(Flow::HandoffOverFrame),get(Flow::HandoffOverTwoFrames),get(Flow::HandoffOver50ms));
+    const auto handoffs=p.handoffSamples.load(std::memory_order_relaxed),handoffTime=p.handoffMicros.load(std::memory_order_relaxed);
+    std::fprintf(stderr,"[Steam Link Native Passthrough] handoff duration %s: samples=%llu, total-us=%llu, approximate-mean-us=%llu; lifetime CPU callback statistics\n",
+        p.kind==ProcessKind::Vrlink?"video":"compositor",static_cast<unsigned long long>(handoffs),static_cast<unsigned long long>(handoffTime),static_cast<unsigned long long>(handoffs?handoffTime/handoffs:0));
     std::fprintf(stderr,"[Steam Link Native Passthrough] HEVC mask decode %s: decoded/refused=%llu/%llu\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::HevcDecoded),get(Flow::HevcRefused));
     if(p.kind==ProcessKind::Compositor){
@@ -91,6 +99,10 @@ void reportFlowCold(Process& p){
         p.kind==ProcessKind::Vrlink?"video":"compositor",stream_bridge_mask_hevc::Pool::Workers,stream_bridge_mask_hevc::Pool::Capacity,
         get(Flow::HevcSubmitted),get(Flow::HevcBackpressure),get(Flow::HevcStale),static_cast<unsigned long long>(hevc.contextsOpened),static_cast<unsigned long long>(hevc.attempts),
         static_cast<unsigned long long>(hevc.attempts?hevc.totalMicros/hevc.attempts:0),static_cast<unsigned long long>(hevc.maxMicros),static_cast<unsigned long long>(hevc.temporalDecoded),static_cast<unsigned long long>(hevc.missingReferences));
+    std::fprintf(stderr,"[Steam Link Native Passthrough] HEVC mask stages compositor: started/collected=%llu/%llu; queue total/max-us=%llu/%llu; completed-to-collect total/max-us=%llu/%llu; publication samples/total/max-us=%llu/%llu/%llu; R8-buffer grows/reuses=%llu/%llu; separate cumulative stages, not additive end-to-end timing\n",
+        static_cast<unsigned long long>(hevc.started),static_cast<unsigned long long>(hevc.collected),static_cast<unsigned long long>(hevc.queueMicros),static_cast<unsigned long long>(hevc.maxQueueMicros),
+        static_cast<unsigned long long>(hevc.collectMicros),static_cast<unsigned long long>(hevc.maxCollectMicros),static_cast<unsigned long long>(p.publicationSamples),
+        static_cast<unsigned long long>(p.publicationMicros),static_cast<unsigned long long>(p.maxPublicationMicros),static_cast<unsigned long long>(hevc.sampleBufferGrows),static_cast<unsigned long long>(hevc.sampleBufferReuses));
     }
     std::fprintf(stderr,"[Steam Link Native Passthrough] camera demand %s: active/none=%llu/%llu; revoked source/channel=%llu/%llu; retired pool epoch=%llu; opaque deferred=%llu\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::CameraActive),get(Flow::CameraNone),get(Flow::CameraSource),get(Flow::CameraChannel),get(Flow::CameraLease),get(Flow::CameraDeferred));
@@ -232,7 +244,7 @@ void submitHevc(Process& p){
     }
 }
 void collectHevc(Process& p){
-    stream_bridge_mask_hevc::Pool::Result result;
+    auto& result=p.hevcResult;
     for(unsigned n=0;n<stream_bridge_mask_hevc::Pool::Capacity&&p.hevcPool.take(result);++n){
         const auto index=result.identity.descriptor.sourceFrame%p.pendingHevc.size();auto& pending=p.pendingHevc[index];const auto& mask=p.masks[index];
         if(pending.phase!=Process::PendingHevc::Phase::Submitted||!sameSource(p.verifiedSource,result.identity.source)
@@ -254,8 +266,11 @@ void collectHevc(Process& p){
         // Authentication and decoder completion alone never grant an image.
         // Consumers still require this certificate's exact current native lease
         // and GPU publication before the existing Ready acknowledgement.
+        const auto publishing=std::chrono::steady_clock::now();
         for(const auto& consumer:p.consumers)if(consumer.owner&&consumer.decodedCoverage&&(!consumer.admitted||consumer.admitted(consumer.owner)))
             consumer.decodedCoverage(consumer.owner,certificate,{decoded.samples.data(),decoded.samples.size()},decoded.range);
+        const auto elapsed=std::uint64_t(std::max<std::int64_t>(0,std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-publishing).count()));
+        ++p.publicationSamples;p.publicationMicros+=elapsed;p.maxPublicationMicros=std::max(p.maxPublicationMicros,elapsed);
         pending={};count(p,Flow::HevcDecoded);
     }
 }
