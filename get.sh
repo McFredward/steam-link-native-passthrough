@@ -51,10 +51,10 @@ import urllib.request
 import zipfile
 
 REPO = 'McFredward/steam-link-native-passthrough'
-REPOSITORY_COMMIT = '9424944d9f5b90c100b4041c46458fa0c3fe8f31'
+REPOSITORY_COMMIT = '63d490b05e0c1e18ae32910b8cc96b0f0a504a81'
 REPOSITORY_ASSET = 'distribution/steam-link-native-passthrough.zip'
-REPOSITORY_BYTES = 20194753
-REPOSITORY_SHA256 = '2dfed3c189cb5c3f57dd593934069a0c925e3bcae7b099082b0c8d5f8c76a4fe'
+REPOSITORY_BYTES = 20194860
+REPOSITORY_SHA256 = '8f7c8309450e5f9d34161d31fbda9e4acc65b060d4b053134cfaba2e6d76a325'
 INSPECTION_TAG = 'setup-inspection-v2'
 INSPECTION_ASSET = 'steam-link-native-passthrough-inspection.zip'
 MANAGER_TAG = 'setup-manager-v1'
