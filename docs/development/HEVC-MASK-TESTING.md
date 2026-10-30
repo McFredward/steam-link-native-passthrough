@@ -13,14 +13,14 @@ proportional native VBV calculation, retaining original automatic delay 0.
 The user nevertheless reported **no visible difference**. The buffer correction
 is active; it has not met the stable, fluid, sharp dense-rain acceptance target.
 
-Across 32 active five-second bins, 1, 920/13, 864 native RGB pictures (13.85%) report
-QP>=40, with maximum 50. The preceding run had 1, 233/11, 691 (10.55%); weighted
+Across 32 active five-second bins, 1,920/13,864 native RGB pictures (13.85%) report
+QP>=40, with maximum 50. The preceding run had 1,233/11,691 (10.55%); weighted
 mean QP is essentially unchanged (30.05 versus 29.96). These runs have different
 durations/source pictures, so this is not an objective regression score.
-All 13, 916 masks (13, 913 HEVC, 3 lossless fallbacks) were decoded and uploaded on
-Frame with no rejection delta. PC drops are 308/14, 877 (~2.07%), versus~1.86%
+All 13,916 masks (13,913 HEVC, 3 lossless fallbacks) were decoded and uploaded on
+Frame with no rejection delta. PC drops are 308/14,877 (~2.07%), versus ~1.86%
 previously. Application CPU/GPU averages are 5.821/4.560 ms at 90 Hz; native coded
-extent remains 1152x 4608. Mask lifetime mean/max QP is 43.13/51. Complete delivery
+extent remains 1152x4608. Mask lifetime mean/max QP is 43.13/51. Complete delivery
 does not establish fine alpha fidelity or unchanged end-to-end latency.
 
 The sender's selected native total targets span 6.27–295.02 Mbps *before* our
@@ -28,7 +28,7 @@ metadata deduction; forwarded RGB still briefly reaches 1 Mbps. Of 43 selected
 high-QP events, 38 already have native targets below 20 Mbps. These are biased
 worst/latest samples, not duration or complete frame-population statistics.
 Added metadata averages roughly 2.3–5.9 Mbps over most active bins, with three
-observed 175–263 kB spikes. One 245, 326-byte event at local opaque PTS 10293 is
+observed 175–263 kB spikes. One 245,326-byte event at local opaque PTS 10293 is
 followed by a captured 19.66 Mbps reserve and 1 Mbps RGB/QP 49 at PTS 10294. This
 supports transient reservation pressure, but does not identify the reason for
 Steam Link's own target reductions. FEC timestamps are not native encoder IDs.
@@ -40,7 +40,7 @@ The user confirmed **automatic Steam Link bandwidth**. The next controlled
 comparison uses the already installed 0.3.13, manual **100 Mbps** in SteamVR's
 Steam Link bandwidth settings and the same dense-rain sequence for 2–3 minutes.
 Keep refresh rate, resolution, mask settings and all other controls unchanged;
-return to Auto after the comparison.100 Mbps is an experimental target, not a
+return to Auto after the comparison. 100 Mbps is an experimental target, not a
 measured link-capacity claim or guaranteed physical throughput/quality floor.
 Check whether the captured native requested target and actual RGB QP/bytes
 stabilize, while monitoring drops, retries, late metadata and mask fidelity.
