@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20192238,
-    "sha256": "bce3dc602e5cdd2c5d5ca2321c92a70a73f332c7f2225046fee26f95e06116ef"
+    "bytes": 20194753,
+    "sha256": "2dfed3c189cb5c3f57dd593934069a0c925e3bcae7b099082b0c8d5f8c76a4fe"
   },
   "artifacts": {
     "frame_layer": {
@@ -21,13 +21,13 @@
       "sha256": "efc7a5c2104565a5b25802c503db99415c2e75f2c4797dbe689f834d1b86a076"
     },
     "pc_provider": {
-      "bytes": 2086912,
-      "sha256": "48228105d89867d904e7e3ce70316fefd790c1185e74c06007ae963ad428e3b0"
+      "bytes": 2094080,
+      "sha256": "3413234d909fe3250a085f9b2ee8e4ead9211cf803c7c202ac9a53e6c712e66b"
     }
   },
   "component_versions": {
     "frame": "0.3.3",
-    "pc": "0.3.9"
+    "pc": "0.3.10"
   },
   "device_actions": false,
   "hardware_verified": false,
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11054,
-    "sha256": "71332090c78ed566e6912d523775486d61693804312d27a61829ac34a5dee873"
+    "sha256": "11a741fd045792b4b40f14747287dbf44e50b6edb2cdd27a517623726fd6c4f5"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -46,12 +46,12 @@
       "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
     },
     "PATCH_VERSIONS.json": {
-      "bytes": 78,
-      "sha256": "348821a79bae066d7b7bd54567cba214a463fef8d4cb88b9421b2019543e4e17"
+      "bytes": 79,
+      "sha256": "97a577d29014a61d9dcf63516c4c0ea0d2a31f80a8388cc5db63785674038965"
     },
     "VERSION": {
       "bytes": 7,
-      "sha256": "19754aefd27e92de8c47211fbc5bb30d95e85a61128529c448e75c47e7c0db8d"
+      "sha256": "986489ec745f6b45b3e46d0c11e947631c79c6703097e1a5d25624b11a8bec60"
     },
     "packaging/mask-ffmpeg.json": {
       "bytes": 452,
@@ -222,7 +222,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "16f29ee3a914a62485848511ca95b7ece2cb2be1",
+  "source_revision": "efab0c0827ee11a296c7fc186face86f1f195c1d",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -240,9 +240,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8090,
-        "sha256": "2cfd70726bd597e1bcb6849cd513026fb79e5eb40237d8f1c2f46a6494c6fd5d"
+        "sha256": "60ada01ad5d2a95f849495531297bb1c327f1a2ecf5724f648eef25584edc049"
       }
     }
   ],
-  "version": "0.3.11"
+  "version": "0.3.12"
 }
