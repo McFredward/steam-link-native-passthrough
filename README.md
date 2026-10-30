@@ -91,12 +91,6 @@ until setup finishes.
 Start your Steam Link stream and enable native Steam Link passthrough in the game.
 Run the same command again to **update, uninstall or restore the previous setup**.
 
-**Release 0.3.15** uses temporal HEVC masks by default with a 20 Mbit/s ceiling
-and measured shared bitrate control. The installer delivers PC **0.3.11** and
-Frame **0.3.5**. No extra flag is needed. `main` uses normal logging; `dev` keeps
-detailed diagnostics. See the [codec guide](docs/development/HEVC-MASK-TESTING.md)
-for bitrate overrides, lossless selection and measured test limits.
-
 ## Developers
 
 To integrate another game, start with the [integration guide](docs/development/GAME-INTEGRATION.md)

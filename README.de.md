@@ -91,13 +91,6 @@ und lass sie bis zum Abschluss eingeschaltet.
 Starte deinen Steam-Link-Stream und aktiviere natives Steam-Link-Passthrough im Spiel.
 Dieselbe Zeile bietet später **Update, Deinstallation oder Rücknahme** an.
 
-**Release 0.3.15** nutzt temporale HEVC-Masken standardmäßig mit 20 Mbit/s
-Obergrenze und einer Regelung nach tatsächlichem Datenverbrauch. Der Installer
-liefert PC **0.3.11** und Frame **0.3.5**. Eine zusätzliche Flag ist nicht nötig.
-`main` verwendet normale Logs, `dev` behält ausführliche Diagnosen.
-Die [Codec-Anleitung](docs/development/HEVC-MASK-TESTING.md) beschreibt
-Bitrateneinstellungen, die verlustfreie Variante und die Grenzen der Messungen.
-
 ## Für Entwickler
 
 Für die Integration weiterer Spiele gibt es einen [Leitfaden](docs/development/GAME-INTEGRATION.md)
