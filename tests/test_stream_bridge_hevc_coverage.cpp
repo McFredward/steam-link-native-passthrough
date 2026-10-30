@@ -19,7 +19,7 @@ struct Writer{
 };
 struct Options{unsigned profile=1,chroma=1,depth=0,width=64,height=64,layers=0,dpb=0,reorder=0,rps=0,slice=2,ppsId=0,cbDiff=3,negative=0,positive=0,delta=0;
     std::vector<unsigned> addresses{0};
-    bool crop=false,full=true,first=true,tiles=false,used=false,predicted=false,dependent=false,extraFirst=false,mixedType=false,mixedOutput=false,mixedPps=false;};
+    bool temporal=false,crop=false,full=true,first=true,tiles=false,used=false,predicted=false,dependent=false,extraFirst=false,mixedType=false,mixedOutput=false,mixedPps=false;};
 void ptl(Writer& w,const Options& o){w.u(0,2);w.bit(false);w.u(o.profile,5);w.u(0,32);w.u(0,32);w.u(0,16);w.u(30,8);}
 void ordering(Writer&w,const Options&o){w.bit(false);w.ue(o.dpb);w.ue(o.reorder);w.ue(0);}
 void nal(std::vector<std::uint8_t>& au,unsigned type,const Writer&w){
@@ -42,13 +42,28 @@ std::vector<std::uint8_t> syntax(const Options& o={}){
     const auto ctb=1u<<(o.cbDiff+3);const auto ctbs=((o.width+ctb-1)/ctb)*((o.height+ctb-1)/ctb);
     unsigned bits=0;for(auto last=ctbs-1;last;last>>=1)++bits;
     for(unsigned n=0;n<o.addresses.size();++n){
-        const bool first=n?o.extraFirst:o.first;Writer i;i.bit(first);i.bit(!(n&&o.mixedOutput));i.ue(n&&o.mixedPps?1:0);
+        const bool first=n?o.extraFirst:o.first;Writer i;i.bit(first);if(!o.temporal)i.bit(!(n&&o.mixedOutput));i.ue(n&&o.mixedPps?1:0);
         if(!first)i.u(o.addresses[n],bits);
-        i.ue(o.slice);i.ue(0);i.end();i.u(128,8);nal(result,n&&o.mixedType?19:20,i);
+        i.ue(o.slice);if(o.temporal){i.u(1,4);i.bit(true);i.bit(false);i.ue(0);}
+        i.ue(0);i.end();i.u(128,8);nal(result,o.temporal?1:(n&&o.mixedType?19:20),i);
     }
     return result;
 }
 void rejected(const std::vector<std::uint8_t>& coded,const char* why){std::vector<std::uint8_t> output{91};check(!sb::wrapHevcCoverage(bytes(coded),64,64,output)&&output==std::vector<std::uint8_t>{91},why);}
+void temporalParser(){
+    Options options;options.temporal=true;options.slice=1;options.dpb=1;options.rps=1;options.negative=1;options.used=true;
+    const auto coded=syntax(options);std::vector<std::uint8_t> output;
+    check(sb::wrapHevcTemporalCoverage(bytes(coded),64,64,17,30,10,false,10,output),"portable syntax-only P fixture admits one bounded previous L0 reference");
+    sb::HevcCoverageView view;
+    check(sb::inspectHevcTemporalCoverage(bytes(output),64,64,view)&&view.temporal&&!view.keyframe&&view.epoch==17&&view.sequence==30&&view.dependency==10&&view.anchor==10&&view.poc==1&&view.pocBits==4,"P parsing separates private sequence gaps, POC and native frame association");
+    for(unsigned offset=56;offset<64;++offset){auto invalid=output;invalid[offset]=1;check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"portable temporal reserved envelope bytes remain closed");}
+    for(unsigned n=0;n<10;++n){auto invalid=options;switch(n){case 0:invalid.slice=0;break;case 1:invalid.slice=2;break;case 2:invalid.dpb=4;break;case 3:invalid.reorder=1;break;case 4:invalid.used=false;break;case 5:invalid.delta=1;break;case 6:invalid.positive=1;break;case 7:invalid.negative=0;break;case 8:invalid.rps=2;invalid.predicted=true;break;case 9:invalid.full=false;break;}
+        const auto body=syntax(invalid);std::vector<std::uint8_t> held{91};
+        check(!sb::wrapHevcTemporalCoverage(bytes(body),64,64,17,30,10,false,10,held)&&held==std::vector<std::uint8_t>{91},"P syntax refuses B/I, oversized DPB, reorder, missing/older/future references, prediction and limited Y transactionally");}
+    for(unsigned n=0;n<4;++n){std::vector<std::uint8_t> held{91};check(!sb::wrapHevcTemporalCoverage(bytes(coded),64,64,n==0?0:17,30,n==1?0:10,false,n==2?31:(n==3?11:10),held)&&held==std::vector<std::uint8_t>{91},"invalid temporal identity and dependency order never publish an envelope");}
+    std::vector<std::uint8_t> held{91};check(!sb::wrapHevcCoverage(bytes(coded),64,64,held),"new P admission does not relax Codec6 independence");
+}
+
 void parser(){
     const std::vector<std::uint8_t> real(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());
     std::vector<std::uint8_t> wrapped;check(sb::wrapHevcCoverage(bytes(real),64,64,wrapped),"real CPU-libx265 Main8bit420 IDR parses");
@@ -119,4 +134,4 @@ void authentication(){
     check(sb::appendCertifiedFrame(bytes(rgb),{51,17,66,64},sb::CoverageEncoding::HevcIntra,bytes(mask),producer,complete)==sb::FrameStatus::InvalidArgument,"outer signed descriptor cannot relabel a different coded mask extent");
 }
 }
-int main(){try{parser();authentication();std::printf("%u bounded HEVC envelope/authentication checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}
+int main(){try{parser();temporalParser();authentication();std::printf("%u bounded HEVC envelope/authentication checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

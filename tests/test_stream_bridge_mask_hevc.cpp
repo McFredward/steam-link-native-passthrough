@@ -76,7 +76,7 @@ void temporal(const hevc::Libraries& libs,const fs::path& root){
     hevc::Decoder decoder;check(decoder.prepareCold(libs),"temporal decoder prepared from owned public ABI");
     std::array<std::vector<std::uint8_t>,16> payloads;
     for(unsigned n=0;n<16;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto coded=read(root/name);
-        check(sb::wrapHevcTemporalCoverage(bytes(coded),64,64,71,n+1,n%8?n:0,n%8==0,(n/8)*8+1,payloads[n]),"real IPPP8 Main8 AU passes bounded temporal grammar");
+        check(sb::wrapHevcTemporalCoverage(bytes(coded),64,64,71,10*(n+1),n%8?10*n:0,n%8==0,10*((n/8)*8+1),payloads[n]),"real IPPP8 Main8 AU passes bounded temporal grammar");
         std::vector<std::uint8_t> old;check(!sb::wrapHevcCoverage(bytes(coded),64,64,old)||n%8==0,"dependent P remains outside legacy Codec6");}
     for(unsigned offset=56;offset<64;++offset){auto invalid=payloads[1];invalid[offset]=1;sb::HevcCoverageView view;
         check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"temporal reserved envelope bytes remain closed");}
@@ -86,7 +86,7 @@ void temporal(const hevc::Libraries& libs,const fs::path& root){
         check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"zero temporal epoch cannot alias a prior session");
         invalid=payloads[1];std::fill_n(invalid.begin()+40,8,0);
         check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"P cannot omit its predecessor");
-        invalid=payloads[1];invalid[48]=3;
+        invalid=payloads[1];invalid[48]=255;
         check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"future group anchor cannot describe this P picture");}
     hevc::DecodedMask output;
     const auto frame=[&](unsigned n){auto in=input(bytes(payloads[n]));in.descriptor.sourceFrame=100+n;return in;};
