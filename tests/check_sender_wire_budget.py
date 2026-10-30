@@ -26,6 +26,10 @@ def main():
             'v2 reserves the actual 70000 added bytes at 120Hz inside the original video budget'),
     }
     controls.update({
+        'forced-single-frame-vbr': (
+            'requestedConfig.rcParams.vbvInitialDelay,preserveVbvSpan);',
+            'requestedConfig.rcParams.vbvInitialDelay,false);',
+            'controlled VBR retains proportional native VBV while CBR keeps the one-picture bound'),
         'unbounded-video-buffer': (
             'budgetConfig.rcParams.vbvBufferSize=buffer.bits;budgetConfig.rcParams.vbvInitialDelay=buffer.delay;',
             '(void)buffer;',

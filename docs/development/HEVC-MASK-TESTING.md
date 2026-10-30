@@ -1,9 +1,43 @@
 # HEVC mask test candidate
 
-Installer **0.3.12 / PC 0.3.10 / Frame 0.3.3** prefers negotiated temporal HEVC
+Installer **0.3.13 / PC 0.3.11 / Frame 0.3.3** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
 preferences still override the default. This candidate updates only the PC sender.
 Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
+
+## Controlled VBR buffer correction
+
+PC0.3.11 preserves the caller's proportional VBV span for an authenticated v2
+producer with predominantly HEVC metadata and native VBR (including VBR_HQ).
+The preceding0.3.12 logs finally expose the colour-image pressure: over27
+active five-second bins,1,233 of11,691 native RGB pictures reported QP>=40;
+585 of616 pictures with forwarded average<=10Mbps also reported QP>=40. Native
+QP reached50. All11,872 masks were decoded/uploaded on Frame. This is observed
+compression pressure, not a same-picture objective visual-quality score.
+
+The unmodified old production VBV policy exactly reproduces all129 eligible
+observed buffer/delay tuples. It additionally clips119 buffers below their
+proportional native share. For one actual QP50 picture, caller average9,667,172
+bit/s and146,290-bit VBV became RGB5,417,265bit/s and50,628bits. Its proportional
+VBV would be81,977bits. These are captured configuration/replay values, not a
+measurement of the new GPU output, latency or visual gain.
+
+The new controlled-VBR policy retains `max(1, floor(nativeVBV * rgbRate / totalRate))`
+bits, bounded by the explicit caller buffer. Its declared VBV duration does not
+exceed the original duration apart from one-bit rounding. An original zero
+initial delay remains the SDK's automatic value instead of forcing a new
+explicit prebuffer; explicit delay is proportionally scaled and bounded. CBR,
+lossless/non-controlled traffic and unknown native VBV retain the previous
+conservative one-picture policy. No bitrate ceiling, metadata reservation, mask
+resolution/codec/quality, GOP, frame proof or Frame artifact changes. This fixes
+an extra colour-buffer restriction; why the native target itself collapses and
+how much alpha compression contributes remain separate unresolved questions.
+
+RGB event flag32 identifies a successfully applied preserved-VBV configuration
+captured with that exact input. The next dense-rain test must compare actual RGB
+QP excursions and visible sharpness, while ensuring no new packet retry/latency
+or receiver backlog. Keeping the caller's configured VBV span is a configuration
+bound, not a proof of unchanged end-to-end VR latency.
 
 ## RGB output measurements
 
@@ -38,7 +72,7 @@ contains its own generation/submission, opaque native frameIdx/input PTS, output
 picture/hardware/QP, RGB/added/complete sizes, and input-captured QoS revision,
 FPS, RC mode, native reset/forced-IDR flags, requested/forwarded average and
 maximum rates, VBV/delay and reserved metadata. Flags1/2/4/8/16 mean exact input,
-known QoS, budget applied, overlap and session authorization. Session flags do
+known QoS, budget applied, overlap and session authorization. Flag32 marks preserved controlled-VBR buffer span. Session flags do
 not prove a current source or rendered image. Unmatched outputs cannot borrow a
 latest configuration. Overlapping configurations are not hardware-effective RC
 proof. RC modes use the public NVENC11.1 enum; maxBitRate has different meaning

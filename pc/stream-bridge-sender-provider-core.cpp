@@ -211,8 +211,11 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                     const auto requested=requestedConfig.rcParams.averageBitRate;
                     budgetConfig.rcParams.averageBitRate=WireBudget::videoRate(requested,metadata);
                     if(requestedConfig.rcParams.maxBitRate)budgetConfig.rcParams.maxBitRate=std::max(budgetConfig.rcParams.averageBitRate,WireBudget::videoRate(requestedConfig.rcParams.maxBitRate,metadata));
+                    const bool preserveVbvSpan=requestedConfig.rcParams.vbvBufferSize&&s->wireBudget.controlled(authority)
+                        &&(requestedConfig.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR||requestedConfig.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR_HQ);
                     const auto buffer=WireBudget::boundVbv(requested,budgetConfig.rcParams.averageBitRate,contract.frameRateNum,contract.frameRateDen,
-                        requestedConfig.rcParams.vbvBufferSize,requestedConfig.rcParams.vbvInitialDelay);
+                        requestedConfig.rcParams.vbvBufferSize,requestedConfig.rcParams.vbvInitialDelay,preserveVbvSpan);
+                    observation.preservedVbvSpan=preserveVbvSpan;
                     budgetConfig.rcParams.vbvBufferSize=buffer.bits;budgetConfig.rcParams.vbvInitialDelay=buffer.delay;
                     budgeted.reInitEncodeParams.encodeConfig=&budgetConfig;applyBudget=applyingBudget=true;
                     count(self.reconfigureStats_.budgeted);self.reconfigureStats_.requestedVideoRate=requested;
@@ -228,10 +231,12 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                     budgeted=*params;budgetConfig=requestedConfig;
                     budgeted.reInitEncodeParams.encodeConfig=&budgetConfig;applyBudget=true;
                 }
+                const bool preservedVbvSpan=observation.preservedVbvSpan;
                 observation=qosObservation(contract,haveConfig?&requestedConfig:nullptr,
                     haveConfig?(applyBudget?&budgetConfig:&requestedConfig):nullptr,applyingBudget,
                     applyingBudget?metadata:0,applyingBudget?s->wireBudget.planningMean(authority,contract.frameRateNum,contract.frameRateDen):0);
                 observation.resetEncoder=params->resetEncoder;observation.forceIDR=params->forceIDR;
+                observation.preservedVbvSpan=preservedVbvSpan;
 
             }else{generation=self.revoke(*s,hevc);count(self.reconfigureStats_.revoked);}
         }

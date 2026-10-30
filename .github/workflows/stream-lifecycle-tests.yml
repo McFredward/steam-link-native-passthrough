@@ -81,3 +81,5 @@ jobs:
         run: python3 tests/check_sender_wire_budget.py --sdk "$PWD/build/nvenc-sdk" --bridge-library "$PWD/build/lifecycle/libsfnp_stream_bridge.a" --output "$PWD/build/wire-budget-control"
       - name: Exercise actual TCP admission, reconfiguration and frame receipts
         run: ctest --test-dir build/lifecycle --output-on-failure --parallel 4 -R '^(stream_bridge_(control|receiver_lifetime|native_runtime|native_decode|local|sender_coverage_gates|sender_provider(_input(_legacy)?|_runtime)?|mask_capture|mask_hevc_encoder)|mask_capture_readers)$'
+      - name: Preserve native CBR buffer policy alongside controlled VBR
+        run: build/lifecycle/test_stream_bridge_sender_provider_input --cbr-rate

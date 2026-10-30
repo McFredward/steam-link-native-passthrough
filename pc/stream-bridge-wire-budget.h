@@ -42,6 +42,9 @@ public:
     std::uint32_t average(std::uint64_t authority,std::uint32_t fpsNum,std::uint32_t fpsDen)const noexcept {
         return valid(authority,fpsNum,fpsDen)?rate(sum_,fpsNum,fpsDen):0;
     }
+    bool controlled(std::uint64_t authority)const noexcept{
+        return authority&&authority==authority_&&controlledWindow();
+    }
     std::uint32_t planningMean(std::uint64_t authority,std::uint32_t fpsNum,std::uint32_t fpsDen)const noexcept{
         if(!valid(authority,fpsNum,fpsDen))return 0;
         if(!controlledWindow())return average(authority,fpsNum,fpsDen);
@@ -51,13 +54,20 @@ public:
         return static_cast<std::uint32_t>(std::min<std::uint64_t>((bits+divisor-1)/divisor,UINT32_MAX));
     }
     static Vbv boundVbv(std::uint32_t requested,std::uint32_t video,std::uint32_t fpsNum,std::uint32_t fpsDen,
-        std::uint32_t buffer,std::uint32_t delay)noexcept {
+        std::uint32_t buffer,std::uint32_t delay,bool preserveSpan=false)noexcept {
         if(!requested||!video||video>requested||!fpsNum||!fpsDen||fpsNum>1000000||fpsDen>1000000||fpsNum>std::uint64_t(fpsDen)*1000)return {};
         const auto perFrame=std::max<std::uint64_t>(1,std::uint64_t(video)*fpsDen/fpsNum);
         const auto scaled=buffer?std::max<std::uint64_t>(1,std::uint64_t(buffer)*video/requested):perFrame;
-        const auto bits=static_cast<std::uint32_t>(std::min<std::uint64_t>(std::min(perFrame,scaled),UINT32_MAX));
+        // For controlled VBR, share the caller's explicit VBV in proportion to
+        // the remaining RGB rate. A second one-picture clamp removes native
+        // burst headroom and follows instantaneous FPS jitter unnecessarily.
+        // B_rgb / rate_rgb <= B_caller / rate_caller (apart from the one-bit
+        // minimum). Unknown VBV, CBR and lossless keep the old bound.
+        const auto bits=static_cast<std::uint32_t>(std::min<std::uint64_t>(preserveSpan&&buffer?scaled:std::min(perFrame,scaled),UINT32_MAX));
         const auto initial=delay?std::max<std::uint64_t>(1,std::uint64_t(delay)*video/requested):bits;
-        return {bits,static_cast<std::uint32_t>(std::min<std::uint64_t>(initial,bits))};
+        // Zero is the SDK's automatic initial delay, not an instruction to
+        // impose a new explicit prebuffer when preserving the native span.
+        return {bits,preserveSpan&&buffer&&!delay?0u:static_cast<std::uint32_t>(std::min<std::uint64_t>(initial,bits))};
     }
     static std::uint32_t videoRate(std::uint32_t requested,std::uint32_t metadata)noexcept {
         // A proportional 25% quality floor overfills the actual wire budget

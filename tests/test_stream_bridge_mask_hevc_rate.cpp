@@ -92,7 +92,10 @@ void budgets(){
     check(controlled.planningMean(7,90,1)>14000000&&controlled.reserve(7,90,1)<40000000,"fallback bytes are included without pretending every following frame repeats the spike");
     for(unsigned i=0;i<16;++i)controlled.observe(7,1000,21000,true);
     check(controlled.reserve(7,90,1)==18000000&&controlled.peakRate(7,90,1)==180000000,"recent controlled rate recovers while the full old peak remains visible");
+    check(controlled.controlled(7)&&!controlled.controlled(8)&&!controlled.controlled(0),"only the current authority can select controlled buffer policy");
     controlled.observe(8,1000,2000,true);check(!controlled.reserve(7,90,1)&&controlled.reserve(8,90,1)==720000,"authority changes revoke old rate history");
+    for(unsigned i=0;i<16;++i)controlled.observe(8,1000,21000,false);
+    check(!controlled.controlled(8),"a sustained lossless route cannot retain a previous HEVC buffer policy");
 }
 void rgbTelemetry(){
     static_assert(sizeof(RgbOutputTelemetry)<4096,"diagnostics have a fixed small process-lifetime footprint");
@@ -122,6 +125,9 @@ void rgbTelemetry(){
     check(formatRgbOutputEvent(text,sizeof text,r,r.events[0])&&std::strstr(text,"age-us=700")&&std::strstr(text,"avg requested/passed=100000000/6000000"),
         "event age and exact captured budget are reconstructable from the cold log timestamp");
     check(!formatRgbOutputEvent(text,4,r,r.events[0]),"undersized diagnostic buffers report truncation");
+    auto preserved=r.events[0];preserved.sample.qos.preservedVbvSpan=true;
+    check(formatRgbOutputEvent(text,sizeof text,r,preserved)&&std::strstr(text,"flags=0x23"),
+        "cold RGB event reports preserved native VBR span on its captured input only");
     check(!t.take(1100).frames,"cold interval reads cannot repeatedly count the same output");
     s.exactInput=true;s.qp=63;s.observedUs=1200;t.observe(s);
     s.observedUs=1199;t.observe(s);s.observedUs=1250;s.completeBytes=1;t.observe(s);
@@ -136,6 +142,30 @@ void rgbTelemetry(){
     q.requestedVbvBufferSize=q.appliedVbvBufferSize=q.requestedVbvInitialDelay=q.appliedVbvInitialDelay=UINT32_MAX;
     q.reservedMetadataBitRate=q.meanMetadataBitRate=UINT32_MAX;
     check(formatRgbOutputEvent(text,sizeof text,huge,e),"all bounded scalar fields fit a complete1024-byte cold event line");
+}
+void nativeVbrSpan(){
+    const auto current=WireBudget::boundVbv(100000000,32800000,120,1,1000000,800000);
+    const auto native=WireBudget::boundVbv(100000000,32800000,120,1,1000000,800000,true);
+    check(current.bits==273333&&native.bits==328000&&native.delay==262400,"controlled VBR shares the native buffer without a second one-frame cut");
+    const auto observed=WireBudget::boundVbv(9667172,5417265,107,1,146290,0,true);
+    check(observed.bits==81977&&observed.delay==0,"real QP50 trace restores proportional native headroom and automatic delay");
+    for(const auto fps:{60u,90u,107u,132u,180u,240u}){
+        const auto p=WireBudget::boundVbv(100000000,60000000,fps,1,3000000,0,true);
+        check(p.bits==1800000&&!p.delay,"native FPS jitter cannot shrink explicit controlled-VBR buffer span");
+        check(std::uint64_t(p.bits)+40000000/fps<=3000000,"RGB buffer plus one reserved metadata frame fits the original native burst budget");
+    }
+    const auto unknown=WireBudget::boundVbv(100000000,60000000,120,1,0,0,true);
+    check(unknown.bits==500000&&unknown.delay==500000,"unknown native buffer retains the existing conservative one-picture fallback");
+    const auto small=WireBudget::boundVbv(100000000,60000000,120,1,6000,6200,true);
+    check(small.bits==3600&&small.delay==3600,"explicit small native buffers and bounded delay remain authoritative");
+    std::uint64_t seed=9;
+    for(unsigned i=0;i<10000;++i){seed=seed*6364136223846793005ull+1;
+        const auto total=std::max(1u,std::uint32_t(seed>>32)),video=1u+std::uint32_t(seed%total),buffer=1u+std::uint32_t((seed>>16)%UINT32_MAX);
+        const auto p=WireBudget::boundVbv(total,video,90,1,buffer,buffer,true);
+        check(p.bits<=buffer&&p.delay<=p.bits,"proportional sharing cannot enlarge caller buffer or delay");
+        check(std::uint64_t(p.bits)*total<=std::uint64_t(buffer)*video+total,"declared RGB VBV duration is no larger than native duration apart from one-bit rounding");
+    }
+    check(!WireBudget::boundVbv(100,101,90,1,10,0,true).bits,"invalid rate increase remains refused");
 }
 void replay(){
     // Deterministic software plant: every NVENC target overshoots2.2x. This is
@@ -156,4 +186,4 @@ void replay(){
     check(video>300000000,"a recovered link gives its capacity back to colour video");
 }
 }
-int main(){try{controller();jitterFeedback();completedInputBudget();budgets();rgbTelemetry();replay();std::printf("%u mask-rate/shared-budget checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}
+int main(){try{controller();jitterFeedback();completedInputBudget();budgets();rgbTelemetry();nativeVbrSpan();replay();std::printf("%u mask-rate/shared-budget checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

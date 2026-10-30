@@ -1,5 +1,13 @@
 # Patch versions
 
+The next October30 package is installer **0.3.13**, PC **0.3.11**, Frame **0.3.3**.
+For controlled HEVC metadata plus native VBR, keep the proportional caller VBV
+span instead of adding a second one-picture cap. Caller automatic initial delay
+is preserved. The0.3.12 logs reproduced129 forwarded buffer/delay observations,
+with119 buffers additionally restricted. Actual RGB QP reached50. CBR, lossless
+and unknown-buffer policy plus all Frame artifacts are unchanged. A matched
+headset rain test is still required to assess quality and latency.
+
 The next October30 diagnostic package is installer **0.3.12**, PC **0.3.10**,
 Frame **0.3.3**. It adds bounded native RGB output/QP and captured-QoS interval
 measurements for the unresolved rain quality issue. Encoding and control policy

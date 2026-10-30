@@ -82,7 +82,7 @@ void device(void*,std::uint64_t generation,void* native,NV_ENC_DEVICE_TYPE type,
 void capture(const NvencOutputEvidence& e,void*){++captures;captureEvent=++event;captured=e;}
 void retire(const NvencOutputEvidence& e,void*){retirementValid=retirementValid&&e.submission!=0;++retires;}
 bool augment(Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& owned,void*){++augments;observed=e;if(!allowAugment||!e.exactInput)return false;owned.assign(candidate.data,candidate.data+candidate.size);owned.resize(owned.size()+augmentBytes,0xab);return true;}
-void run(){
+void run(bool variableRate=true){
     NvencBoundary bridge({{1}});activeBoundary=&bridge;bridge.setInputObserver({capture,retire,nullptr});bridge.setDeviceObserver({device,nullptr});bridge.setOutputAugmenter({augment,nullptr});
     bridge.enableRgbTelemetry(true);
     const auto telemetryLast=[&](){const auto report=bridge.takeRgbTelemetry();
@@ -94,7 +94,8 @@ void run(){
     verified[0]=10;check(!bridge.bindVerifiedModule(verified),"active public dispatch cannot be rebound to another image");
     void* handle=nullptr;NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS op{};op.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;op.device=reinterpret_cast<void*>(0x9090);op.deviceType=NV_ENC_DEVICE_TYPE_DIRECTX;table.nvEncOpenEncodeSessionEx(&op,&handle);
     check(observedDevice==op.device&&observedDeviceType==op.deviceType&&deviceGeneration==bridge.generation(handle),"actual public Open device and epoch observed without guessed object layout");
-    NV_ENC_CONFIG codecConfig{};codecConfig.version=NV_ENC_CONFIG_VER;codecConfig.rcParams.version=NV_ENC_CONFIG_VER;codecConfig.rcParams.averageBitRate=10000000;codecConfig.rcParams.rateControlMode=NV_ENC_PARAMS_RC_CBR;
+    const auto initialMode=variableRate?NV_ENC_PARAMS_RC_VBR:NV_ENC_PARAMS_RC_CBR;
+    NV_ENC_CONFIG codecConfig{};codecConfig.version=NV_ENC_CONFIG_VER;codecConfig.rcParams.version=NV_ENC_CONFIG_VER;codecConfig.rcParams.averageBitRate=10000000;codecConfig.rcParams.rateControlMode=initialMode;
     NV_ENC_INITIALIZE_PARAMS ip{};ip.encodeConfig=&codecConfig;ip.frameRateNum=90;ip.frameRateDen=1;ip.version=NV_ENC_INITIALIZE_PARAMS_VER;ip.encodeGUID=NV_ENC_CODEC_HEVC_GUID;ip.encodeWidth=1152;ip.encodeHeight=4608;table.nvEncInitializeEncoder(handle,&ip);
     check(!bridge.encoderStates()[0].encoded&&bridge.encoderStates()[0].width==1152&&bridge.encoderStates()[0].height==4608,"Init exposes actual dimensions but not successful encode authority");
     NV_ENC_REGISTER_RESOURCE rr{};rr.version=NV_ENC_REGISTER_RESOURCE_VER;rr.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;rr.bufferUsage=NV_ENC_INPUT_IMAGE;rr.resourceToRegister=resource;rr.width=1152;rr.height=4608;rr.bufferFormat=NV_ENC_BUFFER_FORMAT_NV12;
@@ -117,7 +118,7 @@ void run(){
     check(observed.encoderGeneration==bridge.generation(handle)&&observed.resourceGeneration&&observed.mapGeneration>observed.resourceGeneration&&observed.submission>observed.mapGeneration&&observed.submission==captured.submission,"separate monotonically scoped resource/map/submission identities");release();check(retires==1,"input ledger retired at matching successful unlock");
     auto rgb=telemetryLast();check(rgb.exactInput&&rgb.submission==observed.submission&&rgb.inputTimestamp==pic.inputTimeStamp
         &&rgb.frameIndex==777&&rgb.qp==24&&rgb.hardwareStatus==2&&rgb.pictureType==NV_ENC_PIC_TYPE_IDR
-        &&rgb.rgbBytes==au.size()&&rgb.completeBytes==au.size()&&rgb.qos.rateControlMode==NV_ENC_PARAMS_RC_CBR,
+        &&rgb.rgbBytes==au.size()&&rgb.completeBytes==au.size()&&rgb.qos.rateControlMode==initialMode,
         "telemetry records native colour Lock fields and original bytes even when augmentation is refused");
     allowAugment=true;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(p.bitstreamBufferPtr!=au.data()&&p.bitstreamSizeInBytes==au.size()+1&&bridge.liveLeases()==1,"owned final augmentation borrowed through actual native lease");
     const auto* borrowed=static_cast<const std::uint8_t*>(p.bitstreamBufferPtr);check(std::memcmp(borrowed,au.data(),au.size())==0&&borrowed[au.size()]==0xab,"candidate preserves original bytes, independent final storage");
@@ -336,7 +337,7 @@ void run(){
     rateAuthority=0x223400000049;
     augmentBytes=7000;p=sendFrame();release();table.nvEncReconfigureEncoder(handle,&qos);
     check(receivedRateParams!=&qos&&receivedRate==93280000,"a new source epoch uses only its first current sample rather than the previous metadata peak");
-    // A fixed CBR ceiling does not change as scene coverage grows or shrinks.
+    // A fixed native ceiling does not change as scene coverage grows or shrinks.
     // Exercise the real callback without an automatic target-rate reduction.
     codecConfig.rcParams.maxBitRate=100000000;
     const auto fixedConfig=codecConfig;
@@ -345,15 +346,15 @@ void run(){
         augmentBytes=sample[0];p=sendFrame();release();
         check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_SUCCESS
             &&receivedRate==sample[1]&&receivedMaximum==sample[1],
-            "fixed 100Mbit/s CBR reserves changing coverage and retained peaks without an Auto target change");
+            "fixed 100Mbit/s target reserves changing coverage and retained peaks without an Auto target change");
         const auto fixedRates=bridge.reconfigureStats();
         check(fixedRates.requestedVideoRate==100000000
             &&std::uint64_t(receivedRate)+fixedRates.metadataRate==100000000
             &&std::uint64_t(receivedBuffer)+fixedRates.metadataRate/120<=100000000/120,
-            "fixed CBR total rate and video-plus-metadata burst stay within the original constant budget");
+            "fixed total rate and video-plus-metadata burst stay within the original constant budget");
         check(!std::memcmp(&codecConfig,&fixedConfig,sizeof codecConfig)
             &&bridge.generation(handle)==qosGeneration&&observed.coverageSessionAuthorized,
-            "fixed CBR accounting preserves caller settings, exact current coverage and the live paired source");
+            "fixed accounting preserves caller settings, exact current coverage and the live paired source");
     }
     // Real native Lock -> successful augmenter -> QoS path, including a raw
     // fallback spike. Keep the actual peak visible after the recent model recovers.
@@ -369,6 +370,25 @@ void run(){
         "native diagnostics retain every actual burst while planning recent measured bytes plus25percent headroom");
     check(!std::memcmp(&codecConfig,&fixedConfig,sizeof codecConfig)&&bridge.generation(handle)==qosGeneration,
         "controlled metadata policy preserves exact caller config and native source generation");
+    check(receivedBuffer==(variableRate?760000u:633333u)&&receivedDelay==608000,
+        "controlled VBR retains proportional native VBV while CBR keeps the one-picture bound");
+    p=sendFrame();check(observed.qos.preservedVbvSpan==variableRate
+        &&observed.qos.appliedVbvBufferSize==(variableRate?760000u:633333u)
+        &&observed.qos.requestedVbvBufferSize==1000000,
+        "exact input QoS records whether the controlled VBR native span was preserved");release();
+    rgb=telemetryLast();check(rgb.qos.preservedVbvSpan==variableRate&&rgb.qos.appliedVbvBufferSize==(variableRate?760000u:633333u),
+        "RGB telemetry retains the buffer policy of its exact native input");
+    // Automatic delay must stay automatic; FPS jitter alone must not cut the
+    // explicit controlled-VBR byte budget or revoke current input resources.
+    codecConfig.rcParams.vbvInitialDelay=0;qos.reInitEncodeParams.frameRateNum=180;
+    check(table.nvEncReconfigureEncoder(handle,&qos)==NV_ENC_SUCCESS
+        &&receivedBuffer==(variableRate?640000u:355555u)&&receivedDelay==(variableRate?0u:355555u),
+        "controlled VBR preserves caller automatic delay and buffer span under native FPS jitter");
+    p=sendFrame();check(observed.qos.preservedVbvSpan==variableRate&&observed.qos.frameRateNum==180
+        &&observed.qos.requestedVbvInitialDelay==0&&observed.qos.appliedVbvInitialDelay==(variableRate?0u:355555u)
+        &&observed.encoderGeneration==qosGeneration&&observed.coverageSessionAuthorized,
+        "VBR buffer correction keeps exact frame receipt and native source generation");release();
+    codecConfig.rcParams.vbvInitialDelay=800000;qos.reInitEncodeParams.frameRateNum=120;
     codecConfig.rcParams.maxBitRate=120000000;
     observeRateParams=false;rateAuthority=0;augmentBytes=1;bridge.setOutputAugmenter({augment,nullptr});
     qos.reInitEncodeParams.encodeConfig=nullptr;table.nvEncReconfigureEncoder(handle,&qos);
@@ -379,7 +399,7 @@ void run(){
     ++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"QoS never resurrects a resource unregistered by the native callback");release();
     table.nvEncRegisterResource(handle,&rr);table.nvEncMapInputResource(handle,&mp);
     p=sendFrame();check(observed.exactInput&&observed.coverageSessionAuthorized,"native re-registration gets fresh valid input after QoS");release();
-    const auto qosStats=bridge.reconfigureStats();check(qosStats.preservedSuccessful==23+2*repeatedBudgetCalls&&qosStats.preservedRejected==3,"cold QoS counters distinguish successes from rejected attempts");
+    const auto qosStats=bridge.reconfigureStats();check(qosStats.preservedSuccessful==24+2*repeatedBudgetCalls&&qosStats.preservedRejected==3,"cold QoS counters distinguish successes from rejected attempts");
     check(qosStats.overlappingInputs==1&&qosStats.overlappingOutputs==2,"cold counters identify exact completions across both QoS overlap schedules");
     const auto paddingStart=offsetof(NV_ENC_INITIALIZE_PARAMS,privDataSize)+sizeof qos.reInitEncodeParams.privDataSize;
     const auto paddingEnd=offsetof(NV_ENC_INITIALIZE_PARAMS,privData);
@@ -399,7 +419,7 @@ void run(){
     check(observed.qos.known&&observed.qos.revision>beforeResetObservation&&!observed.qos.budgetApplied
         &&!observed.qos.encodeOverlappedReconfigure&&observed.qos.frameRateNum==90,
         "reset encoder captures a fresh configuration observation without inheriting the old generation budget");
-    check(observed.qos.resetEncoder&&!observed.qos.forceIDR&&observed.qos.rateControlMode==NV_ENC_PARAMS_RC_CBR,
+    check(observed.qos.resetEncoder&&!observed.qos.forceIDR&&observed.qos.rateControlMode==initialMode,
         "fresh native reset flags and RC mode are captured without inheriting the previous input configuration");
     check(bridge.receiveEcho(handle,{encodedEcho.data(),encodedEcho.size()},authority())!=Status::Ok,"old generation echo cannot restore image permission before cold runtime ticks");
     ++localNonce;check(bridge.requestDiscovery(handle,localConfig(),authority()),"fresh nonce negotiation can begin after actual native reconfigure");
@@ -482,4 +502,4 @@ void olderCodecPeer(bool originalHevc=false){
 }
 // The native API table is a process-lifetime singleton. Run legacy negotiation
 // in a separate process instead of relying on optimized stack-address reuse.
-int main(int argc,char** argv){try{if(argc==2&&!std::strcmp(argv[1],"--legacy-codec"))olderCodecPeer();else if(argc==2&&!std::strcmp(argv[1],"--old-hevc-codec"))olderCodecPeer(true);else run();std::printf("sender public input association: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"input association failed after %u: %s\n",checks,e.what());return 1;}}
+int main(int argc,char** argv){try{if(argc==2&&!std::strcmp(argv[1],"--legacy-codec"))olderCodecPeer();else if(argc==2&&!std::strcmp(argv[1],"--old-hevc-codec"))olderCodecPeer(true);else run(!(argc==2&&!std::strcmp(argv[1],"--cbr-rate")));std::printf("sender public input association: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"input association failed after %u: %s\n",checks,e.what());return 1;}}

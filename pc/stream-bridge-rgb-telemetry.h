@@ -20,7 +20,7 @@ struct NvencQosObservation {
     std::uint32_t reservedMetadataBitRate=0,meanMetadataBitRate=0;
     std::uint32_t rateControlMode=0;
     bool known=false,budgetApplied=false,encodeOverlappedReconfigure=false;
-    bool resetEncoder=false,forceIDR=false;
+    bool resetEncoder=false,forceIDR=false,preservedVbvSpan=false;
 };
 struct RgbOutputSample {
     std::uint64_t observedUs=0,serial=0,encoderGeneration=0,submission=0,inputTimestamp=0;
@@ -112,7 +112,7 @@ inline bool formatRgbOutputSummary(char* out,std::size_t size,const RgbOutputRep
 }
 inline bool formatRgbOutputEvent(char* out,std::size_t size,const RgbOutputReport& r,const RgbOutputEvent& e)noexcept{
     const auto& s=e.sample;const auto& q=s.qos;
-    const unsigned flags=(s.exactInput?1u:0u)|(q.known?2u:0u)|(q.budgetApplied?4u:0u)|(q.encodeOverlappedReconfigure?8u:0u)|(s.sessionAuthorized?16u:0u);
+    const unsigned flags=(s.exactInput?1u:0u)|(q.known?2u:0u)|(q.budgetApplied?4u:0u)|(q.encodeOverlappedReconfigure?8u:0u)|(s.sessionAuthorized?16u:0u)|(q.preservedVbvSpan?32u:0u);
     const int n=std::snprintf(out,size,"RGB output event: roles=0x%x; age-us=%llu; gen/submission=%llu/%llu; native-frame/pts=%u/%llu; extent=%ux%u; picture/hw/QP=%u/%u/%u; bytes rgb/added/complete=%u/%u/%u; flags=0x%x; qos-rev=%llu; fps=%u/%u, rc=%u, reset/IDR=%u/%u; avg requested/passed=%u/%u, max=%u/%u bit/s; VBV=%u/%u, delay=%u/%u bits; metadata reserved/mean=%u/%u bit/s",
         e.roles,static_cast<unsigned long long>(r.endUs>=s.observedUs?r.endUs-s.observedUs:0),static_cast<unsigned long long>(s.encoderGeneration),static_cast<unsigned long long>(s.submission),
         s.frameIndex,static_cast<unsigned long long>(s.inputTimestamp),s.width,s.height,s.pictureType,s.hardwareStatus,s.qp,s.rgbBytes,s.completeBytes-s.rgbBytes,s.completeBytes,flags,
