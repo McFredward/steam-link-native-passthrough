@@ -38,7 +38,8 @@ struct Fixture {
     std::array<Resource,4> resources{};std::array<Output,4> outputs{};std::vector<Event*> events;
     NV_ENCODE_API_FUNCTION_LIST api{};MaskHevcConfig config{1152,4608,90,1,20000000,2u*1024u*1024u};
     unsigned opened=0,destroyed=0,created=0,registered=0,locks=0,unmaps=0,coldWaits=0,eos=0,privateEncodes=0,polled=0,rateChanges=0;
-    std::uint32_t lastRate=0,lastRateNum=0,lastRateDen=0;NVENCSTATUS rateStatus=NV_ENC_SUCCESS;
+    std::uint32_t lastRate=0,lastRateNum=0,lastRateDen=0,rateResets=0;NVENCSTATUS rateStatus=NV_ENC_SUCCESS;
+    bool expectRateReset=true;
     bool async=true,nv12=true,failOpen=false,failInit=false,failPreset=false,mapFail=false,encodeBusy=false,lockBusy=false;
     bool wrongStamp=false,wrongType=false,wrongStruct=false,nullOutput=false,emptyOutput=false,hwFailure=false,reenter=false,eosFail=false,flushWaitFail=false;std::uint32_t outputSize=0;
     NVENCSTATUS mapStatus=NV_ENC_SUCCESS,encodeStatus=NV_ENC_SUCCESS,lockStatus=NV_ENC_SUCCESS;
@@ -89,7 +90,8 @@ NVENCSTATUS NVENCAPI init(void* s,NV_ENC_INITIALIZE_PARAMS* p){
 }
 NVENCSTATUS NVENCAPI reconfigure(void* s,NV_ENC_RECONFIGURE_PARAMS* p){
     auto& x=f(s);++x.rateChanges;
-    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&p->resetEncoder&&p->forceIDR==unsigned(x.config.temporal),"private reconfigure resets firmware RC at IDR, without changing source or resources");
+    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&p->resetEncoder==unsigned(x.expectRateReset)&&p->forceIDR==unsigned(x.config.temporal&&x.expectRateReset),"only legacy/cadence changes reset RC; temporal bitrate-only updates preserve the GOP");
+    if(p->resetEncoder)++x.rateResets;
     const auto& i=p->reInitEncodeParams;const auto& c=*i.encodeConfig;
     check(i.encodeWidth==x.config.width&&i.encodeHeight==x.config.height&&i.enableEncodeAsync&&i.enablePTD,"rate update preserves dimensions and asynchronous ownership");
     check(c.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR&&c.rcParams.averageBitRate==c.rcParams.maxBitRate&&c.gopLength==(x.config.temporal?8u:1u)&&c.encodeCodecConfig.hevcConfig.idrPeriod==(x.config.temporal?8u:1u),"rate change preserves explicit ceiling and independent mask pictures");
@@ -190,6 +192,38 @@ void dynamicRate(){
     resetAndCheck(x);
 }
 
+void temporalRateContinuity(){
+    Fixture x;x.config.temporal=true;check(x.configure(),"prepare temporal rate continuity fixture");
+    MaskHevcPicture before;std::uint64_t oldRateEpoch=0;std::vector<std::uint8_t> bytes;
+    for(unsigned n=0;n<65;++n){const auto key=x.key(n+1);
+        check(x.encoder.beginStage(key,&x.textures[0])&&x.encoder.submit(key),"real frontend submits each measured temporal input");x.complete(0);
+        check(x.encoder.tryTake(key,bytes,&oldRateEpoch,&before)==MaskHevcTake::Ready,"completed temporal feedback retains exact output and epoch");
+        x.encoder.observeAddedBytes(oldRateEpoch,40000,90,1,100000000);
+    }
+    check(before.keyframe,"rate update begins just after a regular eighth-picture IDR");
+    x.expectRateReset=false;
+    check(x.encoder.updateRate(90,1,13000000,20000000)&&x.rateChanges==1&&!x.rateResets&&x.lastRate<20000000,
+        "measured bitrate-only change preserves firmware RC despite latest low native target");
+    check(x.encoder.diagnostics().rateBudget==20000000,"actual encoder frontend uses original captured input QoS instead of latest worker target");
+    const auto next=x.key(66);check(x.encoder.beginStage(next,&x.textures[0])&&x.encoder.submit(next),"same exact source continues across soft bitrate change");x.complete(0);
+    MaskHevcPicture after;std::uint64_t newRateEpoch=0;
+    check(x.encoder.tryTake(next,bytes,&newRateEpoch,&after)==MaskHevcTake::Ready,"next temporal P retains successful Lock and group parameter restoration");
+    check(!after.keyframe&&after.epoch==before.epoch&&after.anchor==before.anchor&&after.dependency==before.sequence,
+        "soft rate change preserves the exact P dependency and group instead of adding an IDR");
+    check(newRateEpoch!=oldRateEpoch,"soft rate changes still separate in-flight byte feedback epochs");
+    x.encoder.observeAddedBytes(oldRateEpoch,400000,90,1,1000000);
+    check(!x.encoder.diagnostics().wireMean,"old-rate output cannot relabel new measured budget or bytes");
+    for(unsigned n=0;n<MaskHevcRate::DecisionFrames;++n)x.encoder.observeAddedBytes(newRateEpoch,1000,120,1,100000000);
+    x.expectRateReset=true;
+    check(x.encoder.updateRate(120,1,100000000,20000000)&&x.rateChanges==2&&x.rateResets==1,
+        "sustained private cadence change retains explicit RC reset and recovery boundary");
+    const auto recovery=x.key(67);check(x.encoder.beginStage(recovery,&x.textures[0])&&x.encoder.submit(recovery),"cadence boundary accepts next exact input");x.complete(0);
+    check(x.encoder.tryTake(recovery,bytes,nullptr,&after)==MaskHevcTake::Ready&&after.keyframe&&!after.dependency&&after.anchor==after.sequence,
+        "cadence reset actually submits a fresh independent IDR");
+    const auto d=x.encoder.diagnostics();check(d.rateChanges==2&&d.rateResets==1&&x.opened==1&&!x.coldWaits,
+        "bounded diagnostics distinguish soft updates from resets without new sessions or GPU waits");
+    resetAndCheck(x);
+}
 void temporalEncoding(){
     const auto hz=maskHevcLaneCadence(90,1),fraction=maskHevcLaneCadence(90000,1001),odd=maskHevcLaneCadence(89,1),overflow=maskHevcLaneCadence(UINT32_MAX,UINT32_MAX);
     check(hz.num==45&&hz.den==1&&fraction.num==45000&&fraction.den==1001&&odd.num==89&&odd.den==2&&!overflow.num&&!overflow.den,"private half-cadence keeps fractional rates exact and refuses integer wrap");
@@ -240,7 +274,7 @@ void replayGop(const std::filesystem::path& root){
 int main(int argc,char** argv){
     using namespace stream_bridge::sender;
     if(argc==3&&!std::strcmp(argv[1],"--annexb-gop")){replayGop(argv[2]);return 0;}
-    dynamicRate();temporalEncoding();
+    dynamicRate();temporalRateContinuity();temporalEncoding();
     {
         MaskHevcSyntaxTraceSlot slot;MaskHevcSyntaxTrace trace{};
         check(!slot.take(trace),"cold diagnostic cannot read an unpublished header snapshot");

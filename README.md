@@ -81,8 +81,8 @@ until setup finishes.
 Start your Steam Link stream and enable native Steam Link passthrough in the game.
 Run the same command again to **update, uninstall or restore the previous setup**.
 
-The **dev 0.3.10** sender/receiver update uses HEVC masks by default with a
-20 Mbit/s target. To test it, use the installation command above with `dev` in
+The **dev 0.3.11** sender/receiver update uses HEVC masks by default with a
+20 Mbit/s ceiling and measured shared bitrate control. To test it, use the installation command above with `dev` in
 place of `main`; no extra flag is needed. See the [codec test guide](docs/development/HEVC-MASK-TESTING.md)
 for bitrate overrides, lossless selection and the current software-test scope.
 

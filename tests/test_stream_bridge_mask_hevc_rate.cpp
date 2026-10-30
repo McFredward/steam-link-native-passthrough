@@ -51,6 +51,36 @@ void jitterFeedback(){
     for(unsigned i=0;i<100;++i)check(stalled.plan(20000000,90,1,100000000).target==blocked.target,
         "uncommitted/refused API changes cannot accumulate further target reductions");
 }
+void completedInputBudget(){
+    MaskHevcRate rate;rate.initial(20000000,90,1,330000000);
+    // A small mask already fits a low native budget. The configured VBR
+    // ceiling must not itself be mistaken for20Mbps of transmitted traffic.
+    for(unsigned n=0;n<4096;++n){
+        rate.observe(1000,90,1,13000000);
+        const auto p=rate.plan(20000000,90,1,n%2?330000000:13000000);
+        check(!p.change,"fitting actual mask traffic cannot pump the encoder ceiling down and up");
+        if(n>=MaskHevcRate::Window)check(p.cap==2600000,"completed-input QoS, not latest cold target, establishes the mask share");
+    }
+    check(rate.current().target==20000000,"unused mask quality ceiling remains available without sending filler bytes");
+    // One captured low-budget picture and arbitrary cold observations cannot
+    // relabel the16-picture history or infer a sustained capacity collapse.
+    MaskHevcRate transient;transient.initial(20000000,90,1,330000000);
+    for(unsigned n=0;n<MaskHevcRate::DecisionFrames;++n)transient.observe(15000,90,1,330000000);
+    transient.observe(15000,90,1,13000000);
+    for(unsigned n=0;n<4096;++n){const auto p=transient.plan(20000000,90,1,13000000);
+        check(!p.change&&p.cap==20000000,"one low captured target and repeated cold ticks cannot cause an emergency cut");}
+    // A real, sustained bandwidth collapse still protects RGB promptly.
+    for(unsigned n=1;n<MaskHevcRate::Window;++n)transient.observe(15000,90,1,13000000);
+    const auto cut=transient.plan(20000000,90,1,330000000);
+    check(cut.change&&cut.cap==2600000&&cut.target<5000000,"sustained measured overshoot cuts the ceiling even if latest native QoS has bounced high");
+    MaskHevcRate explicitLimit;explicitLimit.initial(20000000,90,1,330000000);
+    for(unsigned n=0;n<MaskHevcRate::DecisionFrames;++n)explicitLimit.observe(1000,90,1,330000000);
+    check(explicitLimit.plan(19000000,90,1,330000000).target==19000000,"a lower explicit user ceiling bypasses ordinary target hysteresis");
+    check(explicitLimit.plan(1000000,90,1,330000000).target==1000000,"actual underfill never overrides an explicit lower user ceiling");
+    MaskHevcRate unknown;unknown.initial(20000000,90,1,330000000);fill(unknown,MaskHevcRate::DecisionFrames,15000);
+    const auto fallback=unknown.plan(20000000,90,1,13000000);
+    check(fallback.change&&fallback.cap==2600000,"absent captured QoS conservatively retains latest known budget feedback");
+}
 void budgets(){
     WireBudget legacy,controlled;
     for(unsigned i=0;i<128;++i){legacy.observe(7,1000,21000);controlled.observe(7,1000,21000,true);}
@@ -81,4 +111,4 @@ void replay(){
     check(video>300000000,"a recovered link gives its capacity back to colour video");
 }
 }
-int main(){try{controller();jitterFeedback();budgets();replay();std::printf("%u mask-rate/shared-budget checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}
+int main(){try{controller();jitterFeedback();completedInputBudget();budgets();replay();std::printf("%u mask-rate/shared-budget checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

@@ -1,5 +1,14 @@
 # Patch versions
 
+The October30 dev package is installer **0.3.11**, PC **0.3.9**, Frame **0.3.3**.
+PC0.3.9 stabilizes shared mask/video budget feedback using completed-input QoS
+and actual wire bytes, preserving temporal RC/GOP on bitrate-only changes. The
+Frame0.3.3 payload remains byte-identical and PC-only setup does not restart it.
+The preceding0.3.10/PC0.3.8 fixed missing P-picture parameter sets; its live
+Spirit Sling test delivered all21,966 masks, with three lossless fallbacks.
+Remaining rain sharpness and sustained smoothness still require a live test of
+this new control policy.
+
 The October29 dev package is installer **0.3.8**, PC **0.3.6**, Frame **0.3.2**.
 PC0.3.6 prevents private mask encoder reconfiguration from starving its own
 feedback under native FPS/target jitter. Decisions use completed pictures and a

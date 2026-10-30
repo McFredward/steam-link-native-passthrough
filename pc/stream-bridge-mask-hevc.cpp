@@ -91,7 +91,7 @@ struct MaskHevcEncoder::Impl {
     MaskHevcRate rate;std::uint64_t rateEpoch=0;unsigned rateBackoff=0;
     NV_ENC_INITIALIZE_PARAMS rateInit{};NV_ENC_CONFIG rateConfig{};
     std::atomic<std::uint32_t> rateTarget{0},rateBudget{0},streamTarget{0},rateNum{0},rateDen{0},wireMean{0};
-    std::atomic<std::uint64_t> rateChanges{0},qpSamples{0},qpSum{0};
+    std::atomic<std::uint64_t> rateChanges{0},rateResets{0},qpSamples{0},qpSum{0};
     std::atomic<std::uint32_t> lastQp{0},minQp{51},maxQp{0},rateSamples{0},lastEncodedBytes{0};
     std::uint32_t processId=0;
     mutable std::mutex mutex;std::atomic<bool> healthy{false};std::atomic<int> status{int(NV_ENC_SUCCESS)};
@@ -376,21 +376,22 @@ bool MaskHevcEncoder::updateRate(std::uint32_t num,std::uint32_t den,std::uint32
     enc.rcParams.vbvInitialDelay=enc.rcParams.vbvBufferSize;
     NV_ENC_RECONFIGURE_PARAMS params{};params.version=NV_ENC_RECONFIGURE_PARAMS_VER;params.reInitEncodeParams=p.rateInit;
     params.reInitEncodeParams.frameRateNum=plan.num;params.reInitEncodeParams.frameRateDen=plan.den;params.reInitEncodeParams.encodeConfig=&enc;
-    // SDK11.1 permits resetting firmware RC at an IDR. Legacy pictures are
-    // independent already; temporal mode explicitly requests the next IDR. This is not a GPU flush, session recreation or
-    // a change to source/image identity; old queued outputs retain their key.
-    params.resetEncoder=1;params.forceIDR=p.config.temporal?1:0;
+    // NVENC allows bitrate/VBV updates without resetting firmware RC or DPB.
+    // Keep the normal IPPP8 boundary; do not add an IDR for every QoS change.
+    // A genuinely changed private cadence starts a fresh RC/GOP boundary.
+    const bool reset=!p.config.temporal||plan.num!=p.rateInit.frameRateNum||plan.den!=p.rateInit.frameRateDen;
+    params.resetEncoder=reset?1:0;params.forceIDR=p.config.temporal&&reset?1:0;
     const auto result=p.api.nvEncReconfigureEncoder(p.session,&params);p.status.store(int(result),std::memory_order_relaxed);
     if(result!=NV_ENC_SUCCESS){p.record(MaskHevcFailure::Reconfigure,result);p.rateBackoff=MaskHevcRate::Window;return false;}
-    if(p.config.temporal)p.forceKeyframe.store(true,std::memory_order_release);
+    if(params.forceIDR)p.forceKeyframe.store(true,std::memory_order_release);
     p.rateConfig=enc;p.rateInit=params.reInitEncodeParams;p.rateInit.encodeConfig=&p.rateConfig;p.config=config;p.config.frameRateNum=plan.num;p.config.frameRateDen=plan.den;
     p.rate.commit(plan);++p.rateEpoch;p.rateTarget=plan.target;p.rateNum=plan.num;p.rateDen=plan.den;p.wireMean=0;p.rateSamples=0;
-    p.rateChanges.fetch_add(1,std::memory_order_relaxed);return true;
+    p.rateChanges.fetch_add(1,std::memory_order_relaxed);if(reset)p.rateResets.fetch_add(1,std::memory_order_relaxed);return true;
 }
-void MaskHevcEncoder::observeAddedBytes(std::uint64_t epoch,std::size_t bytes,std::uint32_t fpsNum,std::uint32_t fpsDen)noexcept{
+void MaskHevcEncoder::observeAddedBytes(std::uint64_t epoch,std::size_t bytes,std::uint32_t fpsNum,std::uint32_t fpsDen,std::uint32_t stream)noexcept{
     auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
     if(!guard||!p.healthy||!epoch||epoch!=p.rateEpoch)return;
-    p.rate.observe(bytes,fpsNum,fpsDen);p.rateSamples=p.rate.samplesSinceChange();const auto current=p.rate.current();p.wireMean=p.rate.observed(current.num,current.den);
+    p.rate.observe(bytes,fpsNum,fpsDen,stream);p.rateSamples=p.rate.samplesSinceChange();const auto current=p.rate.current();p.wireMean=p.rate.observed(current.num,current.den);
     if(p.rateBackoff)--p.rateBackoff;
 }
 
@@ -413,7 +414,7 @@ MaskHevcDiagnostics MaskHevcEncoder::diagnostics()const noexcept{
     d.returnedTimestamp=p.returnedTimestamp.load(std::memory_order_relaxed);d.mapped=p.mappedCount.load(std::memory_order_relaxed);
     d.submitted=p.submittedCount.load(std::memory_order_relaxed);d.locked=p.lockedCount.load(std::memory_order_relaxed);d.ready=p.readyCount.load(std::memory_order_relaxed);
     d.rateTarget=p.rateTarget.load(std::memory_order_relaxed);d.rateBudget=p.rateBudget.load(std::memory_order_relaxed);d.streamTarget=p.streamTarget.load(std::memory_order_relaxed);
-    d.frameRateNum=p.rateNum.load(std::memory_order_relaxed);d.frameRateDen=p.rateDen.load(std::memory_order_relaxed);d.wireMean=p.wireMean.load(std::memory_order_relaxed);d.rateChanges=p.rateChanges.load(std::memory_order_relaxed);
+    d.frameRateNum=p.rateNum.load(std::memory_order_relaxed);d.frameRateDen=p.rateDen.load(std::memory_order_relaxed);d.wireMean=p.wireMean.load(std::memory_order_relaxed);d.rateChanges=p.rateChanges.load(std::memory_order_relaxed);d.rateResets=p.rateResets.load(std::memory_order_relaxed);
     d.parameterKeys=p.parameterKeys.load(std::memory_order_relaxed);d.parameterRestored=p.parameterRestored.load(std::memory_order_relaxed);d.parameterRefused=p.parameterRefused.load(std::memory_order_relaxed);
     d.qpSamples=p.qpSamples.load(std::memory_order_relaxed);d.qpSum=p.qpSum.load(std::memory_order_relaxed);d.lastQp=p.lastQp.load(std::memory_order_relaxed);
     d.minQp=d.qpSamples?p.minQp.load(std::memory_order_relaxed):0;d.maxQp=p.maxQp.load(std::memory_order_relaxed);d.rateSamples=p.rateSamples.load(std::memory_order_relaxed);d.lastEncodedBytes=p.lastEncodedBytes.load(std::memory_order_relaxed);return d;

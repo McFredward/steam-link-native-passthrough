@@ -1,9 +1,39 @@
 # HEVC mask test candidate
 
-Installer **0.3.10 / PC 0.3.8 / Frame 0.3.3** prefers negotiated temporal HEVC
+Installer **0.3.11 / PC 0.3.9 / Frame 0.3.3** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
 preferences still override the default. This candidate updates only the PC sender.
 Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
+
+## Bitrate stability candidate
+
+The preceding0.3.10 live Spirit Sling test delivered all21,966 masks, with only
+three lossless fallbacks instead of the earlier7/8 HEVC refusal. Encoded mask
+bytes averaged5.2kB rather than86.5kB in those different runs. No sampled RGB
+budget hit1Mbps, but native targets still fluctuated10.6–277.8Mbps and the two
+mask encoders made202 RC resets. Mask lifetime mean frame-QP was44.63, max51.
+All masks were decoded/uploaded; a receiver pipeline heartbeat reported no
+backpressure or missing dependency. This supports the reported major improvement
+without objectively measuring rain sharpness. PC432 drops/23,203 presents also
+leave smoothness work; they are not attributed to a particular cause or scene.
+
+PC0.3.9 samples original native QoS with each exact certified mask output and
+uses its fixed16-picture median to establish the20% mask wire share. It cuts
+for actual byte overshoot, not because an unused VBR ceiling exceeds the latest
+instantaneous target. Completed-output gates, growth hysteresis, explicit user
+ceiling and accounting of all added metadata bytes remain enforced. Temporal
+bitrate/VBV-only changes preserve RC/DPB/GOP; only sustained cadence changes
+reset RC and force IDR. Missing-picture recovery retains its existing IDR path.
+The regular eight-picture GOP, resolution, quantization configuration and Frame
+artifacts remain unchanged. See the [controller contract](../../pc/stream-bridge-mask-hevc.md#shared-bitrate-control).
+
+The bounded `HEVC rate continuity: changes/reset=...` heartbeat distinguishes
+soft bitrate updates from actual RC resets. In the next matched rain test, check
+that resets do not track every bitrate change, HEVC parameter/syntax refusal and
+Frame missing-reference/backpressure remain zero, and RGB budget/QP no longer
+repeatedly collapse. A sustained genuine bandwidth drop must still reduce mask
+traffic. Controller/frontend tests are software evidence; this candidate has no
+new hardware quality or latency result until the user repeats that scene.
 
 The PC supplies full-resolution R8 coverage as full-range NV12 Y with neutral
 chroma. Two alternating original NVENC P3/ultra-low-latency sessions use quarter-size

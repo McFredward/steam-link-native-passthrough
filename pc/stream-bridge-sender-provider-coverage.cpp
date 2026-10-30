@@ -323,7 +323,8 @@ struct SenderCoverage::Impl {
                 s.lastControlledMetadata.store(hevc,std::memory_order_relaxed);
                 if(hevc&&output.size()>=e.originalAccessUnitBytes){const auto cadence=encoding==CoverageEncoding::HevcTemporal?
                     maskHevcLaneCadence(e.qos.frameRateNum,e.qos.frameRateDen):MaskHevcCadence{e.qos.frameRateNum,e.qos.frameRateDen};
-                    encodedBy->observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes,cadence.num,cadence.den);}
+                    const auto stream=e.qos.known?e.qos.requestedAverageBitRate/(encoding==CoverageEncoding::HevcTemporal?Impl::TemporalLanes:1u):0;
+                    encodedBy->observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes,cadence.num,cadence.den,stream);}
                 s.lastPid=maskPid;s.state=7;s.gates.payload(candidate.size,encoded.size(),output.size(),static_cast<unsigned>(encoding),std::size_t(e.width)*e.height,encodeUs);s.gates.signal(CoverageSignal::CertifiedMasks);
                 if(!hevc&&s.maskCapture.active()){
                     capture::Metadata sample{};sample.frame=descriptor.sourceFrame;sample.encoderGeneration=descriptor.encoderGeneration;
@@ -679,7 +680,7 @@ HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
         total.mapped+=d.mapped;total.submitted+=d.submitted;total.locked+=d.locked;total.ready+=d.ready;
         total.rateTarget+=d.rateTarget;total.rateBudget+=d.rateBudget;total.streamTarget+=d.streamTarget;total.wireMean+=d.wireMean;
         total.parameterKeys+=d.parameterKeys;total.parameterRestored+=d.parameterRestored;total.parameterRefused+=d.parameterRefused;
-        total.rateChanges+=d.rateChanges;total.qpSamples+=d.qpSamples;total.qpSum+=d.qpSum;total.minQp=std::min(total.minQp,d.minQp);total.maxQp=std::max(total.maxQp,d.maxQp);
+        total.rateChanges+=d.rateChanges;total.rateResets+=d.rateResets;total.qpSamples+=d.qpSamples;total.qpSum+=d.qpSum;total.minQp=std::min(total.minQp,d.minQp);total.maxQp=std::max(total.maxQp,d.maxQp);
         if(d.stage!=MaskHevcFailure::None){total.stage=d.stage;total.nativeStatus=d.nativeStatus;total.rejectedFields=d.rejectedFields;}}
         total.frameRateNum*=Impl::TemporalLanes; // Aggregate nominal output cadence; last values remain lane0 diagnostics.
     }

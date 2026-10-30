@@ -347,9 +347,12 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 std::snprintf(hevcText,sizeof hevcText,"HEVC parameter sets: IDR-groups/restored-P/refused=%llu/%llu/%llu; original VPS/SPS/PPS from exact private encoder epoch/group; entropy unchanged",
                     static_cast<unsigned long long>(diagnostic.parameterKeys),static_cast<unsigned long long>(diagnostic.parameterRestored),static_cast<unsigned long long>(diagnostic.parameterRefused));
                 report(hevcText,stream_bridge::logging::Level::Debug);
-                std::snprintf(hevcText,sizeof hevcText,"HEVC mask quality: lifetime-QP last/min/mean/max=%u/%u/%.2f/%u; valid-QP-samples=%llu; last-encoded-bytes=%u; outputs-since-rate-change=%u; RC reset at IDR; diagnostics only",
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask quality: lifetime-QP last/min/mean/max=%u/%u/%.2f/%u; valid-QP-samples=%llu; last-encoded-bytes=%u; outputs-since-rate-change=%u; diagnostics only",
                     diagnostic.lastQp,diagnostic.minQp,diagnostic.qpSamples?double(diagnostic.qpSum)/double(diagnostic.qpSamples):0.0,diagnostic.maxQp,
                     static_cast<unsigned long long>(diagnostic.qpSamples),diagnostic.lastEncodedBytes,diagnostic.rateSamples);
+                report(hevcText,stream_bridge::logging::Level::Debug);
+                std::snprintf(hevcText,sizeof hevcText,"HEVC rate continuity: changes/reset=%llu/%llu; temporal bitrate-only updates preserve RC/GOP; mask budget uses completed-input QoS and actual added bytes",
+                    static_cast<unsigned long long>(diagnostic.rateChanges),static_cast<unsigned long long>(diagnostic.rateResets));
                 report(hevcText,stream_bridge::logging::Level::Debug);
                 std::snprintf(hevcText,sizeof hevcText,"HEVC mask rate: user-ceiling/stream-target/mask-budget/applied=%u/%u/%u/%u bit/s; added-wire-mean=%u bit/s; configured-fps=%u/%u; changes=%llu; VBR maximum plus measured feedback; not a guaranteed wire cap",
                     hevc.bitRate,diagnostic.streamTarget,diagnostic.rateBudget,diagnostic.rateTarget,diagnostic.wireMean,diagnostic.frameRateNum,diagnostic.frameRateDen,static_cast<unsigned long long>(diagnostic.rateChanges));

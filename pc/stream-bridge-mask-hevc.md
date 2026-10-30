@@ -4,7 +4,8 @@
 fixed NV12 textures filled by the existing exact source/eye/native-input stage.
 It performs no GPU conversion, CPU upload/readback, pairing, source admission,
 wire wrapping or source-frame certification. Main8 420, full-range Y and neutral
-UV128 are the intended contract; each picture explicitly forces IDR plus
+UV128 are the intended contract. Legacy pictures are independent IDRs; negotiated
+temporal pictures use two alternating IPPP8 lanes and their exact group
 VPS/SPS/PPS. Original RGB dimensions, pixels and NVENC session are unchanged.
 
 The NVENC table must be a copy of the verified **original** SDK11.1 function
@@ -15,7 +16,7 @@ the wrapped factory. SDK11.1 table size/version are compile-time assertions.
 ## Integration order
 
 1. Cold/quiesced worker configures the exact D3D11 device, width/height, rational
-   nominal FPS, mask CBR target, maximum AU bytes, and four distinct DEFAULT
+   nominal FPS, mask VBR ceiling, maximum AU bytes, and four distinct DEFAULT
    NV12 textures. The module validates device/extent/format and retains COM
    references. Unsupported async HEVC/NV12/device initialization fails closed;
    there is no synchronous or CPU fallback inside this module.
@@ -102,3 +103,36 @@ ordinary non-Windows builds have no working platform adapter.
 NVIDIA documents asynchronous event-driven output in the
 [NVENC programming guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/pdf/NVENC_VideoEncoder_API_ProgGuide.pdf),
 sections6.1-6.3. These API semantics do not replace actual target-hardware tests.
+
+## Shared bitrate control
+
+Only successfully certified added wire bytes from the exact private rate epoch
+enter feedback. Each sample carries the original native QoS captured with its
+input, before metadata subtraction, divided equally across the two lanes. A
+fixed16-output median of known native targets establishes the mask share; cold
+worker ticks and a single easy RGB picture cannot replace that history. Missing
+captured QoS retains the conservative latest-target path. The user ceiling is
+still enforced; the policy aims for actual mask traffic within20% of the native
+stream budget, not a claim that NVENC guarantees an exact wire cap.
+
+A high configured VBR ceiling does not mean the mask is consuming that bitrate.
+Do not cut a ceiling when actual bytes already fit: doing so needlessly cycles
+quality down/up on native target jitter. Actual overshoot still cuts the target
+after64 completed outputs, or16 for more than2x overshoot; recovery requires128
+outputs and increases by at most25%. Native RGB budgeting independently accounts
+for every actual added metadata byte, including lossless fallback and headers.
+
+Temporal bitrate/VBV-only reconfiguration preserves firmware RC history and the
+current DPB/GOP. It does not request an extra IDR. A sustained private cadence
+change still resets RC and requests a fresh independent IDR; legacy all-IDR
+behaviour is preserved. In-flight old-rate outputs retain their exact picture
+keys and cannot populate the new byte-feedback epoch. Missing/unsent-picture
+recovery still requests an IDR through its existing path. The bounded5-second
+`HEVC rate continuity` log separates successful changes from RC resets.
+
+The2026-10-30 Spirit Sling run motivates this policy: all21,966 masks arrived,
+but202 private rate changes reset RC, while native target samples ranged from
+10.6 to277.8Mbps and actual metadata means were roughly2.3–6.5Mbps. Controller
+replay and frontend tests are software evidence; stable sharp rain on the
+headset still requires a matched live test. Resolution, mask quantization mode,
+regular eight-picture GOP and the receiver are unchanged by this PC update.
