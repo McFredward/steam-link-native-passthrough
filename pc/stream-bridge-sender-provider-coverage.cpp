@@ -134,11 +134,13 @@ struct SenderCoverage::Impl {
     SourceAlphaProbe sourceAlpha;
     MaskContentPublication maskContent;
     capture::Writer maskCapture;
-    MaskHevcEncoder maskEncoder;MaskHevcSurfaces maskSurfaces;
+    static constexpr unsigned TemporalLanes=2;
+    static_assert(MaskHevcEncoder::TemporalGroupPictures==HevcTemporalGop,"matched bounded HEVC group contract");
+    MaskHevcEncoder maskEncoder;std::array<MaskHevcEncoder,TemporalLanes> temporalEncoders;MaskHevcSurfaces maskSurfaces;
     MaskHevcSyntaxTraceSlot syntaxTrace;
     bool hevcRequested=false;std::uint32_t hevcBitrate=20000000;
     unsigned nextHevcStage=0;std::atomic<bool> lastControlledMetadata{false};
-    std::atomic<bool> hevcPrepared{false},hevcAvailable{false},hevcDirty{false},hevcPeerReady{false};
+    std::atomic<bool> hevcPrepared{false},hevcAvailable{false},hevcDirty{false},hevcPeerReady{false},hevcTemporalPeer{false},hevcTemporalPrepared{false},hevcTemporalAvailable{false};
     std::uint64_t hevcContract=0,hevcGeneration=0;std::uint32_t hevcPid=0;
     std::atomic<std::uint64_t> hevcEncoded{0},hevcPending{0},hevcRefused{0},hevcSyntaxRefused{0};
     std::atomic<std::uint64_t> hevcCollectAgeUs{0},hevcMaxCollectAgeUs{0};
@@ -185,6 +187,7 @@ struct SenderCoverage::Impl {
         auto& s=*static_cast<Impl*>(opaque);
         if(!s.enabled||!e.exactInput||e.subresource)return;
         s.hevcPeerReady.store(e.lossyCoverageAuthorized,std::memory_order_release);
+        s.hevcTemporalPeer.store(e.temporalCoverageAuthorized,std::memory_order_release);
         // The exact CopyResource receipt is consumed once, before Encode. It is
         // subsequently addressed only by accepted NVENC submission identity.
         auto* input=identity(static_cast<IUnknown*>(e.resource));
@@ -202,8 +205,11 @@ struct SenderCoverage::Impl {
                     if(!s.hevcContract){s.hevcContract=key.sourceContract;s.hevcPid=key.processId;s.hevcGeneration=key.encoderGeneration;}
                     const auto texture=s.maskSurfaces.textures()[owned.index()];
                     owned->resources.hevcKey=key;
-                    owned->resources.hevcSubmitted=s.maskEncoder.beginStage(key,texture)&&s.maskEncoder.submit(key);
-                    if(!owned->resources.hevcSubmitted)s.maskEncoder.cancel(key);
+                    owned->resources.hevcTemporal=e.temporalCoverageAuthorized&&s.hevcTemporalPrepared.load(std::memory_order_acquire);
+                    owned->resources.hevcLane=unsigned(e.submission%TemporalLanes);
+                    auto& encoder=owned->resources.hevcTemporal?s.temporalEncoders[owned->resources.hevcLane]:s.maskEncoder;
+                    owned->resources.hevcSubmitted=encoder.beginStage(key,texture)&&encoder.submit(key);
+                    if(!owned->resources.hevcSubmitted)encoder.cancel(key);
                 }
             }
         }
@@ -211,7 +217,7 @@ struct SenderCoverage::Impl {
     }
     static void inputRetire(const NvencOutputEvidence& e,void* opaque){
         auto& s=*static_cast<Impl*>(opaque);auto owned=s.stages.read(e.submission,e.encoder,e.encoderGeneration);
-        if(owned){if(owned->resources.hevcKey.submission)s.maskEncoder.cancel(owned->resources.hevcKey);
+        if(owned){if(owned->resources.hevcKey.submission)(owned->resources.hevcTemporal?s.temporalEncoders[owned->resources.hevcLane]:s.maskEncoder).cancel(owned->resources.hevcKey);
             owned->resources.hevcKey={};owned->resources.hevcSubmitted=false;owned->resources.hevcSurfaceReady=false;
             release(owned->resources.input);owned->receipt={};owned.publish(Stages::Phase::Retired);}
     }
@@ -222,7 +228,7 @@ struct SenderCoverage::Impl {
         const auto certify=[&](CoverageEncoding kind,Bytes mask){
             descriptor.cameraRecovery=s.sourceContract.recoveryPolicy(e.cameraOnlyRecoveryAuthorized,
                 e.ordinaryVideoAuthorized,ordinaryContract,ordinaryPid);
-            return s.control.certifyAccessUnit(candidate,descriptor,kind,mask,output,e.lossyCoverageAuthorized);
+            return s.control.certifyAccessUnit(candidate,descriptor,kind,mask,output,e.lossyCoverageAuthorized,e.temporalCoverageAuthorized);
         };
         // Reconfigure can Encode/Lock before the cold worker replaces control.
         // The old paired control binding is not new-generation mask permission.
@@ -231,6 +237,9 @@ struct SenderCoverage::Impl {
         if(!e.coverageSessionAuthorized){s.gates.refuse(CoverageGate::CoverageSession);const bool certified=certify(CoverageEncoding::None,{});if(!certified)s.gates.refuse(CoverageGate::FrameCertificate);return certified;}
         if(!s.enabled)return s.gates.refuse(CoverageGate::Prepared);
         std::vector<std::uint8_t> pixels,encoded;CoverageEncoding encoding=CoverageEncoding::None;
+        struct Unsent {MaskHevcEncoder* encoder=nullptr;bool sent=false;
+            ~Unsent(){if(encoder&&!sent)encoder->requestKeyframe();}} unsent;
+        MaskHevcEncoder* encodedBy=nullptr;
         std::uint32_t maskPid=0;std::uint64_t maskContract=0;std::uint64_t hevcEncodeUs=0,hevcRateEpoch=0;
         {
             // Reading excludes reuse/resize of exactly this stage. It does not
@@ -254,10 +263,16 @@ struct SenderCoverage::Impl {
                         s.hevcCollectAgeUs.store(age,std::memory_order_relaxed);
                         auto maximum=s.hevcMaxCollectAgeUs.load(std::memory_order_relaxed);
                         if(age>maximum)s.hevcMaxCollectAgeUs.compare_exchange_strong(maximum,age,std::memory_order_relaxed);
-                        const auto result=s.maskEncoder.tryTake(gpu.hevcKey,au,&hevcRateEpoch);
+                        auto& encoder=gpu.hevcTemporal?s.temporalEncoders[gpu.hevcLane]:s.maskEncoder;MaskHevcPicture picture;
+                        const auto result=encoder.tryTake(gpu.hevcKey,au,&hevcRateEpoch,&picture);
                         if(result==MaskHevcTake::Ready){
-                            if(wrapHevcCoverage({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight,encoded)){
-                                encoding=CoverageEncoding::HevcIntra;maskPid=slot.pid;maskContract=slot.contract;
+                            if(gpu.hevcTemporal)unsent.encoder=&encoder;
+                            encodedBy=&encoder;
+                            const bool wrapped=gpu.hevcTemporal?
+                                (e.temporalCoverageAuthorized&&wrapHevcTemporalCoverage({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight,picture.epoch,picture.sequence,picture.dependency,picture.keyframe,picture.anchor,encoded)):
+                                wrapHevcCoverage({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight,encoded);
+                            if(wrapped){
+                                encoding=gpu.hevcTemporal?CoverageEncoding::HevcTemporal:CoverageEncoding::HevcIntra;maskPid=slot.pid;maskContract=slot.contract;
                                 CoverageGateCounters::increment(s.hevcEncoded);
                             }else{
                                 s.syntaxTrace.captureOnce({au.data(),au.size()},descriptor.codedWidth,descriptor.codedHeight);
@@ -267,7 +282,7 @@ struct SenderCoverage::Impl {
                         else CoverageGateCounters::increment(s.hevcRefused);
                         hevcEncodeUs=elapsedMicros(started,clockMicros());
                     }
-                    if(encoding!=CoverageEncoding::HevcIntra){
+                    if(!hevcCoverage(encoding)){
                     pixels.resize(std::size_t(slot.width)*slot.height);
                     const auto started=clockMicros();CoverageReadbackResult receipt;
                     const auto result=readCoverageNonblocking(gpu.context,gpu.texture,gpu.completion,slot.width,slot.height,pixels.data(),pixels.size(),forwardGetData,forwardMap,forwardUnmap,receipt);
@@ -282,11 +297,11 @@ struct SenderCoverage::Impl {
         }
         // Do not hold the GPU metadata mutex while scanning/compressing the
         // CPU copy or authenticating it. Native Draw must never wait for RLE.
-        if(!pixels.empty()||encoding==CoverageEncoding::HevcIntra){
+        if(!pixels.empty()||hevcCoverage(encoding)){
             const auto encodeStarted=clockMicros();
             const bool entropy=s.sourceContract.entropyCodecAllowed(maskContract,maskPid,e.entropyCoverageAuthorized);
             const bool rawEntropy=s.sourceContract.entropyCodecAllowed(maskContract,maskPid,e.rawEntropyCoverageAuthorized);
-            const bool hevc=encoding==CoverageEncoding::HevcIntra;
+            const bool hevc=hevcCoverage(encoding);
             const bool encodedMask=hevc||encodeBestCoverage({pixels.data(),pixels.size()},e.compressedCoverageAuthorized,encoding,encoded,entropy,rawEntropy);
             const auto encodeUs=hevc?hevcEncodeUs:elapsedMicros(encodeStarted,clockMicros());
             if(!hevc&&(entropy||rawEntropy)&&encodedMask&&logging::debug()&&s.maskContent.due()){
@@ -306,7 +321,9 @@ struct SenderCoverage::Impl {
                 // this callback even when its original GPU readback was valid.
                 if(!s.sourceCurrent(maskContract,maskPid)){output.clear();s.gates.refuse(CoverageGate::SourceRevoked);return false;}
                 s.lastControlledMetadata.store(hevc,std::memory_order_relaxed);
-                if(hevc&&output.size()>=e.originalAccessUnitBytes)s.maskEncoder.observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes,e.qos.frameRateNum,e.qos.frameRateDen);
+                if(hevc&&output.size()>=e.originalAccessUnitBytes){const auto cadence=encoding==CoverageEncoding::HevcTemporal?
+                    maskHevcLaneCadence(e.qos.frameRateNum,e.qos.frameRateDen):MaskHevcCadence{e.qos.frameRateNum,e.qos.frameRateDen};
+                    encodedBy->observeAddedBytes(hevcRateEpoch,output.size()-e.originalAccessUnitBytes,cadence.num,cadence.den);}
                 s.lastPid=maskPid;s.state=7;s.gates.payload(candidate.size,encoded.size(),output.size(),static_cast<unsigned>(encoding),std::size_t(e.width)*e.height,encodeUs);s.gates.signal(CoverageSignal::CertifiedMasks);
                 if(!hevc&&s.maskCapture.active()){
                     capture::Metadata sample{};sample.frame=descriptor.sourceFrame;sample.encoderGeneration=descriptor.encoderGeneration;
@@ -323,7 +340,7 @@ struct SenderCoverage::Impl {
                     sample.width=descriptor.codedWidth;sample.height=descriptor.codedHeight;sample.encoding=encoding;
                     s.maskCapture.offer(sample,std::move(encoded));
                 }
-                return true;
+                unsent.sent=true;return true;
             }
         }
         // A positively identified desktop/compositor picture remains ordinary
@@ -378,9 +395,10 @@ struct SenderCoverage::Impl {
         // No in-flight readback is reused at another size. Retiring submitted
         // generations happens through the NVENC owner before resize admission.
         Stages::PoolClaim all;if(!stages.maintenance(all))return false;
-        hevcPrepared.store(false,std::memory_order_release);
+        hevcPrepared.store(false,std::memory_order_release);hevcTemporalPrepared.store(false,std::memory_order_release);
         invalidateMaskHevcStages(all);
         if(!maskEncoder.reset())return false;
+        for(auto& encoder:temporalEncoders)if(!encoder.reset())return false;
         maskSurfaces.resetCold();hevcContract=hevcGeneration=0;hevcPid=0;
         nextHevcStage=0;
         poolReady=false;prepared=false;preparedPid=0;state=4;release(targetView);release(target);
@@ -403,14 +421,24 @@ struct SenderCoverage::Impl {
         const auto qos=boundary.encoderQos(actual.encoder,actual.generation);NV_ENCODE_API_FUNCTION_LIST original{};
         if(!qos.frameRateNum||!qos.frameRateDen||!boundary.nativeFunctionTable(original))return;
         Stages::PoolClaim all;if(!stages.maintenance(all))return;
-        hevcPrepared.store(false,std::memory_order_release);
+        hevcPrepared.store(false,std::memory_order_release);hevcTemporalPrepared.store(false,std::memory_order_release);
         invalidateMaskHevcStages(all);
         if(!maskEncoder.reset()){hevcDirty.store(false,std::memory_order_release);return;}
+        for(auto& encoder:temporalEncoders)if(!encoder.reset()){hevcDirty.store(false,std::memory_order_release);return;}
         hevcContract=hevcGeneration=0;hevcPid=0;
         nextHevcStage=0;
         const bool surfaces=maskSurfaces.prepareCold(device,target);
         const MaskHevcConfig config{width,height,qos.frameRateNum,qos.frameRateDen,hevcBitrate,static_cast<std::uint32_t>(MaximumHevcCoverageBitstreamBytes),qos.known?qos.requestedAverageBitRate:0};
         const bool ready=surfaces&&maskEncoder.configure(device,config,maskSurfaces.textures(),original);
+        auto temporalConfig=config;temporalConfig.temporal=true;
+        const auto cadence=maskHevcLaneCadence(config.frameRateNum,config.frameRateDen);
+        temporalConfig.frameRateNum=cadence.num;temporalConfig.frameRateDen=cadence.den;temporalConfig.bitRate=std::max(100000u,config.bitRate/TemporalLanes);
+        temporalConfig.streamBitRate=config.streamBitRate/TemporalLanes;
+        bool temporalReady=ready&&cadence.num&&cadence.den;
+        for(auto& encoder:temporalEncoders)if(temporalReady)temporalReady=encoder.configure(device,temporalConfig,maskSurfaces.textures(),original);
+        if(!temporalReady)for(auto& encoder:temporalEncoders)(void)encoder.reset();
+        hevcTemporalPrepared.store(temporalReady,std::memory_order_release);
+        if(temporalReady)hevcTemporalAvailable.store(true,std::memory_order_release);
         hevcPrepared.store(ready,std::memory_order_release);
         if(ready)hevcAvailable.store(true,std::memory_order_release);
         hevcDirty.store(false,std::memory_order_release);
@@ -571,7 +599,9 @@ struct SenderCoverage::Impl {
         }
         if(s.hevcPrepared.load(std::memory_order_acquire)&&s.hevcPeerReady.load(std::memory_order_acquire)){
             const auto texture=s.maskSurfaces.textures()[free.index()];
-            if(s.maskEncoder.canStage(texture))gpu.hevcSurfaceReady=s.maskSurfaces.write(ctx,static_cast<unsigned>(free.index()));
+            bool reusable=s.maskEncoder.canStage(texture);
+            if(s.hevcTemporalPrepared.load(std::memory_order_acquire))for(auto& encoder:s.temporalEncoders)reusable=encoder.canStage(texture)&&reusable;
+            if(reusable)gpu.hevcSurfaceReady=s.maskSurfaces.write(ctx,static_cast<unsigned>(free.index()));
         }
         const CoveragePublication publication{[](void* value)noexcept{static_cast<Stages::Claim*>(value)->publish(Stages::Phase::Captured);},&free};
         copyCoverageBeforeNative(ctx,destination,source,gpu.texture,s.target,gpu.completion,forwardCopy,forwardEnd,forwardFlush,publication);
@@ -606,7 +636,11 @@ void SenderCoverage::tick()noexcept{
     // this observation never authorizes rendering or retains a changed source.
     if(s.enabled&&s.hevcRequested&&s.hevcPrepared.load(std::memory_order_acquire)&&count==1){
         const auto qos=s.boundary.encoderQos(actual.encoder,actual.generation);
-        (void)s.maskEncoder.updateRate(qos.frameRateNum,qos.frameRateDen,qos.known?qos.requestedAverageBitRate:0,s.hevcBitrate);
+        if(s.hevcTemporalPeer.load(std::memory_order_acquire)&&s.hevcTemporalPrepared.load(std::memory_order_acquire)){
+            const auto cadence=maskHevcLaneCadence(qos.frameRateNum,qos.frameRateDen);
+            for(auto& encoder:s.temporalEncoders)if(cadence.num&&cadence.den)(void)encoder.updateRate(cadence.num,cadence.den,
+                qos.known?qos.requestedAverageBitRate/Impl::TemporalLanes:0,std::max(100000u,s.hevcBitrate/Impl::TemporalLanes));
+        }else (void)s.maskEncoder.updateRate(qos.frameRateNum,qos.frameRateDen,qos.known?qos.requestedAverageBitRate:0,s.hevcBitrate);
     }
     if(s.enabled&&s.prepared&&count==1&&actual.width==s.width&&actual.height==s.height&&s.direct.inventoryRevision()==s.inventoryEpoch&&s.dispatchOwned()&&!s.hevcDirty.load(std::memory_order_acquire))return;
     const auto inventory=s.direct.inventory();
@@ -628,14 +662,26 @@ void SenderCoverage::configureHevcMask(std::uint32_t bitrate)noexcept{
     s.hevcBitrate=bitrate;s.hevcDirty.store(s.hevcRequested,std::memory_order_release);
 }
 bool SenderCoverage::hevcAvailable()const noexcept{return impl_->hevcAvailable.load(std::memory_order_acquire);}
+bool SenderCoverage::hevcTemporalAvailable()const noexcept{return impl_->hevcTemporalAvailable.load(std::memory_order_acquire);}
 bool SenderCoverage::takeHevcSyntaxTrace(MaskHevcSyntaxTrace& trace)noexcept{return impl_->syntaxTrace.take(trace);}
 HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
     const auto& s=*impl_;HevcMaskStats stats{};stats.requested=s.hevcRequested;stats.bitRate=s.hevcBitrate;
     stats.prepared=s.hevcPrepared.load(std::memory_order_acquire);stats.available=s.hevcAvailable.load(std::memory_order_acquire);
-    stats.nativeStatus=s.maskEncoder.lastNvencStatus();stats.encoded=s.hevcEncoded.load(std::memory_order_relaxed);
+    stats.temporalPrepared=s.hevcTemporalPrepared.load(std::memory_order_acquire);stats.temporalAvailable=s.hevcTemporalAvailable.load(std::memory_order_acquire);stats.temporalStatus=0;
+    for(const auto& lane:s.temporalEncoders)if(lane.lastNvencStatus())stats.temporalStatus=lane.lastNvencStatus();
+    stats.temporal=s.hevcTemporalPeer.load(std::memory_order_acquire)&&s.hevcTemporalPrepared.load(std::memory_order_acquire);
+    const auto& encoder=stats.temporal?s.temporalEncoders[0]:s.maskEncoder;
+    stats.nativeStatus=encoder.lastNvencStatus();stats.encoded=s.hevcEncoded.load(std::memory_order_relaxed);
     stats.pending=s.hevcPending.load(std::memory_order_relaxed);stats.refused=s.hevcRefused.load(std::memory_order_relaxed);
     stats.syntaxRefused=s.hevcSyntaxRefused.load(std::memory_order_relaxed);
-    stats.diagnostics=s.maskEncoder.diagnostics();
+    stats.diagnostics=encoder.diagnostics();
+    if(stats.temporal){auto& total=stats.diagnostics;for(unsigned i=1;i<Impl::TemporalLanes;++i){const auto d=s.temporalEncoders[i].diagnostics();
+        total.mapped+=d.mapped;total.submitted+=d.submitted;total.locked+=d.locked;total.ready+=d.ready;
+        total.rateTarget+=d.rateTarget;total.rateBudget+=d.rateBudget;total.streamTarget+=d.streamTarget;total.wireMean+=d.wireMean;
+        total.rateChanges+=d.rateChanges;total.qpSamples+=d.qpSamples;total.qpSum+=d.qpSum;total.minQp=std::min(total.minQp,d.minQp);total.maxQp=std::max(total.maxQp,d.maxQp);
+        if(d.stage!=MaskHevcFailure::None){total.stage=d.stage;total.nativeStatus=d.nativeStatus;total.rejectedFields=d.rejectedFields;}}
+        total.frameRateNum*=Impl::TemporalLanes; // Aggregate nominal output cadence; last values remain lane0 diagnostics.
+    }
     stats.submissionToPollUs=s.hevcCollectAgeUs.load(std::memory_order_relaxed);
     stats.maxSubmissionToPollUs=s.hevcMaxCollectAgeUs.load(std::memory_order_relaxed);return stats;
 }

@@ -81,7 +81,7 @@ und lass sie bis zum Abschluss eingeschaltet.
 Starte deinen Steam-Link-Stream und aktiviere natives Steam-Link-Passthrough im Spiel.
 Dieselbe Zeile bietet später **Update, Deinstallation oder Rücknahme** an.
 
-Das **dev-Update 0.3.0** für Sender und Empfänger nutzt HEVC-Masken standardmäßig
+Das **dev-Update 0.3.9** für Sender und Empfänger nutzt HEVC-Masken standardmäßig
 mit 20 Mbit/s Zielbitrate. Verwende zum Testen in der Installationszeile oben
 `dev` anstelle von `main`; eine zusätzliche Flag ist nicht nötig.
 Die [Codec-Testanleitung](docs/development/HEVC-MASK-TESTING.md) beschreibt

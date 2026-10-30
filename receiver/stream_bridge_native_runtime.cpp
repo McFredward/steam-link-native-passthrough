@@ -122,6 +122,7 @@ struct ReceiverWorker::Impl {
         stream_bridge::ControlRequest config{};config.explicitlyEnabled=true;config.role=stream_bridge::Role::Receiver;
         config.offered=stream_bridge::KnownCapabilities;config.required=stream_bridge::NativeRequiredCapabilities;
         config.hevcIntraCoverageEnabled=request.hevcIntraCoverageReady;
+        config.hevcTemporalCoverageEnabled=request.hevcTemporalCoverageReady;
         config.nativeAccessUnitCapacity=static_cast<std::uint32_t>(std::min<std::size_t>(fact.bufferCapacity,MaxCodedBytes));
         config.buildId=request.buildId;config.pairingsDirectory=request.pairingsDirectory;
         config.address=request.producerAddress;config.port=request.producerPort;config.video=source.stream;
@@ -297,10 +298,11 @@ struct ReceiverWorker::Impl {
         using R=stream_bridge_receiver::Result;
         if(result.result==R::InvalidOwned||result.result==R::WrongSession||result.result==R::Incompatible
             ||result.result==R::EvidenceLost||result.result==R::CapacityExceeded){clear(RuntimeState::SourceLost,true,RuntimeReason::InvalidCertificate);return;}
-        if(certificate.coverageEncoding==stream_bridge::CoverageEncoding::HevcIntra){
+        if(stream_bridge::hevcCoverage(certificate.coverageEncoding)){
+            const bool temporal=certificate.coverageEncoding==stream_bridge::CoverageEncoding::HevcTemporal;
             const auto peer=receiver.snapshot();
-            if(!request.hevcIntraCoverageReady||!peer.peerConfirmed||!peer.metadataObserved||
-                !(receiver.negotiatedCapabilities()&stream_bridge::CapHevcIntraCoverage)){
+            if(!(temporal?request.hevcTemporalCoverageReady:request.hevcIntraCoverageReady)||!peer.peerConfirmed||!peer.metadataObserved||
+                !(receiver.negotiatedCapabilities()&(temporal?stream_bridge::CapHevcTemporalCoverage:stream_bridge::CapHevcIntraCoverage))){
                 // A known individual unsupported picture cannot grant pixels
                 // or reset an otherwise usable old-peer/lossless connection.
                 q->tokens.set(fact.nativeTimestampToken);return;

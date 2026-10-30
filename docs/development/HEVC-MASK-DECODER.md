@@ -1,6 +1,43 @@
 # Independent HEVC mask decoder
 
-The new receiver adapter accepts only authenticated Codec6 `HevcIntra` payloads
+The current adapter also accepts separately negotiated Codec7 `HevcTemporal`.
+The Codec6 independence contract described below is retained. Codec7 uses two
+alternating PC encoding lanes and group-affine Frame decoding; it does not relax
+Codec6 to accept arbitrary P pictures. See [the current candidate and test scope](HEVC-MASK-TESTING.md).
+
+Codec7 requires authenticated `SFHT` version1, Main8/420 full-range Y, explicit
+VPS/SPS/PPS in every AU, no crop, no B/CRA/long-term references, bounded DPB and
+zero reorder. P slices have one active default L0 entry, previous POC; bounded
+additional RPS entries cannot select a different active reference. Each complete
+picture has at most four increasing independent slice CTB addresses.
+
+The64-byte little-endian envelope retains Codec6 fields0..22, with magic `SFHT`.
+Byte23 is1 for IDR and0 for P. Unsigned64-bit fields24/32/40/48 are codec epoch,
+private sequence, predecessor (zero only for IDR) and requested group anchor.
+Bytes56..63 are zero. The existing SFV1 header/hash/MAC authenticates all these
+fields and every entropy byte. Epochs do not repeat inside one producer process;
+a process restart requires a fresh authenticated transport binding. Native
+submission/frame/eye/extent/image authority remains in the original certificate.
+
+Four workers/eight slots retain their bounds. A group stays on one worker, while
+other groups and lanes overlap. Each worker owns a separate optional temporal
+context and legacy context; no additional thread, latest-mask cache or unbounded
+queue is introduced. Parameter/epoch/group/dependency/POC/packet-output checks
+precede publication. Source/channel cancellation revokes queued/completed work
+and invalidates every temporal DPB before a new cancellation epoch can use it.
+A missing reference drops only its chain until a complete IDR. It never resets
+the paired session or grants game pixels during active-MR camera-only recovery.
+
+The serialized per-packet public COPY_OPAQUE identity and fresh PTS remain exact
+for IDR and P. A successful temporal decode yields exactly one current frame and
+leaves the decoder awaiting another packet, without EOF/draining/DPB flush.
+The Process then rejoins its still-current signed certificate and native image
+lease before the existing GPU consumer and Ready acknowledgement.
+
+## Retained independent Codec6 route
+
+
+The independent receiver route accepts only authenticated Codec6 `HevcIntra` payloads
 that pass the portable `SFHC` envelope/profile/extent check. The first route uses
 one complete HEVC Main 8-bit 4:2:0 IDR per mask, with its own VPS/SPS/PPS and up to four independent slices. Unused explicit
 SPS reference sets are parsed but cannot grant inter-frame prediction. P/B/CRA,

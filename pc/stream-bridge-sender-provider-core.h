@@ -44,6 +44,7 @@ struct NvencOutputEvidence {
     // Successful native Lock's original bytes, before any owned SEI is added.
     std::uint32_t originalAccessUnitBytes=0;
     bool lossyCoverageAuthorized=false;
+    bool temporalCoverageAuthorized=false;
 };
 struct DeviceObserver {
     // Successful actual public Open session. Device is borrowed native identity;

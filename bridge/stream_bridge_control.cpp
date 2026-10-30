@@ -60,7 +60,7 @@ bool address(const ControlRequest& request,sockaddr_in& out){
 }
 struct ControlRuntime::Impl{
     static constexpr std::size_t Capacity=4;
-    struct FrameSigner{AuthSession auth;std::uint32_t budget=0;bool hevcIntraEnabled=false;};
+    struct FrameSigner{AuthSession auth;std::uint32_t budget=0;bool hevcIntraEnabled=false,hevcTemporalEnabled=false;};
     // Encoder certificates only read this generation's immutable signing state.
     // They must not compete with socket polling, credentials or control HMACs.
     // Publication requires the negotiated native AU budget; close revokes it
@@ -96,7 +96,8 @@ void ControlRuntime::stop() noexcept{std::lock_guard<std::mutex> lock(impl_->mut
 ControlStatus ControlRuntime::prepare(const ControlRequest& request) noexcept{
     std::lock_guard<std::mutex> lock(impl_->mutex);impl_->close(ControlStatus::Disabled);
     if(!request.explicitlyEnabled)return impl_->state;
-    const auto offered=request.hevcIntraCoverageEnabled?request.offered:(request.offered&~(CapHevcIntraCoverage|CapHevcIntraSlices));
+    const auto offered=(request.offered&~(request.hevcIntraCoverageEnabled?0ull:(CapHevcIntraCoverage|CapHevcIntraSlices)))
+        &~(request.hevcTemporalCoverageEnabled?0ull:CapHevcTemporalCoverage);
     if((request.role!=Role::Producer&&request.role!=Role::Receiver)||!request.buildId
         ||(request.offered&~KnownCapabilities)||(request.required&~offered)
         ||(request.required&RequiredCapabilities)!=RequiredCapabilities
@@ -117,6 +118,7 @@ ControlStatus ControlRuntime::prepare(const ControlRequest& request) noexcept{
         catch(...){impl_->close(ControlStatus::IoRefused);return impl_->state;}
         if(impl_->pendingFrameSigner->auth.prepareProducer(pair,binding)!=AuthStatus::Ok){impl_->close(ControlStatus::AuthenticationRefused);return impl_->state;}
         impl_->pendingFrameSigner->hevcIntraEnabled=(offered&CapHevcIntraCoverage)!=0;
+        impl_->pendingFrameSigner->hevcTemporalEnabled=(offered&CapHevcTemporalCoverage)!=0;
     }
     impl_->requireBudget=full;impl_->nativeBudget=request.nativeAccessUnitCapacity;impl_->challenge=local;
     impl_->config={request.role,request.buildId,local,offered,request.required};impl_->video=request.video;
@@ -153,9 +155,10 @@ std::uint16_t ControlRuntime::localPort()const noexcept{std::lock_guard<std::mut
 bool ControlRuntime::peerVerified()const noexcept{std::lock_guard<std::mutex> lock(impl_->mutex);return impl_->auth.peerVerified();}
 std::uint32_t ControlRuntime::peerAccessUnitCapacity()const noexcept{std::lock_guard<std::mutex> lock(impl_->mutex);return impl_->peerBudget;}
 bool ControlRuntime::certifyAccessUnit(Bytes source,const FrameDescriptor& descriptor,CoverageEncoding encoding,
-    Bytes coverage,std::vector<std::uint8_t>& output,bool hevcIntraAuthorized) noexcept{
+    Bytes coverage,std::vector<std::uint8_t>& output,bool hevcIntraAuthorized,bool hevcTemporalAuthorized) noexcept{
     try{
         const auto signer=std::atomic_load(&impl_->frameSigner);if(!signer)return false;
+        if(encoding==CoverageEncoding::HevcTemporal&&(!hevcTemporalAuthorized||!signer->hevcTemporalEnabled))return false;
         if(encoding==CoverageEncoding::HevcIntra&&(!hevcIntraAuthorized||!signer->hevcIntraEnabled))return false;
         std::vector<std::uint8_t> candidate;
         if(appendCertifiedFrame(source,descriptor,encoding,coverage,signer->auth,candidate)!=FrameStatus::Ok||
@@ -171,6 +174,7 @@ bool ControlRuntime::verifyAccessUnit(Bytes source,const stream_bridge_receiver:
             context.authority.session!=impl_->video.connection||context.authority.streamGeneration!=impl_->video.generation)return false;
         CertifiedAccessUnit candidate;
         if(inspectCertifiedFrame(source,impl_->auth,candidate)!=FrameStatus::Ok)return false;
+        if(candidate.coverageEncoding==CoverageEncoding::HevcTemporal&&!(impl_->config.offered&CapHevcTemporalCoverage))return false;
         if(candidate.coverageEncoding==CoverageEncoding::HevcIntra&&!(impl_->config.offered&CapHevcIntraCoverage))return false;
         if(!impl_->auth.bound()){
             std::vector<std::uint8_t> hello;

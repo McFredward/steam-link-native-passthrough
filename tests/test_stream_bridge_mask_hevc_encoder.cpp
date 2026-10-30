@@ -27,7 +27,7 @@ struct Event {bool signaled=false;};
 struct Resource {ID3D11Texture2D* texture=nullptr;bool registered=false,mapped=false;};
 struct Output {
     std::vector<std::uint8_t> bytes{0,0,0,1,0x26,1,0x80};
-    Event* event=nullptr;std::uint64_t token=0;bool allocated=false,submitted=false,complete=false,locked=false;
+    Event* event=nullptr;std::uint64_t token=0;bool allocated=false,submitted=false,complete=false,locked=false,keyframe=true;
 };
 struct Fixture;
 Fixture* active=nullptr;
@@ -74,23 +74,23 @@ NVENCSTATUS NVENCAPI preset(void* s,GUID,GUID,NV_ENC_TUNING_INFO tune,NV_ENC_PRE
 NVENCSTATUS NVENCAPI init(void* s,NV_ENC_INITIALIZE_PARAMS* p){
     auto& x=f(s);check(p->enableEncodeAsync==1&&p->enablePTD==1&&!p->enableOutputInVidmem,"async CPU-readable output only");
     check(p->encodeWidth==x.config.width&&p->encodeHeight==x.config.height&&p->frameRateNum==x.config.frameRateNum&&p->frameRateDen==x.config.frameRateDen,"unmodified configured extent/FPS");
-    check(p->encodeConfig&&p->encodeConfig->frameIntervalP==1&&p->encodeConfig->gopLength==1,"independent-picture GOP configuration");
+    check(p->encodeConfig&&p->encodeConfig->frameIntervalP==1&&p->encodeConfig->gopLength==(x.config.temporal?8u:1u),"independent-picture GOP configuration");
     const auto& c=*p->encodeConfig;const auto& h=c.encodeCodecConfig.hevcConfig;const auto& r=c.rcParams;
     check(std::memcmp(&c.profileGUID,&NV_ENC_HEVC_PROFILE_MAIN_GUID,sizeof(GUID))==0,"Main profile is explicit");
-    check(h.repeatSPSPPS&&!h.outputAUD&&h.idrPeriod==1&&h.chromaFormatIDC==1&&!h.pixelBitDepthMinus8&&!h.enableAlphaLayerEncoding,"independent Main8 420 with repeated parameter sets and no optional AUD");
+    check(h.repeatSPSPPS&&!h.outputAUD&&h.idrPeriod==(x.config.temporal?8u:1u)&&h.chromaFormatIDC==1&&!h.pixelBitDepthMinus8&&!h.enableAlphaLayerEncoding,"independent Main8 420 with repeated parameter sets and no optional AUD");
     check(!h.sliceMode&&!h.sliceModeData&&!h.enableIntraRefresh&&!h.enableLTR,"one slice, no refresh/reference features");
     check(h.hevcVUIParameters.videoSignalTypePresentFlag&&h.hevcVUIParameters.videoFullRangeFlag&&!h.hevcVUIParameters.colourDescriptionPresentFlag,"raw full-range Y without color transform signaling");
     check(r.rateControlMode==NV_ENC_PARAMS_RC_VBR&&r.averageBitRate==x.config.bitRate&&r.maxBitRate==x.config.bitRate,"explicit VBR average and maximum, never ignored CBR maxBitRate");
     check(r.vbvBufferSize==(std::uint64_t(x.config.bitRate)*x.config.frameRateDen+x.config.frameRateNum-1)/x.config.frameRateNum&&r.vbvInitialDelay==r.vbvBufferSize,"one-frame VBV in bits with safe rational rounding");
-    check(!r.enableAQ&&!r.enableTemporalAQ&&!r.enableLookahead&&!r.lookaheadDepth&&r.zeroReorderDelay&&r.multiPass==NV_ENC_MULTI_PASS_DISABLED,"no hidden lookahead, AQ, multipass or reordering");
+    check(!r.enableAQ&&!r.enableTemporalAQ&&!r.enableLookahead&&!r.lookaheadDepth&&r.zeroReorderDelay&&r.multiPass==(x.config.temporal?NV_ENC_TWO_PASS_QUARTER_RESOLUTION:NV_ENC_MULTI_PASS_DISABLED),"no hidden lookahead, AQ, multipass or reordering");
     return x.failInit?NV_ENC_ERR_INVALID_PARAM:NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI reconfigure(void* s,NV_ENC_RECONFIGURE_PARAMS* p){
     auto& x=f(s);++x.rateChanges;
-    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&p->resetEncoder&&!p->forceIDR,"private reconfigure resets firmware RC at IDR, without changing source or resources");
+    check(p->version==NV_ENC_RECONFIGURE_PARAMS_VER&&p->resetEncoder&&p->forceIDR==unsigned(x.config.temporal),"private reconfigure resets firmware RC at IDR, without changing source or resources");
     const auto& i=p->reInitEncodeParams;const auto& c=*i.encodeConfig;
     check(i.encodeWidth==x.config.width&&i.encodeHeight==x.config.height&&i.enableEncodeAsync&&i.enablePTD,"rate update preserves dimensions and asynchronous ownership");
-    check(c.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR&&c.rcParams.averageBitRate==c.rcParams.maxBitRate&&c.gopLength==1&&c.encodeCodecConfig.hevcConfig.idrPeriod==1,"rate change preserves explicit ceiling and independent mask pictures");
+    check(c.rcParams.rateControlMode==NV_ENC_PARAMS_RC_VBR&&c.rcParams.averageBitRate==c.rcParams.maxBitRate&&c.gopLength==(x.config.temporal?8u:1u)&&c.encodeCodecConfig.hevcConfig.idrPeriod==(x.config.temporal?8u:1u),"rate change preserves explicit ceiling and independent mask pictures");
     check(c.rcParams.vbvBufferSize==(std::uint64_t(c.rcParams.averageBitRate)*i.frameRateDen+i.frameRateNum-1)/i.frameRateNum,"rate/FPS updates keep a one-picture VBV");
     x.lastRate=c.rcParams.averageBitRate;x.lastRateNum=i.frameRateNum;x.lastRateDen=i.frameRateDen;return x.rateStatus;
 }
@@ -113,9 +113,10 @@ NVENCSTATUS NVENCAPI encode(void* s,NV_ENC_PIC_PARAMS* p){
     if(x.encodeBusy)return NV_ENC_ERR_ENCODER_BUSY;
     if(x.encodeStatus!=NV_ENC_SUCCESS)return x.encodeStatus;
     ++x.privateEncodes;auto& o=*static_cast<Output*>(p->outputBitstream);
-    check(p->encodePicFlags==(NV_ENC_PIC_FLAG_FORCEIDR|NV_ENC_PIC_FLAG_OUTPUT_SPSPPS)&&p->pictureStruct==NV_ENC_PIC_STRUCT_FRAME,"every submitted picture forces independent IDR and parameter sets");
+    check((x.config.temporal?(p->encodePicFlags&NV_ENC_PIC_FLAG_OUTPUT_SPSPPS)!=0:p->encodePicFlags==(NV_ENC_PIC_FLAG_FORCEIDR|NV_ENC_PIC_FLAG_OUTPUT_SPSPPS))&&p->pictureStruct==NV_ENC_PIC_STRUCT_FRAME,"every submitted picture forces independent IDR and parameter sets");
     check(p->completionEvent&&p->inputBuffer&&p->bufferFmt==NV_ENC_BUFFER_FORMAT_NV12,"async GPU input, no upload/readback");
     check(p->inputTimeStamp&&p->inputTimeStamp==p->frameIdx,"private nonzero token, independent of native opaque timestamp");
+    o.keyframe=(p->encodePicFlags&NV_ENC_PIC_FLAG_FORCEIDR)!=0;
     o.token=p->inputTimeStamp;o.event=static_cast<Event*>(p->completionEvent);o.submitted=true;o.complete=false;return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI lock(void* s,NV_ENC_LOCK_BITSTREAM* p){
@@ -123,7 +124,7 @@ NVENCSTATUS NVENCAPI lock(void* s,NV_ENC_LOCK_BITSTREAM* p){
     check(o.complete,"lock only after signaled completion");if(x.lockBusy)return NV_ENC_ERR_LOCK_BUSY;
     if(x.lockStatus!=NV_ENC_SUCCESS)return x.lockStatus;
     if(x.reenter){std::vector<std::uint8_t> bytes{99};check(x.encoder.tryTake(x.key(1),bytes)==MaskHevcTake::Busy&&bytes.empty(),"hot reentry refuses without waiting or exposing stale data");}
-    o.locked=true;p->outputTimeStamp=o.token+(x.wrongStamp?1:0);p->pictureType=x.wrongType?NV_ENC_PIC_TYPE_P:NV_ENC_PIC_TYPE_IDR;
+    o.locked=true;p->outputTimeStamp=o.token+(x.wrongStamp?1:0);p->pictureType=x.wrongType?NV_ENC_PIC_TYPE_P:(o.keyframe?NV_ENC_PIC_TYPE_IDR:NV_ENC_PIC_TYPE_P);
     p->pictureStruct=x.wrongStruct?NV_ENC_PIC_STRUCT_FIELD_TOP_BOTTOM:NV_ENC_PIC_STRUCT_FRAME;
     p->frameAvgQP=x.averageQp;p->hwEncodeStatus=x.hwFailure?1:x.hardwareStatus;p->bitstreamBufferPtr=x.nullOutput?nullptr:o.bytes.data();
     p->bitstreamSizeInBytes=x.emptyOutput?0:(x.outputSize?x.outputSize:std::uint32_t(o.bytes.size()));return NV_ENC_SUCCESS;
@@ -183,10 +184,37 @@ void dynamicRate(){
     resetAndCheck(x);
 }
 
+void temporalEncoding(){
+    const auto hz=maskHevcLaneCadence(90,1),fraction=maskHevcLaneCadence(90000,1001),odd=maskHevcLaneCadence(89,1),overflow=maskHevcLaneCadence(UINT32_MAX,UINT32_MAX);
+    check(hz.num==45&&hz.den==1&&fraction.num==45000&&fraction.den==1001&&odd.num==89&&odd.den==2&&!overflow.num&&!overflow.den,"private half-cadence keeps fractional rates exact and refuses integer wrap");
+    Fixture x;x.config.temporal=true;check(x.configure(),"optional temporal encoder prepared independently of legacy mode");
+    std::uint64_t epoch=0,previous=0,anchor=0;
+    for(unsigned n=0;n<20;++n){const auto key=x.key(n+1);
+        check(x.encoder.beginStage(key,&x.textures[0])&&x.encoder.submit(key),"fixed temporal stage accepts exact current input");x.complete(0);
+        std::vector<std::uint8_t> bytes;MaskHevcPicture picture;
+        check(x.encoder.tryTake(key,bytes,nullptr,&picture)==MaskHevcTake::Ready,"actual successful metadata distinguishes P and required IDR");
+        if(!epoch)epoch=picture.epoch;
+        const bool keyframe=n==0||n==8||n==12;
+        check(picture.epoch==epoch&&picture.sequence>previous&&picture.keyframe==keyframe,"IPPP8 has one private epoch and ordered encoded-picture sequence");
+        if(keyframe){anchor=picture.sequence;check(!picture.dependency,"key has no predecessor dependency");}
+        else check(picture.dependency==previous,"P declares the exact previously submitted reference, independent of native frame gaps");
+        check(picture.anchor==anchor,"group affinity survives all P outputs");previous=picture.sequence;
+        if(n==11)x.encoder.requestKeyframe(); // Refused certification/unsent output.
+    }
+    resetAndCheck(x);
+    Fixture y;y.config.temporal=true;check(y.configure(),"second temporal session prepared");
+    const auto a=y.key(1);check(y.encoder.beginStage(a,&y.textures[0])&&y.encoder.submit(a),"accepted private output can later be canceled");
+    y.encoder.cancel(a);y.complete(0);check(y.encoder.canStage(&y.textures[0]),"canceled GPU texture remains owned until completion/unmap");
+    const auto b=y.key(2);check(y.encoder.beginStage(b,&y.textures[0])&&y.encoder.submit(b),"new exact input after canceled predecessor");y.complete(0);
+    std::vector<std::uint8_t> bytes;MaskHevcPicture picture;
+    check(y.encoder.tryTake(b,bytes,nullptr,&picture)==MaskHevcTake::Ready&&picture.keyframe&&!picture.dependency&&picture.epoch!=epoch,"cancel forces recovery and recreated session never aliases an earlier codec epoch");
+    resetAndCheck(y);
+}
+
 }
 
 int main(int argc,char** argv){
-    using namespace stream_bridge::sender;dynamicRate();
+    using namespace stream_bridge::sender;dynamicRate();temporalEncoding();
     {
         MaskHevcSyntaxTraceSlot slot;MaskHevcSyntaxTrace trace{};
         check(!slot.take(trace),"cold diagnostic cannot read an unpublished header snapshot");

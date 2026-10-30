@@ -1,17 +1,66 @@
 # HEVC mask test candidate
 
-Installer 0.3.8 / PC 0.3.6 / Frame 0.3.2 selects lossy HEVC masks by default
-with a 20 Mbit/s user ceiling and an adaptive share of the native stream budget. No flag or configuration file is needed. Existing
-explicit bitrate and lossless preferences override this default.
-It uses a separate original NVENC session on the PC and a private software HEVC
-decoder on the Frame. The ordinary image keeps its native dimensions, encoder,
-foveation and reprojection. Use the normal guided setup; this candidate changes only the PC sender.
-The unchanged Frame component must not be written or restarted. This candidate is software-tested; headset quality and 90 Hz performance
-have not yet been established for this codec.
+Installer **0.3.9 / PC 0.3.7 / Frame 0.3.3** prefers negotiated temporal HEVC
+(IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
+preferences still override the default. This update changes both native
+components; use the normal guided dev setup and apply the paired update.
+
+The PC supplies full-resolution R8 coverage as full-range NV12 Y with neutral
+chroma. Two alternating original NVENC P3/ultra-low-latency sessions use quarter-size
+multipass, no B pictures, no lookahead and one active previous-picture reference.
+Each lane receives every other mask, with half the original cadence and half
+the aggregate mask budget. One requested IDR starts each group of at most eight
+lane pictures. This gives each persistent chain two native frame intervals for
+decode rather than accumulating work in a single90Hz chain. Each AU repeats
+its parameter sets. The original RGB encoder, dimensions, foveation and
+reprojection stay native. A third prepared independent-IDR encoder preserves Codec6
+for older peers; no temporal input is encoded without the separate negotiated
+capability. Temporal capability requires both lane sessions to prepare successfully;
+unsupported hardware/resource limits retain independent/lossless modes.
+
+Codec7 uses optional capability4096 and a signed64-byte `SFHT` envelope. Codec
+epoch, private picture sequence, predecessor and requested group anchor are
+separate from native source/frame/eye/image authority. A successful original Lock
+must return the exact submitted private timestamp, complete progressive output
+and the expected IDR/P type. An abandoned output requests the next recovery IDR.
+A rate reset also forces IDR rather than leaving P state ambiguous.
+
+The Frame pool keeps four worker threads and eight owned slots. Each group's P
+pictures stay on one worker/context; independent groups overlap, retaining
+parallel throughput without frame-thread lookahead. Separate bounded legacy
+contexts preserve old independent-picture decoding. P input requires its exact
+successful dependency and next POC in the same source, binding, native encoder,
+extent, codec epoch and group. No draining or reference flush occurs between P
+pictures. A gap revokes that chain until a complete IDR; active MR stays camera
+only when its exact current mask is unavailable. The paired session is retained.
+Every decoded output still carries its exact packet identity and must rejoin the
+current signed certificate, native image lease and GPU publication before Ready.
+
+The user's synthetic RTX4090 probe produced98.08Mbit/s for the production P1
+all-IDR case despite a requested20Mbit/s target, at frame-average QP50. Matched
+forced/automatic-IDR and infinite-GOP controls were byte-identical. P3/quarter
+multipass alone produced88.11Mbit/s; P3/IPPP8 produced29.43Mbit/s. The last-frame
+mean alpha error fell from15.22 to11.02 byte codes, but endpoint errors remained.
+These are measured **synthetic nominal90Hz bitrates and lossy-alpha errors**,
+not game wire rates or a visual acceptance result. The real captured eight-frame
+NVENC stream also passes the new grammar and private software decoder. Strict
+CPU fixtures cover missing predecessors, cancellation, source changes, parallel
+groups and authenticated P-picture/native-image/GPU Ready joins.
+
+A local C-only decoder stress replay of128 captured pictures on a nominal90Hz
+schedule had82.7ms mean /130.2ms max completion latency with one temporal lane,
+and44.3ms mean /68.8ms max with two alternating lanes. The latter decoded all128
+with no slot backpressure. This is a host scheduling control using identical
+captured entropy complexity, not a two-lane NVIDIA encode-quality measurement
+or Frame performance proof. Frame uses its independently built ARM SIMD codec.
+
+This is a software-tested candidate. Headset image quality, rain/foliage
+continuity and latency still require a matched Frame test. Lower mask bitrate
+alone does not satisfy the maintainer's acceptance target.
 
 ## Windows installation and selection
 
-Run the normal dev installer and apply the offered PC update:
+Run the normal dev installer and apply the offered PC and Frame updates:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get.ps1 | iex
@@ -27,8 +76,8 @@ update; its default zero means preserve the preference, not disable HEVC:
 ```
 
 The override is written only when the installed PC DLL matches the target package.
-The existing Apply step updates changed components; this PC-only update leaves
-the unchanged Frame untouched.
+The existing Apply step updates both changed native components and performs the
+coordinated Frame restart.
 The bootstrap never starts PC SteamVR. Alternatively, from this checkout after
 installing, select the mode with existing Python:
 
@@ -52,7 +101,8 @@ the file returns to the 20 Mbit/s HEVC default. Unreadable or invalid settings
 preserve the lossless route. Failed/unsupported individual HEVC outputs use the
 current frame's established independent A8 fallback. Missing current data keeps
 the existing active-MR camera-only recovery. There is never a latest-mask
-substitution. Old peers negotiate their existing lossless capabilities.
+substitution. Older prepared Codec6 peers retain independent HEVC; other old peers retain
+their established lossless capabilities.
 
 ## What to record
 
@@ -68,7 +118,9 @@ CPU collect/wrap time and submission-to-poll age are not isolated hardware
 encode latency. The actual-byte wire-budget log continues to include added mask
 metadata; enabling HEVC does not disable bandwidth accounting.
 
-Frame logs count HEVC decode/refusal separately. Decoder initialization must
+Frame logs count HEVC decode/refusal, temporal decoded pictures and missing
+references separately. PC logs identify `mode=IPPP8` and `HEVC temporal:`
+preparation, selection and native status; encoding7 has its own frame count. Decoder initialization must
 load the owned adjacent `libavcodec-sfnp-mask.so.62` and
 `libavutil-sfnp-mask.so.60`; it never borrows a mismatching system FFmpeg ABI.
 Compare RGB quality, mask artifacts, frame continuity and decoder load together.

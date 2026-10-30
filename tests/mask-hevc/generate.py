@@ -105,6 +105,43 @@ def generate(ffmpeg, root):
             if name in ('slices', 'tall-slices'):
                 target = root / (name + '.hevc')
                 target.write_bytes(with_unused_reference_set(target.read_bytes()))
+        source = Path(temporary) / 'temporal.yuv'
+        frames = []
+        for frame in range(16):
+            y = bytes(((x + frame*11) % 256 if (x//64+frame) % 5 else 0) for x in range(4096))
+            (root / f'temporal-{frame:03d}.r8').write_bytes(y)
+            frames.append(y + bytes([128])*2048)
+        source.write_bytes(b''.join(frames))
+        target = Path(temporary) / 'temporal.hevc'
+        command = [str(ffmpeg), '-v', 'error', '-nostdin', '-y', '-f', 'rawvideo', '-pixel_format', 'yuv420p',
+                   '-video_size', '64x64', '-framerate', '90', '-color_range', 'pc', '-i', str(source), '-frames:v', '16',
+                   '-c:v', 'libx265', '-preset', 'ultrafast', '-tune', 'zerolatency', '-x265-params',
+                   params.replace('keyint=30:min-keyint=30', 'keyint=8:min-keyint=8') + ':scenecut=0:open-gop=0:ref=1:weightp=0:temporal-mvp=0',
+                   '-color_range', 'pc', '-f', 'hevc', str(target)]
+        subprocess.run(command, check=True, capture_output=True, timeout=30)
+        # Repeat the exact parameter sets for each picture, as requested from
+        # NVENC by production. Keep individual AUs, never a decoder parser guess.
+        coded = target.read_bytes()
+        starts = list(re.finditer(b'\x00\x00(?:\x00)?\x01', coded))
+        parameter_sets = []
+        pictures = []
+        for index, start in enumerate(starts):
+            end = starts[index+1].start() if index+1 < len(starts) else len(coded)
+            body = start.end(); kind = (coded[body] >> 1) & 63
+            if kind == 32:
+                parameter_sets = []
+            if kind in (32, 33, 34):
+                parameter_sets.append(coded[start.start():end])
+            elif kind in (1, 19, 20):
+                if coded[body+2] & 128:
+                    pictures.append(bytearray(b''.join(parameter_sets)))
+                pictures[-1].extend(coded[start.start():end])
+            else:
+                raise ValueError(f'Unexpected temporal fixture NAL {kind}')
+        if len(pictures) != 16:
+            raise ValueError('Temporal CPU fixture must contain exactly 16 pictures')
+        for frame, picture in enumerate(pictures):
+            (root / f'temporal-{frame:03d}.hevc').write_bytes(picture)
     return root
 
 

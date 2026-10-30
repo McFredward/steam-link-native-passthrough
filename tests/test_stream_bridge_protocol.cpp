@@ -109,6 +109,7 @@ void hevcSlicesNegotiation(){
     require(!hevcIntraSlicesNegotiated(a.negotiatedCapabilities()),"offered extension is not confirmed HEVC authority");
     for(const auto kind:{Kind::Hello,Kind::Ack,Kind::Commit}){relay(a,b,kind);relay(b,a,kind);}
     require(hevcIntraSlicesNegotiated(a.negotiatedCapabilities())&&hevcIntraSlicesNegotiated(b.negotiatedCapabilities()),"both committed peers select extended syntax");
+    require(hevcTemporalNegotiated(a.negotiatedCapabilities())&&!hevcTemporalNegotiated(CapHevcTemporalCoverage),"temporal mode requires the complete separately confirmed extended HEVC contract");
     require(!hevcIntraSlicesNegotiated(CapHevcIntraSlices),"extension alone cannot grant HEVC");
 }
 

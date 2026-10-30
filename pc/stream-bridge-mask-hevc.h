@@ -19,12 +19,19 @@ struct MaskHevcKey {
 bool operator==(const MaskHevcKey&,const MaskHevcKey&)noexcept;
 inline bool operator!=(const MaskHevcKey& a,const MaskHevcKey& b)noexcept{return !(a==b);}
 
+struct MaskHevcCadence {std::uint32_t num=0,den=0;};
+// Two alternating lanes preserve a rational cadence without denominator wrap.
+constexpr MaskHevcCadence maskHevcLaneCadence(std::uint32_t num,std::uint32_t den)noexcept{
+    return num%2?(den<=UINT32_MAX/2?MaskHevcCadence{num,den*2}:MaskHevcCadence{}):MaskHevcCadence{num/2,den};
+}
 struct MaskHevcConfig {
     std::uint32_t width=0,height=0,frameRateNum=0,frameRateDen=0;
     // User ceiling, not a guarantee of AU/wire size. Reconfigure only cold.
     std::uint32_t bitRate=0,maxAccessUnitBytes=2u*1024u*1024u;
     std::uint32_t streamBitRate=0; // Original native target, before metadata deduction;0 unknown.
+    bool temporal=false; // Optional Codec7, IPPP8, no B/reordering.
 };
+struct MaskHevcPicture {std::uint64_t epoch=0,sequence=0,dependency=0,anchor=0;bool keyframe=true;};
 enum class MaskHevcTake { Unavailable,Busy,Missing,Pending,Ready,Refused };
 enum class MaskHevcFailure : unsigned {
     None,Setup,MapInput,MapOutput,EncodePicture,LockBitstream,OutputValidation,
@@ -53,12 +60,12 @@ struct MaskHevcDiagnostics {
     std::uint32_t lastQp=0,minQp=0,maxQp=0,rateSamples=0,lastEncodedBytes=0;
 };
 
-// Separate Windows/D3D11 HEVC Main8 session. Each output is an independent
-// IDR with repeated VPS/SPS/PPS. Y is supplied full range; UV must already be
+// Separate Windows/D3D11 HEVC Main8 session. Legacy mode is independent IDR;
+// optional temporal mode is IPPP8. Every output repeats VPS/SPS/PPS. Y is supplied full range; UV must already be
 // neutral128. No readback, upload, NVENC wrapper recursion or CPU codec path.
 class MaskHevcEncoder {
 public:
-    static constexpr unsigned StageCount=4;
+    static constexpr unsigned StageCount=4,TemporalGroupPictures=8;
     MaskHevcEncoder();
     ~MaskHevcEncoder(); // Cold only: flushes GPU work before releasing resources.
     MaskHevcEncoder(const MaskHevcEncoder&)=delete;
@@ -80,15 +87,16 @@ public:
     bool beginStage(const MaskHevcKey&,ID3D11Texture2D*)noexcept;
     bool submit(const MaskHevcKey&)noexcept;
     // Polls one event with timeout0, locks with doNotWait1, and returns only
-    // this exact key's IDR. Always clears out on non-Ready. Reserve out's
+    // this exact key's validated IDR/P. Always clears out on non-Ready. Reserve out's
     // capacity cold when allocation-free output copying is required.
-    MaskHevcTake tryTake(const MaskHevcKey&,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch=nullptr)noexcept;
+    MaskHevcTake tryTake(const MaskHevcKey&,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch=nullptr,MaskHevcPicture* picture=nullptr)noexcept;
     // Cold, opportunistic and only between private submissions. No resource
     // recreation, flush, source-generation change or invalidation on API failure.
-    // Reset only firmware RC state at an already mandatory IDR.
+    // Reset firmware RC at an IDR; temporal mode explicitly forces recovery.
     bool updateRate(std::uint32_t num,std::uint32_t den,std::uint32_t streamBitRate,std::uint32_t userLimit)noexcept;
     // Hot, bounded try-lock. Exact added wire bytes from this rate epoch only.
     void observeAddedBytes(std::uint64_t rateEpoch,std::size_t bytes,std::uint32_t fpsNum=0,std::uint32_t fpsDen=0)noexcept;
+    void requestKeyframe()noexcept; // Bounded atomic notification after an unsent AU.
     void cancel(const MaskHevcKey&)noexcept;
     // Cold/quiesced; waits at most2s for the NVENC flush event. On false,
     // deactivates but retains the bounded GPU-live session; retry cold later.

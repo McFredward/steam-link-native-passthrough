@@ -72,6 +72,68 @@ void decode(const hevc::Libraries& libs,const fs::path& root){
     check(decoder.decodeIntra(in,output)==hevc::Status::Ok&&output.source.generation==27&&output.descriptor.encoderGeneration==31&&output.descriptor.sourceFrame==91&&output.binding[3]==22,"fresh independent AU recovers after bad payload and source restart without old decoder state");
     decoder.stopCold();check(!decoder.ready()&&decoder.decodeIntra(in,output)==hevc::Status::Unavailable,"cold stop revokes decoder availability");
 }
+void temporal(const hevc::Libraries& libs,const fs::path& root){
+    hevc::Decoder decoder;check(decoder.prepareCold(libs),"temporal decoder prepared from owned public ABI");
+    std::array<std::vector<std::uint8_t>,16> payloads;
+    for(unsigned n=0;n<16;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto coded=read(root/name);
+        check(sb::wrapHevcTemporalCoverage(bytes(coded),64,64,71,n+1,n%8?n:0,n%8==0,(n/8)*8+1,payloads[n]),"real IPPP8 Main8 AU passes bounded temporal grammar");
+        std::vector<std::uint8_t> old;check(!sb::wrapHevcCoverage(bytes(coded),64,64,old)||n%8==0,"dependent P remains outside legacy Codec6");}
+    for(unsigned offset=56;offset<64;++offset){auto invalid=payloads[1];invalid[offset]=1;sb::HevcCoverageView view;
+        check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"temporal reserved envelope bytes remain closed");}
+    for(unsigned offset:{0u,4u,5u,6u,7u,8u,10u,12u,16u,20u,21u,22u,23u}){auto invalid=payloads[1];invalid[offset]^=128;sb::HevcCoverageView view;
+        check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"temporal codec/profile/range/extent/count/kind are checked before decode");}
+    {auto invalid=payloads[1];std::fill_n(invalid.begin()+24,8,0);sb::HevcCoverageView view;
+        check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"zero temporal epoch cannot alias a prior session");
+        invalid=payloads[1];std::fill_n(invalid.begin()+40,8,0);
+        check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"P cannot omit its predecessor");
+        invalid=payloads[1];invalid[48]=3;
+        check(!sb::inspectHevcTemporalCoverage(bytes(invalid),64,64,view),"future group anchor cannot describe this P picture");}
+    hevc::DecodedMask output;
+    const auto frame=[&](unsigned n){auto in=input(bytes(payloads[n]));in.descriptor.sourceFrame=100+n;return in;};
+    check(decoder.decodeTemporal(frame(1),output)==hevc::Status::MissingReference,"P cannot create reference state without its authenticated key");
+    for(unsigned n=0;n<16;++n){
+        const auto status=decoder.decodeTemporal(frame(n),output);
+        if(status!=hevc::Status::Ok)std::fprintf(stderr,"temporal %u: %s\n",n,hevc::statusName(status));
+        check(status==hevc::Status::Ok&&output.descriptor.sourceFrame==100+n,"exact packet identity survives IP prediction without decoder draining/reordering");
+        char name[40];std::snprintf(name,sizeof name,"temporal-%03u.r8",n);const auto expected=read(root/name);
+        unsigned error=0;for(unsigned i=0;i<4096;++i)error=std::max(error,unsigned(std::abs(int(expected[i])-int(output.samples[i]))));
+        check(error<=3,"real decoded P coverage matches its own current source samples");
+    }
+    check(decoder.statistics().contextsOpened==1,"one persistent DPB decodes both complete IPPP8 groups");
+    decoder.invalidateTemporal();check(decoder.decodeTemporal(frame(0),output)==hevc::Status::Ok,"key restores invalidated codec state");
+    const auto held=output.samples;
+    check(decoder.decodeTemporal(frame(2),output)==hevc::Status::MissingReference&&output.samples==held,"missing dependency cannot publish partial or previous mask");
+    check(decoder.decodeTemporal(frame(3),output)==hevc::Status::MissingReference,"dependent tail stays refused after a gap");
+    check(decoder.decodeTemporal(frame(8),output)==hevc::Status::Ok&&decoder.decodeTemporal(frame(9),output)==hevc::Status::Ok,"next independent key restores only the codec, with current-frame proof");
+    auto wrong=frame(10);wrong.binding[0]^=1;
+    check(decoder.decodeTemporal(wrong,output)==hevc::Status::MissingReference,"fresh source binding cannot borrow old DPB");
+    check(decoder.decodeTemporal(frame(11),output)==hevc::Status::MissingReference,"old chain remains invalid after source change");
+    check(decoder.decodeTemporal(frame(8),output)==hevc::Status::Ok,"complete key recovers after wrong binding");
+    decoder.invalidateTemporal();check(decoder.decodeTemporal(frame(9),output)==hevc::Status::MissingReference,"explicit cancellation withdraws all prediction state");
+}
+
+void temporalPool(const hevc::Libraries& libs,const fs::path& root,bool lanes=false){
+    hevc::Pool pool;check(pool.prepareCold(libs),"bounded group-affine pool prepared");
+    std::array<std::vector<std::uint8_t>,16> payloads;
+    for(unsigned n=0;n<16;++n){const unsigned picture=lanes?n/2:n;char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",picture);const auto coded=read(root/name);
+        check(sb::wrapHevcTemporalCoverage(bytes(coded),64,64,81+(lanes?n%2:0),picture+1,picture%8?picture:0,picture%8==0,(picture/8)*8+1,payloads[n]),"real temporal pool fixture wrapped");}
+    unsigned sent=0,received=0;std::set<std::uint64_t> frames;
+    const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+    while(received<16&&std::chrono::steady_clock::now()<end){
+        while(sent<16){auto in=input(bytes(payloads[sent]));in.descriptor.sourceFrame=100+sent;if(!pool.submit(in))break;++sent;}
+        hevc::Pool::Result result;
+        while(pool.take(result)){check(result.status==hevc::Status::Ok&&result.decoded.descriptor.sourceFrame==result.identity.descriptor.sourceFrame,"parallel groups retain serial references and exact completed frame identity");
+            check(frames.insert(result.identity.descriptor.sourceFrame).second,"each queued P/key picture completes once");++received;}
+        std::this_thread::yield();
+    }
+    check(sent==16&&received==16,"both independent GOPs make progress through fixed eight slots");
+    pool.cancel();auto in=input(bytes(payloads[lanes?2:1]));in.descriptor.sourceFrame=200;
+    check(pool.submit(in),"post-cancel dependent input remains an authenticated job");
+    bool refused=false;
+    while(!refused&&std::chrono::steady_clock::now()<end){hevc::Pool::Result result;if(pool.take(result)){check(result.status==hevc::Status::MissingReference,"cancel cannot borrow a previously decoded same-group DPB");refused=true;}else std::this_thread::yield();}
+    check(refused,"post-cancel missing-reference status completes without blocking");
+}
+
 void reuse(const hevc::Libraries& libs,const fs::path& root){
     hevc::Decoder decoder;check(decoder.prepareCold(libs),"reusable decoder prepared");
     std::array<std::vector<std::uint8_t>,3> payloads;
@@ -122,4 +184,4 @@ void pool(const hevc::Libraries& libs,const fs::path& root){
 }
 
 }
-int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);reuse(libraries,argv[3]);pool(libraries,argv[3]);std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);temporal(libraries,argv[3]);temporalPool(libraries,argv[3]);temporalPool(libraries,argv[3],true);reuse(libraries,argv[3]);pool(libraries,argv[3]);std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

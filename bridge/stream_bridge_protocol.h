@@ -12,14 +12,17 @@ constexpr std::size_t MessageBytes=80;
 constexpr std::uint64_t CapNegotiation=1, CapAnnexBSei=2,
     CapSourceAssociation=4, CapOpaqueFallback=8, CapExplicitCoverage=16,
     CapRleLz4=32, CapRleZstd=64, CapCameraOnlyRecovery=128, CapRawZstd=256,
-    CapOrdinaryVideoPicture=512, CapHevcIntraCoverage=1024, CapHevcIntraSlices=2048;
+    CapOrdinaryVideoPicture=512, CapHevcIntraCoverage=1024, CapHevcIntraSlices=2048, CapHevcTemporalCoverage=4096;
 // Native deployment requires the original six bits. Zstd is independently
 // optional: older peers keep the original intersection and encoding route.
-constexpr std::uint64_t KnownCapabilities=4095;
+constexpr std::uint64_t KnownCapabilities=8191;
 // Multi-slice NVENC output and unused explicit SPS reference sets require the
 // extended parser on the peer. The original single-slice decoder remains valid.
 constexpr bool hevcIntraSlicesNegotiated(std::uint64_t capabilities){
     return (capabilities&(CapHevcIntraCoverage|CapHevcIntraSlices))==(CapHevcIntraCoverage|CapHevcIntraSlices);
+}
+constexpr bool hevcTemporalNegotiated(std::uint64_t capabilities){
+    return hevcIntraSlicesNegotiated(capabilities)&&(capabilities&CapHevcTemporalCoverage)!=0;
 }
 constexpr std::uint64_t NativeRequiredCapabilities=63;
 constexpr std::uint64_t RequiredCapabilities=CapNegotiation|CapAnnexBSei|CapOpaqueFallback;

@@ -334,11 +334,14 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             const auto hevc=coverage_.hevcMaskStats();
             if(hevc.requested){
                 char hevcText[512]{};
-                std::snprintf(hevcText,sizeof hevcText,"HEVC mask: prepared=%u, available=%u, target-bit/s=%u, native-status=%d; encoded=%llu, pending=%llu, refused=%llu, syntax-refused=%llu; submission-to-poll-us=%llu/max%llu; IDR-only; not GPU encode latency",
+                std::snprintf(hevcText,sizeof hevcText,"HEVC mask: prepared=%u, available=%u, target-bit/s=%u, native-status=%d; encoded=%llu, pending=%llu, refused=%llu, syntax-refused=%llu; submission-to-poll-us=%llu/max%llu; mode=%s; not GPU encode latency",
                     unsigned(hevc.prepared),unsigned(hevc.available),hevc.bitRate,hevc.nativeStatus,
                     static_cast<unsigned long long>(hevc.encoded),static_cast<unsigned long long>(hevc.pending),
                     static_cast<unsigned long long>(hevc.refused),static_cast<unsigned long long>(hevc.syntaxRefused),
-                    static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs));
+                    static_cast<unsigned long long>(hevc.submissionToPollUs),static_cast<unsigned long long>(hevc.maxSubmissionToPollUs),hevc.temporal?"IPPP8":"IDR-only");
+                report(hevcText,stream_bridge::logging::Level::Debug);
+                std::snprintf(hevcText,sizeof hevcText,"HEVC temporal: prepared=%u, available=%u, selected=%u, native-status=%d; two alternating IPPP8 lanes, P3, quarter-resolution multipass; rates/QP aggregate, last values lane0; independent legacy encoder retained",
+                    unsigned(hevc.temporalPrepared),unsigned(hevc.temporalAvailable),unsigned(hevc.temporal),hevc.temporalStatus);
                 report(hevcText,stream_bridge::logging::Level::Debug);
                 const auto& diagnostic=hevc.diagnostics;
                 std::snprintf(hevcText,sizeof hevcText,"HEVC mask quality: lifetime-QP last/min/mean/max=%u/%u/%.2f/%u; valid-QP-samples=%llu; last-encoded-bytes=%u; outputs-since-rate-change=%u; RC reset at IDR; diagnostics only",
@@ -519,10 +522,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 static_cast<unsigned long long>(stats.certifiedMasks),static_cast<unsigned long long>(stats.maskedVideoBytes),
                 static_cast<unsigned long long>(stats.maskRleBytes),static_cast<unsigned long long>(stats.maskedWireBytes),static_cast<unsigned long long>(stats.maxMaskedWireBytes));report(text,stream_bridge::logging::Level::Debug);
             std::snprintf(text,sizeof text,
-                "coverage encoding: raw-mask-bytes=%llu, encoded-coverage-bytes=%llu; frames raw/rle/lz4/zstd/raw-zstd/hevc=%llu/%llu/%llu/%llu/%llu/%llu; cpu-encode/collect-us=%llu/max%llu; approximate counters",
+                "coverage encoding: raw-mask-bytes=%llu, encoded-coverage-bytes=%llu; frames raw/rle/lz4/zstd/raw-zstd/hevc-intra/hevc-ippp8=%llu/%llu/%llu/%llu/%llu/%llu/%llu; cpu-encode/collect-us=%llu/max%llu; approximate counters",
                 static_cast<unsigned long long>(stats.maskRawBytes),static_cast<unsigned long long>(stats.maskEncodedBytes),
                 static_cast<unsigned long long>(stats.maskEncodingFrames[1]),static_cast<unsigned long long>(stats.maskEncodingFrames[2]),static_cast<unsigned long long>(stats.maskEncodingFrames[3]),static_cast<unsigned long long>(stats.maskEncodingFrames[4]),static_cast<unsigned long long>(stats.maskEncodingFrames[5]),
-                static_cast<unsigned long long>(stats.maskEncodingFrames[6]),
+                static_cast<unsigned long long>(stats.maskEncodingFrames[6]),static_cast<unsigned long long>(stats.maskEncodingFrames[7]),
                 static_cast<unsigned long long>(stats.lastEncodeUs),static_cast<unsigned long long>(stats.maxEncodeUs));report(text,stream_bridge::logging::Level::Debug);
             std::snprintf(text,sizeof text,
                 "coverage lifecycle refusals: render-lock=%llu, copy-pair=%llu, stage-full=%llu, input=%llu, stage=%llu, session=%llu, source=%llu/%llu, rle=%llu, certificate=%llu",
@@ -556,7 +559,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             {std::lock_guard<std::mutex> guard(mutex_);if(stopped_)break;}
             try{coverage_.tick();
                 const bool hevc=coverage_.hevcAvailable();
-                if(request_.hevcIntraCoverageEnabled!=hevc){request_.hevcIntraCoverageEnabled=hevc;runtime_.configure(request_);}
+                const bool temporal=coverage_.hevcTemporalAvailable();
+                if(request_.hevcIntraCoverageEnabled!=hevc||request_.hevcTemporalCoverageEnabled!=temporal){
+                    request_.hevcIntraCoverageEnabled=hevc;request_.hevcTemporalCoverageEnabled=temporal;runtime_.configure(request_);}
                 runtime_.tick();
                 if(request_.explicitlyEnabled){stream_bridge::LocalConfig config;stream_bridge::LocalSendAuthority authority;stream_bridge::sender::SourceIpcState state;
                     const auto encoder=runtime_.encoder();

@@ -13,7 +13,7 @@ std::uint64_t sendHevc(HandoffFixture& f,const std::vector<std::uint8_t>& payloa
     const sb::FrameDescriptor descriptor{frame,41,std::uint16_t(width),std::uint16_t(height),1};
     const std::vector<std::uint8_t> original{0,0,0,1,0x40,1,0x91,0x80,0,0,1,0x02,1,0x80,0x42,0x80,0,0};
     std::vector<std::uint8_t> video;
-    check(sb::appendCertifiedFrame({original.data(),original.size()},descriptor,sb::CoverageEncoding::HevcIntra,{payload.data(),payload.size()},f.sender,video)==sb::FrameStatus::Ok,"HEVC input has actual signed original video AU and normative mask envelope");
+    check(sb::appendCertifiedFrame({original.data(),original.size()},descriptor,payload.size()>3&&payload[3]=='T'?sb::CoverageEncoding::HevcTemporal:sb::CoverageEncoding::HevcIntra,{payload.data(),payload.size()},f.sender,video)==sb::FrameStatus::Ok,"HEVC input has actual signed original video AU and normative mask envelope");
     sb::CertifiedAccessUnit verified;check(sb::inspectCertifiedFrame({video.data(),video.size()},f.observer,verified)==sb::FrameStatus::Ok,"real complete AU authenticated before local IPC");
     local::Message message;message.kind=local::Kind::Certified;message.source.stream={f.connection,7};message.source.outputPoolGeneration=7;
     message.descriptor=descriptor;message.binding=f.binding;message.nativeTimestampToken=123;message.submittedContent=frame;message.peerConfirmed=true;
@@ -102,15 +102,23 @@ struct ExactHevcPublication {
         const auto& p=*static_cast<ExactHevcPublication*>(pointer);return p.gpuReady&&p.frame==picture.metadata.descriptor.sourceFrame;
     }
 };
-void hevcNativeHandoff(const hevc::Libraries& libraries,const std::filesystem::path& fixtures){
+void hevcNativeHandoff(const hevc::Libraries& libraries,const std::filesystem::path& fixtures,bool temporal=false){
     HandoffFixture f;ExactHevcPublication publication;
     f.display.consumers[0]={&publication,nullptr,nullptr,nullptr,ExactHevcPublication::admitted,ExactHevcPublication::published,ExactHevcPublication::samples};
     check(f.display.hevcPool.prepareCold(libraries),"handoff decoder workers prepared before native DQ");
-    const auto coded=codedFixture(fixtures/"codes.hevc");std::vector<std::uint8_t> payload;
-    check(sb::wrapHevcCoverage({coded.data(),coded.size()},64,64,payload),"actual independent HEVC mask wrapped for native image join");
+    std::vector<std::uint8_t> payload;
+    if(temporal){
+        for(unsigned n=0;n<8;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto coded=codedFixture(fixtures/name);
+            check(sb::wrapHevcTemporalCoverage({coded.data(),coded.size()},64,64,91,n+1,n?n:0,n==0,1,payload),"real temporal frame wrapped for signed native image join");
+            if(n<7){sendHevc(f,payload);const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+                while(publication.decoded<n+1&&std::chrono::steady_clock::now()<end){f.cycle();std::this_thread::yield();}
+                check(publication.decoded==n+1,"authenticated predecessors establish decoder references without granting an image");}
+        }
+    }else{const auto coded=codedFixture(fixtures/"codes.hevc");check(sb::wrapHevcCoverage({coded.data(),coded.size()},64,64,payload),"actual independent HEVC mask wrapped for native image join");}
+    const unsigned before=publication.decoded;
     const auto frame=f.nextFrame++;const sb::FrameDescriptor descriptor{frame,41,64,64,1};
     const std::vector<std::uint8_t> original{0,0,0,1,0x40,1,0x91,0x80,0,0,1,0x02,1,0x80,0x42,0x80,0,0};std::vector<std::uint8_t> video;
-    check(sb::appendCertifiedFrame({original.data(),original.size()},descriptor,sb::CoverageEncoding::HevcIntra,{payload.data(),payload.size()},f.sender,video)==sb::FrameStatus::Ok,"actual source video and HEVC payload jointly signed");
+    check(sb::appendCertifiedFrame({original.data(),original.size()},descriptor,payload.size()>3&&payload[3]=='T'?sb::CoverageEncoding::HevcTemporal:sb::CoverageEncoding::HevcIntra,{payload.data(),payload.size()},f.sender,video)==sb::FrameStatus::Ok,"actual source video and HEVC payload jointly signed");
     sb::CertifiedAccessUnit verified;check(sb::inspectCertifiedFrame({video.data(),video.size()},f.observer,verified)==sb::FrameStatus::Ok,"native handoff input has verified complete original video AU");
     native::CaptureObservation capture{native::CaptureKind::Decoded,23,f.file.fd,2,71,7,21,frame};f.source.writer.captureEvent(capture);local::LeaseReference lease;
     check(f.source.writer.reference(capture,lease),"exact shared native capture lease recorded");
@@ -121,8 +129,8 @@ void hevcNativeHandoff(const hevc::Libraries& libraries,const std::filesystem::p
     check(decoded.readOnlyLeases>=0&&f.source.channel.enqueue(certificate)&&f.source.channel.enqueue(decoded),"actual signed certificate and decoded-image ports queued together");close(decoded.readOnlyLeases);decoded.dmabuf=decoded.readOnlyLeases=-1;
     f.source.awaiting[lease.slot]=decoded;f.source.channel.tick();auto dq=f.start(decoded);f.waiting();
     const auto end=std::chrono::steady_clock::now()+std::chrono::milliseconds(90);
-    while(!publication.decoded&&std::chrono::steady_clock::now()<end){f.cycle();std::this_thread::yield();}
-    check(publication.decoded==1&&publication.frame==frame&&!f.display.flow[unsigned(renderer::Flow::ReadyQueued)]&&dq.wait_for(std::chrono::milliseconds(0))==std::future_status::timeout,"decoded mask and authenticated image still cannot release native DQ before exact GPU publication");
+    while(publication.decoded==before&&std::chrono::steady_clock::now()<end){f.cycle();std::this_thread::yield();}
+    check(publication.decoded==before+1&&publication.frame==frame&&!f.display.flow[unsigned(renderer::Flow::ReadyQueued)]&&dq.wait_for(std::chrono::milliseconds(0))==std::future_status::timeout,"decoded mask and authenticated image still cannot release native DQ before exact GPU publication");
     publication.gpuReady=true;++publication.frame;f.cycle();
     check(!f.display.flow[unsigned(renderer::Flow::ReadyQueued)],"another frame's published mask cannot acknowledge this native image");
     publication.frame=frame;f.cycle();check(dq.wait_for(std::chrono::seconds(1))==std::future_status::ready,"exact decoded mask/image/GPU join returns through real Ready IPC");dq.get();
@@ -130,4 +138,4 @@ void hevcNativeHandoff(const hevc::Libraries& libraries,const std::filesystem::p
 }
 
 }
-int main(int argc,char** argv){try{if(argc==2&&!std::strcmp(argv[1],"--process-lifecycle"))return sfnpProcessLegacyMain(argc,argv);if(argc!=4)return 2;ingress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);multisliceIngress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);backpressureAndRevocation({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);hevcNativeHandoff({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);std::printf("%u real authenticated HEVC Ingress checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+int main(int argc,char** argv){try{if(argc==2&&!std::strcmp(argv[1],"--process-lifecycle"))return sfnpProcessLegacyMain(argc,argv);if(argc!=4)return 2;ingress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);multisliceIngress({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);backpressureAndRevocation({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);hevcNativeHandoff({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3]);hevcNativeHandoff({std::filesystem::absolute(argv[1]),std::filesystem::absolute(argv[2])},argv[3],true);std::printf("%u real authenticated HEVC Ingress checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

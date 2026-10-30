@@ -21,9 +21,10 @@ struct ControlRequest{
     // derive it from this socket, a key file or a local receive counter.
     VideoStreamContext video{};
     // Producer: explicit lossy quality mode plus a prepared owned encoder.
-    // Receiver: an actually prepared cold decoder. Merely knowing bits1024/2048
+    // Receiver: an actually prepared cold decoder. Merely knowing bits1024/2048/4096
     // never advertises it. Required old peers remain usable without these bits.
     bool hevcIntraCoverageEnabled=false;
+    bool hevcTemporalCoverageEnabled=false;
 };
 struct VerifiedControl{AuthPayload payload{};VerifiedChannel channel{};};
 struct SendReceipt{std::uint64_t ticket=0;};
@@ -69,7 +70,7 @@ public:
     // negotiated CapHevcIntraCoverage evidence. This caller proof is separate
     // from the explicit prepared quality-mode/readiness configuration.
     bool certifyAccessUnit(Bytes,const FrameDescriptor&,CoverageEncoding,Bytes coverage,
-        std::vector<std::uint8_t>& output,bool hevcIntraAuthorized=false) noexcept;
+        std::vector<std::uint8_t>& output,bool hevcIntraAuthorized=false,bool hevcTemporalAuthorized=false) noexcept;
     // Only owned bytes from this currently prepared native source are accepted.
     // A valid certificate proves the complete original encoder AU; the first
     // one additionally must contain the matching authenticated producer HELLO.

@@ -20,6 +20,8 @@ bool operator==(const MaskHevcKey& a,const MaskHevcKey& b)noexcept{
         &&a.processId==b.processId&&a.width==b.width&&a.height==b.height;
 }
 namespace {
+std::atomic<std::uint64_t> nextCodecEpoch{0}; // Scoped by the fresh authenticated producer binding.
+constexpr unsigned TemporalGop=MaskHevcEncoder::TemporalGroupPictures;
 constexpr std::uint32_t MaxPixels=8u*1024u*1024u,MaxAccessUnit=2u*1024u*1024u;
 bool validConfig(const MaskHevcConfig& c)noexcept{
     return c.width&&c.height&&!(c.width&1)&&!(c.height&1)&&c.width<=8192&&c.height<=8192
@@ -76,12 +78,13 @@ struct MaskHevcEncoder::Impl {
     struct Slot {
         ID3D11Texture2D* texture=nullptr;NV_ENC_REGISTERED_PTR registered=nullptr;NV_ENC_INPUT_PTR mapped=nullptr;
         NV_ENC_OUTPUT_PTR output=nullptr;void* event=nullptr;bool eventRegistered=false,notified=false,locked=false;
-        Phase phase=Phase::Free;MaskHevcKey key{};std::uint64_t token=0,rateEpoch=0;
+        Phase phase=Phase::Free;MaskHevcKey key{};std::uint64_t token=0,rateEpoch=0,dependency=0,anchor=0;bool forceKeyframe=true;
     };
     detail::MaskHevcPlatform os=platform();NV_ENCODE_API_FUNCTION_LIST api{};void* session=nullptr;
     ID3D11Device* device=nullptr;MaskHevcConfig config{};std::array<Slot,StageCount> slots{};
     void* flushEvent=nullptr;bool flushRegistered=false,initialized=false,submittedAny=false,flushStarted=false;
     std::uint64_t nextToken=1,sourceContract=0,encoderGeneration=0,highestSubmission=0;
+    std::atomic<bool> forceKeyframe{true};std::uint64_t codecEpoch=0,lastSubmittedToken=0,anchorToken=0;unsigned gopPictures=0;
     MaskHevcRate rate;std::uint64_t rateEpoch=0;unsigned rateBackoff=0;
     NV_ENC_INITIALIZE_PARAMS rateInit{};NV_ENC_CONFIG rateConfig{};
     std::atomic<std::uint32_t> rateTarget{0},rateBudget{0},streamTarget{0},rateNum{0},rateDen{0},wireMean{0};
@@ -126,7 +129,7 @@ struct MaskHevcEncoder::Impl {
     }
     // Called only after event notification. A canceled in-flight texture must
     // not be recycled merely because its native RGB frame has been retired.
-    MaskHevcTake take(Slot& s,std::vector<std::uint8_t>* out,std::uint64_t* epoch=nullptr)noexcept{
+    MaskHevcTake take(Slot& s,std::vector<std::uint8_t>* out,std::uint64_t* epoch=nullptr,MaskHevcPicture* picture=nullptr)noexcept{
         if(!notified(s))return healthy?MaskHevcTake::Pending:MaskHevcTake::Refused;
         NV_ENC_LOCK_BITSTREAM lock{};lock.version=NV_ENC_LOCK_BITSTREAM_VER;lock.outputBitstream=s.output;lock.doNotWait=1;
         const auto result=api.nvEncLockBitstream(session,&lock);status.store(int(result),std::memory_order_relaxed);
@@ -139,10 +142,11 @@ struct MaskHevcEncoder::Impl {
         // zero value too; partial/unknown states still fail closed. The exact
         // completion event, API success, token and bitstream checks remain required.
         const bool hardwareComplete=lock.hwEncodeStatus==0||lock.hwEncodeStatus==2;
-        const unsigned rejected=(lock.outputTimeStamp!=s.token?1u:0u)|(lock.pictureType!=NV_ENC_PIC_TYPE_IDR?2u:0u)
+        const bool pictureValid=lock.pictureType==NV_ENC_PIC_TYPE_IDR||(config.temporal&&!s.forceKeyframe&&lock.pictureType==NV_ENC_PIC_TYPE_P);
+        const unsigned rejected=(lock.outputTimeStamp!=s.token?1u:0u)|(!pictureValid?2u:0u)
             |(lock.pictureStruct!=NV_ENC_PIC_STRUCT_FRAME?4u:0u)|(!hardwareComplete?8u:0u)
             |(!lock.bitstreamBufferPtr?16u:0u)|(!lock.bitstreamSizeInBytes||lock.bitstreamSizeInBytes>config.maxAccessUnitBytes?32u:0u);
-        const auto expected=s.token,encodedRateEpoch=s.rateEpoch;bool valid=rejected==0;
+        const auto expected=s.token,encodedRateEpoch=s.rateEpoch,dependency=s.dependency,anchor=s.anchor;bool valid=rejected==0;
         if(valid&&out)try{
             const auto* bytes=static_cast<const std::uint8_t*>(lock.bitstreamBufferPtr);
             out->assign(bytes,bytes+lock.bitstreamSizeInBytes);
@@ -152,6 +156,7 @@ struct MaskHevcEncoder::Impl {
         s.locked=false;
         if(!releaseMapped(s)){if(out)out->clear();return MaskHevcTake::Refused;}
         if(!valid){
+            forceKeyframe.store(true,std::memory_order_release);
             // A successful API call with rejected output is our validation
             // failure, never a fabricated NV_ENC_ERR_INVALID_PARAM from NVIDIA.
             record(MaskHevcFailure::OutputValidation,NV_ENC_SUCCESS,rejected?rejected:64u,&lock,expected);
@@ -160,12 +165,14 @@ struct MaskHevcEncoder::Impl {
         }
         if(out){
             readyCount.fetch_add(1,std::memory_order_relaxed);if(epoch)*epoch=encodedRateEpoch;
+            if(picture)*picture={codecEpoch,expected,lock.pictureType==NV_ENC_PIC_TYPE_IDR?0:dependency,anchor,lock.pictureType==NV_ENC_PIC_TYPE_IDR};
             lastEncodedBytes=lock.bitstreamSizeInBytes;
             // Metadata only, never frame permission. This pinned API reports QP
             // on successful locks; unknown values do not reject a valid mask.
             if(lock.frameAvgQP<=51){lastQp=lock.frameAvgQP;qpSum.fetch_add(lock.frameAvgQP,std::memory_order_relaxed);qpSamples.fetch_add(1,std::memory_order_relaxed);
                 minQp=std::min(minQp.load(std::memory_order_relaxed),lock.frameAvgQP);maxQp=std::max(maxQp.load(std::memory_order_relaxed),lock.frameAvgQP);}
         }
+        if(!out)forceKeyframe.store(true,std::memory_order_release);
         return out?MaskHevcTake::Ready:MaskHevcTake::Refused;
     }
     // Cold and quiesced only. No OS/event wait is reachable from hot methods.
@@ -208,6 +215,9 @@ struct MaskHevcEncoder::Impl {
     bool configure(ID3D11Device* d,const MaskHevcConfig& c,const std::array<ID3D11Texture2D*,StageCount>& textures,
                    const NV_ENCODE_API_FUNCTION_LIST& f)noexcept{
         if(!d||!os.textureMatches||!validConfig(c)||!validTable(f))return false;
+        auto epoch=nextCodecEpoch.load(std::memory_order_relaxed);
+        do{if(epoch==UINT64_MAX)return false;}while(!nextCodecEpoch.compare_exchange_weak(epoch,epoch+1,std::memory_order_relaxed));
+        codecEpoch=epoch+1;lastSubmittedToken=0;gopPictures=0;forceKeyframe.store(true,std::memory_order_release);
         for(unsigned i=0;i<StageCount;++i){
             if(!os.textureMatches(d,textures[i],c.width,c.height))return false;
             for(unsigned j=0;j<i;++j)if(textures[i]==textures[j])return false;
@@ -227,24 +237,24 @@ struct MaskHevcEncoder::Impl {
            ||!success(api.nvEncGetInputFormats(session,NV_ENC_CODEC_HEVC_GUID,formats.data(),count,&actual))||!actual||actual>count)return false;
         bool nv12=false;for(unsigned i=0;i<actual;++i)nv12|=formats[i]==NV_ENC_BUFFER_FORMAT_NV12;if(!nv12)return false;
         NV_ENC_PRESET_CONFIG preset{};preset.version=NV_ENC_PRESET_CONFIG_VER;preset.presetCfg.version=NV_ENC_CONFIG_VER;
-        if(!success(api.nvEncGetEncodePresetConfigEx(session,NV_ENC_CODEC_HEVC_GUID,NV_ENC_PRESET_P1_GUID,NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY,&preset)))return false;
+        if(!success(api.nvEncGetEncodePresetConfigEx(session,NV_ENC_CODEC_HEVC_GUID,(c.temporal?NV_ENC_PRESET_P3_GUID:NV_ENC_PRESET_P1_GUID),NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY,&preset)))return false;
         const auto planned=rate.initial(c.bitRate,c.frameRateNum,c.frameRateDen,c.streamBitRate);
         NV_ENC_CONFIG enc=preset.presetCfg;enc.version=NV_ENC_CONFIG_VER;enc.profileGUID=NV_ENC_HEVC_PROFILE_MAIN_GUID;
-        enc.gopLength=1;enc.frameIntervalP=1;enc.monoChromeEncoding=0;enc.frameFieldMode=NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
+        enc.gopLength=c.temporal?TemporalGop:1;enc.frameIntervalP=1;enc.monoChromeEncoding=0;enc.frameFieldMode=NV_ENC_PARAMS_FRAME_FIELD_MODE_FRAME;
         enc.rcParams={};enc.rcParams.version=NV_ENC_RC_PARAMS_VER;enc.rcParams.rateControlMode=NV_ENC_PARAMS_RC_VBR;
         enc.rcParams.averageBitRate=enc.rcParams.maxBitRate=planned.target;
         enc.rcParams.vbvBufferSize=std::uint32_t((std::uint64_t(planned.target)*c.frameRateDen+c.frameRateNum-1)/c.frameRateNum);
         enc.rcParams.vbvInitialDelay=enc.rcParams.vbvBufferSize;enc.rcParams.zeroReorderDelay=1;
-        enc.rcParams.lowDelayKeyFrameScale=1;enc.rcParams.multiPass=NV_ENC_MULTI_PASS_DISABLED;
+        enc.rcParams.lowDelayKeyFrameScale=1;enc.rcParams.multiPass=c.temporal?NV_ENC_TWO_PASS_QUARTER_RESOLUTION:NV_ENC_MULTI_PASS_DISABLED;
         enc.encodeCodecConfig={};auto& hevc=enc.encodeCodecConfig.hevcConfig;
-        hevc.chromaFormatIDC=1;hevc.pixelBitDepthMinus8=0;hevc.idrPeriod=1;hevc.maxNumRefFramesInDPB=1;
-        // The signed per-mask payload already delimits one complete IDR. The
+        hevc.chromaFormatIDC=1;hevc.pixelBitDepthMinus8=0;hevc.idrPeriod=c.temporal?TemporalGop:1;hevc.maxNumRefFramesInDPB=1;
+        // The signed per-mask payload already delimits one complete picture. The
         // private decoder needs VPS/SPS/PPS, not optional access-unit delimiters.
         hevc.repeatSPSPPS=1;hevc.outputAUD=0;hevc.sliceMode=0;hevc.sliceModeData=0;
         hevc.hevcVUIParameters.videoSignalTypePresentFlag=1;hevc.hevcVUIParameters.videoFormat=5;
         hevc.hevcVUIParameters.videoFullRangeFlag=1;hevc.hevcVUIParameters.colourDescriptionPresentFlag=0;
         NV_ENC_INITIALIZE_PARAMS init{};init.version=NV_ENC_INITIALIZE_PARAMS_VER;init.encodeGUID=NV_ENC_CODEC_HEVC_GUID;
-        init.presetGUID=NV_ENC_PRESET_P1_GUID;init.encodeWidth=init.darWidth=init.maxEncodeWidth=c.width;
+        init.presetGUID=c.temporal?NV_ENC_PRESET_P3_GUID:NV_ENC_PRESET_P1_GUID;init.encodeWidth=init.darWidth=init.maxEncodeWidth=c.width;
         init.encodeHeight=init.darHeight=init.maxEncodeHeight=c.height;init.frameRateNum=c.frameRateNum;init.frameRateDen=c.frameRateDen;
         init.enableEncodeAsync=1;init.enablePTD=1;init.tuningInfo=NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;init.encodeConfig=&enc;
         if(!success(api.nvEncInitializeEncoder(session,&init)))return false;
@@ -294,7 +304,7 @@ bool MaskHevcEncoder::canStage(ID3D11Texture2D* texture)noexcept{
     // if an earlier best-effort cancel lost a try-lock race. Never free an
     // accepted GPU input until its own completion event is observed.
     if(s->phase==Impl::Phase::Staged)p.releaseMapped(*s);
-    if(s->phase==Impl::Phase::Submitted)s->phase=Impl::Phase::Discard;
+    if(s->phase==Impl::Phase::Submitted){p.forceKeyframe.store(true,std::memory_order_release);s->phase=Impl::Phase::Discard;}
     if(s->phase==Impl::Phase::Discard)p.take(*s,nullptr);
     return p.healthy&&s->phase==Impl::Phase::Free;
 }
@@ -322,18 +332,21 @@ bool MaskHevcEncoder::submit(const MaskHevcKey& key)noexcept{
     NV_ENC_PIC_PARAMS pic{};pic.version=NV_ENC_PIC_PARAMS_VER;pic.inputWidth=p.config.width;pic.inputHeight=p.config.height;
     pic.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;pic.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;pic.inputBuffer=s->mapped;
     pic.outputBitstream=s->output;pic.completionEvent=s->event;pic.inputTimeStamp=s->token;pic.frameIdx=std::uint32_t(s->token);
-    pic.encodePicFlags=NV_ENC_PIC_FLAG_FORCEIDR|NV_ENC_PIC_FLAG_OUTPUT_SPSPPS;
+    s->forceKeyframe=!p.config.temporal||p.forceKeyframe.exchange(false,std::memory_order_acq_rel)||p.gopPictures>=TemporalGop;
+    s->dependency=s->forceKeyframe?0:p.lastSubmittedToken;s->anchor=s->forceKeyframe?s->token:p.anchorToken;
+    pic.encodePicFlags=NV_ENC_PIC_FLAG_OUTPUT_SPSPPS|(s->forceKeyframe?NV_ENC_PIC_FLAG_FORCEIDR:0);
     const auto result=p.api.nvEncEncodePicture(p.session,&pic);p.status.store(int(result),std::memory_order_relaxed);
-    if(result!=NV_ENC_SUCCESS&&result!=NV_ENC_ERR_NEED_MORE_INPUT){p.record(MaskHevcFailure::EncodePicture,result);p.releaseMapped(*s);return false;}
+    if(result!=NV_ENC_SUCCESS&&result!=NV_ENC_ERR_NEED_MORE_INPUT){p.record(MaskHevcFailure::EncodePicture,result);p.forceKeyframe.store(true,std::memory_order_release);p.releaseMapped(*s);return false;}
+    p.lastSubmittedToken=s->token;p.anchorToken=s->anchor;p.gopPictures=s->forceKeyframe?1:p.gopPictures+1;
     p.submittedCount.fetch_add(1,std::memory_order_relaxed);
     s->rateEpoch=p.rateEpoch;s->phase=Impl::Phase::Submitted;p.submittedAny=true;return true;
 }
-MaskHevcTake MaskHevcEncoder::tryTake(const MaskHevcKey& key,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch)noexcept{
-    out.clear();if(rateEpoch)*rateEpoch=0;auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
+MaskHevcTake MaskHevcEncoder::tryTake(const MaskHevcKey& key,std::vector<std::uint8_t>& out,std::uint64_t* rateEpoch,MaskHevcPicture* picture)noexcept{
+    out.clear();if(rateEpoch)*rateEpoch=0;if(picture)*picture={};auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
     if(!guard)return MaskHevcTake::Busy;
     if(!p.healthy)return MaskHevcTake::Unavailable;
     auto* s=p.find(key);if(!s||s->phase!=Impl::Phase::Submitted)return MaskHevcTake::Missing;
-    return p.take(*s,&out,rateEpoch);
+    return p.take(*s,&out,rateEpoch,picture);
 }
 bool MaskHevcEncoder::updateRate(std::uint32_t num,std::uint32_t den,std::uint32_t stream,std::uint32_t user)noexcept{
     auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);
@@ -350,12 +363,13 @@ bool MaskHevcEncoder::updateRate(std::uint32_t num,std::uint32_t den,std::uint32
     enc.rcParams.vbvInitialDelay=enc.rcParams.vbvBufferSize;
     NV_ENC_RECONFIGURE_PARAMS params{};params.version=NV_ENC_RECONFIGURE_PARAMS_VER;params.reInitEncodeParams=p.rateInit;
     params.reInitEncodeParams.frameRateNum=plan.num;params.reInitEncodeParams.frameRateDen=plan.den;params.reInitEncodeParams.encodeConfig=&enc;
-    // SDK11.1 explicitly permits resetting firmware RC at an IDR. All private
-    // pictures are IDR already. This is not a GPU flush, session recreation or
+    // SDK11.1 permits resetting firmware RC at an IDR. Legacy pictures are
+    // independent already; temporal mode explicitly requests the next IDR. This is not a GPU flush, session recreation or
     // a change to source/image identity; old queued outputs retain their key.
-    params.resetEncoder=1;
+    params.resetEncoder=1;params.forceIDR=p.config.temporal?1:0;
     const auto result=p.api.nvEncReconfigureEncoder(p.session,&params);p.status.store(int(result),std::memory_order_relaxed);
     if(result!=NV_ENC_SUCCESS){p.record(MaskHevcFailure::Reconfigure,result);p.rateBackoff=MaskHevcRate::Window;return false;}
+    if(p.config.temporal)p.forceKeyframe.store(true,std::memory_order_release);
     p.rateConfig=enc;p.rateInit=params.reInitEncodeParams;p.rateInit.encodeConfig=&p.rateConfig;p.config=config;p.config.frameRateNum=plan.num;p.config.frameRateDen=plan.den;
     p.rate.commit(plan);++p.rateEpoch;p.rateTarget=plan.target;p.rateNum=plan.num;p.rateDen=plan.den;p.wireMean=0;p.rateSamples=0;
     p.rateChanges.fetch_add(1,std::memory_order_relaxed);return true;
@@ -367,11 +381,12 @@ void MaskHevcEncoder::observeAddedBytes(std::uint64_t epoch,std::size_t bytes,st
     if(p.rateBackoff)--p.rateBackoff;
 }
 
+void MaskHevcEncoder::requestKeyframe()noexcept{impl_->forceKeyframe.store(true,std::memory_order_release);}
 void MaskHevcEncoder::cancel(const MaskHevcKey& key)noexcept{
     auto& p=*impl_;std::unique_lock<std::mutex> guard(p.mutex,std::try_to_lock);if(!guard||!p.healthy)return;
     auto* s=p.find(key);if(!s)return;
     if(s->phase==Impl::Phase::Staged){p.releaseMapped(*s);return;}
-    s->phase=Impl::Phase::Discard;p.take(*s,nullptr);
+    p.forceKeyframe.store(true,std::memory_order_release);s->phase=Impl::Phase::Discard;p.take(*s,nullptr);
 }
 bool MaskHevcEncoder::reset()noexcept{std::lock_guard<std::mutex> guard(impl_->mutex);return impl_->clear();}
 bool MaskHevcEncoder::configured()const noexcept{return impl_->healthy.load(std::memory_order_acquire);}

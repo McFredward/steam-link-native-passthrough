@@ -2,7 +2,8 @@
 #include "stream_bridge_mask_hevc.h"
 
 namespace stream_bridge_mask_hevc {
-// Authenticated cold-worker inputs only. The fixed pool owns each encoded copy;
+// Authenticated cold-worker inputs only. Temporal groups stay on one worker;
+// independent groups overlap across the same four threads and eight slots. The fixed pool owns each encoded copy;
 // completion order never supplies image/source/eye authority. The caller must
 // rejoin the exact still-current certificate and native image lease. Lifecycle
 // prepare/stop has one quiescent cold owner. Submit/take/cancel are synchronized;

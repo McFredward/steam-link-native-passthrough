@@ -40,13 +40,22 @@ def main():
          '!peer.metadataObserved', 'false', 'test_stream_bridge_native_runtime',
          ['--hevc-gates'], 'confirmed capability alone cannot publish HEVC'),
         ('missing_negotiated_capability', 'receiver/stream_bridge_native_runtime.cpp',
-         '!(receiver.negotiatedCapabilities()&stream_bridge::CapHevcIntraCoverage)',
+         '!(receiver.negotiatedCapabilities()&(temporal?stream_bridge::CapHevcTemporalCoverage:stream_bridge::CapHevcIntraCoverage))',
          'false', 'test_stream_bridge_native_runtime', ['--hevc-gates'],
          'receiver capability check independently rejects MAC-valid Codec6'),
         ('implicit_opt_in', 'bridge/stream_bridge_control.cpp',
-         'request.hevcIntraCoverageEnabled?request.offered:(request.offered&~(CapHevcIntraCoverage|CapHevcIntraSlices))',
+         '(request.offered&~(request.hevcIntraCoverageEnabled?0ull:(CapHevcIntraCoverage|CapHevcIntraSlices)))',
          'request.offered', 'test_stream_bridge_native_runtime', ['--hevc-gates'],
          'ready receiver cannot make a default lossless sender negotiate Codec6'),
+        ('missing_temporal_capability', 'receiver/stream_bridge_native_runtime.cpp',
+         'temporal?stream_bridge::CapHevcTemporalCoverage:stream_bridge::CapHevcIntraCoverage',
+         'temporal?stream_bridge::KnownCapabilities:stream_bridge::CapHevcIntraCoverage',
+         'test_stream_bridge_native_runtime', ['--hevc-gates'],
+         'receiver independently refuses unnegotiated temporal data'),
+        ('implicit_temporal_opt_in', 'bridge/stream_bridge_control.cpp',
+         '(request.hevcTemporalCoverageEnabled?0ull:CapHevcTemporalCoverage)',
+         '0ull', 'test_stream_bridge_native_runtime', ['--hevc-gates'],
+         'old intra peer retains independent HEVC without temporal permission'),
         ('missing_encoded_payload_hash', 'bridge/stream_bridge_frame.cpp',
          'if(!equal({coverageHash.data(),coverageHash.size()},{h+112,32}))',
          'if((void(coverageHash),false))', 'test_stream_bridge_hevc_coverage', [],
@@ -101,7 +110,7 @@ def main():
                   'bridge/stream_bridge_hevc_coverage.cpp', 'bridge/stream_bridge_hevc_coverage.h'})},
               'hardware_verified': False, 'device_actions': False, 'results': results}
     (output / 'results.json').write_text(json.dumps(report, sort_keys=True, indent=2) + '\n')
-    print('4 causal HEVC proof removals each fail their exact production witness')
+    print('6 causal HEVC proof removals each fail their exact production witness')
 
 if __name__ == '__main__':
     main()

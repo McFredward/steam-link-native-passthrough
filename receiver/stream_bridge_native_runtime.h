@@ -72,6 +72,7 @@ struct RuntimeRequest {
     // Set only after the owned cold HEVC coverage decoder actually prepared.
     // Unsupported/missing decoder keeps the optional capability unadvertised.
     bool hevcIntraCoverageReady=false;
+    bool hevcTemporalCoverageReady=false;
 };
 // All provider ports are used only by the worker, not by a rendering callback.
 // The process entry below supplies these exclusively from the pinned provider.

@@ -64,7 +64,7 @@ struct CoverageGateStats {
     std::uint32_t lastQueryResult=0,lastReadbackResult=0;
     std::uint64_t maskedVideoBytes=0,maskedWireBytes=0,maskRleBytes=0,maxMaskedWireBytes=0;
     std::uint64_t maskEncodedBytes=0,maskRawBytes=0,lastEncodeUs=0,maxEncodeUs=0;
-    std::array<std::uint64_t,7> maskEncodingFrames{};
+    std::array<std::uint64_t,8> maskEncodingFrames{};
     std::array<std::uint64_t,static_cast<unsigned>(SourceContractStatus::Count)> sourceRefusals{},sourceProcessPairs{};
     std::uint32_t sourceCauses=0;
     bool contextTableReadable=false,contextTableStable=false,nativeDeviceSame=false;
@@ -150,7 +150,7 @@ private:
     std::atomic<std::uint64_t> submittedReadbacks_{},queryReady_{},queryPending_{},queryErrors_{},queryAge_{},maxQueryAge_{};
     std::atomic<std::uint64_t> maskedVideoBytes_{},maskedWireBytes_{},maskRleBytes_{},maxMaskedWireBytes_{};
     std::atomic<std::uint64_t> maskEncodedBytes_{},maskRawBytes_{},encodeDuration_{},maxEncodeDuration_{};
-    std::array<std::atomic<std::uint64_t>,7> maskEncodingFrames_{};
+    std::array<std::atomic<std::uint64_t>,8> maskEncodingFrames_{};
     // Contention can lose diagnostic samples; snapshots are intentionally not
     // coherent frame proofs. No caller may use them to authorize rendering.
     std::array<std::atomic<std::uint64_t>,static_cast<unsigned>(CoverageSignal::Count)> signals_{};
@@ -200,8 +200,8 @@ private:
 // video alone. ready is source-mode preparation, never selected-image proof.
 struct HevcMaskStats {
     MaskHevcDiagnostics diagnostics{};
-    bool requested=false,prepared=false,available=false;
-    std::uint32_t bitRate=0;int nativeStatus=0;
+    bool requested=false,prepared=false,available=false,temporal=false,temporalPrepared=false,temporalAvailable=false;
+    std::uint32_t bitRate=0;int nativeStatus=0,temporalStatus=0;
     std::uint64_t encoded=0,pending=0,refused=0,syntaxRefused=0;
     std::uint64_t submissionToPollUs=0,maxSubmissionToPollUs=0;
 };
@@ -217,6 +217,7 @@ public:
     void configureMaskCapture(const std::filesystem::path& privateRoot)noexcept; // Cold, explicit request only.
     void configureHevcMask(std::uint32_t bitrate)noexcept; // Cold startup only; zero disables.
     bool hevcAvailable()const noexcept;
+    bool hevcTemporalAvailable()const noexcept;
     HevcMaskStats hevcMaskStats()const noexcept;
     bool takeHevcSyntaxTrace(MaskHevcSyntaxTrace&)noexcept; // Cold one-shot diagnostic only.
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.

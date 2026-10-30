@@ -20,7 +20,8 @@ struct FrameDescriptor {
     // current decoded-image lease can exempt that picture from MR recovery.
     std::uint8_t cameraRecovery=0;
 };
-enum class CoverageEncoding:std::uint8_t { None=0,Raw=1,Rle=2,RleLz4=3,RleZstd=4,RawZstd=5,HevcIntra=6 };
+enum class CoverageEncoding:std::uint8_t { None=0,Raw=1,Rle=2,RleLz4=3,RleZstd=4,RawZstd=5,HevcIntra=6,HevcTemporal=7 };
+constexpr bool hevcCoverage(CoverageEncoding value){return value==CoverageEncoding::HevcIntra||value==CoverageEncoding::HevcTemporal;}
 struct CertifiedAccessUnit {
     FrameDescriptor descriptor{};
     Nonce binding{};

@@ -19,7 +19,7 @@ extern "C" {
 namespace stream_bridge_mask_hevc {
 namespace sb=stream_bridge;
 const char* statusName(Status s)noexcept{
-    constexpr const char* names[]{"ok","unavailable","invalid-identity","invalid-envelope","decoder-refused","invalid-output","wrong-frame","extra-output","allocation-refused"};
+    constexpr const char* names[]{"ok","unavailable","invalid-identity","invalid-envelope","decoder-refused","invalid-output","wrong-frame","extra-output","allocation-refused","missing-reference"};
     const auto i=static_cast<unsigned>(s);return i<sizeof(names)/sizeof(*names)?names[i]:"unknown";
 }
 #ifdef SFNP_MASK_HEVC_ENABLED
@@ -81,15 +81,24 @@ struct Decoder::Impl {
     }
     struct Work {
         Impl& api;AVCodecContext* context=nullptr;AVPacket* packet=nullptr;AVFrame* frame=nullptr;
-        Key epoch{};
+        Key epoch{};std::uint64_t codecEpoch=0,sequence=0,anchor=0;unsigned pictures=0,poc=0;bool temporal=false;
         ~Work(){if(frame)api.av_frame_free(&frame);if(packet)api.av_packet_free(&packet);if(context)api.avcodec_free_context(&context);}
     };
     std::unique_ptr<Work> work;std::uint64_t nextToken=0;
     Status decode(const Input& input,const sb::HevcCoverageView& view,DecodedMask& output){
         auto epoch=key(input);std::fill_n(epoch.begin()+32,8,0);epoch[44]=0; // Frame/policy may change inside an epoch.
-        if(work&&work->epoch!=epoch)work.reset();
+        if(work&&(work->epoch!=epoch||work->temporal!=view.temporal||
+            (view.temporal&&work->codecEpoch!=view.epoch)))work.reset();
+        if(view.temporal&&!view.keyframe&&(!work||work->anchor!=view.anchor||work->sequence!=view.dependency||
+            !work->pictures||work->pictures>=sb::HevcTemporalGop||
+            view.poc!=((work->poc+1)&((1u<<view.pocBits)-1)))){
+            work.reset();return Status::MissingReference;
+        }
+        // A stale/duplicate key cannot rewind a healthy chain. A fresh epoch
+        // remains separately bound to the authenticated source and transport.
+        if(view.temporal&&view.keyframe&&work&&view.sequence<=work->sequence)return Status::WrongFrame;
         if(!work){
-            auto candidate=std::unique_ptr<Work>(new Work{*this});auto& w=*candidate;w.epoch=epoch;
+            auto candidate=std::unique_ptr<Work>(new Work{*this});auto& w=*candidate;w.epoch=epoch;w.temporal=view.temporal;w.codecEpoch=view.epoch;w.anchor=view.anchor;
             w.context=avcodec_alloc_context3(codec);w.packet=av_packet_alloc();w.frame=av_frame_alloc();
             if(!w.context||!w.packet||!w.frame)return Status::AllocationRefused;
             // NVENC's observed independent slices have no WPP entry points.
@@ -104,12 +113,15 @@ struct Decoder::Impl {
             if(avcodec_open2(w.context,codec,nullptr)<0)return Status::DecoderRefused;
             work=std::move(candidate);++stats.contextsOpened;
         }
+        if(view.temporal&&view.keyframe){work->anchor=view.anchor;work->pictures=0;}
         const auto result=decodeWork(*work,input,view,output);
         if(result!=Status::Ok)work.reset(); // Never retain entropy-error state.
+        else if(view.temporal){work->sequence=view.sequence;work->poc=view.poc;work->pictures=view.keyframe?1:work->pictures+1;}
         return result;
     }
     Status decodeWork(Work& w,const Input& input,const sb::HevcCoverageView& view,DecodedMask& output){
-        av_frame_unref(w.frame);av_packet_unref(w.packet);avcodec_flush_buffers(w.context);
+        av_frame_unref(w.frame);av_packet_unref(w.packet);
+        if(!view.temporal||view.keyframe)avcodec_flush_buffers(w.context);
         if(nextToken==std::uint64_t(INT64_MAX))return Status::DecoderRefused;
         const auto token=static_cast<std::int64_t>(++nextToken);
         if(av_new_packet(w.packet,static_cast<int>(view.annexB.size))<0)return Status::AllocationRefused;
@@ -118,7 +130,7 @@ struct Decoder::Impl {
         std::memcpy(w.packet->opaque_ref->data,identity.data(),identity.size());w.packet->pts=token;w.packet->dts=token;
         if(avcodec_send_packet(w.context,w.packet)<0)return Status::DecoderRefused;
         int received=avcodec_receive_frame(w.context,w.frame);
-        if(received==AVERROR(EAGAIN)){
+        if(received==AVERROR(EAGAIN)&&!view.temporal){
             if(avcodec_send_packet(w.context,nullptr)<0)return Status::DecoderRefused;
             received=avcodec_receive_frame(w.context,w.frame);
         }
@@ -127,7 +139,8 @@ struct Decoder::Impl {
         if(!f.opaque_ref||f.opaque_ref->size!=identity.size()||std::memcmp(f.opaque_ref->data,identity.data(),identity.size())||f.pts!=token)return Status::WrongFrame;
         if(f.width!=view.width||f.height!=view.height||f.crop_top||f.crop_bottom||f.crop_left||f.crop_right||
             (f.format!=AV_PIX_FMT_YUV420P&&f.format!=AV_PIX_FMT_YUVJ420P&&f.format!=AV_PIX_FMT_NV12)||f.color_range!=AVCOL_RANGE_JPEG||
-            f.decode_error_flags||(f.flags&AV_FRAME_FLAG_CORRUPT)||!(f.flags&AV_FRAME_FLAG_KEY)||f.pict_type!=AV_PICTURE_TYPE_I||!f.data[0]||f.linesize[0]<f.width)return Status::InvalidOutput;
+            f.decode_error_flags||(f.flags&AV_FRAME_FLAG_CORRUPT)||
+            (view.keyframe?(!(f.flags&AV_FRAME_FLAG_KEY)||f.pict_type!=AV_PICTURE_TYPE_I):((f.flags&AV_FRAME_FLAG_KEY)||f.pict_type!=AV_PICTURE_TYPE_P))||!f.data[0]||f.linesize[0]<f.width)return Status::InvalidOutput;
         const auto* buffer=av_frame_get_plane_buffer(w.frame,0);if(!buffer||!buffer->data)return Status::InvalidOutput;
         const auto begin=reinterpret_cast<std::uintptr_t>(buffer->data),plane=reinterpret_cast<std::uintptr_t>(f.data[0]);
         const auto used=std::uint64_t(f.linesize[0])*(view.height-1u)+view.width;
@@ -143,8 +156,9 @@ struct Decoder::Impl {
             candidate.range.minimum=std::min(candidate.range.minimum,minimum);candidate.range.maximum=std::max(candidate.range.maximum,maximum);}
         av_frame_unref(w.frame);received=avcodec_receive_frame(w.context,w.frame);
         if(received>=0)return Status::ExtraOutput;
+        if(view.temporal&&received!=AVERROR(EAGAIN))return Status::DecoderRefused;
         if(received!=AVERROR(EAGAIN)&&received!=AVERROR_EOF)return Status::DecoderRefused;
-        if(received==AVERROR(EAGAIN)){
+        if(received==AVERROR(EAGAIN)&&!view.temporal){
             const auto sent=avcodec_send_packet(w.context,nullptr);if(sent<0&&sent!=AVERROR_EOF)return Status::DecoderRefused;
             received=avcodec_receive_frame(w.context,w.frame);if(received>=0)return Status::ExtraOutput;if(received!=AVERROR_EOF)return Status::DecoderRefused;
         }
@@ -192,6 +206,29 @@ Status Decoder::decodeIntra(const Input& input,DecodedMask& output)noexcept{
     try{status=impl_->decode(input,view,output);}catch(...){impl_->work.reset();status=Status::AllocationRefused;}
     const auto micros=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-started).count();
     if(status==Status::Ok)++impl_->stats.decoded;
+    impl_->stats.totalMicros+=std::max<std::int64_t>(micros,0);impl_->stats.maxMicros=std::max(impl_->stats.maxMicros,std::uint64_t(std::max<std::int64_t>(micros,0)));
+    return status;
+#else
+    (void)input;(void)output;return Status::Unavailable;
+#endif
+}
+void Decoder::invalidateTemporal()noexcept{
+#ifdef SFNP_MASK_HEVC_ENABLED
+    impl_->work.reset();
+#endif
+}
+Status Decoder::decodeTemporal(const Input& input,DecodedMask& output)noexcept{
+#ifdef SFNP_MASK_HEVC_ENABLED
+    if(!ready())return Status::Unavailable;
+    const auto& d=input.descriptor;
+    if(!nonzero(input.source.connection)||!input.source.generation||!nonzero(input.binding)||!d.sourceFrame||!d.encoderGeneration||d.cameraRecovery>2){invalidateTemporal();return Status::InvalidIdentity;}
+    sb::HevcCoverageView view{};
+    if(!sb::inspectHevcTemporalCoverage(input.payload,d.codedWidth,d.codedHeight,view)){invalidateTemporal();return Status::InvalidEnvelope;}
+    const auto started=std::chrono::steady_clock::now();++impl_->stats.attempts;Status status;
+    try{status=impl_->decode(input,view,output);}catch(...){invalidateTemporal();status=Status::AllocationRefused;}
+    const auto micros=std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-started).count();
+    if(status==Status::Ok){++impl_->stats.decoded;++impl_->stats.temporalDecoded;}
+    if(status==Status::MissingReference)++impl_->stats.missingReferences;
     impl_->stats.totalMicros+=std::max<std::int64_t>(micros,0);impl_->stats.maxMicros=std::max(impl_->stats.maxMicros,std::uint64_t(std::max<std::int64_t>(micros,0)));
     return status;
 #else

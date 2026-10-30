@@ -38,19 +38,19 @@ struct Fixture {
     nd::DecodeProvider* ownedNative=nullptr;std::vector<nd::DecodedFrame> decodedFrames;
     std::vector<nd::CaptureObservation> unavailableFrames;nd::SourceIdentity unavailableSource{};
     nd::SnapshotStats counts{};unsigned polls=0,capturePolls=0,randomCalls=0,certified=0,decoded=0;
-    bool randomFails=false,routeReady=true,publishGapAfterEmptyPoll=false,leaseCurrent=true,hevcReady=false;unsigned leaseChecks=0;std::uint64_t clock=100;std::vector<nd::RuntimeNotice> notices;std::vector<nd::CaptureObservation> invalidations;
+    bool randomFails=false,routeReady=true,publishGapAfterEmptyPoll=false,leaseCurrent=true,hevcReady=false,temporalReady=false;unsigned leaseChecks=0;std::uint64_t clock=100;std::vector<nd::RuntimeNotice> notices;std::vector<nd::CaptureObservation> invalidations;
     nd::DecodedFrame lastDecoded{};nd::CertifiedFrame lastCertified{};sb::CertifiedAccessUnit retained{};
     sb::ControlRuntime producer;nd::ReceiverWorker worker;sb::Handshake sender;
     sb::LocalConfig local{};sb::LocalSendAuthority authority{};std::uint64_t content=0,sourceFrame=1000;std::vector<sb::VerifiedControl> echoes;
-    explicit Fixture(bool hevc=false):hevcReady(hevc){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
-        r.offered=sb::KnownCapabilities;r.required=sb::KnownCapabilities&~(sb::CapHevcIntraCoverage|sb::CapHevcIntraSlices);r.hevcIntraCoverageEnabled=hevc;
+    explicit Fixture(bool hevc=false,bool temporal=false):hevcReady(hevc),temporalReady(temporal){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
+        r.offered=sb::KnownCapabilities;r.required=sb::KnownCapabilities&~(sb::CapHevcIntraCoverage|sb::CapHevcIntraSlices|sb::CapHevcTemporalCoverage);r.hevcIntraCoverageEnabled=hevc;r.hevcTemporalCoverageEnabled=temporal;
         std::strcpy(r.address.data(),"127.0.0.1");check(producer.prepare(r)==sb::ControlStatus::Listening,"actual producer transport");
         check(producer.localConfig(local,authority),"actual producer signing session");
         check(sender.begin(local,authority.channel)==sb::Status::Ok,"actual full-capability producer handshake");}
     static tx::VerifiedSource source(){tx::VerifiedSource s;s.verified=s.ordinaryStream=s.completeAccessUnit=true;s.codec=tx::VerifiedSource::Codec::HevcAnnexB;s.moduleSha256[0]=1;s.apiVersion=0x7102000b;s.encoderGeneration=81;return s;}
     nd::RuntimeRequest request(){nd::RuntimeRequest r;r.explicitlyEnabled=true;r.buildId=712;r.pairingsDirectory=files.receiver;r.producerPort=producer.localPort();std::strcpy(r.producerAddress.data(),"127.0.0.1");
         r.imageRoutePrepared=[](void* v) noexcept{return static_cast<Fixture*>(v)->routeReady;};r.imageRouteContext=this;
-        r.callbacks={onCertified,onDecoded,onCapture,onNotice,this,onUnavailable};r.hevcIntraCoverageReady=hevcReady;return r;}
+        r.callbacks={onCertified,onDecoded,onCapture,onNotice,this,onUnavailable};r.hevcIntraCoverageReady=hevcReady;r.hevcTemporalCoverageReady=temporalReady;return r;}
     nd::SourceProvider provider(){return {poll,pollCapture,stats,random,this,monotonic,currentCapture};}
     static std::uint64_t monotonic(void* v) noexcept{return static_cast<Fixture*>(v)->clock;}
     static bool poll(nd::Observation& out,std::uint8_t* destination,std::size_t capacity,void* v) noexcept {
@@ -94,7 +94,7 @@ struct Fixture {
             capture.push_back({nd::CaptureKind::Decoded,23,73,0,token,7,21,token});pump();}
         check(sender.confirmed()&&worker.status().state==nd::RuntimeState::PeerConfirmed,"actual video certificate plus real reverse socket confirms peer");}
     void relisten(std::uint16_t port){sb::ControlRequest r;r.explicitlyEnabled=true;r.role=sb::Role::Producer;r.buildId=712;r.pairingsDirectory=files.producer;
-        r.offered=sb::KnownCapabilities;r.required=sb::KnownCapabilities&~(sb::CapHevcIntraCoverage|sb::CapHevcIntraSlices);r.hevcIntraCoverageEnabled=hevcReady;r.port=port;std::strcpy(r.address.data(),"127.0.0.1");
+        r.offered=sb::KnownCapabilities;r.required=sb::KnownCapabilities&~(sb::CapHevcIntraCoverage|sb::CapHevcIntraSlices|sb::CapHevcTemporalCoverage);r.hevcIntraCoverageEnabled=hevcReady;r.port=port;std::strcpy(r.address.data(),"127.0.0.1");
         check(producer.prepare(r)==sb::ControlStatus::Listening&&producer.localConfig(local,authority),"actual fresh producer control admission on same configured endpoint");
         sender.reset();check(sender.begin(local,authority.channel)==sb::Status::Ok,"new real paired binding after route reconnect");}
 };
@@ -622,6 +622,26 @@ void completeCodedProbe(Fixture& f){
     f.enqueue(certified,61);f.pump();
     check(f.echoes.size()==1&&tracker.acceptEcho(f.sender,bytes(f.echoes.front().payload),f.echoes.front().channel)==sb::Status::Ok&&tracker.observed(),"only actual observed authenticated probe returns the exact native echo");
 }
+void temporalCapabilityGates(){
+    const std::vector<std::uint8_t> annexB(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());std::vector<std::uint8_t> mask;
+    check(sb::wrapHevcTemporalCoverage(bytes(annexB),64,64,11,1,0,true,1,mask),"owned IDR can start a separately negotiated temporal chain");
+    Fixture modern(true,true);modern.negotiate();
+    check(sb::hevcTemporalNegotiated(modern.sender.negotiatedCapabilities()),"prepared endpoints negotiate optional temporal capability");
+    const auto frame=[&](Fixture& f){std::vector<std::uint8_t> coded;
+        check(f.producer.certifyAccessUnit(bytes(ordinary),{++f.sourceFrame,81,64,64},sb::CoverageEncoding::HevcTemporal,bytes(mask),coded,true,true),"prepared temporal signer still needs caller's exact negotiated authority");return coded;};
+    auto count=modern.certified;modern.enqueue(frame(modern),60);modern.pump();
+    check(modern.certified==count,"temporal capability never substitutes for the real coded-source probe");
+    completeCodedProbe(modern);count=modern.certified;modern.enqueue(frame(modern),62);modern.pump();
+    check(modern.certified==count+1&&modern.retained.coverageEncoding==sb::CoverageEncoding::HevcTemporal,"temporal metadata reaches native image association only after mutual proof");
+    Fixture older(true);older.temporalReady=true;older.negotiate();completeCodedProbe(older);
+    check(!sb::hevcTemporalNegotiated(older.sender.negotiatedCapabilities())&&sb::hevcIntraSlicesNegotiated(older.sender.negotiatedCapabilities()),"old intra peer retains independent HEVC without temporal permission");
+    std::vector<std::uint8_t> held{51};check(!older.producer.certifyAccessUnit(bytes(ordinary),{71,81,64,64},sb::CoverageEncoding::HevcTemporal,bytes(mask),held,true,true)&&held==std::vector<std::uint8_t>{51},"caller cannot bypass unprepared temporal signer");
+    sb::Pairing pair;sb::AuthSession bypass;
+    check(sb::loadPrivatePairing(older.files.producer,sb::Role::Producer,pair)==sb::CredentialStatus::Ok&&bypass.prepareProducer(pair,older.authority.channel.binding)==sb::AuthStatus::Ok,"negative temporal gate control owns actual source credentials");
+    std::vector<std::uint8_t> forged;check(sb::appendCertifiedFrame(bytes(ordinary),{++older.sourceFrame,81,64,64},sb::CoverageEncoding::HevcTemporal,bytes(mask),bypass,forged)==sb::FrameStatus::Ok,"unnegotiated temporal fault is still MAC valid");
+    count=older.certified;older.enqueue(forged,63);older.pump();check(older.certified==count&&older.worker.status().state==nd::RuntimeState::PeerConfirmed,"receiver independently refuses unnegotiated temporal data without resetting the paired source");
+}
+
 void hevcCapabilityAndProbeGates(){
     const std::vector<std::uint8_t> annexB(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());
     std::vector<std::uint8_t> mask;check(sb::wrapHevcCoverage(bytes(annexB),64,64,mask),"actual owned Main IDR mask fixture");
@@ -660,4 +680,4 @@ void hevcCapabilityAndProbeGates(){
 }
 
 }
-int main(int argc,char** argv){try{if(argc==2&&std::strcmp(argv[1],"--hevc-gates")==0){hevcCapabilityAndProbeGates();std::cout<<checks<<" HEVC source/capability gate checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-restart")==0){actualNativeRestart();std::cout<<checks<<" actual native restart checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-burst")==0){actualNativeBurst();std::cout<<checks<<" actual native burst checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-validity")==0){earlyDecodedValidity();std::cout<<checks<<" early decoded validity checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-decoded")==0){earlyDecodedOrdering();std::cout<<checks<<" early decoded checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--pool-order")==0){sameFdPoolOrdering();std::cout<<checks<<" pool-order checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--route-gaps")==0){routeQuarantineAndBackoff();std::cout<<checks<<" route-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--live-switch")==0){liveDecoderSwitch();std::cout<<checks<<" live-switch checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--known-gap")==0){knownGapRecovery();std::cout<<checks<<" known-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-disposition")==0){actualNativeTerminalDisposition();std::cout<<checks<<" actual native terminal disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--capture-disposition")==0){terminalCaptureDisposition();std::cout<<checks<<" terminal capture disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--ordinary-gap")==0){ordinaryWithoutCapture();std::cout<<checks<<" no-capture checks PASS\n";return 0;}hevcCapabilityAndProbeGates();offAndPreparation();actualNativeBurst();actualNativeTerminalDisposition();actualNativeRestart();earlyDecodedOrdering();earlyDecodedValidity();realVideoAndCapture();unprovedInputs();ordinaryWithoutCapture();terminalCaptureDisposition();knownGapRecovery();routeQuarantineAndBackoff();liveDecoderSwitch();sameFdPoolOrdering();lifecycleAndLoss();ambiguityAndBound();imageRouteAdmission();lateTransportReadiness();transportRecoveryRejectsOldProof();std::cout<<checks<<" hosted native receiver checks PASS\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(int argc,char** argv){try{if(argc==2&&std::strcmp(argv[1],"--hevc-gates")==0){hevcCapabilityAndProbeGates();temporalCapabilityGates();std::cout<<checks<<" HEVC source/capability gate checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-restart")==0){actualNativeRestart();std::cout<<checks<<" actual native restart checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-burst")==0){actualNativeBurst();std::cout<<checks<<" actual native burst checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-validity")==0){earlyDecodedValidity();std::cout<<checks<<" early decoded validity checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--early-decoded")==0){earlyDecodedOrdering();std::cout<<checks<<" early decoded checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--pool-order")==0){sameFdPoolOrdering();std::cout<<checks<<" pool-order checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--route-gaps")==0){routeQuarantineAndBackoff();std::cout<<checks<<" route-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--live-switch")==0){liveDecoderSwitch();std::cout<<checks<<" live-switch checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--known-gap")==0){knownGapRecovery();std::cout<<checks<<" known-gap checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--native-disposition")==0){actualNativeTerminalDisposition();std::cout<<checks<<" actual native terminal disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--capture-disposition")==0){terminalCaptureDisposition();std::cout<<checks<<" terminal capture disposition checks PASS\n";return 0;}if(argc==2&&std::strcmp(argv[1],"--ordinary-gap")==0){ordinaryWithoutCapture();std::cout<<checks<<" no-capture checks PASS\n";return 0;}hevcCapabilityAndProbeGates();temporalCapabilityGates();offAndPreparation();actualNativeBurst();actualNativeTerminalDisposition();actualNativeRestart();earlyDecodedOrdering();earlyDecodedValidity();realVideoAndCapture();unprovedInputs();ordinaryWithoutCapture();terminalCaptureDisposition();knownGapRecovery();routeQuarantineAndBackoff();liveDecoderSwitch();sameFdPoolOrdering();lifecycleAndLoss();ambiguityAndBound();imageRouteAdmission();lateTransportReadiness();transportRecoveryRejectsOldProof();std::cout<<checks<<" hosted native receiver checks PASS\n";return 0;}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
