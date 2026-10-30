@@ -142,7 +142,7 @@ param(
         $utf8 = New-Object Text.UTF8Encoding $false
         [IO.File]::WriteAllText((Join-Path $stage 'diagnostics.json'), ($manifest | ConvertTo-Json -Depth 8), $utf8)
         [IO.Compression.ZipFile]::CreateFromDirectory($stage, $temporaryZip)
-        if (Test-Path -LiteralPath $ArchivePath) { [IO.File]::Replace($temporaryZip, $ArchivePath, $null) }
+        if (Test-Path -LiteralPath $ArchivePath) { [IO.File]::Replace($temporaryZip, $ArchivePath, [NullString]::Value) }
         else { [IO.File]::Move($temporaryZip, $ArchivePath) }
         Write-Host ('PC diagnostics: ' + $ArchivePath)
         Write-Host ('Native driver_vrlink.txt included: ' + $manifest.driver_log_found)
