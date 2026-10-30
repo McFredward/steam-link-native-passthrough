@@ -20,6 +20,30 @@ bootstrap-only commit does not require rebuilding unchanged native components.
 An archive mismatch aborts before extraction. Updating an installed device still
 requires the assistant's inspection and explicit Apply confirmation.
 
+`collect-pc-logs.ps1` is an independent read-only PC diagnostic entry. Run it
+after a test; SteamVR/Frame settings, processes and installed files are not
+changed. It detects Steam through the current user's registry and checks the
+OpenVR log directory, copies bounded tails of native `driver_vrlink.txt`,
+`vrserver.txt` and `vrcompositor.txt` plus current Venture logs, and records only
+selected scalar saved `driver_vrlink` settings. Saved settings are not proof of
+the effective mode during an earlier run; native timestamped driver records
+provide that context. Missing/unreadable inputs stay explicit in `diagnostics.json`.
+
+```powershell
+irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/refs/heads/dev/distribution/collect-pc-logs.ps1 | iex
+```
+
+The single archive is `%LOCALAPPDATA%\steam-link-native-passthrough\diagnostics\pc-logs.zip`.
+Subsequent runs atomically replace it. Defaults bound each log to its last 8 MiB
+and current runtime logs to six; temporary staging files are removed on success
+and failure. Full settings, account/credential files, images and older Venture
+`.prev.log` files are excluded. Explicit `-SteamPath`, `-VentureDataPath`,
+`-OpenVrPathsFile`, `-OutputPath` and `-MaxLogBytes` arguments are available when
+running the downloaded script with `-File`. Windows fixtures exercise actual
+PowerShell 5.1/7 ZIP contents, tail bounds, settings filtering, source immutability,
+missing/configured alternate inputs, repeated publication and failed replacement.
+The normal installer/native versions are unchanged.
+
 `nvenc-quality-probe.zip` is a separate, finite, owned synthetic GPU diagnostic.
 It is not an installed native patch or a paired update; `VERSION` and native
 component versions remain unchanged. Its build descriptor identifies the exact

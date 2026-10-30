@@ -7,6 +7,7 @@ on:
       - 'VERSION'
       # Archive/bootstrap updates do not change compiled native sources.
       - 'distribution/**'
+      - '.github/workflows/pc-log-tests.yml'
       - 'get.ps1'
       - 'get.sh'
       - 'get-preview.*'
@@ -59,6 +60,7 @@ on:
       - 'VERSION'
       # Archive/bootstrap updates do not change compiled native sources.
       - 'distribution/**'
+      - '.github/workflows/pc-log-tests.yml'
       - 'get.ps1'
       - 'get.sh'
       - 'get-preview.*'

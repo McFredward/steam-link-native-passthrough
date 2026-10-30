@@ -1,0 +1,27 @@
+name: Private PC log collection
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'distribution/collect-pc-logs*.ps1'
+      - '.github/workflows/pc-log-tests.yml'
+  pull_request:
+    paths:
+      - 'distribution/collect-pc-logs*.ps1'
+      - '.github/workflows/pc-log-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute actual bounded ZIP collection and failure recovery on fixtures
+        shell: ${{ matrix.shell }}
+        run: ./distribution/collect-pc-logs.tests.ps1

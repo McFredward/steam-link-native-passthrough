@@ -5,6 +5,42 @@ Installer **0.3.13 / PC 0.3.11 / Frame 0.3.3** prefers negotiated temporal HEVC
 preferences still override the default. This candidate updates only the PC sender.
 Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
 
+## Manual100 follow-up: requested native rates still fall below the UI target
+
+The user tested the same installed 0.3.13 with a reported manual 100 Mbps target
+at 11:01–11:03 and again observed no perceptible quality difference. The new
+`vrserver.txt` appends this run to the preceding Auto run; isolate the new time
+range/process generation instead of combining both sessions.
+
+Across 25 active five-second bins, 1,142/10,885 RGB pictures (10.49%) report
+QP>=40, maximum 50 and weighted mean 30.04. The prior Auto run measured 13.85%,
+maximum 50 and mean 30.05 with different duration/source pictures. This is no
+objective same-frame visual gain. Of 114 selected, budgeted non-overlap RGB
+observations, only 5 request exactly 100 Mbps; captured *original native* targets
+range 5.38–100 Mbps and forwarded RGB again reaches 1 Mbps. All 114 show the
+proportional VBR correction active. A UI target did not establish a sustained
+native RGB budget in this run; do not assume Auto was effectively disabled or
+that a manual target bypasses native link protection without driver evidence.
+
+All 11,054 masks were HEVC and decoded/uploaded on Frame, with zero refusal delta
+and no lossless fallback. Mask lifetime mean/max QP is 42.05/51; 98 private rate
+updates include 4 RC resets. PC drops are 150/11,914 (~1.26%), versus 2.07% in the
+prior Auto run. Application CPU/GPU is 6.009/4.769 ms at 90 Hz. The native coded
+extent remains 1152x4608. Frame native logs contain 22 retry events/384 requested
+packets during 11:00–11:03 and 8 late metadata messages, including 2 before game
+entry. Their indices are not native NVENC PTS/frameIdx.
+
+The PC `driver_vrlink.txt` remains absent from supplied inputs. Before another
+codec/preset/rate change, collect the existing test's native link estimates,
+automatic/manual flags, capacity histogram, held-frame and step-down events
+using the [PC log collector](../../distribution/README.md). It adds selected
+saved settings for context; settings collected after returning to Auto cannot
+prove the earlier game's mode. No new gameplay or runtime update is required
+just to collect existing logs. Distinguish a wrong/effectively unapplied UI
+setting, native safety throttling, physical delivery pressure and alpha quality
+before recommending a permanent 100/200/350 Mbps policy. Stable sharp fluid
+rain remains unverified.
+
 ## Live result: buffer correction did not improve perceived rain quality
 
 The October 30 10:42–10:45 Spirit Sling run used PC 0.3.11. All 151 selected,
