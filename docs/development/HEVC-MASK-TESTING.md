@@ -6,6 +6,71 @@ preferences still override the default. This candidate updates the Frame receive
 Run the normal guided dev setup and apply the offered update while the Frame is awake.
 The PC native provider is byte-identical to 0.3.13.
 
+## Live0.3.14: output reuse works; mask decode and queue delay remain
+
+The October30 12:39–12:42 Spirit Sling run has no clear perceived improvement.
+Read-only SSH retrieval confirms that the installed Frame layer's size/SHA256
+exactly match the delivered Frame0.3.4. The restarted compositor process48483
+provides fresh five-second stage reports through game exit. Its final counts
+show14,488 HEVC masks plus6 lossless fallbacks, matching all14,494 renderer
+decodes/uploads, with no decode/upload refusal, pool backpressure, stale result
+or missing HEVC reference. R8 output storage grows10 times and is reused14,478
+times: the optimization is active, but has not met visual acceptance.
+
+| Frame measurement | Mean | Maximum |
+| --- | ---: | ---: |
+| Mask decoder worker wall time | 12.646 ms | 33.024 ms |
+| Submitted job waiting to start | 8.032 ms | 61.368 ms |
+| Completed result waiting for collection | 0.081 ms | 2.159 ms |
+| Consumer publication CPU validation/staging/scheduling | 0.607 ms | 6.256 ms |
+
+These are separate cumulative stage measurements across concurrent work, not
+additive end-to-end latency or pure decoder CPU execution time. Publication does
+not measure the later GPU fence. The decoder/queue measurements identify a
+larger remaining target than result collection or the R8 upload copy alone.
+
+The video process writes its diagnostics to Steam's `logs/steam_output.log`
+after the coordinated update; those lines are absent from this run's journal.
+The first monotonic video session ends with16,366 measured handoffs, mean9.505 ms,
+maximum33.327 ms and7,247/44/0 callbacks over11/22/50 ms. These are counters
+through the last reported sample, including menu/ordinary frames, not an exact
+active-MR percentage or complete-run upper bound. The same output file also
+contains a separately restarted12:49 stream whose counters reset and show
+short menu waits; exclude it from the12:39 gameplay result. Do not conclude
+that handoff latency disappeared from the last line of that later session.
+
+Across32 five-second bins overlapping MR,1,228/14,064 RGB pictures (8.73%) have
+QP>=40, mean30.26 and maximum50. The preceding manual100 run had10.49%, mean30.04
+and maximum50, with different duration and source pictures. This does not prove
+a matched visual improvement or a causal regression. Excluding both edge bins
+leaves1,058/13,199 high-QP pictures (8.02%). Selected original native encoder
+requests still span6.56–100 Mbps; forwarded RGB still reaches1 Mbps. The
+selected worst/latest events are not a whole-frame population. Actual active-bin
+means are28.92 Mbps RGB plus4.03 Mbps added metadata, not a physical link-capacity
+measurement. Mask lifetime mean/max QP remains42.71/51; private rate changes/reset
+are132/2. PC application timing is5.606 ms CPU/4.397 ms GPU at90 Hz; dropped
+presents159/15,527 (~1.02%). The native coded extent remains1152x4608.
+
+Frame's native stream log records33 substantive retry events requesting773
+packets and6 late metadata messages in12:39:27–12:42:08. Retry indices are not
+NVENC frame identities. Native PC `driver_vrlink.txt` was not supplied for this
+run, so fresh effective Auto/manual mode and native throttle counts remain
+unverified. The remaining exact-Ready wait is a plausible contributor to native
+decoded-ACK feedback, not proof of the sole cause of visible RGB pixelation.
+
+The next optimization must shorten actual mask decoding/queue residence while
+retaining full-resolution decoded Y bytes and exact current source/frame/eye/
+lease/camera/GPU proof. More decoder threads alone are not an established fix:
+the current owner deliberately uses one thread for the observed independent
+NVENC slices without WPP entry points. The pinned
+[FFmpeg8.1.3 implementation](https://github.com/FFmpeg/FFmpeg/blob/n8.1.3/libavcodec/hevc/hevcdec.c#L3074)
+uses its slice-thread path for entry-point/WPP work and otherwise decodes those
+NAL units serially. A proposed picture-internal parallel decoder therefore
+needs a compatible implementation, same-input Y-plane comparisons, bounded CPU
+ownership and latency/throughput checks; merely increasing `thread_count`,
+adding frame buffering, skipping filters or releasing an unready image is not
+the validated next candidate. No new native patch accompanies this log review.
+
 ## Frame R8 buffer reuse and continuing pipeline timing (0.3.14)
 
 The previous receiver repeatedly allocated/zeroed a full decoded R8 output buffer
