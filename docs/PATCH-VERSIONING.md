@@ -1,5 +1,11 @@
 # Patch versions
 
+The next October30 diagnostic package is installer **0.3.12**, PC **0.3.10**,
+Frame **0.3.3**. It adds bounded native RGB output/QP and captured-QoS interval
+measurements for the unresolved rain quality issue. Encoding and control policy
+are unchanged from0.3.11; all Frame artifacts stay byte-identical. The0.3.11
+live test confirmed fewer RC resets but no clear visual gain.
+
 The October30 dev package is installer **0.3.11**, PC **0.3.9**, Frame **0.3.3**.
 PC0.3.9 stabilizes shared mask/video budget feedback using completed-input QoS
 and actual wire bytes, preserving temporal RC/GOP on bitrate-only changes. The

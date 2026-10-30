@@ -1,6 +1,7 @@
 #include "stream-bridge-sender-provider-core.h"
 #include <cstring>
 #include <limits>
+#include <chrono>
 #ifdef __linux__
 #include <sys/uio.h>
 #include <unistd.h>
@@ -10,6 +11,7 @@ namespace stream_bridge::sender {
 namespace {
 template<class T,std::size_t N> bool zero(const T (&values)[N]){for(const auto& value:values)if(value!=T{})return false;return true;}
 void count(std::uint64_t& value){if(value!=std::numeric_limits<std::uint64_t>::max())++value;}
+std::uint64_t rgbClockUs()noexcept{return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
 bool copyConfiguration(const NV_ENC_CONFIG* input,NV_ENC_CONFIG& output){
 #ifdef _WIN32
     SIZE_T read=0;return ReadProcessMemory(GetCurrentProcess(),input,&output,sizeof output,&read)&&read==sizeof output;
@@ -26,6 +28,7 @@ NvencQosObservation qosObservation(const NV_ENC_INITIALIZE_PARAMS& init,const NV
     NvencQosObservation result{};result.frameRateNum=init.frameRateNum;result.frameRateDen=init.frameRateDen;
     if(!requested||!applied)return result;
     result.known=true;result.budgetApplied=budgetApplied;
+    result.rateControlMode=static_cast<std::uint32_t>(requested->rcParams.rateControlMode);
     result.requestedAverageBitRate=requested->rcParams.averageBitRate;result.requestedMaximumBitRate=requested->rcParams.maxBitRate;
     result.requestedVbvBufferSize=requested->rcParams.vbvBufferSize;result.requestedVbvInitialDelay=requested->rcParams.vbvInitialDelay;
     result.appliedAverageBitRate=applied->rcParams.averageBitRate;result.appliedMaximumBitRate=applied->rcParams.maxBitRate;
@@ -228,6 +231,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                 observation=qosObservation(contract,haveConfig?&requestedConfig:nullptr,
                     haveConfig?(applyBudget?&budgetConfig:&requestedConfig):nullptr,applyingBudget,
                     applyingBudget?metadata:0,applyingBudget?s->wireBudget.planningMean(authority,contract.frameRateNum,contract.frameRateDen):0);
+                observation.resetEncoder=params->resetEncoder;observation.forceIDR=params->forceIDR;
 
             }else{generation=self.revoke(*s,hevc);count(self.reconfigureStats_.revoked);}
         }
@@ -261,7 +265,8 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                 if(found){m.resourceGeneration=found->generation;m.generation=++s->nextIdentity;}else m={};
             }
             s->initialized=s->hevc=true;s->width=width;s->height=height;saveContract(*s,contract,config,hasConfig,known);
-            self.observeQos(*s,known?qosObservation(contract,hasConfig?&config:nullptr,hasConfig?&config:nullptr):NvencQosObservation{});
+            auto updatedQos=known?qosObservation(contract,hasConfig?&config:nullptr,hasConfig?&config:nullptr):NvencQosObservation{};
+            updatedQos.resetEncoder=params->resetEncoder;updatedQos.forceIDR=params->forceIDR;self.observeQos(*s,updatedQos);
         }else{s->maps={};s->resources={};}
     }
     return result;
@@ -367,6 +372,22 @@ NVENCSTATUS NVENCAPI NvencBoundary::lock(void* encoder,NV_ENC_LOCK_BITSTREAM* pa
             &&(s->adapter.handshake().negotiatedCapabilities()&CapOrdinaryVideoPicture)!=0;
     }else count(self.outputStats_.unmatched);
     evidence.originalAccessUnitBytes=params->bitstreamSizeInBytes;
+    // Observe only after a successful typed original Lock. This receipt runs
+    // before the existing metadata guard unlocks, including augmentation
+    // refusal/exception paths. It never changes the caller's fields or bytes.
+    struct RgbReceipt {
+        RgbOutputTelemetry& telemetry;const NvencOutputEvidence& evidence;NV_ENC_LOCK_BITSTREAM& output;
+        ~RgbReceipt()noexcept{
+            if(!telemetry.enabled())return;
+            RgbOutputSample sample{};sample.observedUs=rgbClockUs();sample.encoderGeneration=evidence.encoderGeneration;
+            sample.submission=evidence.submission;sample.inputTimestamp=output.outputTimeStamp;
+            sample.frameIndex=output.frameIdx;sample.pictureType=static_cast<std::uint32_t>(output.pictureType);
+            sample.hardwareStatus=output.hwEncodeStatus;sample.qp=output.frameAvgQP;
+            sample.rgbBytes=evidence.originalAccessUnitBytes;sample.completeBytes=output.bitstreamSizeInBytes;
+            sample.width=evidence.width;sample.height=evidence.height;sample.exactInput=evidence.exactInput;
+            sample.sessionAuthorized=evidence.coverageSessionAuthorized;sample.qos=evidence.qos;telemetry.observe(sample);
+        }
+    } rgbReceipt{self.rgbTelemetry_,evidence,*params};
     const Bytes original{static_cast<const std::uint8_t*>(params->bitstreamBufferPtr),params->bitstreamSizeInBytes};
     std::uint64_t ticket=0;
     try {
@@ -443,6 +464,8 @@ void NvencBoundary::setInputObserver(InputObserver value){std::lock_guard<std::m
 void NvencBoundary::setOutputAugmenter(OutputAugmenter value){std::lock_guard<std::mutex> guard(mutex_);augmenter_=value;}
 ReconfigureStats NvencBoundary::reconfigureStats()const{std::lock_guard<std::mutex> guard(mutex_);return reconfigureStats_;}
 OutputStats NvencBoundary::outputStats()const{std::lock_guard<std::mutex> guard(mutex_);return outputStats_;}
+void NvencBoundary::enableRgbTelemetry(bool value){std::lock_guard<std::mutex> guard(mutex_);rgbTelemetry_.enable(value,value?rgbClockUs():0);}
+RgbOutputReport NvencBoundary::takeRgbTelemetry(){std::lock_guard<std::mutex> guard(mutex_);return rgbTelemetry_.take(rgbTelemetry_.enabled()?rgbClockUs():0);}
 std::array<EncoderState,4> NvencBoundary::encoderStates()const{std::lock_guard<std::mutex> guard(mutex_);std::array<EncoderState,4> result{};for(unsigned i=0;i<sessions_.size();++i)result[i]={sessions_[i].encoder,sessions_[i].generation,sessions_[i].initialized&&sessions_[i].hevc,sessions_[i].adapter.mutualConfirmed(),sessions_[i].adapter.probeObserved(),sessions_[i].width,sessions_[i].height,sessions_[i].encoded};return result;}
 bool NvencBoundary::nativeFunctionTable(NV_ENCODE_API_FUNCTION_LIST& output)const{
     std::lock_guard<std::mutex> guard(mutex_);if(!installed_||!enabled_||!inputHooks_)return false;

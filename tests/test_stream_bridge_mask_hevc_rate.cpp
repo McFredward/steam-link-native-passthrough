@@ -1,7 +1,9 @@
 #include "pc/stream-bridge-mask-hevc-rate.h"
 #include "pc/stream-bridge-wire-budget.h"
+#include "pc/stream-bridge-rgb-telemetry.h"
 #include <cstdio>
 #include <stdexcept>
+#include <cstring>
 using namespace stream_bridge::sender;
 namespace {
 unsigned checks=0;
@@ -92,6 +94,49 @@ void budgets(){
     check(controlled.reserve(7,90,1)==18000000&&controlled.peakRate(7,90,1)==180000000,"recent controlled rate recovers while the full old peak remains visible");
     controlled.observe(8,1000,2000,true);check(!controlled.reserve(7,90,1)&&controlled.reserve(8,90,1)==720000,"authority changes revoke old rate history");
 }
+void rgbTelemetry(){
+    static_assert(sizeof(RgbOutputTelemetry)<4096,"diagnostics have a fixed small process-lifetime footprint");
+    RgbOutputTelemetry t;RgbOutputSample s{};s.observedUs=200;s.encoderGeneration=7;s.submission=11;s.inputTimestamp=99;
+    s.frameIndex=31;s.qp=20;s.rgbBytes=100;s.completeBytes=140;s.width=1152;s.height=4608;s.exactInput=true;
+    s.qos.known=true;s.qos.revision=5;s.qos.frameRateNum=90;s.qos.frameRateDen=1;s.qos.requestedAverageBitRate=100000000;
+    s.qos.appliedAverageBitRate=90000000;s.qos.rateControlMode=2;
+    t.observe(s);check(!t.take(250).frames,"disabled diagnostics never observe native output");t.enable(true,100);t.observe(s);
+    s.observedUs=300;s.submission=12;s.qp=50;s.rgbBytes=200;s.completeBytes=500;s.qos.appliedAverageBitRate=6000000;t.observe(s);
+    s.observedUs=400;s.submission=13;s.qp=35;s.rgbBytes=900;s.completeBytes=950;s.qos.appliedAverageBitRate=50000000;t.observe(s);
+    s.observedUs=500;s.submission=14;s.qp=30;s.rgbBytes=300;s.completeBytes=900;s.qos.appliedAverageBitRate=100000000;t.observe(s);
+    s.observedUs=600;s.submission=0;s.qp=0;s.rgbBytes=s.completeBytes=20;s.exactInput=false;s.qos.appliedAverageBitRate=1;t.observe(s);
+    check(!t.take(599).frames,"a backwards report clock cannot consume future observations");
+    auto r=t.take(1000);
+    check(r.frames==5&&r.unmatched==1&&r.rgbBytes==1520&&r.addedBytes==990&&r.maxRgbBytes==900&&r.maxAddedBytes==600,
+        "RGB and complete-minus-original metadata remain separate over every accepted native output");
+    check(r.qpSamples==5&&r.minQp==0&&r.maxQp==50&&r.qpSum==135,"raw valid QP zero is preserved without claiming visual quality");
+    check(r.lowBudgetFrames==1&&r.highQpFrames==1&&r.lowBudgetHighQpFrames==1,"explicit low-budget/high-QP counts distinguish sustained pressure from a single worst sample");
+    const auto& last=r.events[r.eventCount-1].sample;
+    check(r.knownQos==4&&!last.exactInput&&!last.qos.known&&!last.qos.revision&&!last.qos.appliedAverageBitRate,
+        "unmatched output cannot borrow a latest native configuration in diagnostic events");
+    check(r.eventCount==4&&r.events[0].roles==(RgbOutputTelemetry::LowRgb|RgbOutputTelemetry::HighQp),
+        "one transient low-budget high-QP picture survives later good frames without duplicate log rows");
+    check(r.events[0].sample.submission==12&&r.events[0].sample.qos.appliedAverageBitRate==6000000,
+        "worst-picture sample retains its own original input QoS after later changes");
+    char text[RgbOutputLogBytes]{};check(formatRgbOutputSummary(text,sizeof text,r)&&std::strstr(text,"bytes rgb/added=1520/990"),"cold summary reports the observed original and added bytes");
+    check(formatRgbOutputEvent(text,sizeof text,r,r.events[0])&&std::strstr(text,"age-us=700")&&std::strstr(text,"avg requested/passed=100000000/6000000"),
+        "event age and exact captured budget are reconstructable from the cold log timestamp");
+    check(!formatRgbOutputEvent(text,4,r,r.events[0]),"undersized diagnostic buffers report truncation");
+    check(!t.take(1100).frames,"cold interval reads cannot repeatedly count the same output");
+    s.exactInput=true;s.qp=63;s.observedUs=1200;t.observe(s);
+    s.observedUs=1199;t.observe(s);s.observedUs=1250;s.completeBytes=1;t.observe(s);
+    s.completeBytes=RgbOutputTelemetry::MaximumBytes+1;t.observe(s);r=t.take(1300);
+    check(r.frames==1&&r.rejected==3&&!r.qpSamples&&!r.minQp&&!r.maxQp,"invalid clocks/sizes and unsupported QP cannot pollute rate or QP aggregates");
+    t.enable(false,0);t.enable(true,1400);s.observedUs=1500;s.completeBytes=30;s.qp=20;
+    for(unsigned n=0;n<10000;++n){++s.observedUs;t.observe(s);}r=t.take(12000);
+    check(r.frames==10000&&r.eventCount<=5,"continuous output cannot grow diagnostic storage or log-event count");
+    auto huge=r;auto& e=huge.events[0];e.sample.encoderGeneration=e.sample.submission=e.sample.inputTimestamp=e.sample.qos.revision=UINT64_MAX;
+    auto& q=e.sample.qos;q.frameRateNum=q.frameRateDen=q.rateControlMode=UINT32_MAX;
+    q.requestedAverageBitRate=q.appliedAverageBitRate=q.requestedMaximumBitRate=q.appliedMaximumBitRate=UINT32_MAX;
+    q.requestedVbvBufferSize=q.appliedVbvBufferSize=q.requestedVbvInitialDelay=q.appliedVbvInitialDelay=UINT32_MAX;
+    q.reservedMetadataBitRate=q.meanMetadataBitRate=UINT32_MAX;
+    check(formatRgbOutputEvent(text,sizeof text,huge,e),"all bounded scalar fields fit a complete1024-byte cold event line");
+}
 void replay(){
     // Deterministic software plant: every NVENC target overshoots2.2x. This is
     // evidence about control logic, not a claim about measured GPU behaviour.
@@ -111,4 +156,4 @@ void replay(){
     check(video>300000000,"a recovered link gives its capacity back to colour video");
 }
 }
-int main(){try{controller();jitterFeedback();completedInputBudget();budgets();replay();std::printf("%u mask-rate/shared-budget checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}
+int main(){try{controller();jitterFeedback();completedInputBudget();budgets();rgbTelemetry();replay();std::printf("%u mask-rate/shared-budget checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

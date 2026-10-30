@@ -1,9 +1,62 @@
 # HEVC mask test candidate
 
-Installer **0.3.11 / PC 0.3.9 / Frame 0.3.3** prefers negotiated temporal HEVC
+Installer **0.3.12 / PC 0.3.10 / Frame 0.3.3** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
 preferences still override the default. This candidate updates only the PC sender.
 Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
+
+## RGB output measurements
+
+PC0.3.10 adds bounded scalar diagnostics in dev/debug logs for the remaining
+colour-image bottleneck. This update keeps PC0.3.9 encoding settings, mask rate
+control, GOP, resolution and all Frame0.3.3 files unchanged. It is a measurement
+candidate, not a new sharpness or latency result. Normal dev setup needs no flag.
+
+The0.3.11 Spirit Sling test delivered all13,628 masks. Resets fell to4 for125
+private rate changes (~97% fewer per delivered HEVC picture than the preceding
+run), but RGB budget samples still fell to6.41Mbps and PC drops remained~1.84%.
+The user reported no clear visual difference. Native Frame logs also showed
+packet retries and late metadata; their physical/network or packetization cause
+is not established. Five-second budget snapshots alone cannot explain those
+colour-rate collapses.
+
+`RGB output interval` reports every eligible successful native Lock's original
+colour bytes, complete-minus-original added bytes, output byte-rate and raw QP
+statistics over the interval. It separately counts unmatched inputs, known QoS
+and reconfiguration overlap. Explicit counts for forwarded budget<=10Mbps,
+QP>=40 and both distinguish repeated pressure from a single excursion; these
+thresholds are diagnostics, not a control policy or visual acceptance boundary.
+This is encoder-returned output, not measured WiFi
+traffic/capacity, and QP is not an objective visual-quality score. QP0 remains a
+raw valid numeric result; a driver that reports only zero is not evidence of
+lossless encoding. Unknown/unsupported QP is excluded from QP aggregates.
+
+Up to five `RGB output event` rows retain actual observations for low forwarded
+RGB budget, high QP, peak RGB size, peak added size and latest output. Roles are
+bit flags1/2/4/8/16; a frame selected for several roles is emitted once. Each row
+contains its own generation/submission, opaque native frameIdx/input PTS, output
+picture/hardware/QP, RGB/added/complete sizes, and input-captured QoS revision,
+FPS, RC mode, native reset/forced-IDR flags, requested/forwarded average and
+maximum rates, VBV/delay and reserved metadata. Flags1/2/4/8/16 mean exact input,
+known QoS, budget applied, overlap and session authorization. Session flags do
+not prove a current source or rendered image. Unmatched outputs cannot borrow a
+latest configuration. Overlapping configurations are not hardware-effective RC
+proof. RC modes use the public NVENC11.1 enum; maxBitRate has different meaning
+in CBR and VBR.
+
+The event's `age-us` is measured by the same host monotonic clock as the interval
+snapshot. Subtract it from the enclosing report time to locate a short excursion
+approximately; host log formatting and PC/Frame clock offset remain limits.
+Native frameIdx/PTS are opaque and are not assumed equal to Frame FEC indices.
+Use nearby native retry timestamps as correlation, not proof of a shared frame.
+
+The collector has fixed storage and copies only scalars while the existing
+native metadata mutex is already held. Native Lock flags/status/parameters,
+output bytes, source permissions and control decisions are never changed by
+measurement. There is no pixel capture, GPU/readback work, I/O or new waiting in
+the native hook. Formatting and at most one summary plus five event lines occur
+on the cold worker every five seconds and at final stop. Release logging leaves
+collection disabled.
 
 ## Bitrate stability candidate
 

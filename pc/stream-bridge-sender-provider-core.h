@@ -2,6 +2,7 @@
 #include "stream-bridge-sender.h"
 #include "stream-bridge-sender-backend.h"
 #include "stream-bridge-wire-budget.h"
+#include "stream-bridge-rgb-telemetry.h"
 #include <nvEncodeAPI.h> // Explicit, hash-pinned SDK 11.1 input; never downloaded at build time.
 #include <array>
 #include <atomic>
@@ -9,20 +10,6 @@
 
 namespace stream_bridge::sender {
 using NvencFactory = NVENCSTATUS (NVENCAPI*)(NV_ENCODE_API_FUNCTION_LIST*);
-// Diagnostic scalars from the last successful public configuration call. This
-// is not exact hardware-effective rate, source permission or frame/image proof.
-// A pending Encode-to-Lock interval overlapping Reconfigure is ambiguous even
-// when its original snapshot is known; never replace it with a later config.
-struct NvencQosObservation {
-    std::uint64_t revision=0;
-    std::uint32_t frameRateNum=0,frameRateDen=0;
-    std::uint32_t requestedAverageBitRate=0,requestedMaximumBitRate=0;
-    std::uint32_t requestedVbvBufferSize=0,requestedVbvInitialDelay=0;
-    std::uint32_t appliedAverageBitRate=0,appliedMaximumBitRate=0;
-    std::uint32_t appliedVbvBufferSize=0,appliedVbvInitialDelay=0;
-    std::uint32_t reservedMetadataBitRate=0,meanMetadataBitRate=0;
-    bool known=false,budgetApplied=false,encodeOverlappedReconfigure=false;
-};
 struct NvencOutputEvidence {
     void* encoder=nullptr;std::uint64_t encoderGeneration=0,submission=0;
     void* resource=nullptr;std::uint64_t resourceGeneration=0,mapGeneration=0;
@@ -112,6 +99,8 @@ public:
     NvencQosObservation encoderQos(void*,std::uint64_t generation)const;
     ReconfigureStats reconfigureStats()const; // Cold worker snapshot; no hot-path logging.
     OutputStats outputStats()const;
+    void enableRgbTelemetry(bool); // Cold opt-in, fixed diagnostic storage only.
+    RgbOutputReport takeRgbTelemetry(); // Cold interval snapshot; never frame authority.
     // Revokes only that observed encoder generation; borrowed output stays alive.
     void revokeDiscovery(void*,std::uint64_t generation);
     void stop();
@@ -161,5 +150,6 @@ private:
     std::uint64_t nextGeneration_=0,nextQosRevision_=0;ReconfigureStats reconfigureStats_{};OutputStats outputStats_{};
     bool installed_=false,enabled_=true,inputHooks_=false;
     OutputAugmenter augmenter_{};InputObserver inputObserver_{};DeviceObserver deviceObserver_{};
+    RgbOutputTelemetry rgbTelemetry_{};
 };
 } // namespace stream_bridge::sender

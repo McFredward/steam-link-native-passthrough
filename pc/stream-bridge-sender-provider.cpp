@@ -181,7 +181,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
     stream_bridge::sender::SourceIpcServer sourceIpc_{[](std::uint32_t pid,void* context){return static_cast<Provider*>(context)->coverage_.ready(pid);},this,
         [](std::uint32_t pid,bool budget,void* context)noexcept{static_cast<Provider*>(context)->coverage_.sourceProcess(pid,budget);}};
     void** directSlots_=nullptr;std::array<void*,8> directOriginal_{},directWrapped_{};
-    void report(const char* status,stream_bridge::logging::Level level=stream_bridge::logging::Level::Important){if(log_&&stream_bridge::logging::enabled(level)){char text[768]{};std::snprintf(text,sizeof text,"Steam Link Native Passthrough: %s",status);log_->Log(text);}}
+    void report(const char* status,stream_bridge::logging::Level level=stream_bridge::logging::Level::Important){if(log_&&stream_bridge::logging::enabled(level)){char text[stream_bridge::sender::RgbOutputLogBytes+64]{};std::snprintf(text,sizeof text,"Steam Link Native Passthrough: %s",status);log_->Log(text);}}
     bool configure(){
         vr::EVRInitError error=vr::VRInitError_None;
         auto* settings=static_cast<vr::IVRSettings*>(context_->GetGenericInterface(vr::IVRSettings_Version,&error));
@@ -300,6 +300,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         }
         if(!attached)return;
         report("verified native sender attached");
+        boundary().enableRgbTelemetry(request_.explicitlyEnabled&&stream_bridge::logging::debug());
         auto last=stream_bridge::sender::RuntimeState::Off;const char* lastCoverage=nullptr;
         std::array<const char*,32> reported{};
         // Repeated startup churn must not spend the budget before a later
@@ -368,6 +369,16 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     stream_bridge::logging::Level::Debug:stream_bridge::logging::Level::Warning);
             }
 
+        };
+        auto nextRgbReport=std::chrono::steady_clock::time_point{};
+        const auto reportRgb=[&](bool final){
+            if(!stream_bridge::logging::debug())return;
+            const auto now=std::chrono::steady_clock::now();if(!final&&now<nextRgbReport)return;
+            nextRgbReport=now+std::chrono::seconds(5);
+            const auto stats=boundary().takeRgbTelemetry();if(!stats.frames&&!stats.rejected)return;
+            char text[stream_bridge::sender::RgbOutputLogBytes]{};
+            if(stream_bridge::sender::formatRgbOutputSummary(text,sizeof text,stats))report(text,stream_bridge::logging::Level::Debug);
+            for(unsigned i=0;i<stats.eventCount;++i)if(stream_bridge::sender::formatRgbOutputEvent(text,sizeof text,stats,stats.events[i]))report(text,stream_bridge::logging::Level::Debug);
         };
         auto nextBudgetReport=std::chrono::steady_clock::time_point{};std::uint64_t budgetReports=0;
         const auto reportWireBudget=[&](bool final){
@@ -589,7 +600,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 }
                 last=runtime_.state();reportState(stream_bridge::sender::runtimeStateName(last));
             }
-            if(request_.explicitlyEnabled){reportReconfigure(false);reportWireBudget(false);reportHevc(false);reportCoverage(false);reportFailure();}
+            if(request_.explicitlyEnabled){reportReconfigure(false);reportWireBudget(false);reportRgb(false);reportHevc(false);reportCoverage(false);reportFailure();}
             std::unique_lock<std::mutex> guard(mutex_);changed_.wait_for(guard,std::chrono::milliseconds(8),[this]{return stopped_;});
         }
         report("sender worker stopping");
@@ -597,6 +608,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         report(coverage_.stateName());
         reportReconfigure(true);
         reportWireBudget(true);
+        reportRgb(true);
         reportHevc(true);
         reportCoverage(true);
         reportFailure();

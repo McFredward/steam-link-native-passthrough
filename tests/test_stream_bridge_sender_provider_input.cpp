@@ -74,7 +74,7 @@ NVENCSTATUS NVENCAPI unregistration(void*,NV_ENC_REGISTERED_PTR){return NV_ENC_S
 NVENCSTATUS NVENCAPI map(void*,NV_ENC_MAP_INPUT_RESOURCE* p){p->mappedResource=mapped;p->mappedBufferFmt=NV_ENC_BUFFER_FORMAT_NV12;return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI unmap(void*,NV_ENC_INPUT_PTR){return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI encode(void* handle,NV_ENC_PIC_PARAMS* p){++encodes;encodeEvent=++event;timestamp=p->inputTimeStamp;if(duringEncode)duringEncode(handle);return encodeResult;}
-NVENCSTATUS NVENCAPI lock(void*,NV_ENC_LOCK_BITSTREAM* p){p->bitstreamBufferPtr=au.data();p->bitstreamSizeInBytes=au.size();p->outputTimeStamp=timestamp+(wrongTimestamp?1:0);p->pictureType=NV_ENC_PIC_TYPE_IDR;return lockResult;}
+NVENCSTATUS NVENCAPI lock(void*,NV_ENC_LOCK_BITSTREAM* p){p->bitstreamBufferPtr=au.data();p->bitstreamSizeInBytes=au.size();p->outputTimeStamp=timestamp+(wrongTimestamp?1:0);p->pictureType=NV_ENC_PIC_TYPE_IDR;p->frameAvgQP=24;p->frameIdx=777;p->hwEncodeStatus=2;return lockResult;}
 NVENCSTATUS NVENCAPI unlock(void*,NV_ENC_OUTPUT_PTR){return unlockResult;}
 NVENCSTATUS NVENCAPI destroy(void*){return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI factory(NV_ENCODE_API_FUNCTION_LIST* p){p->nvEncOpenEncodeSessionEx=open;p->nvEncInitializeEncoder=init;p->nvEncReconfigureEncoder=reconfigure;p->nvEncRegisterResource=registration;p->nvEncUnregisterResource=unregistration;p->nvEncMapInputResource=map;p->nvEncUnmapInputResource=unmap;p->nvEncEncodePicture=encode;p->nvEncLockBitstream=lock;p->nvEncUnlockBitstream=unlock;p->nvEncDestroyEncoder=destroy;return NV_ENC_SUCCESS;}
@@ -84,6 +84,10 @@ void retire(const NvencOutputEvidence& e,void*){retirementValid=retirementValid&
 bool augment(Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& owned,void*){++augments;observed=e;if(!allowAugment||!e.exactInput)return false;owned.assign(candidate.data,candidate.data+candidate.size);owned.resize(owned.size()+augmentBytes,0xab);return true;}
 void run(){
     NvencBoundary bridge({{1}});activeBoundary=&bridge;bridge.setInputObserver({capture,retire,nullptr});bridge.setDeviceObserver({device,nullptr});bridge.setOutputAugmenter({augment,nullptr});
+    bridge.enableRgbTelemetry(true);
+    const auto telemetryLast=[&](){const auto report=bridge.takeRgbTelemetry();
+        for(unsigned i=0;i<report.eventCount;++i)if(report.events[i].roles&RgbOutputTelemetry::Last)return report.events[i].sample;
+        check(false,"actual successful native Lock produces one final telemetry receipt");return RgbOutputSample{};};
     std::array<std::uint8_t,32> verified{{9}};
     check(!bridge.bindVerifiedModule({})&&bridge.bindVerifiedModule(verified),"only nonzero observed native identity binds before public callback publication");
     NV_ENCODE_API_FUNCTION_LIST table{};table.version=NV_ENCODE_API_FUNCTION_LIST_VER;check(bridge.create(factory,&table)==NV_ENC_SUCCESS,"actual public input/output API table wrapped");
@@ -111,10 +115,18 @@ void run(){
         &&observed.originalAccessUnitBytes==au.size()&&!captured.originalAccessUnitBytes,
         "actual Encode freezes initial observed QoS and Lock adds original bytes before any SEI augmentation");
     check(observed.encoderGeneration==bridge.generation(handle)&&observed.resourceGeneration&&observed.mapGeneration>observed.resourceGeneration&&observed.submission>observed.mapGeneration&&observed.submission==captured.submission,"separate monotonically scoped resource/map/submission identities");release();check(retires==1,"input ledger retired at matching successful unlock");
+    auto rgb=telemetryLast();check(rgb.exactInput&&rgb.submission==observed.submission&&rgb.inputTimestamp==pic.inputTimeStamp
+        &&rgb.frameIndex==777&&rgb.qp==24&&rgb.hardwareStatus==2&&rgb.pictureType==NV_ENC_PIC_TYPE_IDR
+        &&rgb.rgbBytes==au.size()&&rgb.completeBytes==au.size()&&rgb.qos.rateControlMode==NV_ENC_PARAMS_RC_CBR,
+        "telemetry records native colour Lock fields and original bytes even when augmentation is refused");
     allowAugment=true;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(p.bitstreamBufferPtr!=au.data()&&p.bitstreamSizeInBytes==au.size()+1&&bridge.liveLeases()==1,"owned final augmentation borrowed through actual native lease");
     const auto* borrowed=static_cast<const std::uint8_t*>(p.bitstreamBufferPtr);check(std::memcmp(borrowed,au.data(),au.size())==0&&borrowed[au.size()]==0xab,"candidate preserves original bytes, independent final storage");
     unlockResult=NV_ENC_ERR_GENERIC;check(table.nvEncUnlockBitstream(handle,output)==unlockResult&&bridge.liveLeases()==1&&borrowed[au.size()]==0xab,"failed Unlock preserves final certificate/mask bytes");unlockResult=NV_ENC_SUCCESS;release();check(bridge.liveLeases()==0&&retires==2,"successful Unlock retires final augmentation and source ledger");
+    rgb=telemetryLast();check(rgb.rgbBytes==au.size()&&rgb.completeBytes==au.size()+1&&rgb.qp==24,
+        "native telemetry separates colour and final augmented sizes without touching caller fields");
     wrongTimestamp=true;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"unmatched timestamp never guesses most recent source");wrongTimestamp=false;release();
+    rgb=telemetryLast();check(!rgb.exactInput&&!rgb.qos.known&&!rgb.qos.revision&&rgb.rgbBytes==rgb.completeBytes,
+        "unmatched native colour output stays explicitly unpaired without borrowing current QoS");
     check(!observed.qos.known&&!observed.qos.revision,
         "unmatched native output cannot borrow a latest configuration snapshot");
     encodeResult=NV_ENC_ERR_GENERIC;pic.inputTimeStamp++;table.nvEncEncodePicture(handle,&pic);p=get();check(!observed.exactInput&&p.bitstreamBufferPtr==au.data(),"failed actual Encode never produces input evidence");release();encodeResult=NV_ENC_SUCCESS;
@@ -189,10 +201,11 @@ void run(){
     ++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);duringEncode={};
     p=get();check(observed.exactInput&&p.bitstreamBufferPtr!=au.data(),"only the later matching completed output can acquire the still-current input");release();
     duringEncode=[&](void* nativeHandle){
-        const auto calls=augments;lockResult=NV_ENC_ERR_LOCK_BUSY;
+        const auto calls=augments;(void)bridge.takeRgbTelemetry();lockResult=NV_ENC_ERR_LOCK_BUSY;
         NV_ENC_LOCK_BITSTREAM value{};value.version=NV_ENC_LOCK_BITSTREAM_VER;value.outputBitstream=output;
         check(nestedLock(nativeHandle,&value)==NV_ENC_ERR_LOCK_BUSY&&augments==calls&&bridge.liveLeases()==0,
             "busy original native Lock cannot grant completion evidence while Encode is pending");
+        check(!bridge.takeRgbTelemetry().frames,"failed original native Lock cannot contribute RGB telemetry");
         lockResult=NV_ENC_SUCCESS;
     };
     ++pic.inputTimeStamp;table.nvEncEncodePicture(handle,&pic);duringEncode={};
@@ -212,6 +225,9 @@ void run(){
     check(observed.qos.revision==asynchronousInput.qos.revision&&observed.qos.frameRateNum==90
         &&observed.qos.appliedAverageBitRate==10000000&&observed.qos.encodeOverlappedReconfigure,
         "later successful native QoS never relabels an earlier submitted frame with latest rate or FPS");
+    rgb=telemetryLast();check(rgb.submission==asynchronousInput.submission&&rgb.qos.revision==asynchronousInput.qos.revision
+        &&rgb.qos.appliedAverageBitRate==10000000&&rgb.qos.encodeOverlappedReconfigure,
+        "telemetry follows the actual asynchronous input receipt instead of latest native reconfiguration");
     p=sendFrame();check(observed.exactInput&&observed.coverageSessionAuthorized&&observed.submission>qosResources.submission,"fresh Encode after QoS owns a new exact authorized submission");
     check(observed.qos.known&&observed.qos.revision>asynchronousInput.qos.revision
         &&observed.qos.frameRateNum==120&&observed.qos.frameRateDen==1
@@ -383,6 +399,8 @@ void run(){
     check(observed.qos.known&&observed.qos.revision>beforeResetObservation&&!observed.qos.budgetApplied
         &&!observed.qos.encodeOverlappedReconfigure&&observed.qos.frameRateNum==90,
         "reset encoder captures a fresh configuration observation without inheriting the old generation budget");
+    check(observed.qos.resetEncoder&&!observed.qos.forceIDR&&observed.qos.rateControlMode==NV_ENC_PARAMS_RC_CBR,
+        "fresh native reset flags and RC mode are captured without inheriting the previous input configuration");
     check(bridge.receiveEcho(handle,{encodedEcho.data(),encodedEcho.size()},authority())!=Status::Ok,"old generation echo cannot restore image permission before cold runtime ticks");
     ++localNonce;check(bridge.requestDiscovery(handle,localConfig(),authority()),"fresh nonce negotiation can begin after actual native reconfigure");
     p=sendFrame();check(!observed.coverageSessionAuthorized,"fresh discovery does not inherit old session mask permission");release();
