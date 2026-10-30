@@ -1,5 +1,8 @@
 # Native update recognition, October21
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 ## Observed failure and evidence boundary
 
 The supplied PC SteamVR2.18.4/build1792185270 logs refuse sender attachment

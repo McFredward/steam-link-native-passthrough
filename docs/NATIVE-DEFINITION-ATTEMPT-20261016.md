@@ -1,5 +1,8 @@
 # Native definition observation and the next integration boundary
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The maintainer approved the exact330,320-byte metadata/source diagnostic,
 SHA256 `034defdc829cecf32ed8e2f8787f33f2ec42b03152887f128cc3e2475626ac68`.
 One agreed SteamVR restart reached healthy native UI, followed by the user's

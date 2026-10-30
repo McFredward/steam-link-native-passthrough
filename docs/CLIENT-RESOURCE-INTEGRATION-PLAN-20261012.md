@@ -1,5 +1,8 @@
 # Next native client resource integration
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Decision
 
 The successful [connection capture](CLIENT-CONNECT-CAPTURE-20261012.md)

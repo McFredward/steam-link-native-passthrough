@@ -1,8 +1,13 @@
 # General native mask compression and camera-only recovery
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 This is the versioned codec/recovery investigation. Candidate and pending-test
-statements below refer to their recorded checkpoints. The released PC0.2.21 /
-Frame0.2.18 baseline and later desktop confirmation are recorded in
+statements below refer to their recorded checkpoints. Current0.3.15 / PC0.3.11 / Frame0.3.5 prefers temporal HEVC; the lossless
+representations and recovery rules documented here remain fallback contracts.
+The later HEVC controller/decoder and measured limits are in
+[release status](RELEASE-0.3.15.md). Historical0.2.21/0.2.18 desktop confirmation is in
 [current compatibility](../COMPATIBILITY.md#current-evidence) and
 [desktop recovery](DESKTOP-RECOVERY.md).
 

@@ -1,5 +1,8 @@
 # Offline subgroup guard proof
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This is an optional generator and owned GPU experiment. It installs nothing and
 does not change the existing guarded presenter, receiver, CMake or Frame. The
 small measured gain does not presently justify native feature-chain changes.

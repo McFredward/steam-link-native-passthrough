@@ -1,5 +1,8 @@
 # Offline packed-opacity output integration
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This fixture closes the **owned offscreen output** end of the explicit-opacity
 chain. It does not install a layer, connect to a headset, activate a native shader
 override, authorize passthrough, or assert native frame/eye/UV bindings.

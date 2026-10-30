@@ -1,5 +1,8 @@
 # Receiver startup boundary observed on the Frame, 2026-10-12
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The first authorized receiver-observer attempt exposed an incorrect launcher
 assumption: native Steam Link's `vrlink` belongs to **`steam.service`**, not
 `steamvr.service`. The SteamVR-only drop-in loaded the library in the compositor

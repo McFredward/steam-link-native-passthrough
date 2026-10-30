@@ -1,5 +1,8 @@
 # Startup mapped-client loader lease
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `frame_import_loader::Reader::verify` supplies the production mapped reader for
 `frame_import_module::verify_startup`. It enumerates with the prepared real public
 `dl_iterate_phdr` provider and hashes the client inside the exact matching loader

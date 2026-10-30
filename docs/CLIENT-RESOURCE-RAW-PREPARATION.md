@@ -1,5 +1,8 @@
 # Reviewed raw resource transaction diagnostic
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Implemented scope
 
 The [actual cold-thread capture](CLIENT-RESOURCE-THREAD-CAPTURE-20261012.md)

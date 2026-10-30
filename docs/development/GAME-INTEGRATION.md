@@ -1,8 +1,12 @@
 # Integrating another PCVR game
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 This is the handoff guide for a game-mod agent. Read it before the older
-investigation logs. The released baseline is installer 0.2.22, PC 0.2.21 and
-Frame 0.2.18. Read the repository's current version files rather than using
+investigation logs. The released baseline is installer 0.3.15, PC 0.3.11 and
+Frame 0.3.5; [release status and evidence](RELEASE-0.3.15.md) distinguish the
+current contract from dated investigations. Read the repository's current version files rather than using
 these numbers as an activation allowlist.
 
 ## Read these first
@@ -25,7 +29,8 @@ game's existing Virtual Desktop colour-key mode separate from native mode.
 Game: same current eye's RGB contribution E and coverage alpha A
   -> original SteamVR submission and source texture
   -> PC companion: exact native source/copy/accepted encoder-input receipt
-  -> original HEVC access unit plus authenticated lossless coverage metadata
+  -> original HEVC access unit plus authenticated coverage metadata
+     (negotiated temporal HEVC by default; explicit lossless remains available)
   -> Frame: matching decoded-image lease and native selected-image proof
   -> native composition: E + (1 - A) * local camera
 ```
@@ -149,7 +154,10 @@ overlay visibility toggle or weaken the native image proof.
 
 Use v2 metadata accounting with Auto and fixed bitrate. Look at mask bytes,
 fractional samples, reserved metadata and video requested/passed rates together.
-Dense fog and long soft light shafts can make a full-resolution lossless mask
+Temporal HEVC is now the default; full-range alpha may be quantized while its
+source/frame/eye association remains exact. Keep game-side coverage correct,
+including faint effects and small holes. Independent lossless fallback still
+matters: dense fog and long soft light shafts can make a full-resolution lossless mask
 expensive even when RGB looks simple. Preserve native mapping and alpha
 precision. Remove effects only as an explicit, scoped product decision; measure
 them separately and retain flames, lighting and scenario effects otherwise.

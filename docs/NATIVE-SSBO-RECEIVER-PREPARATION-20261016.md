@@ -1,5 +1,8 @@
 # Same-invocation receiver integration
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## r3 native result: retention repaired; semantics still refused
 
 The approved r3 candidate loads successfully against all79 native imports,

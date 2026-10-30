@@ -1,5 +1,8 @@
 # Opt-in cold decoder-thread preparation
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Implemented boundary
 
 The [actual resource census](CLIENT-RESOURCE-CAPTURE-20261012.md) established

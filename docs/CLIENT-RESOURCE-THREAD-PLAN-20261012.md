@@ -1,5 +1,8 @@
 # Cold preparation of the native resource thread
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Result and recommended boundary
 
 The authentic resource census copied all six Begin/Pending/Reference records,

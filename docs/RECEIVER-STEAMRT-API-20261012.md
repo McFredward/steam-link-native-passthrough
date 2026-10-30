@@ -1,5 +1,8 @@
 # Receiver Steam-runtime OpenVR API audit (2026-10-12)
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The receiver's actual API is the Steam-runtime
 `steamrtarm64/libopenvr_api.so`, rather than the compositor-side `/opt/steamvr`
 copy used in the earlier API bootstrap audit. Their public names coincide, but

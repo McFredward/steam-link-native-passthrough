@@ -1,5 +1,8 @@
 # Native Frame camera failure after setup restart
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 ## Observed on October 19, 2026
 
 The maintainer reports black, then green native passthrough behind the Frame's

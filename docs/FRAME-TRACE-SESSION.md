@@ -1,5 +1,8 @@
 # Authorized temporary Frame trace session
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The maintainer authorized a temporary passive capture on 2026-10-11, with a
 written change record and an explicit rollback procedure. This permission is
 limited to the diagnostic; it does not authorize mask activation, runtime binary

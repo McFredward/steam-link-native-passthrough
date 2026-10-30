@@ -1,5 +1,8 @@
 # Stream-bridge admission and encoder quality adaptation
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Hardware evidence
 
 The paired October 18 run used GloomhavenVR Build 708. The PC provider loaded in

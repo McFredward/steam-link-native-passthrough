@@ -1,5 +1,8 @@
 # Independent public draw diagnosis
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This is inactive diagnostic infrastructure, not Steam Link passthrough. The
 2026-10-15 periodic capture showed why the first selected import was an
 insufficient filter: its image and view had left current tracking before nearly

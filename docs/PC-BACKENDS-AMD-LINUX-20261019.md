@@ -1,5 +1,8 @@
 # Native MR sender backends: AMD and Linux
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 Status: implementation foundation, 2026-10-19. This does **not** enable AMD or
 Linux in the installed sender. No device installation or native Steam change is
 part of this work.

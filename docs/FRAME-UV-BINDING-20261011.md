@@ -1,5 +1,8 @@
 # Frame mask UV and descriptor route, 2026-10-11
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Result and scope
 
 The installed `distort_vs_reproject_layered` vertex shader provides a concrete

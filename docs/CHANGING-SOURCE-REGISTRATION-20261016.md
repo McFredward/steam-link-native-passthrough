@@ -1,5 +1,8 @@
 # Changing application-source registration
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This is developer evidence for the Steam Link explicit-mask investigation. It
 does not enable streamed passthrough, replace a native shader or modify Steam's
 PC sender. All native mapping and alpha-presentation permissions remain closed.

@@ -1,5 +1,8 @@
 # Changing application registration source, 2026-10-16
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The [completed final-draw uniform capture](NATIVE-UNIFORM-CAPTURE-20261016.md)
 used GloomhavenVR676's fixed artwork. Its static identity cannot establish that
 a changing color frame and coverage plane still belong together. GloomhavenVR677

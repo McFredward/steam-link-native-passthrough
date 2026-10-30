@@ -1,5 +1,8 @@
 # Compositor startup safety after the missing-UI run
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Hardware evidence
 
 At 2026-10-13 21:58:45 CEST the private-export compositor diagnostic started,

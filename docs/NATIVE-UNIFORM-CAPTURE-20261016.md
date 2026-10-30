@@ -1,5 +1,8 @@
 # Final-draw uniform capture, 2026-10-16
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The approved optional diagnostic from source
 `446027eba3834e24a69099665fec9a6243802503` completed one capture,
 `e5138e4b1410ff2f888365cbe66659e5`, while GloomhavenVR676 displayed its

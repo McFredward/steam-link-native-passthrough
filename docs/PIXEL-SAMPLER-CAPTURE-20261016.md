@@ -1,5 +1,8 @@
 # Native sampler capture and static source recovery, 2026-10-16
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Result
 
 The approved query-history follow-up to the [cold refusal](PIXEL-SAMPLER-ATTEMPT-20261016.md)

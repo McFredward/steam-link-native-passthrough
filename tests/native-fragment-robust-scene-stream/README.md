@@ -1,5 +1,8 @@
 # Actual producer → lossy codec → native stereo regression
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This explicitly offline fixture consumes the six **actual compiled Unity** source
 and carrier PNGs, their `codec-inputs.json` pins and `gpu-result.json` probes. It
 never replaces the images with analytic guards or measured twelve-value vectors.

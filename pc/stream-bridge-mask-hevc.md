@@ -38,7 +38,7 @@ the wrapped factory. SDK11.1 table size/version are compile-time assertions.
    `nvEncLockBitstream(doNotWait=1)`. Internal unique timestamps disambiguate
    native timestamps that repeat or carry opaque bits. A non-ready/refused
    result returns no bytes. No later/latest mask may be substituted.
-6. Validate/wrap the actual AnnexB AU with the strict negotiated codec6 envelope
+6. Validate/wrap the actual AnnexB AU with the strict negotiated codec6 or codec7 envelope
    only after all current source/frame proofs pass. The module verifies its
    private timestamp, IDR/progressive type, hardware status and byte bounds;
    the separate envelope parser verifies actual Main/SPS/PPS/range/slice syntax.

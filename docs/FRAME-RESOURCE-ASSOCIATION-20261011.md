@@ -1,5 +1,8 @@
 # Selected video surface and compositor resource association
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Result
 
 The inspected receiver stores the decoded frame key and reuse generation beside

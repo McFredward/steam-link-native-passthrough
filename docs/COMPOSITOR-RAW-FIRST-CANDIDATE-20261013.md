@@ -1,5 +1,8 @@
 # First compositor raw candidate: source and capture review
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The latest diagnostic consumed its single candidate during Frame startup,
 without an operator-confirmed PC-VR stream. It correctly refused that candidate
 before observing an image or reply. This is not evidence that the compositor

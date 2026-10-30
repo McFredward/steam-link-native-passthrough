@@ -100,5 +100,7 @@ and another producer withdraw it. An updated client can try v2, then reconnect
 with a fresh nonce using v1 after an older provider rejects/closes the request.
 A current accepted v2 session must not have a simultaneous fallback observer.
 Rate accounting can increase video compression under metadata load; it changes
-neither resolution/frame rate nor the lossless mask. See the
+neither resolution/frame rate nor the source alpha. The separately negotiated
+transport now prefers lossy temporal HEVC; explicit lossless mode remains
+available. Source permission never establishes decoder/image readiness. See the
 [bounded policy and evidence](../development/FRAME-CONTINUITY.md#producer-metadata-rate-accounting-dev-pc0215).

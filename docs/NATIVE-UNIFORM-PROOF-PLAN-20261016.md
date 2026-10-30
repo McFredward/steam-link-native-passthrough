@@ -1,5 +1,8 @@
 # Next receiver mapping proof, 2026-10-16
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 Final-review boundary: the implemented post-draw companion does not establish
 native host-visible/map/write lifetime or a native CPU-writer completion
 contract. Its private fence proves completion/publication of its copies, not

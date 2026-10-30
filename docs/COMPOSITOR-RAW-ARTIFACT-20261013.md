@@ -1,5 +1,8 @@
 # Combined compositor import diagnostic
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The diagnostic associates a genuinely sent import-reply token with the
 compositor's actual public Vulkan image, memory binding and image view. The
 2026-10-14 hardware run established this local join for a startup UI import;

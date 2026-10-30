@@ -1,5 +1,8 @@
 # Inert current-R1 presenter GPU controls
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This fixture tests the **offline candidate**, not Steam Link passthrough. It uses
 an explicitly supplied, SHA256-pinned private original fragment module and a
 synthetic owned RGBA32F source. No Valve shader body or generated derivative is

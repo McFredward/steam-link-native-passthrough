@@ -1,5 +1,8 @@
 # Inert original-invocation buffer observer
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The next native binding needs values consumed by the original fragment, not
 uniform bytes copied after its draw. The original
 [offscreen MRT observer](NATIVE-FRAGMENT-SSA-PROBE-20261016.md) established how to

@@ -1,5 +1,15 @@
 # Private PC mask diagnostics
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
+Release0.3.15 normally sends Codec7 temporal HEVC; this diagnostic SFMCv1
+writer intentionally records only lossless encodings1–5. It does not capture or
+replay the temporal decoder reference chain. Select the explicit lossless mode
+for a coordinated capture if needed; that changes the codec/load being measured
+and cannot establish production HEVC rain performance. Use ordinary Debug PC/Frame
+logs for the current HEVC path. See [HEVC testing](HEVC-MASK-TESTING.md).
+
 The optional capture records the **already encoded A8 coverage** after successful
 frame certification and the final current-source check. It does not record scene
 RGB, video, camera images, pairing keys or credentials. The records are unsigned

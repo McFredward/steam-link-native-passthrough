@@ -3,7 +3,7 @@
 User installation is described in the [README](../README.md#installation).
 This reference documents setup operations and recovery for the current paired
 PC and Frame companions, carrying transparency alongside original colour video.
-The October22 stable release and confirmed desktop/game observations are in
+The October30 stable0.3.15 release, temporal HEVC defaults and observed headset limits are in
 [current compatibility](COMPATIBILITY.md#current-evidence). A controlled sharpness
 benchmark and new runtime/game tests remain separate. The former
 [Frame-only atlas receiver](history/ATLAS-RECEIVER.md) is
@@ -39,9 +39,9 @@ On **Linux**, the inspection/Frame-maintenance entry is:
 curl -fsSL https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/main/get.sh | bash
 ```
 
-The standard entry selects only the paired experimental package; it cannot
-install an old Frame-only release. The `dev` branch and `get-preview` aliases are
-for development checks of this same route, not a second receiver method.
+The standard entry selects the reviewed paired release package; it cannot
+install an old Frame-only release. The `dev` branch is the diagnostic channel. Each `get-preview` alias resolves
+to that branch's same paired installer, not a separate receiver method.
 Read a downloaded script before executing it if you prefer reviewing the source.
 The assistant prepares its private Python/UI dependencies and, on Windows, an
 OpenSSH fallback when needed. You do not need to install Python or use `pip`.

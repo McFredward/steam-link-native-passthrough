@@ -1,6 +1,6 @@
 # Tested versions and evidence
 
-## Successfully tested runtimes: October22 release baseline
+## Successfully tested runtimes: October30 release baseline
 
 | Component | Current paired route |
 |---|---|
@@ -10,8 +10,8 @@
 | PC sender | Windows x86_64, supported NVIDIA encoder, HEVC |
 | Game source | Explicit SDR RGBA integration; real RGB contribution, coverage alpha and independently proved native eyes |
 | Installation | Matching PC and Frame companions, [guided setup](PC-FRAME-SETUP.md) |
-| Released components | Installer0.2.22, PC0.2.21, Frame0.2.18; Demeo Mixed Reality2.0.0 |
-| Hardware status | Demeo, Battles and Battlemarked tested; latest desktop-overlay fix reported working |
+| Released components | Installer0.3.15, PC0.3.11, Frame0.3.5; Demeo Mixed Reality2.0.0 |
+| Hardware status | Demeo/Battles/Battlemarked desktop fix confirmed; Spirit Sling via Venture reports improvement on0.3.15 |
 
 The supported game and minimum version have their own [table](../README.md#supported-games).
 Steam Frame standalone passthrough is separate and requires neither streamed companion.
@@ -34,8 +34,9 @@ this route's current validated combination.
 
 The v2 rate policy supports Auto and fixed Steam Link bitrate settings. The
 confirmed October 22 headset run used Auto; constant-target CBR software tests
-cover fixed bitrate with changing mask load. Fixed-bitrate headset validation
-remains separate. See the [player notes](../README.md#supported-games).
+cover fixed bitrate with changing mask load. October30 Spirit Sling follow-ups also used a manual100Mbit/s setting.
+Those scene-dependent results are not a controlled Auto/fixed comparison or
+a guarantee of sustainable physical throughput. See the [player notes](../README.md#supported-games).
 
 **OVR Advanced Settings is a known incompatibility in Demeo:** unwanted tracking
 origin changes/recenters occurred with it running and were no longer observed
@@ -66,12 +67,22 @@ background-sampling shaders and every material family are not certified.
 
 ## Current evidence
 
-The stable [0.2.22 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.2.22)
-contains the native PC0.2.21/Frame0.2.18 binaries tested on dev. Main changes only
+The stable [0.3.15 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15)
+contains the native PC0.3.11/Frame0.3.5 binaries tested on dev. Main changes only
 the logging defaults and related integrity metadata. The full native CI and
 Windows/Linux installer CI passed before publication; public asset downloads
 were compared byte-for-byte with the reviewed artifacts.
 
+The October30 Spirit Sling/Venture follow-up confirms exact installed layer and
+private codec/util hashes,31,700 real within-picture slice jobs and all15,876
+masks decoded/uploaded. Mean worker12.646→11.259ms, queue8.032→4.924ms,
+focused-game RGB QP>=40 share8.73%→1.24%, and PC dropped presents1.02%→0.44%
+support the reported improvement. Different scenes/durations prevent a controlled
+causal sharpness claim; worst decoder latency39.602ms and occasional high QP/
+native retries remain. The teardown fault followed a maintainer-confirmed manual
+SteamVR kill. See [release evidence and limits](development/RELEASE-0.3.15.md).
+
+The older October22 desktop result remains valid for its tested artifacts.
 The maintainer reported the desktop fix working. The October22 21:39–21:45
 read-only Frame capture covers Battlemarked, Battles and Demeo: 2,621 ordinary
 desktop/video submissions, 10,189 decoded/uploaded masks, zero rejected masks,
@@ -89,8 +100,8 @@ comparisons and sanitizer fixtures do not replace the headset test.
 Older Gloomhaven/Demeo observations and candidate investigations remain in the
 [continuity record](development/FRAME-CONTINUITY.md) and dated notes. Their
 pending statuses describe those earlier artifacts, not the released desktop
-fix. No current result certifies arbitrary materials, new runtimes, fixed-rate
-headset behavior or a controlled sharpness/latency benchmark. General source
+fix. No current result certifies arbitrary materials, new runtimes, universal
+fixed-rate behavior or a controlled sharpness/latency benchmark. General source
 and recovery changes must preserve v1/Gloomhaven as well as v2 integrations.
 
 The [old receiver's visible gameplay and sharpness limitations](history/ATLAS-RECEIVER.md)

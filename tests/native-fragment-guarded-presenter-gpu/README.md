@@ -1,5 +1,8 @@
 # Inert synthetic-v2 guard GPU proof
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This fixture executes the **offline** guarded fragment candidate against owned
 single-mip RGBA32F images. It does not install a receiver layer or establish native
 source/session/frame identity, physical-eye placement, liveness, body integrity,

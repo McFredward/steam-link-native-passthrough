@@ -3,8 +3,17 @@
 The setup bootstrap may provide its own missing interpreter/client. It does not
 install a Windows optional feature, SSH service, system Python, pip package or
 administrator-level runtime. Dependency availability is separate from the
-reviewed sender/receiver activation contract; these dependencies do not turn the
-current bridge prototype into an installable release.
+reviewed sender/receiver activation contract; dependencies alone do not establish native admission. Release0.3.15 is the
+reviewed paired package; runtime fingerprints and native/source proof still apply.
+
+## Current packaged inputs
+
+`packaging/setup-python.json`, `setup-openssh.json` and `setup-textual.json`
+pin the actual release inputs: Windows CPython3.14.8 embeddable, the selected
+OpenSSH client subset and offline Textual8.2.8 wheels. Setup imports its private
+vendored UI without runtime pip. Linux bootstrapping is a separate pinned
+interpreter fallback, not a Linux PC sender. Windows packaged-Python and real
+OpenSSH/UI cancellation fixtures passed for the delivered0.3.15 payload.
 
 ## Windows OpenSSH fallback
 

@@ -1,5 +1,8 @@
 # Shared-allocation admission regression
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 `test_stream_bridge_sender_shared_resource.cpp` compiles the actual production
 `submittedSharedResource` guard. The installed luma callback supplies its live
 DirectMode handle, generation, process and descriptor, plus the native bound-SRV

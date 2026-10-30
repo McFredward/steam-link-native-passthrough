@@ -1,5 +1,8 @@
 # Integration lessons from GloomhavenVR and Demeo
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 Read with the [integration guide](GAME-INTEGRATION.md). These are reusable
 rendering/transport lessons from the October 2026 integrations, not a promise
 that another game's ABI, materials or timing will match. Dated investigation
@@ -108,7 +111,10 @@ Battlemarked metadata reservations exceeded500 Mbit/s in one heavy menu capture
 and left video at its1 Mbit/s floor; packet/FEC failures and decoder resets were
 observed. The v2 wire accountant reserves mask traffic within the current native
 rate/VBV budget for both Auto and fixed-rate requests. v1 sources retain their
-rate policy; the negotiated lossless codec/recovery improvements apply to both.
+rate policy. Codec/recovery negotiation applies to both source versions.
+Release0.3.15 prefers temporal HEVC and permits lossy alpha values; explicit
+lossless selection remains available. No codec may approximate source/frame/eye
+identity or substitute an older mask. See [current evidence](RELEASE-0.3.15.md).
 The encoder selects independent Raw/RLE/LZ4/Zstd representations under bounded
 sizes and work. Do not reduce mask precision or native mapping to hide overload.
 

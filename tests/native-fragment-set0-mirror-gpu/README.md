@@ -1,5 +1,8 @@
 # Compatible one-set mirror GPU oracle
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This private-input, owned-raster test checks the **Vulkan call pattern** used by
 the compatible Set0 mirror. It does not call production `Clone` or `Transaction`,
 replay the original vertex stage, or authorize a receiver substitution.

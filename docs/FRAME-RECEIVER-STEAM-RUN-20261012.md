@@ -1,5 +1,8 @@
 # Steam-client receiver observer attempt, 2026-10-12
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The maintainer explicitly approved the corrected **Steam-client-service**
 preload and restart. It reached the native receiver, resolving the launch-route
 failure in [the preceding attempt](FRAME-RECEIVER-LAUNCH-20261012.md).

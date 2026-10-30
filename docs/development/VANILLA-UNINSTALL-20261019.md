@@ -1,5 +1,8 @@
 # Vanilla uninstall and exact operation Undo
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 The maintainer's 2026-10-19 requirement distinguishes two different outcomes:
 
 - **Uninstall:** ordinary Steam Link with none of our installed patch generations

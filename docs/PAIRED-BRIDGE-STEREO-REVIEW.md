@@ -1,5 +1,8 @@
 # Paired preview stereo regression
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The first combined preview headset run reported duplicate, distorted pictures
 and a black area where passthrough was expected. Turning native passthrough off
 restored the normal picture. This is hardware failure evidence, even though the

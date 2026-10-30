@@ -1,5 +1,8 @@
 # Private mask compression study
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This directory is an offline research tool. It changes no sender policy,
 receiver capability, protocol, native video extent, device or installation.
 `pilot-results.json` is a small reproducible record, not a hardware acceptance

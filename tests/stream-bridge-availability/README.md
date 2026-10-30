@@ -1,5 +1,8 @@
 # Exact-picture availability evidence
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This focused fixture investigates publication ordering. It does not certify a
 headset image, GPU completion, native decoder speed or the contents of alpha.
 

@@ -1,5 +1,8 @@
 # Read-only live bridge inspection
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `tools/inspect_live_bridge.py` inspects existing Frame process and Steam log
 metadata. It does not install a receiver, initialize VR, attach to a process,
 change settings, or activate passthrough. It cannot prove a working mask/video

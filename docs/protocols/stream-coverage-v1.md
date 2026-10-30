@@ -18,7 +18,7 @@ unsigned little-endian. Its dedicated `user_data_unregistered` SEI UUID is
 |---:|---:|---|
 | 0 | 4 | ASCII `SFV1` |
 | 4 | 1 | Version 1 |
-| 5 | 1 | Coverage encoding: None 0, Raw 1, RLE 2, RLE+LZ4 3, optional RLE+Zstd 4, raw+Zstd 5, optional lossy HEVC intra6 |
+| 5 | 1 | Coverage encoding: None 0, Raw 1, RLE 2, RLE+LZ4 3, optional RLE+Zstd 4, raw+Zstd 5, lossy HEVC intra6, temporal HEVC7 |
 | 6 | 2 | Header length 176 |
 | 8 | 16 | Authenticated pair identity |
 | 24 | 16 | Current session binding |
@@ -91,8 +91,12 @@ values while retaining exact source/frame/eye/image association. Its signed
 encoded-payload hash has the same meaning as the existing codecs; successful
 HEVC decoding is an additional independent gate. It is never selected by the
 lossless chooser or enabled merely by knowing a capability bit. See the
-[intra HEVC contract](hevc-coverage-v1.md) for the envelope, opt-in/readiness,
-strict independent-picture subset and remaining hardware evidence.
+[HEVC contracts](hevc-coverage-v1.md) for the envelope, opt-in/readiness,
+strict independent-picture subset and temporal extension. Codec7 uses the same
+signed header with a64-byte SFHT envelope and an explicit bounded reference chain.
+The installed policy prefers negotiated temporal HEVC. Generic lossless expansion
+APIs refuse both HEVC encodings; the prepared real decoder owns that work. See
+[current decoder/evidence](../development/HEVC-MASK-DECODER.md).
 
 ## Optional RLE/Zstd encoding 4
 

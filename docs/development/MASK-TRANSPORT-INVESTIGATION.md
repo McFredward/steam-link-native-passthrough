@@ -1,4 +1,13 @@
-# Lossless mask transport investigation
+# Mask transport investigation before HEVC adoption
+
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
+This October29 checkpoint predates the authorized lossy implementation. The
+current0.3.15 release uses negotiated temporal HEVC by default, independent
+NVENC mask lanes and a private software decoder. See [current status and
+measured limits](RELEASE-0.3.15.md); alternatives and pending statements below
+are the original research, not the currently selected codec.
 
 The October 29 Spirit Sling / Venture test successfully displayed mixed reality
 on Steam Frame, but detailed translucent effects could exhaust the requested
