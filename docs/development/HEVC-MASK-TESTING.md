@@ -5,6 +5,58 @@ Installer **0.3.13 / PC 0.3.11 / Frame 0.3.3** prefers negotiated temporal HEVC
 preferences still override the default. This candidate updates only the PC sender.
 Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
 
+## Live result: buffer correction did not improve perceived rain quality
+
+The October 30 10:42–10:45 Spirit Sling run used PC 0.3.11. All 151 selected,
+non-overlapping controlled-VBR observations carry flag 32 and exactly match the
+proportional native VBV calculation, retaining original automatic delay 0.
+The user nevertheless reported **no visible difference**. The buffer correction
+is active; it has not met the stable, fluid, sharp dense-rain acceptance target.
+
+Across 32 active five-second bins, 1, 920/13, 864 native RGB pictures (13.85%) report
+QP>=40, with maximum 50. The preceding run had 1, 233/11, 691 (10.55%); weighted
+mean QP is essentially unchanged (30.05 versus 29.96). These runs have different
+durations/source pictures, so this is not an objective regression score.
+All 13, 916 masks (13, 913 HEVC, 3 lossless fallbacks) were decoded and uploaded on
+Frame with no rejection delta. PC drops are 308/14, 877 (~2.07%), versus~1.86%
+previously. Application CPU/GPU averages are 5.821/4.560 ms at 90 Hz; native coded
+extent remains 1152x 4608. Mask lifetime mean/max QP is 43.13/51. Complete delivery
+does not establish fine alpha fidelity or unchanged end-to-end latency.
+
+The sender's selected native total targets span 6.27–295.02 Mbps *before* our
+metadata deduction; forwarded RGB still briefly reaches 1 Mbps. Of 43 selected
+high-QP events, 38 already have native targets below 20 Mbps. These are biased
+worst/latest samples, not duration or complete frame-population statistics.
+Added metadata averages roughly 2.3–5.9 Mbps over most active bins, with three
+observed 175–263 kB spikes. One 245, 326-byte event at local opaque PTS 10293 is
+followed by a captured 19.66 Mbps reserve and 1 Mbps RGB/QP 49 at PTS 10294. This
+supports transient reservation pressure, but does not identify the reason for
+Steam Link's own target reductions. FEC timestamps are not native encoder IDs.
+Frame logs contain 33 native retry events/944 requested packets and 3 late
+metadata messages; the decoder reset at 10:42:20 precedes MR gameplay. A new
+worker timing heartbeat is absent, so zero receiver backlog is not established.
+
+The user confirmed **automatic Steam Link bandwidth**. The next controlled
+comparison uses the already installed 0.3.13, manual **100 Mbps** in SteamVR's
+Steam Link bandwidth settings and the same dense-rain sequence for 2–3 minutes.
+Keep refresh rate, resolution, mask settings and all other controls unchanged;
+return to Auto after the comparison.100 Mbps is an experimental target, not a
+measured link-capacity claim or guaranteed physical throughput/quality floor.
+Check whether the captured native requested target and actual RGB QP/bytes
+stabilize, while monitoring drops, retries, late metadata and mask fidelity.
+If requested targets remain stable but QP/visible artifacts persist, distinguish
+RGB codec/foveation limits from alpha quantization using matched source pixels.
+If targets still collapse, inspect the native driver link/throttle evidence.
+
+Include the PC's `Steam/logs/driver_vrlink.txt` with the usual logs. It is absent
+from the current supplied set. Its `Link BW: Est`, `Link BW hist` and
+`THROTTLE EVENT` records provide link-estimate/manual-mode/capacity/held-frame
+context, as described by the source project's
+[driver-log diagnostic documentation](https://github.com/elliotttate/SteamFrame-Advanced-Options/blob/main/docs/live-dashboard.md#wireless-link-card).
+That documentation is evidence about what to collect, not a recommendation to
+install another encoder hook. No new runtime preset, bitrate floor, codec,
+Frame installation or restart is published for this investigation.
+
 ## Controlled VBR buffer correction
 
 PC0.3.11 preserves the caller's proportional VBV span for an authenticated v2
