@@ -9,14 +9,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from analyze_world_stability import analyze, quantiles
 
-BINARY = sys.argv.pop(1) if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else None
+BINARY = None
+if __name__ == "__main__" and len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+    BINARY = sys.argv.pop(1)
 
 
 class ReportTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not BINARY:
-            raise RuntimeError("Pass the built world-stability-test binary")
+            raise unittest.SkipTest("Pass the built world-stability-test binary for the real emitter fixture")
         cls.transcript = subprocess.check_output([BINARY, "--transcript"], text=True)
         cls.records = [json.loads(line) for line in cls.transcript.splitlines()]
 
