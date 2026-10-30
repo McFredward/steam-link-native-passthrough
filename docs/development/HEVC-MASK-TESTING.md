@@ -5,6 +5,61 @@ Installer **0.3.13 / PC 0.3.11 / Frame 0.3.3** prefers negotiated temporal HEVC
 preferences still override the default. This candidate updates only the PC sender.
 Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
 
+## Native ZIP result: manual mode confirmed, decoded-picture handoff delayed
+
+The subsequent PC diagnostic ZIP contains the previously missing native driver
+log. All seven copied input size/hash records validate. Saved settings report
+`automaticBandwidth=false`, `targetBandwidth=100`. More decisively, the native
+timestamped records throughout the 11:01:32–11:03:35 MR interval report
+`100.0 Mbit/s (auto: 0)`. All 136 native bad-link records retain 100 -> 100 Mbps
+with auto 0. This rules out an incorrectly applied Auto setting for this run.
+The earlier interpretation of Auto as the main explanation was insufficient.
+
+There are 143 native throttle records during this MR interval, median 11,104 us
+and maximum 45,420 us. The examined 10:59:20–11:01:32 pre-MR and
+11:03:35–11:03:47 exit intervals have none. These events do not by themselves
+identify RF loss, physical bandwidth exhaustion, encoder saturation or the
+additional MR path. Native capacity histograms are estimates, not a measured
+physical limit. The existing RGB traces independently still show original
+per-frame NVENC budgets falling to 5.38 Mbps and forwarded RGB to 1 Mbps.
+Link setting, per-frame encoder request, actual coded bytes and physical
+throughput are distinct quantities.
+
+A recheck of the already captured matching Frame journal establishes fresh
+*video handoff* counters, even though a fresh compositor mask-worker timing
+heartbeat is unavailable. Before MR, the recorded handoff maximum is 3,714 us
+with no over-11ms events. By 11:02:22, the same video process reports 2,033
+callbacks over 11 ms, 19 over 22 ms and maximum 33,435 us. These are cumulative
+counters through the last reported sample, not complete-run upper bounds or
+mask-decoder-only measurements. At 90 Hz a frame period is about 11.11 ms.
+
+The code makes this extra wait explicit: `DecodeProvider::invokeIoctl` invokes
+the exact-capture handoff after successful native DQ/state publication and before
+returning the decoded image to the player. `handoff` in
+`layer/stream_bridge_process.cpp` waits for the paired Ready receipt, up to 100 ms.
+The compositor sends that receipt only after the matching current certificate,
+native image lease, coverage publication and camera grant are established.
+The renderer already retains a *scheduled* GPU-mask lease for publication;
+this is not an unconditional wait for the subsequent upload fence.
+
+The independent host
+[implementation research](https://github.com/elliotttate/SteamFrame-Advanced-Options/blob/845c5ac00f0ce73f0a95ab1d15c984b754919c5b/docs/research/host-stream-map.md#requested-bitrate-accepted-budget-and-coded-bytes)
+describes decoded-acknowledgement queue feedback that remains active in manual
+mode. Our observed DQ wait is therefore a concrete possible contributor to the
+lower encoder requests. Timestamp association and source inspection do not
+prove it is the sole cause of every throttle or visible artifact.
+
+The next performance work belongs in the Frame pipeline. First obtain current
+queue/decode/context/copy/publication timing throughout MR: the present
+`reportFlowCold` lifetime 48-report/exponential-progress gate can suppress useful
+measurements in a long-running compositor. Then benchmark bounded buffer/context
+reuse and earlier independent mask processing with the same full-resolution
+decoded Y planes. Preserve every exact current source/frame/eye/lease check and
+scheduled GPU ownership proof. Removing the handoff wait, reusing an older mask,
+disabling native backpressure or forcing a bitrate floor would hide the issue
+without establishing stable, sharp, correctly paired MR. No such runtime change
+or new quality-tested candidate is published by this diagnostic result.
+
 ## Manual100 follow-up: requested native rates still fall below the UI target
 
 The user tested the same installed 0.3.13 with a reported manual 100 Mbps target
