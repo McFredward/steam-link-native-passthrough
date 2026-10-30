@@ -13,6 +13,8 @@
 #include <cstring>
 #include <new>
 #include <thread>
+#include <fstream>
+#include <filesystem>
 
 // Same encoder implementation, original API table and event state transitions
 // as Windows, with no real GPU/OS handles. These are contract/lifetime tests,
@@ -117,6 +119,10 @@ NVENCSTATUS NVENCAPI encode(void* s,NV_ENC_PIC_PARAMS* p){
     check(p->completionEvent&&p->inputBuffer&&p->bufferFmt==NV_ENC_BUFFER_FORMAT_NV12,"async GPU input, no upload/readback");
     check(p->inputTimeStamp&&p->inputTimeStamp==p->frameIdx,"private nonzero token, independent of native opaque timestamp");
     o.keyframe=(p->encodePicFlags&NV_ENC_PIC_FLAG_FORCEIDR)!=0;
+    if(x.config.temporal){
+        if(o.keyframe)o.bytes.assign(HevcMainIdrFixture.begin(),HevcMainIdrFixture.end());
+        else o.bytes={0,0,0,1,2,1,0x80,0x80}; // Driver-style VCL-only P; syntax tested separately.
+    }
     o.token=p->inputTimeStamp;o.event=static_cast<Event*>(p->completionEvent);o.submitted=true;o.complete=false;return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI lock(void* s,NV_ENC_LOCK_BITSTREAM* p){
@@ -211,10 +217,30 @@ void temporalEncoding(){
     resetAndCheck(y);
 }
 
+void replayGop(const std::filesystem::path& root){
+    Fixture x;x.config.temporal=true;check(x.configure(),"actual frontend prepares captured driver-output replay");
+    unsigned originalAccepted=0;std::uint64_t bytesBefore=0,bytesAfter=0;
+    for(unsigned n=0;n<8;++n){char name[32];std::snprintf(name,sizeof name,"%03u.hevc",n);std::ifstream file(root/name,std::ios::binary);
+        std::vector<std::uint8_t> original{std::istreambuf_iterator<char>(file),{}};check(!original.empty()&&original.size()<=2u*1024u*1024u,"owned replay AU exists and is bounded");
+        const auto key=x.key(n+1);check(x.encoder.beginStage(key,&x.textures[0])&&x.encoder.submit(key),"captured output retains the actual private submission/event/Lock path");
+        x.outputs[0].bytes=original;x.complete(0);std::vector<std::uint8_t> normalized;MaskHevcPicture picture;
+        std::vector<std::uint8_t> previous;originalAccepted+=unsigned(stream_bridge::wrapHevcTemporalCoverage({original.data(),original.size()},1152,4608,1,n+1,n?n:0,n==0,1,previous));
+        check(x.encoder.tryTake(key,normalized,nullptr,&picture)==MaskHevcTake::Ready,"VCL-only real P survives successful Lock via exact cached group parameters");
+        std::vector<std::uint8_t> wire;
+        check(stream_bridge::wrapHevcTemporalCoverage({normalized.data(),normalized.size()},1152,4608,picture.epoch,picture.sequence,picture.dependency,picture.keyframe,picture.anchor,wire),"normalized real NVIDIA AU passes unchanged receiver syntax");
+        std::snprintf(name,sizeof name,"completed-%03u.hevc",n);std::ofstream output(root/name,std::ios::binary);output.write(reinterpret_cast<const char*>(normalized.data()),normalized.size());
+        bytesBefore+=original.size();bytesAfter+=normalized.size();
+    }
+    const auto d=x.encoder.diagnostics();check(originalAccepted==1&&d.parameterKeys==1&&d.parameterRestored==7&&!d.parameterRefused,"original1-of8 failure reproduces; exact frontend repair admits all8 with7 header completions");
+    std::printf("real raw GOP replay: original-admission=%u/8, completed=8/8; entropy preserved; added-header-bytes=%llu\n",originalAccepted,static_cast<unsigned long long>(bytesAfter-bytesBefore));resetAndCheck(x);
+}
+
 }
 
 int main(int argc,char** argv){
-    using namespace stream_bridge::sender;dynamicRate();temporalEncoding();
+    using namespace stream_bridge::sender;
+    if(argc==3&&!std::strcmp(argv[1],"--annexb-gop")){replayGop(argv[2]);return 0;}
+    dynamicRate();temporalEncoding();
     {
         MaskHevcSyntaxTraceSlot slot;MaskHevcSyntaxTrace trace{};
         check(!slot.take(trace),"cold diagnostic cannot read an unpublished header snapshot");

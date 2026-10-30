@@ -1,6 +1,7 @@
 #include "bridge/stream_bridge_hevc_coverage.h"
 #include "bridge/stream_bridge_frame.h"
 #include "stream_bridge_hevc_fixture.h"
+#include "pc/stream-bridge-mask-hevc-parameters.h"
 #include <algorithm>
 #include <cstdio>
 #include <stdexcept>
@@ -62,6 +63,46 @@ void temporalParser(){
         check(!sb::wrapHevcTemporalCoverage(bytes(body),64,64,17,30,10,false,10,held)&&held==std::vector<std::uint8_t>{91},"P syntax refuses B/I, oversized DPB, reorder, missing/older/future references, prediction and limited Y transactionally");}
     for(unsigned n=0;n<4;++n){std::vector<std::uint8_t> held{91};check(!sb::wrapHevcTemporalCoverage(bytes(coded),64,64,n==0?0:17,30,n==1?0:10,false,n==2?31:(n==3?11:10),held)&&held==std::vector<std::uint8_t>{91},"invalid temporal identity and dependency order never publish an envelope");}
     std::vector<std::uint8_t> held{91};check(!sb::wrapHevcCoverage(bytes(coded),64,64,held),"new P admission does not relax Codec6 independence");
+}
+
+void parameterCompletion(){
+    using namespace sb::sender;using R=MaskHevcParameters::Result;
+    Options key;key.dpb=1;key.rps=1;key.negative=1;key.used=true;
+    auto p=key;p.temporal=true;p.slice=1;
+    const auto idr=syntax(key),completeP=syntax(p);
+    std::vector<std::uint8_t> rawP;
+    for(std::size_t n=0;n+5<completeP.size();++n)if(!completeP[n]&&!completeP[n+1]&&!completeP[n+2]&&completeP[n+3]==1&&completeP[n+4]==2){rawP.assign(completeP.begin()+n,completeP.end());break;}
+    check(!rawP.empty(),"driver-style P output contains only its VCL NALs");
+    MaskHevcParameters cache;cache.reset(17);
+    const MaskHevcPicture first{17,10,0,10,true},next{17,12,10,10,false};
+    auto output=rawP;check(cache.complete(output,next)==R::Refused&&output==rawP,"P cannot borrow parameter sets without an exact group IDR");
+    output=idr;check(cache.complete(output,first)==R::KeyCached&&output==idr,"complete locked IDR bytes remain unchanged while only parameters are retained");
+    output=rawP;check(cache.complete(output,next)==R::Restored&&output==completeP,"omitted parameter sets are restored byte exactly without editing picture entropy");
+    std::vector<std::uint8_t> wire;check(sb::wrapHevcTemporalCoverage(bytes(output),64,64,17,12,10,false,10,wire),"repaired driver-style P passes the unchanged receiver grammar");
+    output=completeP;check(cache.complete(output,next)==R::Complete&&output==completeP,"driver-supplied complete P remains byte identical");
+    auto wrong=next;wrong.epoch=18;output=rawP;check(cache.complete(output,wrong)==R::Refused&&output==rawP,"another private encoder cannot borrow this epoch's headers");
+    wrong=next;wrong.anchor=11;check(cache.complete(output,wrong)==R::Refused,"a different requested group cannot borrow earlier IDR headers");
+    output=rawP;check(cache.complete(output,next,rawP.size())==R::Refused&&output==rawP,"header completion respects the total configured AU limit transactionally");
+    auto secondKey=key;secondKey.cbDiff=2;auto secondP=secondKey;secondP.temporal=true;secondP.slice=1;
+    const auto idr2=syntax(secondKey),completeP2=syntax(secondP);
+    output=idr2;check(cache.complete(output,{17,20,0,20,true})==R::KeyCached,"a newer group's distinct parameter sets are retained separately");
+    output=rawP;check(cache.complete(output,next)==R::Restored&&output==completeP,"late prior-group P never receives the newest group's different parameters");
+    output=rawP;check(cache.complete(output,{17,21,20,20,false})==R::Restored&&output==completeP2,"new group receives its own exact IDR parameter sets");
+    output=idr2;check(cache.complete(output,{17,14,0,10,true})==R::KeyCached,"unexpected in-group IDR advances parameter identity without changing source authority");
+    output=rawP;check(cache.complete(output,next)==R::Refused,"future IDR parameters cannot repair an earlier P picture");
+    output=idr;check(cache.complete(output,first)==R::Complete,"late earlier IDR can be self-contained but cannot rewind the group cache");
+    output=rawP;check(cache.complete(output,{17,15,14,10,false})==R::Restored&&output==completeP2,"late IDR did not overwrite the newer group's parameter state");
+    for(unsigned n=0;n<5;++n){output=idr;check(cache.complete(output,{17,30+n,0,30+n,true})==R::KeyCached,"bounded header groups rotate without allocation");}
+    output=rawP;check(cache.complete(output,{17,22,20,20,false})==R::Refused,"evicted group cannot silently use another cached group");
+    cache.reset(18);output=rawP;check(cache.complete(output,{18,12,10,10,false})==R::Refused,"cold reset revokes all header groups even if sequence numbers repeat");
+    for(unsigned control=0;control<6;++control){auto malformed=idr;
+        if(control==0)malformed.resize(3);
+        if(control==1)malformed[4]|=128;
+        if(control==2)malformed[5]=2;
+        if(control==3)malformed.insert(malformed.end(),idr.begin(),idr.end());
+        if(control==4)malformed.insert(malformed.begin()+4,MaskHevcParameters::MaximumParameters,0);
+        if(control==5)malformed.resize(MaskHevcParameters::MaximumAccessUnit+1);
+        const auto held=malformed;check(cache.complete(malformed,{18,10,0,10,true})==R::Refused&&malformed==held,"malformed/layered/multiple/oversized IDR cannot create parameter authority");}
 }
 
 void parser(){
@@ -134,4 +175,4 @@ void authentication(){
     check(sb::appendCertifiedFrame(bytes(rgb),{51,17,66,64},sb::CoverageEncoding::HevcIntra,bytes(mask),producer,complete)==sb::FrameStatus::InvalidArgument,"outer signed descriptor cannot relabel a different coded mask extent");
 }
 }
-int main(){try{parser();temporalParser();authentication();std::printf("%u bounded HEVC envelope/authentication checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}
+int main(){try{parser();temporalParser();parameterCompletion();authentication();std::printf("%u bounded HEVC envelope/authentication checks passed\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

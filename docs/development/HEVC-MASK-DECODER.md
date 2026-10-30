@@ -1,5 +1,9 @@
 # Independent HEVC mask decoder
 
+PC0.3.8 completes missing P-picture parameter NALs from the successfully locked
+IDR in that exact private encoder epoch/group, using bounded parameter-only
+storage. The Frame adapter and all packet/image guards remain unchanged.
+
 The current adapter also accepts separately negotiated Codec7 `HevcTemporal`.
 The Codec6 independence contract described below is retained. Codec7 uses two
 alternating PC encoding lanes and group-affine Frame decoding; it does not relax

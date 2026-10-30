@@ -5,6 +5,7 @@
 #include "../stream-bridge-process/lifecycle_tests.cpp"
 #undef main
 #include "bridge/stream_bridge_hevc_coverage.h"
+#include "pc/stream-bridge-mask-hevc-parameters.h"
 namespace hevc=stream_bridge_mask_hevc;
 namespace {
 std::vector<std::uint8_t> codedFixture(const std::filesystem::path& path){std::ifstream file(path,std::ios::binary);return {std::istreambuf_iterator<char>(file),{}};}
@@ -108,7 +109,13 @@ void hevcNativeHandoff(const hevc::Libraries& libraries,const std::filesystem::p
     check(f.display.hevcPool.prepareCold(libraries),"handoff decoder workers prepared before native DQ");
     std::vector<std::uint8_t> payload;
     if(temporal){
-        for(unsigned n=0;n<8;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto coded=codedFixture(fixtures/name);
+        sb::sender::MaskHevcParameters parameters;parameters.reset(91);
+        for(unsigned n=0;n<8;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto original=codedFixture(fixtures/name);auto coded=original;
+            if(n){
+                for(std::size_t at=0;at+5<coded.size();++at)if(!coded[at]&&!coded[at+1]&&(coded[at+2]==1||(coded[at+2]==0&&coded[at+3]==1))){
+                    const auto body=at+(coded[at+2]==1?3:4);if(((coded[body]>>1)&63)==1){coded.erase(coded.begin(),coded.begin()+at);break;}at=body+1;}
+            }
+            check(parameters.complete(coded,{91,n+1,n?n:0,1,n==0})==(n?sb::sender::MaskHevcParameters::Result::Restored:sb::sender::MaskHevcParameters::Result::KeyCached)&&coded==original,"real P-image handoff starts from omitted-header driver output and exact group repair");
             check(sb::wrapHevcTemporalCoverage({coded.data(),coded.size()},64,64,91,n+1,n?n:0,n==0,1,payload),"real temporal frame wrapped for signed native image join");
             if(n<7){sendHevc(f,payload);const auto end=std::chrono::steady_clock::now()+std::chrono::seconds(2);
                 while(publication.decoded<n+1&&std::chrono::steady_clock::now()<end){f.cycle();std::this_thread::yield();}

@@ -340,7 +340,7 @@ struct SenderCoverage::Impl {
                     sample.width=descriptor.codedWidth;sample.height=descriptor.codedHeight;sample.encoding=encoding;
                     s.maskCapture.offer(sample,std::move(encoded));
                 }
-                unsent.sent=true;return true;
+                unsent.sent=hevc;return true; // A lossless fallback did not deliver the private HEVC AU.
             }
         }
         // A positively identified desktop/compositor picture remains ordinary
@@ -678,6 +678,7 @@ HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
     if(stats.temporal){auto& total=stats.diagnostics;for(unsigned i=1;i<Impl::TemporalLanes;++i){const auto d=s.temporalEncoders[i].diagnostics();
         total.mapped+=d.mapped;total.submitted+=d.submitted;total.locked+=d.locked;total.ready+=d.ready;
         total.rateTarget+=d.rateTarget;total.rateBudget+=d.rateBudget;total.streamTarget+=d.streamTarget;total.wireMean+=d.wireMean;
+        total.parameterKeys+=d.parameterKeys;total.parameterRestored+=d.parameterRestored;total.parameterRefused+=d.parameterRefused;
         total.rateChanges+=d.rateChanges;total.qpSamples+=d.qpSamples;total.qpSum+=d.qpSum;total.minQp=std::min(total.minQp,d.minQp);total.maxQp=std::max(total.maxQp,d.maxQp);
         if(d.stage!=MaskHevcFailure::None){total.stage=d.stage;total.nativeStatus=d.nativeStatus;total.rejectedFields=d.rejectedFields;}}
         total.frameRateNum*=Impl::TemporalLanes; // Aggregate nominal output cadence; last values remain lane0 diagnostics.

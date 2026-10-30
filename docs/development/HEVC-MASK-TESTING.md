@@ -1,9 +1,9 @@
 # HEVC mask test candidate
 
-Installer **0.3.9 / PC 0.3.7 / Frame 0.3.3** prefers negotiated temporal HEVC
+Installer **0.3.10 / PC 0.3.8 / Frame 0.3.3** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
-preferences still override the default. This update changes both native
-components; use the normal guided dev setup and apply the paired update.
+preferences still override the default. This candidate updates only the PC sender.
+Use the normal guided dev setup and apply the PC update; the unchanged Frame files and services stay untouched.
 
 The PC supplies full-resolution R8 coverage as full-range NV12 Y with neutral
 chroma. Two alternating original NVENC P3/ultra-low-latency sessions use quarter-size
@@ -11,9 +11,10 @@ multipass, no B pictures, no lookahead and one active previous-picture reference
 Each lane receives every other mask, with half the original cadence and half
 the aggregate mask budget. One requested IDR starts each group of at most eight
 lane pictures. This gives each persistent chain two native frame intervals for
-decode rather than accumulating work in a single90Hz chain. Each AU repeats
-its parameter sets. The original RGB encoder, dimensions, foveation and
-reprojection stay native. A third prepared independent-IDR encoder preserves Codec6
+decode rather than accumulating work in a single90Hz chain. Each delivered AU
+carries its parameter sets, restored from the exact private epoch/group IDR when
+NVIDIA omits them from P output despite OUTPUT_SPSPPS. The original RGB encoder,
+dimensions, foveation and reprojection stay native. A third prepared independent-IDR encoder preserves Codec6
 for older peers; no temporal input is encoded without the separate negotiated
 capability. Temporal capability requires both lane sessions to prepare successfully;
 unsupported hardware/resource limits retain independent/lossless modes.
@@ -58,9 +59,46 @@ This is a software-tested candidate. Headset image quality, rain/foliage
 continuity and latency still require a matched Frame test. Lower mask bitrate
 alone does not satisfy the maintainer's acceptance target.
 
+## October30 parameter-header regression and repair
+
+PC0.3.7's real Spirit Sling run completed5999 private HEVC outputs successfully,
+but the sender rejected5248 at syntax wrapping and delivered only751 HEVC masks.
+The refusal ratio is almost exactly seven of eight. The first refused AU has
+only two NALtype1 P slices; it contains no VPS/SPS/PPS. All751 delivered IDRs
+were decoded on Frame0.3.3, with no HEVC refusal, missing reference or pool
+backpressure. The5266 lossless fallbacks restored large mask reservations; two
+logged colour updates fell to1Mbit/s, against128–168Mbit/s reserved metadata.
+The previous software fixtures manually repeated parameter sets before decoding,
+so they did not exercise the missing-header behavior through the real sender
+frontend. The probe's compression gain did not establish this integration.
+
+PC0.3.8 restores only the original parameter NAL bytes of a successfully locked
+IDR in the same private encoder epoch and requested group. Four fixed groups
+hold at most4KiB of parameter bytes each; no picture entropy or decoded mask is
+cached. Unknown/missing/evicted groups, epoch changes and future IDR headers fail
+closed and request recovery IDR. A successful independent lossless fallback also leaves the unsent private AU
+uncommitted and requests recovery IDR. Native successful Lock, event, timestamp,
+picture type and output-size checks still precede this operation. The completed
+AU remains inside its total configured byte bound and passes the unchanged
+strict Main8/range/extent/slice parser before its exact-frame certificate.
+
+The real eight-picture NVIDIA probe reproduces the old1-of8 admission through
+the actual encoder frontend with explicit fake OS/NVENC completion. The repaired
+frontend admits8-of8, restoring seven P headers for609 added bytes across the
+whole captured GOP. Real private FFmpeg decoding returns the exact same final
+5,308,416 R8 bytes as the independent original-stream decode. CPU fixtures now
+remove P headers first, run production restoration and compare the entire
+completed AU byte for byte before real decoding and signed native-image/GPU
+Ready handoff. This proves transport repair without changing encoded entropy;
+it does not prove new headset image quality or sustained P-decoding performance.
+
+PC logs add `HEVC parameter sets: IDR-groups/restored-P/refused=`. A normal
+continuous group should restore seven P outputs per IDR; syntax refusal and
+lossless-fallback counts must no longer grow at seven-eighths of the stream.
+
 ## Windows installation and selection
 
-Run the normal dev installer and apply the offered PC and Frame updates:
+Run the normal dev installer and apply the offered PC update:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get.ps1 | iex
@@ -76,8 +114,8 @@ update; its default zero means preserve the preference, not disable HEVC:
 ```
 
 The override is written only when the installed PC DLL matches the target package.
-The existing Apply step updates both changed native components and performs the
-coordinated Frame restart.
+The existing Apply step updates the PC component. The unchanged Frame component
+remains running and is not rewritten or restarted.
 The bootstrap never starts PC SteamVR. Alternatively, from this checkout after
 installing, select the mode with existing Python:
 

@@ -1,6 +1,7 @@
 #include "stream-bridge-mask-hevc.h"
 #include "stream-bridge-mask-hevc-platform.h"
 #include "stream-bridge-mask-hevc-rate.h"
+#include "stream-bridge-mask-hevc-parameters.h"
 #include <nvEncodeAPI.h> // Same explicitly supplied, hash-pinned SDK11.1 as provider.
 #include <atomic>
 #include <cstring>
@@ -85,6 +86,8 @@ struct MaskHevcEncoder::Impl {
     void* flushEvent=nullptr;bool flushRegistered=false,initialized=false,submittedAny=false,flushStarted=false;
     std::uint64_t nextToken=1,sourceContract=0,encoderGeneration=0,highestSubmission=0;
     std::atomic<bool> forceKeyframe{true};std::uint64_t codecEpoch=0,lastSubmittedToken=0,anchorToken=0;unsigned gopPictures=0;
+    MaskHevcParameters parameters;
+    std::atomic<std::uint64_t> parameterKeys{0},parameterRestored{0},parameterRefused{0};
     MaskHevcRate rate;std::uint64_t rateEpoch=0;unsigned rateBackoff=0;
     NV_ENC_INITIALIZE_PARAMS rateInit{};NV_ENC_CONFIG rateConfig{};
     std::atomic<std::uint32_t> rateTarget{0},rateBudget{0},streamTarget{0},rateNum{0},rateDen{0},wireMean{0};
@@ -163,6 +166,16 @@ struct MaskHevcEncoder::Impl {
             if(out)out->clear();
             return MaskHevcTake::Refused;
         }
+        if(out&&config.temporal){
+            const MaskHevcPicture identity{codecEpoch,expected,lock.pictureType==NV_ENC_PIC_TYPE_IDR?0:dependency,anchor,lock.pictureType==NV_ENC_PIC_TYPE_IDR};
+            const auto completed=parameters.complete(*out,identity,config.maxAccessUnitBytes);
+            if(completed==MaskHevcParameters::Result::Refused){
+                parameterRefused.fetch_add(1,std::memory_order_relaxed);forceKeyframe.store(true,std::memory_order_release);
+                out->clear();record(MaskHevcFailure::ParameterSets,NV_ENC_SUCCESS,0,&lock,expected);return MaskHevcTake::Refused;
+            }
+            if(completed==MaskHevcParameters::Result::KeyCached)parameterKeys.fetch_add(1,std::memory_order_relaxed);
+            if(completed==MaskHevcParameters::Result::Restored)parameterRestored.fetch_add(1,std::memory_order_relaxed);
+        }
         if(out){
             readyCount.fetch_add(1,std::memory_order_relaxed);if(epoch)*epoch=encodedRateEpoch;
             if(picture)*picture={codecEpoch,expected,lock.pictureType==NV_ENC_PIC_TYPE_IDR?0:dependency,anchor,lock.pictureType==NV_ENC_PIC_TYPE_IDR};
@@ -177,7 +190,7 @@ struct MaskHevcEncoder::Impl {
     }
     // Cold and quiesced only. No OS/event wait is reachable from hot methods.
     bool clear()noexcept{
-        healthy.store(false,std::memory_order_release);
+        healthy.store(false,std::memory_order_release);parameters.reset();
         if(session&&initialized&&submittedAny&&flushRegistered){
             if(!flushStarted){
                 if(!os.resetEvent(flushEvent))return fail(NV_ENC_ERR_GENERIC);
@@ -217,7 +230,7 @@ struct MaskHevcEncoder::Impl {
         if(!d||!os.textureMatches||!validConfig(c)||!validTable(f))return false;
         auto epoch=nextCodecEpoch.load(std::memory_order_relaxed);
         do{if(epoch==UINT64_MAX)return false;}while(!nextCodecEpoch.compare_exchange_weak(epoch,epoch+1,std::memory_order_relaxed));
-        codecEpoch=epoch+1;lastSubmittedToken=0;gopPictures=0;forceKeyframe.store(true,std::memory_order_release);
+        codecEpoch=epoch+1;parameters.reset(codecEpoch);lastSubmittedToken=0;gopPictures=0;forceKeyframe.store(true,std::memory_order_release);
         for(unsigned i=0;i<StageCount;++i){
             if(!os.textureMatches(d,textures[i],c.width,c.height))return false;
             for(unsigned j=0;j<i;++j)if(textures[i]==textures[j])return false;
@@ -401,6 +414,7 @@ MaskHevcDiagnostics MaskHevcEncoder::diagnostics()const noexcept{
     d.submitted=p.submittedCount.load(std::memory_order_relaxed);d.locked=p.lockedCount.load(std::memory_order_relaxed);d.ready=p.readyCount.load(std::memory_order_relaxed);
     d.rateTarget=p.rateTarget.load(std::memory_order_relaxed);d.rateBudget=p.rateBudget.load(std::memory_order_relaxed);d.streamTarget=p.streamTarget.load(std::memory_order_relaxed);
     d.frameRateNum=p.rateNum.load(std::memory_order_relaxed);d.frameRateDen=p.rateDen.load(std::memory_order_relaxed);d.wireMean=p.wireMean.load(std::memory_order_relaxed);d.rateChanges=p.rateChanges.load(std::memory_order_relaxed);
+    d.parameterKeys=p.parameterKeys.load(std::memory_order_relaxed);d.parameterRestored=p.parameterRestored.load(std::memory_order_relaxed);d.parameterRefused=p.parameterRefused.load(std::memory_order_relaxed);
     d.qpSamples=p.qpSamples.load(std::memory_order_relaxed);d.qpSum=p.qpSum.load(std::memory_order_relaxed);d.lastQp=p.lastQp.load(std::memory_order_relaxed);
     d.minQp=d.qpSamples?p.minQp.load(std::memory_order_relaxed):0;d.maxQp=p.maxQp.load(std::memory_order_relaxed);d.rateSamples=p.rateSamples.load(std::memory_order_relaxed);d.lastEncodedBytes=p.lastEncodedBytes.load(std::memory_order_relaxed);return d;
 }

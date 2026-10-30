@@ -5,6 +5,7 @@ on:
     paths:
       - 'bridge/stream_bridge_frame.*'
       - 'bridge/stream_bridge_hevc_coverage.*'
+      - 'pc/stream-bridge-mask-hevc-parameters.h'
       - 'tests/test_stream_bridge_hevc_coverage.cpp'
       - 'bridge/stream_bridge_compression.*'
       - 'third_party/zstd/**'
@@ -19,6 +20,7 @@ on:
     paths:
       - 'bridge/stream_bridge_frame.*'
       - 'bridge/stream_bridge_hevc_coverage.*'
+      - 'pc/stream-bridge-mask-hevc-parameters.h'
       - 'tests/test_stream_bridge_hevc_coverage.cpp'
       - 'bridge/stream_bridge_compression.*'
       - 'third_party/zstd/**'

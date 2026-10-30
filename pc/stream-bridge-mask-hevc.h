@@ -35,7 +35,7 @@ struct MaskHevcPicture {std::uint64_t epoch=0,sequence=0,dependency=0,anchor=0;b
 enum class MaskHevcTake { Unavailable,Busy,Missing,Pending,Ready,Refused };
 enum class MaskHevcFailure : unsigned {
     None,Setup,MapInput,MapOutput,EncodePicture,LockBitstream,OutputValidation,
-    UnlockBitstream,UnmapInput,PollEvent,Flush,FlushWait,Reconfigure
+    UnlockBitstream,UnmapInput,PollEvent,Flush,FlushWait,Reconfigure,ParameterSets
 };
 inline const char* maskHevcFailureName(MaskHevcFailure stage)noexcept{
     switch(stage){
@@ -45,7 +45,7 @@ inline const char* maskHevcFailureName(MaskHevcFailure stage)noexcept{
     case MaskHevcFailure::OutputValidation:return "output-validation";case MaskHevcFailure::UnlockBitstream:return "unlock-bitstream";
     case MaskHevcFailure::UnmapInput:return "unmap-input";case MaskHevcFailure::PollEvent:return "poll-event";
     case MaskHevcFailure::Flush:return "flush";case MaskHevcFailure::FlushWait:return "flush-wait";
-    case MaskHevcFailure::Reconfigure:return "reconfigure";
+    case MaskHevcFailure::Reconfigure:return "reconfigure";case MaskHevcFailure::ParameterSets:return "parameter-sets";
     }return "unknown";
 }
 // Fixed diagnostic storage only. These approximate snapshots never authorize
@@ -56,12 +56,13 @@ struct MaskHevcDiagnostics {
     std::uint32_t rejectedFields=0,pictureType=0,pictureStruct=0,hardwareStatus=0,bytes=0;
     std::uint64_t expectedTimestamp=0,returnedTimestamp=0,mapped=0,submitted=0,locked=0,ready=0;
     std::uint32_t rateTarget=0,rateBudget=0,streamTarget=0,frameRateNum=0,frameRateDen=0,wireMean=0;
-    std::uint64_t rateChanges=0,qpSamples=0,qpSum=0;
+    std::uint64_t rateChanges=0,qpSamples=0,qpSum=0,parameterKeys=0,parameterRestored=0,parameterRefused=0;
     std::uint32_t lastQp=0,minQp=0,maxQp=0,rateSamples=0,lastEncodedBytes=0;
 };
 
 // Separate Windows/D3D11 HEVC Main8 session. Legacy mode is independent IDR;
-// optional temporal mode is IPPP8. Every output repeats VPS/SPS/PPS. Y is supplied full range; UV must already be
+// optional temporal mode is IPPP8. Each delivered temporal AU includes the exact group IDR
+// VPS/SPS/PPS, restored when the driver omits them from P outputs. Y is supplied full range; UV must already be
 // neutral128. No readback, upload, NVENC wrapper recursion or CPU codec path.
 class MaskHevcEncoder {
 public:

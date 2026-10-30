@@ -3,6 +3,7 @@
 #include <thread>
 #include <set>
 #include "bridge/stream_bridge_hevc_coverage.h"
+#include "pc/stream-bridge-mask-hevc-parameters.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -75,7 +76,11 @@ void decode(const hevc::Libraries& libs,const fs::path& root){
 void temporal(const hevc::Libraries& libs,const fs::path& root){
     hevc::Decoder decoder;check(decoder.prepareCold(libs),"temporal decoder prepared from owned public ABI");
     std::array<std::vector<std::uint8_t>,16> payloads;
-    for(unsigned n=0;n<16;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto coded=read(root/name);
+    sb::sender::MaskHevcParameters parameters;parameters.reset(71);
+    for(unsigned n=0;n<16;++n){char name[40];std::snprintf(name,sizeof name,"temporal-%03u.hevc",n);const auto original=read(root/name);auto coded=original;
+        if(n%8)for(const auto& nal:nals(original))if(nal.type==1){coded.erase(coded.begin(),coded.begin()+nal.start);break;}
+        const sb::sender::MaskHevcPicture picture{71,10*(n+1),n%8?10*n:0,10*((n/8)*8+1),n%8==0};
+        check(parameters.complete(coded,picture)==(n%8?sb::sender::MaskHevcParameters::Result::Restored:sb::sender::MaskHevcParameters::Result::KeyCached)&&coded==original,"driver-style omitted P headers are repaired with identical source bytes before real entropy decode");
         check(sb::wrapHevcTemporalCoverage(bytes(coded),64,64,71,10*(n+1),n%8?10*n:0,n%8==0,10*((n/8)*8+1),payloads[n]),"real IPPP8 Main8 AU passes bounded temporal grammar");
         std::vector<std::uint8_t> old;check(!sb::wrapHevcCoverage(bytes(coded),64,64,old)||n%8==0,"dependent P remains outside legacy Codec6");}
     for(unsigned offset=56;offset<64;++offset){auto invalid=payloads[1];invalid[offset]=1;sb::HevcCoverageView view;
