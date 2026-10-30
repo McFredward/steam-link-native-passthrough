@@ -1,5 +1,8 @@
 # Native Frame compositor startup review, 2026-10-11
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This is a read-only review of the installed native compositor after the
 [temporary passive trace](FRAME-TRACE-SESSION.md) was removed. It does not
 activate a layer, change SteamVR, or establish a working mask bridge. Private

@@ -1,5 +1,8 @@
 # Passive binding loss audit
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Evidence and conclusion
 
 This audit covers source `8571cc6` and the private 2026-10-11 armed capture in

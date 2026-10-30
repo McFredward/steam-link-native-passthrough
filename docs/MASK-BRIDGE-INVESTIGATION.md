@@ -1,5 +1,8 @@
 # Steam Link mask bridge investigation
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 Status: source and read-only installed-runtime investigation, 2026-10-11.
 The actual Frame shader has now been inspected on SteamOS 0.3.0, build
 20260922.6101926. Its interface and source-coordinate dependencies provide

@@ -1,5 +1,8 @@
 # Pre-stream operator arming
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This is a passive import diagnostic, not working Steam Link passthrough. The
 operator may arm the existing collector after the diagnostic SteamVR invocation
 and system UI have passed their health checks, immediately before connecting the

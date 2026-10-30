@@ -1,5 +1,8 @@
 # Next bounded resource transaction diagnostic
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 Status, 2026-10-13: the separately approved
 [actual raw capture](CLIENT-RESOURCE-RAW-CAPTURE-20261013.md) completed and was
 fully rolled back. It confirms one matching local request/reply/publication

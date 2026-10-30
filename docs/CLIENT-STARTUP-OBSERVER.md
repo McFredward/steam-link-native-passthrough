@@ -1,5 +1,8 @@
 # Passive client-startup observer
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `receiver/client_startup_observer.cpp` supplies the main-namespace artifact
 `libframe_client_startup.so`. It cold-prepares the already loaded receiver, API,
 libc, loader and observer mappings, initializes the bounded startup runtime,

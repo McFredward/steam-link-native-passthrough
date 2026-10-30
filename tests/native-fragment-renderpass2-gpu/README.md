@@ -1,5 +1,8 @@
 # Owned RenderPass2 equivalence GPU proof
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This focused fixture creates a real ordinary `VkRenderPassCreateInfo2` pass,
 then passes that same definition through production `captureRenderPass2()` and
 `RenderPassDefinition::view()` to create a separate compatible legacy renderpass.

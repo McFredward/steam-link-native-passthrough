@@ -15,6 +15,15 @@ No GitHub Release is needed to deliver routine candidates:
    Publish the validated source and payload to `dev` while optimization is in
    progress. Update `main` only after explicit maintainer release approval.
 
+Release0.3.15 promotes the validated dev native/setup payloads to main with
+Important defaults. Retarget only `pc-provider/logging-default.conf`,
+`frame/logging-default.conf`, explanatory text and inner/outer integrity metadata.
+Update the archive receipt's exact size/SHA256, then perform steps3–4 above.
+Verify all other members, especially DLL/layer/selector/private codec pair and
+setup scripts, against the tested dev archive. Dev keeps Debug. A stable tagged
+GitHub Release may carry the same ZIP and SHA256SUMS after maintainer approval;
+the normal installer still uses its immutable repository archive.
+
 The archive's own source revision describes its native/setup contents; a later
 bootstrap-only commit does not require rebuilding unchanged native components.
 An archive mismatch aborts before extraction. Updating an installed device still

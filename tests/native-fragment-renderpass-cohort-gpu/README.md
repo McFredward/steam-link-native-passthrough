@@ -1,5 +1,8 @@
 # Owned render-pass cohort GPU proof
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 Explicit private original fragment bytes are required; no Valve code is embedded.
 The fixture reuses existing read-only resource/validation helpers, then builds
 independent two/three-subpass legacy and RP2 cohorts with multisample resolve,

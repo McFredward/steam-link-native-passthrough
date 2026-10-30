@@ -1,5 +1,8 @@
 # SteamOS 0.4.5 resource-manager carrier audit
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Result and proof limits
 
 The current client library provides a source-proven request/reply route from

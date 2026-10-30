@@ -1,5 +1,8 @@
 # Passive binding throughput repair, 2026-10-11
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The first [native journal run](FRAME-BINDING-JOURNAL-RUN-20261011.md) lost 201,483
 binding publications despite zero binding-lock contention and no exhausted object
 tables. This repair addresses measured replay and burst limits. The subsequent

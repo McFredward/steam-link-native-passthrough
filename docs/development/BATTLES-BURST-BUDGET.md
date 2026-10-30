@@ -1,5 +1,8 @@
 # Battles transport resets and burst accounting, October22
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 ## Captured result
 
 Demeo Battles1.4.21 uses PC0.2.16 on SteamVR2.18.4. Public binding discovery

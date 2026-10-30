@@ -1,5 +1,8 @@
 # Native pixel tracker concurrency, 2026-10-15
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The subsequent approved [complete native capture](PIXEL-SNAPSHOT-CAPTURE-20261015.md)
 now verifies progress beyond this refusal on the actual Frame, followed by full
 restoration. The local preparation and limits below remain the original record.

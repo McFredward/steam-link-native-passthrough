@@ -1,16 +1,20 @@
 # Branch defaults and native logging
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 PC 0.2.18, Frame 0.2.14 and installer 0.2.18 introduce Error, Warning,
 Important and Debug thresholds. Game-mod logging is configured independently
 in its loader config or legacy INI. Demeo uses `[LOGGING] Level` in
 `BepInEx/config/DemeoMixedReality.cfg` (MelonLoader uses `greenscreen.ini`).
-Both dev packages retain existing diagnostic output;
-main packages default to Important. Existing Valve/Unity/loader logs are outside
+Release0.3.15 (PC0.3.11/Frame0.3.5) uses the same native implementation on both
+branches. Dev packages retain diagnostic output; main packages default to Important. Existing Valve/Unity/loader logs are outside
 our control.
 
 Important retains bounded startup, attachment, source/connection state and
 failure messages. Routine QoS/bitrate/alpha counters, renderer statistics and
-local decoder flow/latency counters require Debug. The cold renderer worker
+local decoder flow/latency counters, HEVC queue/worker/R8/slice-job reports and
+RGB-QP interval/event telemetry require Debug. The cold renderer worker
 still emits compact warnings for new rejected masks, uploads, guarded submits,
 GPU pool refusals or pipeline loss. Filtering never changes image/source/eye
 proof, mask availability, video rate, shader logic or native call ordering.
@@ -30,7 +34,9 @@ files, explanatory data and verified archive/bootstrap pins. Native binaries,
 setup code, source/artifact evidence, runtime versions, pairings and shader
 contracts remain byte-identical. It makes immutable archive/core commits before
 refreshing aliases; no GitHub Releases or device operations are performed.
-The workflow only runs after an archive push on main/dev. Developer work still
+The workflow only runs after an archive push on main/dev. Release engineering
+keeps the archive sidecar receipt synchronized with the retargeted ZIP and
+verifies both ordinary and compatibility entry scripts publicly. Developer work still
 integrates on dev; this does not authorize an agent to merge or publish main.
 
 For a persistent user override, write just a level name followed by a newline
@@ -54,7 +60,10 @@ need the ordinary coordinated Frame update/restart after the user's Apply.
 Later PC-only updates with identical Frame files/default retain the existing
 no-Frame-writes/no-Frame-restart behavior. Switching channels changes a Frame
 configuration default and therefore legitimately needs coordinated application.
-No SSH writes or Frame restart were used during development.
+A dev-to-main switch changes both owned logging defaults even when component
+versions match. Apply the offered update using the ordinary coordinated setup;
+merely pulling Git or re-running Check cannot change an installed process level.
+No SSH writes or Frame restart are performed by package retargeting.
 
 Software checks cover actual game/loader sinks, embedded branch defaults,
 incremental switches, malformed overrides, original installer upgrade/Undo,

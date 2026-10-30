@@ -1,5 +1,8 @@
 # Actual renderer integration fixture
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 ## Current camera-only and desktop checks
 
 The normal suite includes camera-only recovery and exact ordinary desktop

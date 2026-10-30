@@ -1,5 +1,8 @@
 # Distinguishing the first native pipe from the target instance
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The first authentic Frame startup capture reached the prepared MAIN observer,
 the actual Steam-runtime API, the deep-bound client-to-libc mutex entry and the
 independently validated client mapping. It then refused `Singleton` before

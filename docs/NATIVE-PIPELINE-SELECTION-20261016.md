@@ -1,5 +1,8 @@
 # Exact native pipeline selection after arming (2026-10-16)
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The retained native API archive records six `PS_DISTORT` pipeline creations,
 six different layout handles and twelve different VS/PS module handles. Its
 294 actual `draw_recorded` events use only the final two pipelines:147 draws

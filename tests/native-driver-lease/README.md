@@ -1,5 +1,8 @@
 # Native-driver lease focused controls
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 `test_pixel_native_driver_lease.cpp` includes the production implementation in
 its own translation unit. Do not link `pixel_native_driver_lease.cpp` a second
 time. Build `fixture.cpp` as a separate shared library with a SHA-1 GNU build ID

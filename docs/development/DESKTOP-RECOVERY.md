@@ -1,5 +1,8 @@
 # Ordinary desktop video during active MR recovery
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 PC0.2.21 and Frame0.2.18 distinguish an actual desktop/compositor frame from
 missing game data. The October22 headset logs show foreign native PID6288
 while the declared game is PID9280. At20:50:24–29 the Frame records708 more

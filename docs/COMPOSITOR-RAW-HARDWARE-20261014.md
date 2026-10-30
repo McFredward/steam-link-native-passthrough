@@ -1,5 +1,8 @@
 # Native import join and operator-reserved capture (2026-10-14)
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This is diagnostic infrastructure, not working Steam Link passthrough. No mask,
 shader replacement, pixels, source frame, eye, native UV mapping or GPU lifetime
 has been admitted. The PC Steam sender remains unchanged.

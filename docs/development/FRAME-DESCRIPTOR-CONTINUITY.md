@@ -1,5 +1,8 @@
 # Stream coverage and native descriptor lifetime
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 ## Paired hardware evidence, October 19, 2026
 
 Frame patch 0.2.3 and GloomhavenVR Build 710 show active-game flicker even while

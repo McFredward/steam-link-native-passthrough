@@ -1,7 +1,9 @@
 # Developing Steam Link Native Passthrough
 
-Current development supports one **paired Windows/NVIDIA/HEVC
-route**. [Installation](../README.md#installation) and [compatibility](COMPATIBILITY.md) are the
+The stable **0.3.15** baseline delivers PC **0.3.11** / Frame **0.3.5** on the
+paired Windows/NVIDIA/HEVC route. Main uses Important logging; dev uses Debug.
+See the [release state and evidence](development/RELEASE-0.3.15.md) and
+[complete documentation index](README.md). [Installation](../README.md#installation) and [compatibility](COMPATIBILITY.md) are the
 player entry points. The [retired atlas record](history/ATLAS-RECEIVER.md) preserves
 the earlier implementation and evidence; its formats are not runtime fallbacks.
 
@@ -26,7 +28,8 @@ do not follow their activation instructions as current installation steps.
 Game current eye: RGB contribution E + independent coverage A
   → original SteamVR per-eye shared texture
   → Windows sender companion: native source and encoder-input proof
-  → original colour HEVC access unit + authenticated coverage metadata
+  → original colour HEVC AU + authenticated temporal HEVC mask metadata
+  → private Frame CPU mask decode: four workers/eight slots, two slice threads
   → matching Frame companion: exact AU / decoded image / lease association
   → guarded native game composition over local Frame camera
 ```
@@ -58,7 +61,9 @@ See [GloomhavenVR's source contract](https://github.com/McFredward/GloomhavenVR/
 and [Demeo Mixed Reality](https://github.com/McFredward/demeo-mixed-reality) for
 working game-side examples. Their different camera ownership and XR layouts
 are covered in the [integration lessons](development/INTEGRATION-LESSONS.md).
-Other games need their own source integration; installation alone cannot infer
+The [Venture passthrough fork](https://github.com/McFredward/Venture/tree/feat/steam-link-passthrough)
+uses the same source API for Quest apps; Spirit Sling is the current reference.
+This does not certify arbitrary Quest MR APIs or games. Other games need their own source integration; installation alone cannot infer
 transparency in an unmodified game.
 
 ## Identity and admission contracts
@@ -92,6 +97,12 @@ transparency in an unmodified game.
 Never select an atlas decoder or replace an RGB colour to obtain native coverage.
 See [desktop/recovery](development/DESKTOP-RECOVERY.md) and
 [signed policies](protocols/stream-coverage-v1.md).
+
+Temporal HEVC is the default when both companions prepare and negotiate it;
+explicit lossless preferences and safe old-peer intersections remain. The game
+must still produce correct same-eye alpha before transport quantization. The
+mask is a separate luma stream in authenticated metadata, not hidden RGB tiles
+or an attachment to Valve's RGB hardware decoder.
 
 Detailed contracts: [bridge](protocols/stream-bridge-v1.md),
 [authentication](protocols/stream-bridge-auth-v1.md),

@@ -1,4 +1,7 @@
-# Independent HEVC mask decoder
+# Temporal and independent HEVC mask decoder
+
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
 
 PC0.3.8 completes missing P-picture parameter NALs from the successfully locked
 IDR in that exact private encoder epoch/group, using bounded parameter-only
@@ -25,7 +28,8 @@ submission/frame/eye/extent/image authority remains in the original certificate.
 
 Four workers/eight slots retain their bounds. A group stays on one worker, while
 other groups and lanes overlap. Each worker owns a separate optional temporal
-context and legacy context; no additional thread, latest-mask cache or unbounded
+context and legacy context. Frame0.3.5 adds bounded within-picture slice
+threads as described below; no frame threading, latest-mask cache or growing
 queue is introduced. Parameter/epoch/group/dependency/POC/packet-output checks
 precede publication. Source/channel cancellation revokes queued/completed work
 and invalidates every temporal DPB before a new cancellation epoch can use it.
@@ -80,7 +84,13 @@ Each worker retains one decoder context per source/binding/encoder/extent epoch.
 `avcodec_flush_buffers` releases references between independent complete IDRs;
 all VPS/SPS/PPS are still required by the portable parser before decoding. Missing
 parameter sets cannot borrow a cached PPS. Entropy errors discard that context.
-Single-threaded decoder contexts avoid oversubscribing the fixed picture pool.
+Frame0.3.5 uses two slice threads per active picture and disables frame threading.
+The byte-pinned FFmpeg8.1.3 independent-NAL backport handles the observed non-WPP
+slices. The four-worker/eight-slot pool is unchanged; no extra pictures are queued.
+The strict completion guard refuses missing CTBs before output, and deblocking/SAO
+complete before the Y plane is copied. Source-patch and base/result file hashes,
+original attribution, LGPL license and build tool ship with the decoder. See
+[private source provenance](../../third_party/ffmpeg/README.md).
 The adapter supplies one packet with a serialized
 source connection/generation, encoder generation, actual submission ID, extent,
 policy and binding through FFmpeg's public `COPY_OPAQUE` contract. It requires the
@@ -148,7 +158,20 @@ supported decoder instance and positively negotiated plain output format, buffer
 bounds/crops, synchronization, lifetime and throughput checks. Do not reinterpret
 C01Q as NV12 or change the running RGB decoder to obtain mask pixels.
 
-## Explicit host timing
+## Current independent-slice validation
+
+The owned2/4-slice IPPP8 fixtures exercise actual codec batch execution, complete
+encoder reconstruction, SAO and cross-slice filtering against the unmodified
+serial decoder. Header-valid incomplete pictures must preserve old caller pixels
+and identity, invalidate temporal state and recover only with a fresh key picture.
+The current suite has4,195,524 real assertions. Whole private codec/util plus
+current decoder/pool/tests pass ASan/UBSan and TSan; sanitizer-only loader/ASLR
+exceptions and their host scope are documented in [release evidence](RELEASE-0.3.15.md).
+Use the [real decoder fixture instructions](../../tests/mask-hevc/README.md).
+The October30 Frame run confirms real two-job batches and lower mean decode/queue
+time; source differences and remaining39.602ms spikes prevent a uniform latency claim.
+
+## Earlier explicit host timing
 
 Build `mask_hevc_benchmark` with the explicit private codec headers and libraries.
 It accepts `fresh|serial|pool CODEC_LIBRARY UTILITY_LIBRARY OWNED_HEVC WIDTH HEIGHT

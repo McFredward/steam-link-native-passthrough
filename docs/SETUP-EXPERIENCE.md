@@ -1,6 +1,11 @@
 # Friendly setup presentation and discovery
 
-`setup/steam_link_setup_ui.py` is an optional standard-library presentation layer.
+The paired0.3.15 installer uses the private offline Textual presentation in
+`setup/steam_link_setup_textual.py`, selected through `steam_link_setup_vendor.py`.
+It supports keyboard/mouse navigation, resizing, visible progress, private inline
+SSH credentials and cancellation. `steam_link_setup_ui.py` supplies shared
+presentation/discovery contracts and the standard-library fallback described
+below. The machine-readable `--check` path bypasses interactive presentation.
 The engine owns the installation/report contract and bypasses this layer for its
 machine-readable `--check` flow. Load it from its verified bundle path using
 `importlib` (register the module in `sys.modules` before execution for dataclasses).

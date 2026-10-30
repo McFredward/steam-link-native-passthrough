@@ -1,5 +1,19 @@
 # Patch versions
 
+## Current release
+
+Stable installer **0.3.15**, PC **0.3.11**, Frame **0.3.5** promotes the tested
+dev native binaries to main with Important logging; dev retains Debug. A channel
+switch changes owned configuration and package/bootstrap hashes, not native
+versions. Frame0.3.5 enables two within-picture HEVC slice threads, a byte-pinned
+private FFmpeg backport and strict complete-picture output. Frame0.3.4 introduced
+R8 buffer reuse. See [release evidence](development/RELEASE-0.3.15.md).
+
+## Earlier candidate checkpoints
+
+The dated paragraphs below record the state before their next test/publication;
+their word "next" is historical, not a newer current version.
+
 The next October30 package is installer **0.3.13**, PC **0.3.11**, Frame **0.3.3**.
 For controlled HEVC metadata plus native VBR, keep the proportional caller VBV
 span instead of adding a second one-picture cap. Caller automatic initial delay
@@ -49,6 +63,8 @@ quality, throughput or successful runtime admission.
 The October22 stable release is installer **0.2.22**, PC **0.2.21**, Frame
 **0.2.18**. The current repository version files remain authoritative; the
 examples below illustrate independent versioning, not a runtime allowlist.
+
+## Version and publication rules
 
 `VERSION` identifies the installer. `PATCH_VERSIONS.json` independently identifies
 the PC sender and Frame receiver patches. Installer-only changes increment

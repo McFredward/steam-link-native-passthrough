@@ -1,5 +1,8 @@
 # Opt-in receiver selected-attempt observer
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `receiver/receiver_observer.cpp` implements the narrow observation proposed in
 [the receiver boundary audit](FRAME-RECEIVER-OBSERVER.md). It is an opt-in
 diagnostic and does not enable passthrough. The first authorized Frame attempt

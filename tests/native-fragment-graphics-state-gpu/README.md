@@ -1,4 +1,7 @@
 This adds one focused actual-driver case to the existing owned cold-factory
+
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
 fixture. It queries and enables supported `VK_EXT_extended_dynamic_state3`
 features, creates the original pinned VS/PS pipeline with the same mutable
 owned creation input later captured by production code, retires the original

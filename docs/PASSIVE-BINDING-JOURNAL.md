@@ -1,5 +1,8 @@
 # Ordered passive binding metadata
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The 2026-10-11 [loss audit](PASSIVE-BINDING-LOSS-AUDIT.md) found five lost
 binding observations and unsupported imported-resource metadata in the armed
 Frame recording. This implementation addresses those two source-level causes.

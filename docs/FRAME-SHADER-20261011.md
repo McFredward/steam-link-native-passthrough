@@ -1,5 +1,8 @@
 # Steam Frame compositor shader inspection, 2026-10-11
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This report describes static metadata from a private, read-only capture of an
 installed shader on one headset. No live pipeline or descriptor capture has yet
 established that this module is the one used for a particular streamed frame.

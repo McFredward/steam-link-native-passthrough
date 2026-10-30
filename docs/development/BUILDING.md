@@ -1,5 +1,8 @@
 # Build and validate the current paired route
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 This is a developer workflow, not an installation guide. Players use the
 [guided installer](../../README.md#installation). A local build never authorizes
 a device write or service restart.
@@ -68,6 +71,31 @@ and a successful PE build do not add Linux/AMD/Intel runtime support. To enable
 actual portable sender-boundary fixtures, pass
 `-DSFNP_NVENC_SDK_DIRECTORY=/absolute/path/to/reviewed-sdk` during configuration.
 
+## Private HEVC decoder inputs
+
+The production Frame build must include the private decoder; a facade compiled
+without explicit FFmpeg headers remains unavailable. Obtain the exact release,
+detached signature and key pinned by `packaging/mask-ffmpeg.json`. The offline
+tool verifies all inputs, applies the byte-pinned independent-slice backport from
+`packaging/mask-ffmpeg-patches.json` in scratch space, verifies base/result hashes
+and all upstream files, then records the actual patch set and library hashes.
+It needs GNU patch, GnuPG, make and the appropriate C toolchain. No build tool
+installs or restarts a device.
+
+```sh
+python3 -B tools/build_mask_hevc_ffmpeg.py \
+  --archive /private/ffmpeg-8.1.3.tar.xz \
+  --signature /private/ffmpeg-8.1.3.tar.xz.asc \
+  --key /private/ffmpeg-devel.asc --output build/private-frame-codec
+```
+
+The default cross-prefix is `aarch64-linux-gnu-`. A separate host test build uses
+`--cross-prefix ''`; `--upstream-only` is restricted to a distinct host comparison
+output and must never build a production Frame package. Codec62/util60 are loaded
+only from their owned adjacent names, not the system/Valve libraries. Preserve
+LGPL attribution, the release lock, backport/manifest and build tool in delivery.
+Use [real decoder instructions](../../tests/mask-hevc/README.md) for host tests.
+
 ## Frame ARM64 receiver and selector
 
 On a Linux build host with the reviewed AArch64 GNU toolchain and Vulkan headers:
@@ -79,12 +107,17 @@ cmake -S . -B build/frame -DCMAKE_SYSTEM_NAME=Linux \
   -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
   -DCMAKE_ASM_COMPILER=aarch64-linux-gnu-gcc \
   -DFRAME_STREAM_BRIDGE_ONLY=ON -DFRAME_STREAM_BRIDGE_RECEIVER=ON \
-  -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+  -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release \
+  -DSFNP_MASK_HEVC_INCLUDE_DIRECTORY="$PWD/build/private-frame-codec/install/include"
 cmake --build build/frame --parallel 4 --target \
   VkLayer_steam_link_bridge sfnp_stream_launch
 ```
 
 Outputs are `libVkLayer_steam_link_bridge.so` and `libsfnp_stream_launch.so`.
+Also package the complete matching private codec pair from
+`build/private-frame-codec/install/lib/` using `--mask-codec` and `--mask-util`.
+Copy the resolved SONAME payloads to regular staging files; the package refuses
+linked input paths. Omitting the pair cannot deliver the default HEVC mode.
 Inspect their architecture, dependencies and exported ABI; retain the private
 C++ runtime/linker isolation required by `StreamBridgeReceiver.cmake`. A host
 x86_64 build is useful for tests but cannot be installed as the Frame binary.
@@ -111,7 +144,9 @@ release can also have a GitHub Release when explicitly requested by the
 maintainer; it does not change the immutable installer download route.
 
 Package defaults are dev/Debug and main/Important; they are not new native
-versions. `tools/publish_logging_channel.py` checks that retargeting changes only
+versions. Keep the archive sidecar receipt's size/SHA256 synchronized after a
+channel retarget, then pin its immutable commit before refreshing aliases.
+`tools/publish_logging_channel.py` checks that retargeting changes only
 logging data and integrity metadata, preserving native/setup binaries exactly.
 Its `--publish` mode commits and pushes: use it only for authorized publication,
 not a game agent's local build. A PC-only update with unchanged Frame payload

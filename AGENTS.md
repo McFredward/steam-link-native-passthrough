@@ -8,7 +8,10 @@
   instruction supersedes the previous publication authorization: do not update
   `main` until the maintainer explicitly approves another release. Keep upstream
   history and attribution; worker branches stay local.
-  Use separate worktrees and disjoint file ownership.
+  Use separate worktrees and disjoint file ownership. The maintainer explicitly
+  approved publishing the tested0.3.15 candidate to main on2026-10-30, with
+  Important logging and refreshed developer documentation. This approval covers
+  this release; subsequent candidates still integrate on dev unless approved.
 - Commit as `McFredward <frederik@lissek.info>`. Speak German to the maintainer;
   source, comments and developer documentation are English.
 - The intended input is real per-eye scene coverage, independent of scene RGB.
@@ -80,6 +83,7 @@
   in the bootstrap; the installer does not depend on GitHub Releases. The
   maintainer explicitly requested stable release 0.2.22 on 2026-10-22. That does
   not authorize future releases or routine candidate tags without a new request.
+  The2026-10-30 release request separately approves stable0.3.15.
 - The maintainer's 2026-10-21 PC-only update instruction requires unchanged
   Frame components, settings and services to remain untouched. Such an update,
   its failure recovery and interrupted-run continuation must not restart the

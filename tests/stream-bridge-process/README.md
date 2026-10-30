@@ -1,5 +1,8 @@
 # Production process and artifact boundaries
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 ## Current recovery and ordinary-picture additions
 
 The fixture also exercises signed camera-recovery policies through actual

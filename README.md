@@ -22,6 +22,16 @@
 
 Play supported PC VR games in your real room over Steam Link.
 
+**Latest release: [0.3.15](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15) · Published October 30, 2026**
+
+| Component | Release version |
+|---|---|
+| Installer | **0.3.15** |
+| PC sender | **0.3.11** |
+| Frame receiver | **0.3.5** |
+
+The installation command below installs this release from `main` with normal logging.
+
 ## Native transparency, no colour replacement
 
 The game sends transparency separately from its colours, so no colour is removed
@@ -81,10 +91,11 @@ until setup finishes.
 Start your Steam Link stream and enable native Steam Link passthrough in the game.
 Run the same command again to **update, uninstall or restore the previous setup**.
 
-The **dev 0.3.15** sender/receiver update uses HEVC masks by default with a
-20 Mbit/s ceiling and measured shared bitrate control. To test it, use the installation command above with `dev` in
-place of `main`; no extra flag is needed. See the [codec test guide](docs/development/HEVC-MASK-TESTING.md)
-for bitrate overrides, lossless selection and the current software-test scope.
+**Release 0.3.15** uses temporal HEVC masks by default with a 20 Mbit/s ceiling
+and measured shared bitrate control. The installer delivers PC **0.3.11** and
+Frame **0.3.5**. No extra flag is needed. `main` uses normal logging; `dev` keeps
+detailed diagnostics. See the [codec guide](docs/development/HEVC-MASK-TESTING.md)
+for bitrate overrides, lossless selection and measured test limits.
 
 ## Developers
 

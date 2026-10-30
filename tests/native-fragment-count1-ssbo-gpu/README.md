@@ -1,5 +1,8 @@
 # Count1 original-invocation SSBO proof
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This private, offscreen fixture keeps the unchanged, pinned original fragment
 shader on a separate count3 layout. It compares that original GPU output and its
 canonical array3 SSBO record with three explicitly specialized count1 interfaces:

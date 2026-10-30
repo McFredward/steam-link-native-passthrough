@@ -1,5 +1,8 @@
 # SteamOS 0.4.5: compositor import and success-boundary audit
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Result
 
 The updated compositor still has a synchronous DMA-BUF import route, but its

@@ -1,5 +1,8 @@
 # Linux sender: Vulkan Video implementation plan
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 Linux sender installation remains unsupported. The new public-API completion
 boundary is a first implementation component, not a working Linux passthrough
 backend. No installer compatibility flag or existing Windows path changes.

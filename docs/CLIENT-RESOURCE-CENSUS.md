@@ -1,5 +1,8 @@
 # Register-only resource-boundary census
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 ## Implemented next step
 
 The source adapter now observes one bounded native import/pending/reference

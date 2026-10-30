@@ -1,4 +1,69 @@
-# Optional intra HEVC coverage, encoding6
+# HEVC coverage: temporal encoding7 and retained intra encoding6
+
+## Current selection and negotiation
+
+Release0.3.15 prefers negotiated Codec7 (`HevcTemporal`) with two alternating
+IPPP8 lanes and a20Mbit/s user ceiling. Codec6 remains the independent-IDR route;
+explicit lossless selection and unprepared/old peers keep lossless intersection.
+Bits1024/2048 prepare the installed HEVC slice route and bit4096 additionally
+permits Codec7; no HEVC bit becomes mandatory baseline authority. Portable
+readiness fields start false until actual encoder/decoder preparation succeeds.
+Installed defaults select the mode but never replace handshake, coded probe,
+authentication or per-image proof. Full-range Y and neutral UV retain the same
+meaning; decoded alpha is lossy in either HEVC mode.
+
+## Temporal envelope and references
+
+Codec7 uses the same authenticated SFV1 descriptor/hash domain, but the coverage
+payload begins with a64-byte little-endian SFHT envelope:
+
+| Offset | Bytes | Meaning |
+| ---: | ---: | --- |
+|0|4|ASCII SFHT|
+|4|1|Version1|
+|5|1|Full-range Y marker1|
+|6|1|Main profile1|
+|7|1|Bit depth8|
+|8|2|Exact signed width|
+|10|2|Exact signed height|
+|12|4|Exact R8 sample count|
+|16|4|Following Annex-B byte count|
+|20|1|4:2:0 marker1|
+|21|1|Independent coverage sample semantics1|
+|22|1|Restricted codec contract marker1|
+|23|1|1 for IDR,0 for P|
+|24|8|Nonzero private codec epoch|
+|32|8|Nonzero private sequence|
+|40|8|Predecessor sequence;0 only for IDR|
+|48|8|Nonzero group anchor, at most current sequence|
+|56|8|Reserved zero|
+|64|variable|Complete Annex-B picture with explicit VPS/SPS/PPS|
+
+The parser enforces the same Main8/420, range, extent, NAL/slice and2MiB coded
+bounds; P pictures add a forward IP chain, one active default L0 reference to
+previous POC, no B/CRA/reorder/long-term reference, and at most8 pictures per
+chain in the stateful decoder. The accepted dependency must equal that lane's
+last successfully decoded private sequence, with the same codec/source/binding/
+encoder epoch, anchor and expected wrapped POC. Another valid lane's decoded
+picture cannot stand in for it. Missing/failed references invalidate that chain
+until a fresh nonrewinding IDR; no error concealment, cached/latest alpha or old
+image is authorized. The actual native submission/frame/eye/extent remains in
+the signed outer certificate, independent of these private codec counters.
+
+Missing P-picture parameter NALs are completed only from the successfully locked
+IDR of that exact private encoder epoch/group; entropy bytes remain unchanged.
+The Frame retains DPB state between P pictures and validates serialized public
+COPY_OPAQUE packet identity plus a fresh PTS for every immediate output. It never
+flushes each P picture or adds reordered/display frames. Bounded owned jobs and
+within-picture slice threading remain cold worker operations. Every postfilter
+and complete Y plane finishes before current GPU publication and exact Ready.
+
+This extension does not relax Codec6 to accept arbitrary P pictures. Source and
+wire definitions are authoritative in `stream_bridge_hevc_coverage.h/.cpp`,
+`stream_bridge_frame.h` and `receiver/stream_bridge_mask_hevc.cpp`. Current
+hardware observations and limits are in [release evidence](../development/RELEASE-0.3.15.md).
+
+## Retained independent Codec6 contract
 
 The maintainer explicitly authorized lossy NVENC/HEVC coverage on October29,
 2026. Pixel values may be approximated in this optional mode. Source, session,
@@ -126,7 +191,7 @@ image, native eye mapping or GPU lifetime. Those independent existing checks
 remain mandatory. Authenticated active-MR loss follows the existing camera-only
 recovery rule; no active peer/camera authority retains ordinary opaque output.
 
-## Software evidence and remaining hardware evidence
+## Initial Codec6 software checkpoint
 
 Portable tests use an owned synthetic64x64 gray image encoded by real public
 CPU libx265 as HEVC Main, plus deliberately syntax-only parameter generators
@@ -136,12 +201,23 @@ byte of the actual RGB/certificate/encoded-mask authentication binding. The
 native receiver worker also exercises real loopback authentication, bilateral
 negotiation, coded probe/echo and current CAPTURE association.
 
-These are software controls. Independent NVENC output, concurrent RGB/mask
-encoder availability, Frame decoder latency, bandwidth behavior and Spirit
-Sling image quality still require coordinated hardware tests. No device is
+These were the initial Codec6 software controls. Later NVENC/Frame/Spirit Sling
+observations are recorded in the current release baseline linked above; the
+initial fixtures alone never establish those hardware results. New devices,
+games and controlled quality/latency claims still require coordinated tests. No device is
 installed or restarted by these tests.
 
-## Sender rate policy (PC0.3.5)
+## Current sender policy and earlier rate checkpoints
+
+PC0.3.11 uses completed-input QoS and actual certified added bytes for shared
+rate feedback, preserves temporal RC/GOP on bitrate-only updates, and keeps the
+caller's proportional native VBR buffer span instead of adding a second
+one-picture RGB cap. The mask user ceiling is not a hard wire cap. Explicit
+lossless/unknown-buffer policies remain separate. See the
+[current controller](../../pc/stream-bridge-mask-hevc.md#shared-bitrate-control)
+and [test history](../development/HEVC-MASK-TESTING.md).
+
+### Sender rate policy checkpoint (PC0.3.5)
 
 Wire syntax, dimensions, all-IDR independence and exact native-frame proof are
 unchanged. The20Mbit/s default is a user ceiling. The private VBR encoder target
@@ -155,7 +231,7 @@ fallback spikes included and the longer actual peak separately reported.
 Lossless/old-peer reservation is unchanged. These are rate estimates, never mask
 permission or a strict network cap. The Frame0.3.2 payload is unchanged.
 
-## Completed-output rate decisions (PC0.3.6)
+### Completed-output rate checkpoint (PC0.3.6)
 
 No wire or decoder change. Sixteen recent authenticated output-byte/FPS samples
 form the estimator; at least64 completed outputs permit a normal private RC

@@ -1,5 +1,8 @@
 # Manual receiver observer session
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `tools/receiver_observer_session.py` prepares a reversible user-service session
 for the [protected scalar observer](RECEIVER-OBSERVER-IMPLEMENTATION.md).
 The helper is tested offline and has performed a manually restored Steam-client

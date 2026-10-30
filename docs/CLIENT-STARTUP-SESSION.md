@@ -1,5 +1,8 @@
 # Manual client-startup diagnostic session
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `tools/client_startup_session.py` stages, activates and removes the narrowly
 prepared [OpenVR startup observer](IMPORT-STARTUP-FORWARDING.md). It does not
 download anything, patch native binaries or launch scripts, modify Vulkan,

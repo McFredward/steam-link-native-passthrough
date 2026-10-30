@@ -1,5 +1,8 @@
 # Scene contribution presenter: private GPU oracle
 
+> Fixture reference. See the [current release baseline](../../docs/development/RELEASE-0.3.15.md) for
+> supported production paths and hardware evidence; a passing fixture alone does not certify them.
+
 This focused fixture executes the new scene-atlas fragment generator with a
 private, exactly pinned original PS supplied explicitly. No Valve bytes are
 checked in. It does not activate a receiver or contact a device.

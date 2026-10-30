@@ -1,5 +1,8 @@
 # Protected receiver capture on SteamOS 0.4.5
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The manually coordinated PC VR-stream run captured **32 valid protected receiver
 selection attempts**, with all 32 serialized and no loss, mutex, pointer or I/O
 errors. The [Btrfs identity reconciliation](RECEIVER-OBSERVER-SESSION.md) and

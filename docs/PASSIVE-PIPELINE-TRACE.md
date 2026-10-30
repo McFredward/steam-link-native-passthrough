@@ -1,5 +1,8 @@
 # Bounded passive compositor pipeline capture
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 This diagnostic is a separate Vulkan layer, `VK_LAYER_FRAME_MASK_trace`.
 It observes shader-module fingerprints, graphics-pipeline stage tuples, recorded
 draws and successful queue submission. It never replaces a shader, changes a

@@ -1,10 +1,37 @@
-# HEVC mask test candidate
+# HEVC mask release, tests and chronological evidence
+
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
 
 Installer **0.3.15 / PC 0.3.11 / Frame 0.3.5** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
-preferences still override the default. This candidate updates the Frame receiver.
-Run the normal guided dev setup and apply the offered update while the Frame is awake.
-The PC native provider remains byte-identical to 0.3.14.
+preferences still override the default. This release is available through the
+normal guided main setup, with Important logging. Dev retains Debug diagnostics.
+PC native bytes remain identical to0.3.14. See [release baseline](RELEASE-0.3.15.md)
+for current Frame measurements, remaining limits and publication policy.
+
+## Live0.3.15: perceived and measured improvement
+
+The October30 14:21–14:24 Spirit Sling run confirms exact delivered Frame layer,
+codec/util hashes and15,850 real slice batches /31,700 jobs. All15,876 masks
+(15,874 HEVC +2 lossless) decode/upload, without decoder refusal, backpressure,
+stale results or missing references. Worker mean falls12.646→11.259ms and queue
+mean8.032→4.924ms. Focus-window RGB QP>=40 falls1,228/14,064 (8.73%)→191/15,460
+(1.24%); measured RGB mean28.92→44.00Mbit/s and PC dropped presents1.02%→0.44%.
+Removing boundary bins preserves the RGB direction. Resolution remains1152x4608.
+
+The maintainer reports improvement. These different scenes/durations support the
+perception but do not isolate a causal gain. Stage timings are concurrent, not
+additive end-to-end latency. Maximum worker time rises33.024→39.602ms; RGB QP50,
+selected forwarded1Mbit/s requests and native retries persist. Full dense-rain
+sharpness/smoothness acceptance remains open. The maintainer confirms manually
+killing PC SteamVR after the run; the following vrlink teardown fault is not an
+unprompted gameplay crash observation.
+
+## Chronological candidate records
+
+The versioned sections below describe their own tests and pending work at that
+time. "Next" and "not tested" statements there are not the current release status.
 
 ## Within-picture independent-slice decoding (0.3.15)
 

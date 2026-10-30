@@ -1,5 +1,8 @@
 # Exact Frame handoff continuity (0.2.2)
 
+> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Versioned observations below retain their original checkpoint scope.
+
 This changes the private local video/compositor protocol to SFL2. Authenticated
 PC video/coverage certificates are unchanged. It is not an atlas, colour key,
 latest-mask substitution, resolution change or timestamp heuristic.

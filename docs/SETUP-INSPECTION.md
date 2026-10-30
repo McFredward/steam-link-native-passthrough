@@ -1,24 +1,29 @@
-# Guided check and removal
+# Inspection and legacy-removal modes
 
-The assistant checks PC SteamVR and the Frame over SSH, and can remove an
-existing installation you explicitly select. **It does not install the new
+The normal main/get.ps1 and same-branch get-preview aliases install/update the
+reviewed paired0.3.15 route. This page describes the separate `-InspectionOnly`
+and `-Manage` maintenance modes. Use [setup/recovery](PC-FRAME-SETUP.md) for the
+ordinary install path.
+
+In maintenance mode the assistant checks PC SteamVR and the Frame over SSH and
+can remove an existing installation you explicitly select. **It does not install the new
 sender/receiver bridge or fix image quality.** It never restarts Steam, SteamVR
 or the headset, and never creates a pairing in this maintenance mode.
 
 On Windows, open PowerShell normally (no administrator permission needed):
 
 ```powershell
-irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get-preview.ps1 | iex
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/main/get.ps1))) -Manage
 ```
 
 On Linux, open a terminal:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/dev/get-preview.sh | bash
+curl -fsSL https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/main/get.sh | bash -s -- --manage
 ```
 
-The same command now opens a numbered **Check / Uninstall / Exit** assistant.
-It does not install the unfinished full-resolution sender/receiver bridge. The
+The explicit maintenance command opens **Check / Uninstall / Exit**.
+It does not install or update the paired sender/receiver bridge. The
 existing Frame patch can be removed after an explicit review and typed
 confirmation; merely launching the command never removes or activates a patch.
 
@@ -43,7 +48,7 @@ available; choose Restore previous setup explicitly when you want to undo them.
 
 The report identifies matching, different, missing or unreadable reference PC
 files. A Frame runtime match only identifies the checked reference revision; it
-is not proof that the new bridge is installed or working. Existing legacy Frame
+is not proof that the paired bridge is installed or displaying a correct picture. Existing legacy Frame
 patches are shown separately.
 
 Each PC file also has a fixed `reason` code. A successful comparison is

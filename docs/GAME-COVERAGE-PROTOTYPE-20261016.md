@@ -1,5 +1,8 @@
 # Inert game-coverage shader prototype
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 The existing transported registration pattern is synthetic. Successfully reading
 its numeric panel does not turn the game's ordinary framebuffer alpha into
 scene coverage. This developer-only fixture begins testing that separate producer

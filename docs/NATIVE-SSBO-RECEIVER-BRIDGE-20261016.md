@@ -1,5 +1,8 @@
 # Optional original-invocation receiver bridge (2026-10-16)
 
+> Versioned engineering reference: this records its original checkpoint.
+> Use [current development](DEVELOPING.md) and the [0.3.15 baseline](development/RELEASE-0.3.15.md) for present integration, installation and evidence.
+
 `FRAME_PIXEL_SSBO_TRANSACTION` is a build-time diagnostic option, off by default.
 It adds no mask presentation or passthrough activation. The existing pixel
 snapshot path is unchanged when this option is off. Definitions, original Vulkan
