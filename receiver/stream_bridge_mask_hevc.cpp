@@ -82,8 +82,16 @@ struct Decoder::Impl {
     }
     struct Work {
         Impl& api;AVCodecContext* context=nullptr;AVPacket* packet=nullptr;AVFrame* frame=nullptr;
+        decltype(AVCodecContext::execute2) execute=nullptr;
         Key epoch{};std::uint64_t codecEpoch=0,sequence=0,anchor=0;unsigned pictures=0,poc=0;bool temporal=false;
         ~Work(){if(frame)api.av_frame_free(&frame);if(packet)api.av_packet_free(&packet);if(context)api.avcodec_free_context(&context);}
+        static int executeSlices(AVCodecContext* codecContext,int (*job)(AVCodecContext*,void*,int,int),void* arg,int* results,int count){
+            auto& work=*static_cast<Work*>(codecContext->opaque);
+            // The serialized codec owner dispatches a batch; child workers do
+            // not touch these counters. Preserve the decoder's real executor.
+            if(count>1){++work.api.stats.sliceBatches;work.api.stats.sliceJobs+=unsigned(count);}
+            return work.execute(codecContext,job,arg,results,count);
+        }
     };
     std::unique_ptr<Work> work;std::uint64_t nextToken=0;
     Status decode(const Input& input,const sb::HevcCoverageView& view,DecodedMask& output){
@@ -102,16 +110,18 @@ struct Decoder::Impl {
             auto candidate=std::unique_ptr<Work>(new Work{*this});auto& w=*candidate;w.epoch=epoch;w.temporal=view.temporal;w.codecEpoch=view.epoch;w.anchor=view.anchor;
             w.context=avcodec_alloc_context3(codec);w.packet=av_packet_alloc();w.frame=av_frame_alloc();
             if(!w.context||!w.packet||!w.frame)return Status::AllocationRefused;
-            // NVENC's observed independent slices have no WPP entry points.
-            // Parallelism belongs to the fixed independent-picture pool; do
-            // not oversubscribe it with per-context decoder worker threads.
-            w.context->thread_count=1;w.context->thread_type=FF_THREAD_SLICE;
+            // The pinned private backport also handles independent NAL slices
+            // without WPP. Keep the count fixed and never add frame buffering.
+            w.context->thread_count=Decoder::SliceThreads;w.context->thread_type=FF_THREAD_SLICE;
             w.context->flags|=AV_CODEC_FLAG_COPY_OPAQUE|AV_CODEC_FLAG_LOW_DELAY;
             w.context->flags&=~AV_CODEC_FLAG_OUTPUT_CORRUPT;
             w.context->err_recognition=AV_EF_CRCCHECK|AV_EF_BITSTREAM|AV_EF_BUFFER|AV_EF_EXPLODE|AV_EF_CAREFUL;
             w.context->error_concealment=0;w.context->strict_std_compliance=FF_COMPLIANCE_STRICT;
             w.context->max_pixels=sb::MaximumCoverageBytes;w.context->apply_cropping=0;w.context->get_format=softwareFormat;
             if(avcodec_open2(w.context,codec,nullptr)<0)return Status::DecoderRefused;
+            w.execute=w.context->execute2;
+            if(!w.execute)return Status::DecoderRefused;
+            w.context->opaque=&w;w.context->execute2=Work::executeSlices;
             work=std::move(candidate);++stats.contextsOpened;
         }
         if(view.temporal&&view.keyframe){work->anchor=view.anchor;work->pictures=0;}

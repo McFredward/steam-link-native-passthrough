@@ -26,6 +26,7 @@ const char* statusName(Status)noexcept;
 struct Statistics {
     std::uint64_t contextsOpened=0,attempts=0,decoded=0,totalMicros=0,maxMicros=0,temporalDecoded=0,missingReferences=0;
     std::uint64_t sampleBufferGrows=0,sampleBufferReuses=0;
+    std::uint64_t sliceBatches=0,sliceJobs=0;
 };
 // Serialized cold-worker owner only. No file/device I/O, library loading or
 // decoding belongs in a renderer callback. Reuse one bounded decoder and its
@@ -33,6 +34,8 @@ struct Statistics {
 // fresh packet tokens and COPY_OPAQUE still prove every exact returned frame.
 class Decoder {
 public:
+    // At most two CPU lanes inside a picture. No frame threading/delay.
+    static constexpr unsigned SliceThreads=2;
     Decoder();~Decoder();
     Decoder(const Decoder&)=delete;Decoder& operator=(const Decoder&)=delete;
     bool prepareCold(const Libraries&)noexcept; // Exact explicit public ABI.

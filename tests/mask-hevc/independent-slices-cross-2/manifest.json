@@ -1,0 +1,147 @@
+{
+  "schema": "sfnp-owned-nal-slices-v1",
+  "extent": [
+    256,
+    256
+  ],
+  "frames": 16,
+  "slices": 2,
+  "wpp": false,
+  "tiles": false,
+  "source": "owned integer fractional foliage/rain; two IPPP8 GOPs; no image capture",
+  "encoder_source": "https://github.com/ultravideo/kvazaar/tree/6040962bed5cc68c5ad01234c38c08b8b2822068",
+  "encoder_source_archive_sha256": "12fd0f8f63627c8ce7c8e8398c0dddbaa9e3c7bec9d9af9260f45447c4d56fae",
+  "encoder_options": [
+    "-i",
+    "input.yuv",
+    "--input-res",
+    "256x256",
+    "--frames",
+    "16",
+    "-o",
+    "encoded.hevc",
+    "--debug",
+    "reference.yuv",
+    "--preset",
+    "ultrafast",
+    "--qp",
+    "40",
+    "--tiles",
+    "1x2",
+    "--slices",
+    "tiles",
+    "--no-wpp",
+    "--threads",
+    "1",
+    "--owf",
+    "0",
+    "--gop",
+    "0",
+    "--period",
+    "8",
+    "--no-open-gop",
+    "--ref",
+    "1",
+    "--no-tmvp",
+    "--no-bipred",
+    "--range",
+    "pc",
+    "--hash",
+    "none",
+    "--no-info",
+    "--no-aud",
+    "--sao",
+    "off"
+  ],
+  "header_normalization": "one unused temporal sublayer removed; row tiles coincide with independent slices; remove tiles and zero entry-point field, retain entropy; enable cross-slice loop filtering in PPS and slice headers, reference from unmodified serial decoder",
+  "base_normalization_encoder_reconstruction_equal": true,
+  "encoder_reconstruction_all_YUV_bytes_equal": false,
+  "reference_kind": "unmodified-serial-decoder",
+  "sao": false,
+  "cross_slice_filter": true,
+  "reference_Y_sha256": [
+    "4833b70e44b1b40c554d118d9f15ff6e81c2ccb9016ed9f9330c82adf1fa8d17",
+    "2af2925ebd4d20ef06bf9b0ef0b48095a9b54ad190c27ea7d05b984c8a7f798c",
+    "b17d548ecdbd932fe93d538e0642ee7bf6115f3fe6f41009c59913207b23c5cf",
+    "a91541163544f94fbc3185d7e4d981580e3a3f7868f5b5e854ac3421c915d109",
+    "c11f7d0dcf4822ed6ebed2a103f8e883bdbee7705259d8d974690cfbd6f962b1",
+    "cf334bef76c86c536ccb99b786169b9fcf0e3a14a6c367e678b58a0eee804fd9",
+    "bf603697cd2053a82ee8e74cfc785a126cca7b9a5a15aec5907ef9bff106b5eb",
+    "7cdd1d9f78402fdd2eb653239ac77bc9951933c70a8b6e15c1fd1de6e6c2c096",
+    "5cfd7854fcd4561b5ced41fd3d0a92f0c72da07f46673c93d3c22551cd791c94",
+    "0c535cd8d6bee8293045b733dd8e86af9bdae251920725ba54952fcb06bff88c",
+    "15441fc5e36d5fc38f93c90e875fe60d81e8b5fcb47356612dfe24994058f6b3",
+    "85bdfeb2c47a61e58ef2d31ca8c8b913f254e897e686b64009b75a58ef63de1f",
+    "4ea45e1e3c57a343be48b42d2a1fd52a8f85d1fe70f6778a276f3f833fcdce34",
+    "7d223a77f0abbcc1ca061446a134f456041f6a512d6e8176c8ac357adc08b4c4",
+    "2aefedcdea398acd2337b4d229945d20b5df7c3d534026f3c9743f7fa9ae16ec",
+    "f31925f57708dc88d0444988306fe18d14722c71b9c276771a6866040058924e"
+  ],
+  "files": {
+    "nal-000.hevc": {
+      "bytes": 9777,
+      "sha256": "23adf86e260a9f5167c8ee23ffebdd2a85eae81d3a01d4faad3394ac85984a8b"
+    },
+    "nal-001.hevc": {
+      "bytes": 1006,
+      "sha256": "f6216fdfbfc0a0001e389317e19242d953d612b06450db187182c08e78c2ac62"
+    },
+    "nal-002.hevc": {
+      "bytes": 765,
+      "sha256": "4002cc3c3b18003444f3ffc2e449e8b69c5a1e76d9d937c90e8f6ae913e9be2b"
+    },
+    "nal-003.hevc": {
+      "bytes": 721,
+      "sha256": "c07ab6c6ae41a088213a25a72f8ccf685608301ec655e17b8d25f6d6ce4e34e4"
+    },
+    "nal-004.hevc": {
+      "bytes": 794,
+      "sha256": "03b73175807c0a4a80a350b670f6da2ca6a9fb03944bc53848510bdfbf1fe4c8"
+    },
+    "nal-005.hevc": {
+      "bytes": 857,
+      "sha256": "898c42562b790ee25ebfc1ad3b35f587bebb8eb9be744ba241f4479074b32bef"
+    },
+    "nal-006.hevc": {
+      "bytes": 977,
+      "sha256": "233ab121370e1b7fc0a6090d936477422a9813c0e85651e5097746d669807f0b"
+    },
+    "nal-007.hevc": {
+      "bytes": 853,
+      "sha256": "24606249797cd1c243fbd8ffed9e867fa459a48604351d5b48e06694ff8f6d79"
+    },
+    "nal-008.hevc": {
+      "bytes": 9721,
+      "sha256": "ea004d13760dc0cd07ddda82cc968e9a0f011b00a2bbc31040fedb718ac4d1f7"
+    },
+    "nal-009.hevc": {
+      "bytes": 967,
+      "sha256": "b8a21c81e9141de13c5ff4659dcd00b078fdb9aec638d5e73cab83b20019a971"
+    },
+    "nal-010.hevc": {
+      "bytes": 812,
+      "sha256": "3d3ea4f36f7dbd36d2fca1eefb8adc21c020b10ceda7c6c803f6538b63087580"
+    },
+    "nal-011.hevc": {
+      "bytes": 754,
+      "sha256": "9c0e36f71d3349bb17b2dd2ee0137d759c3cbee97c684e875c5eab40506e629c"
+    },
+    "nal-012.hevc": {
+      "bytes": 863,
+      "sha256": "31f39c05eb361899c42958dbe504555dd4ee7c51a042ab4182ec2d160da1a0fa"
+    },
+    "nal-013.hevc": {
+      "bytes": 671,
+      "sha256": "d02b6ac64aca05b7f064266e569018cd411d0f7f7ba5841213583bd34f9fed5e"
+    },
+    "nal-014.hevc": {
+      "bytes": 737,
+      "sha256": "4222e579431d400c3e6dec9c2e7d22d5ad76af8bf29ce03135104b6de6393ac4"
+    },
+    "nal-015.hevc": {
+      "bytes": 682,
+      "sha256": "8add8fa0ff7ac653d309db18521fa59ec4d410355a4999bf81b2c0cd7d3d609c"
+    }
+  },
+  "device_actions": false
+}

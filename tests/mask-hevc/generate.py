@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Host-only CPU fixtures: no NVENC, V4L2, device probing or live services."""
 import argparse
+import hashlib
+import json
 import re
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -79,6 +82,22 @@ def with_unused_reference_set(coded):
 
 def generate(ffmpeg, root):
     root.mkdir(parents=True, exist_ok=True)
+    # Fixed owned streams exercise independent non-WPP slices; libx265's
+    # multi-slice mode requires WPP and cannot cover the production path.
+    for variant, count in [('2', 2), ('4', 4), ('sao-2', 2), ('cross-2', 2), ('cross-sao-2', 2)]:
+        source = Path(__file__).parent / f'independent-slices-{variant}'
+        manifest = json.loads((source / 'manifest.json').read_bytes())
+        assert manifest['extent'] == [256, 256] and manifest['slices'] == count
+        assert manifest['frames'] == 16 and not manifest['wpp'] and not manifest['tiles']
+        assert manifest.get('base_normalization_encoder_reconstruction_equal', manifest['encoder_reconstruction_all_YUV_bytes_equal'])
+        assert manifest.get('reference_kind', 'encoder-reconstruction') in ('encoder-reconstruction', 'unmodified-serial-decoder')
+        target = root / f'independent-slices-{variant}'
+        target.mkdir()
+        for name, expected in manifest['files'].items():
+            raw = (source / name).read_bytes()
+            assert len(raw) == expected['bytes'] and hashlib.sha256(raw).hexdigest() == expected['sha256']
+            shutil.copyfile(source / name, target / name)
+        (target / 'reference.sha256').write_text('\n'.join(manifest['reference_Y_sha256']) + '\n')
     params = 'qp=0:keyint=30:min-keyint=30:bframes=0:repeat-headers=1:annexb=1:range=full:info=0:aud=0:wpp=0:frame-threads=1:pools=none:slices=1:log-level=error'
     with tempfile.TemporaryDirectory(prefix='sfnp-hevc-fixture-') as temporary:
         for name, width, y, extra in (

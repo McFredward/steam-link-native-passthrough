@@ -142,7 +142,7 @@ void Pool::cancel()noexcept{
 void Pool::stopCold()noexcept{impl_->stop();}
 Pool::PipelineStatistics Pool::statistics()const noexcept{
     std::lock_guard<std::mutex> lock(impl_->gate);auto result=impl_->timing;
-    for(const auto& value:impl_->measurements){result.contextsOpened+=value.contextsOpened;result.attempts+=value.attempts;result.decoded+=value.decoded;result.totalMicros+=value.totalMicros;result.maxMicros=std::max(result.maxMicros,value.maxMicros);result.temporalDecoded+=value.temporalDecoded;result.missingReferences+=value.missingReferences;result.sampleBufferGrows+=value.sampleBufferGrows;result.sampleBufferReuses+=value.sampleBufferReuses;}
+    for(const auto& value:impl_->measurements){result.contextsOpened+=value.contextsOpened;result.attempts+=value.attempts;result.decoded+=value.decoded;result.totalMicros+=value.totalMicros;result.maxMicros=std::max(result.maxMicros,value.maxMicros);result.temporalDecoded+=value.temporalDecoded;result.missingReferences+=value.missingReferences;result.sampleBufferGrows+=value.sampleBufferGrows;result.sampleBufferReuses+=value.sampleBufferReuses;result.sliceBatches+=value.sliceBatches;result.sliceJobs+=value.sliceJobs;}
     return result;
 }
 } // namespace stream_bridge_mask_hevc

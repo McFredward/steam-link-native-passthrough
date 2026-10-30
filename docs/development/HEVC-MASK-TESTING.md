@@ -1,10 +1,53 @@
 # HEVC mask test candidate
 
-Installer **0.3.14 / PC 0.3.11 / Frame 0.3.4** prefers negotiated temporal HEVC
+Installer **0.3.15 / PC 0.3.11 / Frame 0.3.5** prefers negotiated temporal HEVC
 (IPPP8) by default. No new flag is needed. Existing explicit bitrate and lossless
 preferences still override the default. This candidate updates the Frame receiver.
 Run the normal guided dev setup and apply the offered update while the Frame is awake.
-The PC native provider is byte-identical to 0.3.13.
+The PC native provider remains byte-identical to 0.3.14.
+
+## Within-picture independent-slice decoding (0.3.15)
+
+Frame0.3.5 backports Phillip Blucas's independent NAL slice threading proposal
+onto the authenticated private FFmpeg8.1.3 source. The receiver permits two slice
+threads per picture, with frame threading disabled. Four pool workers/eight slots
+remain fixed; no extra queued pictures, lower mask resolution, quantizer changes,
+thresholding, smoothing or skipped deblocking/SAO are introduced. Exact current
+source/frame/eye/native lease/camera/scheduled GPU ownership and Ready wait remain.
+The PC provider and launch selector are unchanged; the Frame layer and private
+codec/utility pair are rebuilt together. The codec/helper source, attribution,
+base/result hashes and reproducible build recipe travel with the archive.
+
+The receiver's five-second diagnostics add actual codec slice batch/job counts,
+with a maximum of two within-picture execution lanes per active picture. These
+count real codec execution, not merely configured thread capacity. The backport
+adds a strict complete-CTB check under `AV_EF_EXPLODE`; malformed partial pictures
+cannot escape as an apparently successful AVFrame. Parallel slice ownership is
+immutable until the jobs join, then ordinary postfilters complete the picture.
+
+Owned two/four-slice, non-WPP, IPPP8 fixtures cover every Y byte against complete
+encoder reconstruction. Additional SAO, cross-slice deblocking and combined cases
+compare against the unmodified serial decoder. Header-valid incomplete pictures
+must leave caller pixels/identity untouched and revoke temporal state until a
+fresh key picture. Alternating encoder lanes, cancellation and source replacement
+retain exact identities. Negative controls independently detect one-thread fallback,
+an unpatched codec and the old incomplete-output acceptance. Full host CTests,
+source-patch cache/provenance tests and focused installer tests pass. ASan/UBSan
+and TSan instrument both the complete private codec/util libraries and the current
+C++ decoder/pool/test owners. Only the ignored host sanitizer loader copy omits
+`RTLD_DEEPBIND`; production retains it. Child-only ASLR disabling allows the host
+TSan run; no global device/host setting is changed.
+
+A controlled host comparison uses the same four distinct physical cores, five
+alternating trials per build and mode, two alternating IPPP8 lanes, and all640
+full1152x4608 Y planes exactly equal to complete encoder reconstruction. Median
+serial decoder wall time falls38.3%; bounded parallel-pool elapsed time falls15.1%.
+The baseline is the preceding one-thread receiver plus unpatched FFmpeg8.1.3.
+Serial timing excludes wrapping/hash/I-O; pool timing includes submit/collection
+and one preallocated R8 staging copy, with pixel hashes outside the timer. This
+is CPU software evidence for owned no-SAO pictures, not a Frame/NVENC benchmark
+or proof of less rain pixelation. Software correctness and throughput do not
+complete the maintainer's stable, fluid, sharp headset acceptance target.
 
 ## Live0.3.14: output reuse works; mask decode and queue delay remain
 
@@ -636,10 +679,13 @@ syntax, Frame decoder throughput or user-visible image quality.
 `packaging/mask-ffmpeg.json` pins the official FFmpeg 8.1.3 release, detached
 signature, release key and fingerprint. `tools/build_mask_hevc_ffmpeg.py` builds
 only the LGPL decoder and utility libraries from those explicitly provided
-inputs, with no GPL/nonfree components or source patches. See its `--help` for
+inputs, with no GPL/nonfree components. A reviewed byte-pinned backport and all
+base/result source hashes are pinned by `packaging/mask-ffmpeg-patches.json`;
+see `third_party/ffmpeg/README.md` for attribution, scope and GNU patch requirement.
+See its `--help` for
 the offline build arguments; a blank `--cross-prefix` builds host test libraries.
 The namespaced libraries are independent of Valve binaries. The archive carries
-the original LGPL 2.1 text, exact source URL/hash and the reproducible build tool.
+the original LGPL 2.1 text, exact source URL/hash, backport/manifest and build tool.
 
 ## NVIDIA multi-slice parser correction (0.3.5)
 

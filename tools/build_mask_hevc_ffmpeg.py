@@ -16,6 +16,47 @@ def pin(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def source_patches(source, manifest, enabled=True):
+    """Apply reviewed byte-pinned backports without accepting an editable cache."""
+    specs = json.loads(manifest.read_text())
+    if specs.get('schema') != 'sfnp-mask-ffmpeg-source-patches-v1' or len(specs['patches']) != 1:
+        raise RuntimeError('Unknown private decoder patch set')
+    patch = specs['patches'][0]
+    path = ROOT / patch['path']
+    if not path.is_file() or pin(path) != patch['sha256']:
+        raise RuntimeError('Private decoder patch pin differs')
+    files = patch['files']
+    if not files or any(not name.startswith('libavcodec/hevc/') or '..' in Path(name).parts
+                        or Path(name).suffix not in ('.c', '.h') for name in files):
+        raise RuntimeError('Private decoder patch source scope differs')
+    if any((source / name).is_symlink() or not (source / name).is_file() for name in files):
+        raise RuntimeError('Private decoder patch source must be a regular file')
+    state = {name: pin(source / name) for name in files}
+    base = all(state[name] == value['base_sha256'] for name, value in files.items())
+    changed = all(state[name] == value['patched_sha256'] for name, value in files.items())
+    if not enabled:
+        if not base:
+            raise RuntimeError('Baseline decoder needs a separate unpatched output directory')
+        return [], {}
+    if not base and not changed:
+        raise RuntimeError('Private decoder patched source differs')
+    if base:
+        # Validate the complete result before replacing any cached source file.
+        with tempfile.TemporaryDirectory(prefix='sfnp-hevc-backport-') as directory:
+            scratch = Path(directory)
+            for name in files:
+                target = scratch / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source / name, target)
+            subprocess.run(['patch', '--batch', '--fuzz=0', '--no-backup-if-mismatch',
+                            '-p1', '-i', str(path.resolve())], cwd=scratch, check=True, timeout=20)
+            if any(pin(scratch / name) != value['patched_sha256'] for name, value in files.items()):
+                raise RuntimeError('Private decoder patch output differs')
+            for name in files:
+                shutil.copyfile(scratch / name, source / name)
+    return specs['patches'], {name: value['patched_sha256'] for name, value in files.items()}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--archive', type=Path, required=True)
@@ -23,7 +64,11 @@ def main():
     parser.add_argument('--key', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--cross-prefix', default='aarch64-linux-gnu-')
+    parser.add_argument('--upstream-only', action='store_true',
+                        help='Host comparison only; use a separate unpatched output directory.')
     args = parser.parse_args()
+    if args.upstream_only and args.cross_prefix:
+        raise RuntimeError('Upstream-only is a host comparison, not a Frame build')
     lock = json.loads((ROOT / 'packaging/mask-ffmpeg.json').read_text())
     for path, expected in ((args.archive, lock['sha256']),
                            (args.signature, lock['signature_sha256']),
@@ -49,13 +94,17 @@ def main():
     if not source.exists():
         with tarfile.open(args.archive) as archive:
             archive.extractall(output, filter='data')
+    patches, expected_patches = source_patches(source, ROOT / 'packaging/mask-ffmpeg-patches.json',
+                                               not args.upstream_only)
     # A reused editable extraction is not provenance by itself. Check every
     # upstream regular source file against the authenticated release bytes.
     with tarfile.open(args.archive) as archive:
         for member in archive.getmembers():
             if member.isfile():
                 actual=output/member.name
-                if not actual.is_file() or pin(actual)!=hashlib.sha256(archive.extractfile(member).read()).hexdigest():
+                relative = str(Path(member.name).relative_to('ffmpeg-' + lock['version']))
+                expected = expected_patches.get(relative) or hashlib.sha256(archive.extractfile(member).read()).hexdigest()
+                if not actual.is_file() or pin(actual) != expected:
                     raise RuntimeError('Extracted FFmpeg source differs: ' + member.name)
     build = output / 'objects'
     build.mkdir(exist_ok=True)
@@ -87,7 +136,7 @@ def main():
     if '#define FFMPEG_LICENSE "LGPL version 2.1 or later"' not in config:
         raise RuntimeError('Unexpected FFmpeg license configuration')
     (output / 'recipe.json').write_text(json.dumps({
-        'source': lock, 'flags': flags, 'source_patches': [],
+        'source': lock, 'flags': flags, 'source_patches': patches,
         'libraries': {name: pin(prefix / name) for name in expected},
         'device_actions': False,
     }, indent=2) + '\n')

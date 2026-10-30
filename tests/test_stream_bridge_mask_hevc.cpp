@@ -4,6 +4,7 @@
 #include <set>
 #include "bridge/stream_bridge_hevc_coverage.h"
 #include "pc/stream-bridge-mask-hevc-parameters.h"
+#include "receiver/sha256.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
@@ -203,5 +204,68 @@ void pool(const hevc::Libraries& libs,const fs::path& root){
     check(!pool.ready()&&!pool.submit(in)&&!pool.take(result),"explicit stop joins workers and revokes every outstanding result");
 }
 
+std::string pixelDigest(const std::vector<std::uint8_t>& pixels){
+    frame_receiver::Sha256 hash;hash.update(pixels.data(),pixels.size());const auto digest=hash.finish();char hex[65]{};
+    for(unsigned n=0;n<digest.size();++n)std::snprintf(hex+2*n,3,"%02x",unsigned(digest[n]));
+    return hex;
 }
-int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);temporal(libraries,argv[3]);temporalPool(libraries,argv[3]);temporalPool(libraries,argv[3],true);reuse(libraries,argv[3]);pool(libraries,argv[3]);std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+void independentSlices(const hevc::Libraries& libs,const fs::path& root,unsigned count,const char* variant=nullptr){
+    const auto name=std::string("independent-slices-")+(variant?variant:std::to_string(count));
+    const auto directory=root/name;
+    std::array<std::vector<std::uint8_t>,16> coded,payloads;std::array<std::string,16> reference;
+    std::ifstream hashes(directory/"reference.sha256");
+    for(unsigned n=0;n<16;++n){
+        char name[40];std::snprintf(name,sizeof name,"nal-%03u.hevc",n);coded[n]=read(directory/name);hashes>>reference[n];
+        check(reference[n].size()==64,"owned encoder reconstruction hash is complete");
+        const auto units=nals(coded[n]);check(std::count_if(units.begin(),units.end(),[](const auto& nal){return nal.type==1||nal.type==19||nal.type==20;})==count,"actual independent-slice count matches owned fixture");
+        check(sb::wrapHevcTemporalCoverage(bytes(coded[n]),256,256,81,n+1,n%8?n:0,n%8==0,(n/8)*8+1,payloads[n]),"independent non-WPP slices satisfy unchanged temporal contract");
+    }
+    const auto frame=[&](unsigned n){auto in=input(bytes(payloads[n]));in.descriptor.codedWidth=in.descriptor.codedHeight=256;in.descriptor.sourceFrame=100+n;return in;};
+    hevc::Decoder decoder;check(decoder.prepareCold(libs),"private parallel backend prepared");hevc::DecodedMask output;
+    for(unsigned n=0;n<16;++n){
+        check(decoder.decodeTemporal(frame(n),output)==hevc::Status::Ok,"independent slices return one immediate current picture");
+        check(output.descriptor.sourceFrame==100+n&&output.source.connection==frame(n).source.connection&&output.binding==frame(n).binding,"slice execution preserves exact public packet identity");
+        check(pixelDigest(output.samples)==reference[n],"every decoded alpha byte equals the complete reference reconstruction");
+    }
+    const auto stats=decoder.statistics();
+    check(stats.sliceBatches>=14&&stats.sliceJobs==count*stats.sliceBatches,"real independent-slice jobs execute through the new codec path, without frame buffering");
+    std::printf("fixture=%s verified-pictures=16; slice batches/jobs=%llu/%llu; exact full Y SHA256\n",name.c_str(),static_cast<unsigned long long>(stats.sliceBatches),static_cast<unsigned long long>(stats.sliceJobs));
+    if(count!=2||variant)return;
+    // Two header-valid slices, but the second terminates after a quarter of
+    // the picture. The first slice is valid; no partial alpha may escape.
+    const auto four=read(root/"independent-slices-4/nal-001.hevc");auto a=nals(coded[1]),b=nals(four);
+    a.erase(std::remove_if(a.begin(),a.end(),[](const auto& nal){return nal.type>31;}),a.end());
+    b.erase(std::remove_if(b.begin(),b.end(),[](const auto& nal){return nal.type>31;}),b.end());
+    check(a.size()==2&&b.size()==4,"partial-picture control contains real independent entropy slices");
+    std::vector<std::uint8_t> partial(coded[1].begin(),coded[1].begin()+a[0].end);partial.insert(partial.end(),four.begin()+b[2].start,four.begin()+b[2].end);
+    std::vector<std::uint8_t> partialPayload;
+    check(sb::wrapHevcTemporalCoverage(bytes(partial),256,256,81,2,1,false,1,partialPayload),"partial picture remains header-valid so the decoder completion guard must refuse it");
+    decoder.invalidateTemporal();check(decoder.decodeTemporal(frame(0),output)==hevc::Status::Ok,"new valid key seeds strict partial-picture control");
+    const auto held=output.samples;auto invalid=frame(1);invalid.payload=bytes(partialPayload);
+    check(decoder.decodeTemporal(invalid,output)!=hevc::Status::Ok&&output.samples==held&&output.descriptor.sourceFrame==100,"incomplete parallel output preserves every old caller byte and identity transactionally");
+    check(decoder.decodeTemporal(frame(2),output)==hevc::Status::MissingReference,"failed independent slice revokes its complete reference chain");
+    check(decoder.decodeTemporal(frame(8),output)==hevc::Status::Ok&&pixelDigest(output.samples)==reference[8],"fresh key recovers exact decoded coverage after child-job failure");
+    hevc::Pool pool;check(pool.prepareCold(libs),"parallel temporal pool prepared");std::array<std::vector<std::uint8_t>,32> lanes;
+    for(unsigned n=0;n<32;++n){const unsigned picture=n/2;check(sb::wrapHevcTemporalCoverage(bytes(coded[picture]),256,256,81+n%2,picture+1,picture%8?picture:0,picture%8==0,(picture/8)*8+1,lanes[n]),"two independent encoder lanes wrapped");}
+    unsigned sent=0,received=0;std::set<std::uint64_t> seen;hevc::Pool::Result result;const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(5);
+    while(received<32&&std::chrono::steady_clock::now()<deadline){
+        while(sent<32){auto in=frame(0);in.payload=bytes(lanes[sent]);in.descriptor.sourceFrame=200+sent;if(!pool.submit(in))break;++sent;}
+        while(pool.take(result)){
+            check(result.status==hevc::Status::Ok&&result.decoded.descriptor.sourceFrame==result.identity.descriptor.sourceFrame,"parallel pool results retain exact current identity");
+            const auto index=result.identity.descriptor.sourceFrame-200;check(index<32&&seen.insert(index).second,"each independent-slice pool result completes once");
+            check(pixelDigest(result.decoded.samples)==reference[index/2],"both alternating lanes preserve every alpha byte across GOP/context transitions");++received;
+        }
+        std::this_thread::yield();
+    }
+    check(received==32&&pool.statistics().sliceBatches>=24,"bounded pool completes both non-WPP IPPP8 lanes using actual slice jobs");
+    pool.cancel();auto fresh=frame(0);fresh.source.generation=99;fresh.binding[0]=91;fresh.descriptor.sourceFrame=999;
+    check(pool.submit(fresh),"new source admitted after parallel cancellation");bool recovered=false;
+    while(!recovered&&std::chrono::steady_clock::now()<deadline){
+        if(!pool.take(result)){std::this_thread::yield();continue;}
+        check(result.status==hevc::Status::Ok&&result.decoded.source.generation==99&&result.decoded.descriptor.sourceFrame==999&&pixelDigest(result.decoded.samples)==reference[0],"cancelled decoder state cannot lend pixels or identity to the new source");recovered=true;
+    }
+    check(recovered,"new source recovers after parallel pool cancellation");
+}
+
+}
+int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);temporal(libraries,argv[3]);temporalPool(libraries,argv[3]);temporalPool(libraries,argv[3],true);reuse(libraries,argv[3]);pool(libraries,argv[3]);independentSlices(libraries,argv[3],2);independentSlices(libraries,argv[3],4);independentSlices(libraries,argv[3],2,"sao-2");independentSlices(libraries,argv[3],2,"cross-2");independentSlices(libraries,argv[3],2,"cross-sao-2");std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

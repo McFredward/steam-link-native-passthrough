@@ -103,6 +103,8 @@ void reportFlowCold(Process& p){
         static_cast<unsigned long long>(hevc.started),static_cast<unsigned long long>(hevc.collected),static_cast<unsigned long long>(hevc.queueMicros),static_cast<unsigned long long>(hevc.maxQueueMicros),
         static_cast<unsigned long long>(hevc.collectMicros),static_cast<unsigned long long>(hevc.maxCollectMicros),static_cast<unsigned long long>(p.publicationSamples),
         static_cast<unsigned long long>(p.publicationMicros),static_cast<unsigned long long>(p.maxPublicationMicros),static_cast<unsigned long long>(hevc.sampleBufferGrows),static_cast<unsigned long long>(hevc.sampleBufferReuses));
+    std::fprintf(stderr,"[Steam Link Native Passthrough] HEVC mask slice execution compositor: threads-per-picture-max=%u; codec batches/jobs=%llu/%llu; frame-threading=off; diagnostic within-picture work only\n",
+        stream_bridge_mask_hevc::Decoder::SliceThreads,static_cast<unsigned long long>(hevc.sliceBatches),static_cast<unsigned long long>(hevc.sliceJobs));
     }
     std::fprintf(stderr,"[Steam Link Native Passthrough] camera demand %s: active/none=%llu/%llu; revoked source/channel=%llu/%llu; retired pool epoch=%llu; opaque deferred=%llu\n",
         p.kind==ProcessKind::Vrlink?"video":"compositor",get(Flow::CameraActive),get(Flow::CameraNone),get(Flow::CameraSource),get(Flow::CameraChannel),get(Flow::CameraLease),get(Flow::CameraDeferred));
