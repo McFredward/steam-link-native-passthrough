@@ -28,6 +28,7 @@ versions and pending checks; they do not override current source or release scop
 | [Build and validate the current paired route](development/BUILDING.md) | `development/BUILDING.md` |
 | [Ordinary desktop video during active MR recovery](development/DESKTOP-RECOVERY.md) | `development/DESKTOP-RECOVERY.md` |
 | [Exact Frame handoff continuity (0.2.2)](development/FRAME-CONTINUITY.md) | `development/FRAME-CONTINUITY.md` |
+| [Frame-local world-stability experiment](development/WORLD-STABILITY.md) | `development/WORLD-STABILITY.md` |
 | [Stream coverage and native descriptor lifetime](development/FRAME-DESCRIPTOR-CONTINUITY.md) | `development/FRAME-DESCRIPTOR-CONTINUITY.md` |
 | [Integrating another PCVR game](development/GAME-INTEGRATION.md) | `development/GAME-INTEGRATION.md` |
 | [Temporal and independent HEVC mask decoder](development/HEVC-MASK-DECODER.md) | `development/HEVC-MASK-DECODER.md` |
