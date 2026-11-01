@@ -9,7 +9,7 @@ from pathlib import Path
 SCHEMA = "sfnp-frame-world-stability-v1"
 MAX_BYTES = 8 * 1024 * 1024
 PHASES = {0: "still", 1: "rotation", 2: "translation", 3: "comparison"}
-OBSERVATIONS = ("not-recorded", "reference-stable-scene-wobbles", "both-wobble", "reference-unseen", "unclear", "visibility-marker-seen", "visibility-marker-unseen")
+OBSERVATIONS = ("not-recorded", "reference-stable-scene-wobbles", "both-wobble", "reference-unseen", "scene-wobble-reduced", "unclear", "visibility-marker-seen", "visibility-marker-unseen")
 
 
 def finite(value):
@@ -92,7 +92,7 @@ def analyze(text, observed="not-recorded"):
             raise ValueError("A head-locked control cannot have a standing anchor")
         if mode=="head-locked-visibility" and any(s["phase"]!=0 for s in samples):
             raise ValueError("A head-locked control cannot record world-motion phases")
-        if mode=="head-locked-visibility" and observed in ("reference-stable-scene-wobbles", "both-wobble", "reference-unseen"):
+        if mode=="head-locked-visibility" and observed in ("reference-stable-scene-wobbles", "both-wobble", "reference-unseen", "scene-wobble-reduced"):
             raise ValueError("A head-locked visibility control cannot establish world stability")
         if mode=="world-fixed" and observed.startswith("visibility-marker-"):
             raise ValueError("Visibility-control observations require a visibility-control recording")

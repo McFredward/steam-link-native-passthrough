@@ -2,9 +2,11 @@
 
 Status: developer-only diagnostic, revision 2 on dev after stable 0.3.15. The
 first coordinated revision-1 attempt on 2026-11-01 reported an **unseen** marker.
-Revision 2 adds a separate visibility control; neither its visibility nor world
-stability has been confirmed on a headset yet. This is not a stability fix or a
-new native companion release. The installed **main** PC/Frame components can stay
+Revision 2's head-locked control and world-fixed reference were subsequently
+confirmed visible by the wearer with the same diagnostic binary. The wearer
+reported stable local reference / wobbling game objects in Demeo Battlemarked and
+Gloomhaven MR, with stable or substantially reduced game wobble in Gloomhaven VR.
+These are qualitative observations, not a stability fix or a new companion release. The installed **main** PC/Frame components can stay
 in place; running this standalone diagnostic requires no companion update.
 
 The maintainer observes entire objects briefly moving with fast head movements,
@@ -145,7 +147,8 @@ python3 -B tools/analyze_world_stability.py reference.jsonl \
 ```
 
 The optional observation is supplied explicitly by the wearer. Other accepted
-world-reference values are `both-wobble`, `reference-unseen`, `unclear`,
+world-reference values are `both-wobble`, `reference-unseen`,
+`scene-wobble-reduced`, `unclear`,
 `not-recorded`. Visibility-control recordings accept `visibility-marker-seen`,
 `visibility-marker-unseen`, `unclear`, `not-recorded`. The analyzer rejects
 cross-mode observations and motion phases in head-locked recordings; legacy
@@ -183,3 +186,48 @@ the temporary device files were removed. The installed camera configuration hash
 was unchanged. No requested rotation/translation phase was performed and no
 world-stability or companion-causality conclusion follows from this attempt.
 The local private evidence is retained outside Git.
+
+## Visible reference and Gloomhaven comparison: 2026-11-01
+
+The wearer continued using main for both installed companions. The tested native
+diagnostic SHA256 was
+`109af43953f303d6b58bc7d1ade34a43c1c81bc2e5b061d79c1b97dda3594e7c`.
+Both the amber-bordered head-relative control and the separate white world-fixed
+reference were physically confirmed visible. The cause of revision-1 invisibility
+is still unresolved: sort order, placement and dashboard conditions changed
+between attempts, so no single change has been isolated as the fix.
+
+| Game / in-game mode | Wearer observation | Samples / rotation samples |
+| --- | --- | --- |
+| Demeo Battlemarked / MR on | Local cross stayed stable relative to the real room; game objects wobbled | 5,493 / 1,299 |
+| GloomhavenVR / MR on | Local cross stayed stable; game objects wobbled | 3,986 / 1,301 |
+| GloomhavenVR / MR off | Game stable or substantially less wobble relative to the local cross | 3,247 / 1,246 |
+
+All world-reference records had valid public tracking/timing context, API marker
+visibility, zero dashboard samples, no exhausted logging budget and clean owned
+overlay removal. Each process and its temporary device directory was removed;
+the installed camera configuration hash was unchanged. The initial `still` phase
+includes preparation and is not a strictly motionless baseline.
+
+In the Gloomhaven rotation phases, median reported angular speed was approximately
+82 degrees/s with MR on and 168 degrees/s with MR off. The reported improvement
+was therefore not accompanied by slower measured head rotations in this run.
+The trajectories were not identical, and vertical/lateral translation, scene
+scale/depth and mode-dependent rendering remain confounders. This does not quantify
+an improvement ratio, visual error or end-to-end latency. The selected response
+also did not distinguish total elimination from a large reduction.
+
+The MR-off result is recorded as `scene-wobble-reduced`; this describes the
+wearer's comparison and never claims a measured stability value. In-game modes
+were confirmed by the wearer, not read by the helper. Companions remained loaded;
+this is not an unmodified-Steam-Link baseline and MR off does not prove the mask
+path was disabled.
+
+Prioritize MR-dependent presentation work: exact decoder handoff waits, HEVC mask
+readiness/publication, frame scheduling and the app's MR render-pose/scale/depth
+changes. The main logging level does not print the existing paired handoff/stage
+counters (`reportFlowCold` requires Debug). Existing public FrameTiming data must
+not be treated as streamed game FPS or motion-to-photon timing. A later coordinated
+Debug-logging comparison is needed before attributing the observed wobble to a
+particular wait, decoder or pose transform. Preserve exact current image/mask/eye
+proof and camera authority while investigating any added delay.

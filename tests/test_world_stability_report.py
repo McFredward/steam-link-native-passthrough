@@ -40,11 +40,17 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(report["reference_mode"], "head-locked-visibility")
         self.assertFalse(report["world_reference"] or report["world_lock_error_measured"] or report["causal_diagnosis_proven"])
         self.assertTrue(report["clean_stop"])
-        for observation in ("reference-stable-scene-wobbles", "both-wobble", "reference-unseen"):
+        for observation in ("reference-stable-scene-wobbles", "both-wobble", "reference-unseen", "scene-wobble-reduced"):
             with self.subTest(observation=observation), self.assertRaises(ValueError):
                 analyze(transcript, observation)
         with self.assertRaises(ValueError):
             analyze(self.transcript, "visibility-marker-seen")
+
+    def test_reduced_wobble_is_an_explicit_qualitative_observation(self):
+        report = analyze(self.transcript, "scene-wobble-reduced")
+        self.assertEqual(report["explicit_user_visual_observation"], "scene-wobble-reduced")
+        self.assertFalse(report["world_lock_error_measured"] or report["causal_diagnosis_proven"])
+        self.assertIsNone(report["motion_to_photon_ms"])
 
     def test_legacy_world_recordings_remain_readable(self):
         records = copy.deepcopy(self.records)
