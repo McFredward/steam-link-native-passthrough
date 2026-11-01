@@ -18,6 +18,28 @@ The reference is Meta's [guided Space Setup and semantic Scene Model](https://de
 Our colours and exact interactions below are authored design decisions, not a
 claim to duplicate a particular Horizon OS version's UI.
 
+### Dashboard entry point
+
+The agreed primary entry is a **native SteamVR dashboard overlay on the Frame**,
+with its own "Room setup" icon/tab. A Steam Library entry is not the intended
+user flow. The installed component registers as a dashboard overlay application;
+starting it with SteamVR makes its controls available but must not start camera
+capture or scanning. The user explicitly chooses "Scan a new room", "Use a saved
+room", or "Edit/rescan room" inside its dashboard panel.
+
+The public OpenVR [dashboard overlay interface](https://github.com/ValveSoftware/openvr/wiki/IVROverlay_Overview)
+provides the main panel and thumbnail via `CreateDashboardOverlay`. A driver/add-on
+registration alone does not create that UI. The component must run in the Frame's
+local native SteamVR instance; a dashboard overlay registered only in PC SteamVR
+does not establish a local Frame dashboard entry.
+
+After the user starts setup, the 3D scan feedback and element handles must remain
+world-aligned when the dashboard closes. The dashboard panel is the entry/control
+surface; the stereo world visualization needs its own verified rendering path.
+Camera ownership, coexistence with an active Steam Link session, local icon
+placement and visibility still require implementation and hardware verification.
+This design change does not claim an installed overlay or authorize device setup.
+
 1. **Check camera and tracking.** Start only with a current Arcturus source,
    calibrated geometry and camera-exposure poses in one known tracking origin.
    Explain an unavailable camera without showing fabricated scan activity.
@@ -131,7 +153,8 @@ the device have not been measured.
 2. Implement stereo rectification/matching or consume verified native depth;
    connect a bounded live worker to the reconstruction core. No online RGB transfer
    or raw-camera recording is implicitly enabled by this work.
-3. Implement and verify the headset application: stereo world mesh, controls,
+3. Implement and verify the Frame-local dashboard overlay and its scan view:
+   application registration, dashboard icon/panel, explicit capture start, stereo world mesh, controls,
    element handles, hatching, frontier guidance, previews and startup/teardown.
    The existing world-stability experiment has no confirmed visible reference yet;
    it is not evidence that a native scene overlay has already been established.
