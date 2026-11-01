@@ -229,7 +229,7 @@ changes. The main logging level does not print the existing paired handoff/stage
 counters (`reportFlowCold` requires Debug). Existing public FrameTiming data must
 not be treated as streamed game FPS or motion-to-photon timing. A subsequent
 read-only device inspection found Debug already active and retained counters for
-both reference runs. The [handoff profiling result](MR-HANDOFF-PROFILING.md)
+both reference runs. The [handoff profiling result](https://github.com/McFredward/steam-link-native-passthrough/blob/dev/docs/development/MR-HANDOFF-PROFILING.md)
 records 7.719 ms mean video callback duration in the MR rotation window versus
 0.232 ms with MR off, plus separate mask-stage evidence and relay-clock limits.
 This establishes an MR-dependent wait in those logs, not a measured visual error
