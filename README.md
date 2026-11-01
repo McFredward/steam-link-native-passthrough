@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.1**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.2**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell

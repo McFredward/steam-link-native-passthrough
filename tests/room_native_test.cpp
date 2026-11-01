@@ -1,4 +1,5 @@
 #include "room_scan/native_view.h"
+#include "room_scan/native_present.h"
 #include <cstdio>
 #include <random>
 #include <stdexcept>
@@ -47,5 +48,27 @@ int main(){try{
     check(measured.firstSeen.size()==3&&measured.firstSeen[0]==0,"existing geometry does not restart its animation on another observation");
     visual["room"]["world_visuals_allowed"]=false;measured.update(visual,2);
     check(!measured.allowed&&measured.vertices.empty(),"invalid room tracking removes world geometry");
+    RawOverlayImage upload;Canvas bitmap(32,16);bitmap.rect(0,0,32,16,Teal);unsigned calls=0;
+    const auto submit=[&](void*,unsigned w,unsigned h){++calls;check(w==32&&h==16,"fixed raw image extent");return 0;};
+    check(upload.update(bitmap,0,"fixture",submit)&&upload.pending(),"first raw image waits for asynchronous completion");
+    const auto retained=upload.retained();
+    for(unsigned i=1;i<100;++i){bitmap.pixels[0]=std::uint8_t(i);upload.update(bitmap,i*.01,"fixture",submit);}
+    check(calls==1&&upload.retained()==retained,"a slow consumer cannot queue images or overwrite its retained bytes");
+    upload.complete(true,"fixture");
+    check(upload.update(bitmap,1,"fixture",submit)&&calls==2,"completion permits the latest coalesced image");
+    upload.complete(true,"fixture");
+    for(unsigned i=2;i<100;++i)upload.update(bitmap,i,"fixture",submit);
+    check(calls==2,"an unchanged visible menu submits no repeated raw images");
+    bitmap.pixels[1]=41;upload.update(bitmap,100,"fixture",submit);bool refused=false;
+    try{upload.check(111,"fixture");}catch(const std::runtime_error&){refused=true;}
+    check(refused&&calls==3,"missing completion expires without more uploads");
+    RawOverlayImage failed;refused=false;
+    try{failed.update(bitmap,0,"fixture",[](void*,unsigned,unsigned){return 12;});}catch(const std::runtime_error& e){refused=std::string(e.what()).find("code=12")!=std::string::npos;}
+    check(refused&&!failed.pending(),"native submission errors retain their numeric diagnostic");
+    Json displayed={{"page","home"},{"buttons",{{{"action","new"},{"enabled",true}}}}};
+    Json changed=displayed;changed["world_revision"]=10;
+    check(sameControls(displayed,changed),"unrelated geometry changes do not disable visible controls");
+    changed["page"]="prepare";changed["buttons"][0]["action"]="start";
+    check(!sameControls(displayed,changed),"a click on the previous page cannot start a hidden camera action");
     std::puts("PASS native stereo, geometry, raster limits and UI hit tests");return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}}

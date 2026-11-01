@@ -7,6 +7,7 @@
 #include <fstream>
 #include <vector>
 #include <cstring>
+#include <functional>
 
 namespace room_native {
 using Json=nlohmann::json;
@@ -104,57 +105,92 @@ inline StereoResult matchStereo(const std::vector<std::uint8_t>& left,const std:
 class StereoCamera {
 public:
     VR_IVRSystem_FnTable* system=nullptr;VR_IVRTrackedCamera_FnTable* api=nullptr;
-    TrackedCameraHandle_t handle=0;Json binding;std::string status="not-started";
+    TrackedCameraHandle_t handle=0;Json binding,diagnostics;std::string status="not-started";
+    std::function<std::array<Mat,2>()> factoryGeometry=arcturusFactoryGeometry;
     ~StereoCamera(){stop();}
     bool start(const std::string& session,const std::string& origin){
-        stop();status="public-stereo-source-unavailable";
+        stop();status="public-camera-api-unavailable";
+        diagnostics={{"check","interfaces"},{"reason",status}};
+        diagnostics["tracked_camera_interface"]=api!=nullptr;
+        diagnostics["system_interface"]=system!=nullptr;
         try{
-            if(!api||!api->HasCamera||!api->GetCameraFrameSize||!api->GetCameraIntrinsics||!api->AcquireVideoStreamingService
-                ||!api->ReleaseVideoStreamingService||!api->GetVideoStreamFrameBuffer||!api->GetCameraTrackingSpace)return false;
-            bool has=false;if(api->HasCamera(0,&has)||!has)return false;
+            if(!system||!system->GetInt32TrackedDeviceProperty||!system->GetArrayTrackedDeviceProperty
+                ||!api||!api->HasCamera||!api->GetCameraFrameSize||!api->GetCameraIntrinsics||!api->AcquireVideoStreamingService
+                ||!api->ReleaseVideoStreamingService||!api->GetVideoStreamFrameBuffer||!api->GetCameraTrackingSpace)return reject(status);
+            diagnostics["check"]="has-camera";
+            bool has=false;const auto available=api->HasCamera(0,&has);
+            diagnostics["has_camera"]=has;diagnostics["camera_api_error"]=int(available);
+            if(available)return reject("camera-query-failed");
+            if(!has)return reject("camera-not-exposed");
+            diagnostics["check"]="camera-count";
             ETrackedPropertyError error=ETrackedPropertyError_TrackedProp_Success;
             const int count=system->GetInt32TrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_NumCameras_Int32,&error);
-            if(error||count!=2)return false;
+            diagnostics["camera_count"]=count;diagnostics["property_error"]=int(error);
+            if(error)return reject("camera-count-query-failed");
+            if(count!=2)return reject("camera-count-unsupported");
+            diagnostics["check"]="stereo-layout";
             layout=system->GetInt32TrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_CameraFrameLayout_Int32,&error);
-            if(error||!(layout&2)||((layout&48)!=16&&(layout&48)!=32))return false;
+            diagnostics["layout"]=layout;diagnostics["property_error"]=int(error);
+            if(error)return reject("camera-layout-query-failed");
+            if(!(layout&2)||((layout&48)!=16&&(layout&48)!=32))return reject("camera-layout-unsupported");
+            diagnostics["check"]="undistorted-frame-size";
             const auto kind=EVRTrackedCameraFrameType_VRTrackedCameraFrameType_Undistorted;
-            if(api->GetCameraFrameSize(0,kind,&width,&height,&bytes)||!width||!height||width>8192||height>8192
-                ||std::uint64_t(width)*height*4!=bytes||bytes>64u*1024*1024)return false;
+            const auto sizeError=api->GetCameraFrameSize(0,kind,&width,&height,&bytes);
+            diagnostics["camera_api_error"]=int(sizeError);diagnostics["frame_size"]={width,height,bytes};
+            if(sizeError)return reject("camera-frame-size-query-failed");
+            if(!width||!height||width>8192||height>8192||std::uint64_t(width)*height*4!=bytes
+                ||bytes>64u*1024*1024)return reject("camera-frame-size-unsupported");
             eyeWidth=width/((layout&32)?2:1);eyeHeight=height/((layout&16)?2:1);
-            if(eyeWidth*((layout&32)?2:1)!=width||eyeHeight*((layout&16)?2:1)!=height)return false;
+            if(eyeWidth*((layout&32)?2:1)!=width||eyeHeight*((layout&16)?2:1)!=height)return reject("camera-stereo-extent-invalid");
+            diagnostics["check"]="camera-to-head";
             std::array<HmdMatrix34_t,2> transforms{};
             const auto size=system->GetArrayTrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_CameraToHeadTransforms_Matrix34_Array,
                 k_unHmdMatrix34PropertyTag,transforms.data(),sizeof(transforms),&error);
-            if(error||size!=sizeof(transforms))return false;
-            const auto factory=arcturusFactoryGeometry();
+            diagnostics["property_error"]=int(error);diagnostics["extrinsic_bytes"]=size;
+            if(error||size!=sizeof(transforms))return reject("camera-extrinsics-unavailable");
+            diagnostics["check"]="arcturus-factory-calibration";
+            const auto factory=factoryGeometry();
             for(unsigned i=0;i<2;++i){headFromCamera[i]=fromNative(transforms[i]);
+                diagnostics["eye"]=i;diagnostics["check"]="arcturus-camera-association";
                 if(!rigid(headFromCamera[i])||length(position(headFromCamera[i])-position(factory[i]))>.015f
                     ||dot(column(headFromCamera[i],0),column(factory[i],0))<.98f
                     ||dot(column(headFromCamera[i],1),column(factory[i],1))<.98f
-                    ||dot(column(headFromCamera[i],2),column(factory[i],2))<.98f){status="camera-module-association-unverified";return false;}
-                HmdVector2_t f{},c{};if(api->GetCameraIntrinsics(0,i,kind,&f,&c))return false;
-                intrinsics[i]={f.v[0],f.v[1],c.v[0],c.v[1]};for(float v:intrinsics[i])if(!std::isfinite(v))return false;
-                if(f.v[0]<=0||f.v[1]<=0||c.v[0]<0||c.v[0]>=eyeWidth||c.v[1]<0||c.v[1]>=eyeHeight)return false;
+                    ||dot(column(headFromCamera[i],2),column(factory[i],2))<.98f)return reject("camera-module-association-unverified");
+                diagnostics["check"]="undistorted-intrinsics";
+                HmdVector2_t f{},c{};const auto intrinsicError=api->GetCameraIntrinsics(0,i,kind,&f,&c);
+                diagnostics["camera_api_error"]=int(intrinsicError);
+                if(intrinsicError)return reject("camera-intrinsics-query-failed");
+                intrinsics[i]={f.v[0],f.v[1],c.v[0],c.v[1]};for(float v:intrinsics[i])if(!std::isfinite(v))return reject("camera-intrinsics-invalid");
+                if(f.v[0]<=0||f.v[1]<=0||c.v[0]<0||c.v[0]>=eyeWidth||c.v[1]<0||c.v[1]>=eyeHeight)return reject("camera-intrinsics-invalid");
             }
+            diagnostics["check"]="metric-baseline";
             const V3 left=position(headFromCamera[0]),right=position(headFromCamera[1]);baseline=length(right-left);
-            if(baseline<.03f||baseline>.10f)return false;
+            diagnostics["baseline_m"]=baseline;
+            if(baseline<.03f||baseline>.10f)return reject("camera-baseline-unsupported");
+            diagnostics["check"]="rectification";
             const V3 x=normalized(right-left),forward=normalized((column(headFromCamera[0],2)+column(headFromCamera[1],2))*(-1));
             const V3 down=normalized(cross(forward,x)),z=normalized(cross(x,down));
             rectifiedHead=Mat{};const std::array<V3,4> columns{x,down*(-1),z*(-1),left};
             for(unsigned c=0;c<4;++c){rectifiedHead.m[0][c]=columns[c].x;rectifiedHead.m[1][c]=columns[c].y;rectifiedHead.m[2][c]=columns[c].z;}
-            if(!rigid(rectifiedHead))return false;
+            if(!rigid(rectifiedHead))return reject("camera-rectification-invalid");
+            diagnostics["check"]="tracking-space";
             buildMaps();trackingSpace=api->GetCameraTrackingSpace();
+            diagnostics["tracking_space"]=int(trackingSpace);
             if(trackingSpace==ETrackingUniverseOrigin_TrackingUniverseStanding)standingFromTracking=Mat{};
-            else if(trackingSpace==ETrackingUniverseOrigin_TrackingUniverseRawAndUncalibrated)standingFromTracking=fromNative(system->GetRawZeroPoseToStandingAbsoluteTrackingPose());
-            else if(trackingSpace==ETrackingUniverseOrigin_TrackingUniverseSeated)standingFromTracking=fromNative(system->GetSeatedZeroPoseToStandingAbsoluteTrackingPose());
-            else return false;
-            if(!rigid(standingFromTracking))return false;
-            pixels.resize(bytes);if(api->AcquireVideoStreamingService(0,&handle)||!handle){stop();return false;}
+            else if(trackingSpace==ETrackingUniverseOrigin_TrackingUniverseRawAndUncalibrated&&system->GetRawZeroPoseToStandingAbsoluteTrackingPose)standingFromTracking=fromNative(system->GetRawZeroPoseToStandingAbsoluteTrackingPose());
+            else if(trackingSpace==ETrackingUniverseOrigin_TrackingUniverseSeated&&system->GetSeatedZeroPoseToStandingAbsoluteTrackingPose)standingFromTracking=fromNative(system->GetSeatedZeroPoseToStandingAbsoluteTrackingPose());
+            else return reject("camera-tracking-space-unsupported");
+            if(!rigid(standingFromTracking))return reject("camera-tracking-space-invalid");
+            diagnostics["check"]="acquire-stream";
+            pixels.resize(bytes);const auto acquireError=api->AcquireVideoStreamingService(0,&handle);
+            diagnostics["camera_api_error"]=int(acquireError);
+            if(acquireError||!handle){stop();return reject("camera-stream-acquire-failed");}
             Json descriptor={{"intrinsics",intrinsics},{"layout",layout},{"width",width},{"height",height}};
             for(const auto& m:headFromCamera)for(const auto& row:m.m)for(float v:row)descriptor["camera_to_head"].push_back(v);
             binding={{"session_id",session},{"origin_id",origin},{"calibration_id",stableId(descriptor.dump())}};
-            lastSequence=0;lastExposure=0;status="calibrated-public-arcturus-stereo";return true;
-        }catch(const std::exception&){stop();status="camera-calibration-unverified";return false;}
+            lastSequence=0;lastExposure=0;status="calibrated-public-arcturus-stereo";
+            diagnostics["check"]="ready";diagnostics["reason"]=status;return true;
+        }catch(const std::exception&){stop();return reject("camera-calibration-unverified");}
     }
     void stop(){if(handle&&api&&api->ReleaseVideoStreamingService)api->ReleaseVideoStreamingService(handle);handle=0;pixels.clear();}
     Json next(){
@@ -184,6 +220,7 @@ public:
             {"depth_m",stereo.depth},{"confidence",stereo.confidence}};
     }
 private:
+    bool reject(const std::string& reason){status=reason;diagnostics["reason"]=reason;return false;}
     std::uint32_t width=0,height=0,eyeWidth=0,eyeHeight=0,bytes=0,lastSequence=0;std::uint64_t lastExposure=0;
     int layout=0;float baseline=0;ETrackingUniverseOrigin trackingSpace=ETrackingUniverseOrigin_TrackingUniverseStanding;
     std::array<std::array<float,4>,2> intrinsics{};std::array<Mat,2> headFromCamera{};

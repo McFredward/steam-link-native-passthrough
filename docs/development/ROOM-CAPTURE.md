@@ -1,6 +1,6 @@
 # Arcturus room capture
 
-Status: **installable experimental candidate, no headset validation for this feature**.
+Status: **installable experimental candidate; first headset UI test failed**.
 The native dashboard, controller editor, bounded stereo reconstruction and owned
 installer integration are implemented. Actual Arcturus image availability through
 the public Frame camera interface is unverified. A successful build or an attached
@@ -53,6 +53,32 @@ outside Valve's compositor callbacks and leaves native reprojection intact.
 Local overlay visibility was established by the earlier
 [world-reference diagnostic](WORLD-STABILITY.md); **this new projection renderer,
 controller mapping and alignment accuracy still require a headset check**.
+
+### First headset feedback and candidate 2
+
+The 2026-11-01 wearer test established that candidate 1's dashboard is visible,
+but the wearer reported flicker. Its scan request was refused with the generic
+`public-stereo-source-unavailable` status. The manifest parser rejected the
+application because the platform-specific path lacked a generic `binary_path`.
+Later, a dashboard texture submission failed around a native compositor crash.
+These observations do not isolate the cause of the crash or flicker. Both
+calibration paths were readable; their presence alone does not admit a source.
+
+Candidate **0.3.16-roomscan.2** adds the generic manifest path and checks actual
+application registration/identification. Raw bitmap submission now retains
+immutable bytes until `VREvent_ImageLoaded` or `VREvent_ImageFailed`. Each overlay
+has at most one load in flight; intermediate producer updates coalesce and
+unchanged images are not resubmitted. Pending loads have a bounded timeout.
+Controls use the last completed image's state, so a click on an old page cannot
+start a camera action that has not appeared. The 3D projection keeps the pose of
+its submitted image until that load completes. Native quit events stop rendering
+before further submissions. Small bounded counters expose upload/queue behaviour.
+
+Every camera admission failure now records its exact check, reason and relevant
+numeric public API results. The headset shows a diagnostic code. This neither
+weakens stereo/calibration checks nor substitutes synthetic geometry. Candidate 2
+has software refusal/queue tests; its flicker, crash and actual source behaviour
+still require a coordinated headset retest.
 
 ## Camera source and remaining hardware gate
 

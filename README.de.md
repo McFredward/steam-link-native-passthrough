@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.1** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.2** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
