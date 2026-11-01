@@ -1,0 +1,30 @@
+name: Offline mask decode benchmark
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'probe/mask_decode_benchmark.cpp'
+      - 'tools/build_mask_decode_benchmark.py'
+      - 'tests/test_mask_decode_benchmark.py'
+      - '.github/workflows/mask-decode-benchmark-tests.yml'
+  pull_request:
+    paths:
+      - 'probe/mask_decode_benchmark.cpp'
+      - 'tools/build_mask_decode_benchmark.py'
+      - 'tests/test_mask_decode_benchmark.py'
+      - '.github/workflows/mask-decode-benchmark-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build actual CLI with the unavailable-backend branch
+        run: |
+          mkdir -p build/offline-mask-benchmark
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror -pthread -I. probe/mask_decode_benchmark.cpp receiver/stream_bridge_mask_hevc.cpp bridge/stream_bridge_hevc_coverage.cpp -ldl -o build/offline-mask-benchmark/probe
+      - name: Check private-copy guards and actual CLI input budgets
+        run: python3 -B tests/test_mask_decode_benchmark.py build/offline-mask-benchmark/probe

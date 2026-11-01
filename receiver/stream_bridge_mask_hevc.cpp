@@ -113,7 +113,9 @@ struct Decoder::Impl {
             // The pinned private backport also handles independent NAL slices
             // without WPP. Keep the count fixed and never add frame buffering.
             w.context->thread_count=Decoder::SliceThreads;w.context->thread_type=FF_THREAD_SLICE;
-            w.context->flags|=AV_CODEC_FLAG_COPY_OPAQUE|AV_CODEC_FLAG_LOW_DELAY;
+            // The owned Main8/420 decoder can omit unused chroma reconstruction.
+            // Every Y sample, entropy check and luma filter remains unchanged.
+            w.context->flags|=AV_CODEC_FLAG_COPY_OPAQUE|AV_CODEC_FLAG_LOW_DELAY|AV_CODEC_FLAG_GRAY;
             w.context->flags&=~AV_CODEC_FLAG_OUTPUT_CORRUPT;
             w.context->err_recognition=AV_EF_CRCCHECK|AV_EF_BITSTREAM|AV_EF_BUFFER|AV_EF_EXPLODE|AV_EF_CAREFUL;
             w.context->error_concealment=0;w.context->strict_std_compliance=FF_COMPLIANCE_STRICT;

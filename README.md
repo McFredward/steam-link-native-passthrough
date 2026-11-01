@@ -32,6 +32,8 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
+Dev test candidate: **0.3.16** · Frame **0.3.6**, PC **0.3.11** · November 1, 2026.
+
 ## Native transparency, no colour replacement
 
 The game sends transparency separately from its colours, so no colour is removed

@@ -19,21 +19,28 @@ def pin(path):
 def source_patches(source, manifest, enabled=True):
     """Apply reviewed byte-pinned backports without accepting an editable cache."""
     specs = json.loads(manifest.read_text())
-    if specs.get('schema') != 'sfnp-mask-ffmpeg-source-patches-v1' or len(specs['patches']) != 1:
+    if specs.get('schema') != 'sfnp-mask-ffmpeg-source-patches-v1' or not 1 <= len(specs['patches']) <= 4:
         raise RuntimeError('Unknown private decoder patch set')
-    patch = specs['patches'][0]
-    path = ROOT / patch['path']
-    if not path.is_file() or pin(path) != patch['sha256']:
-        raise RuntimeError('Private decoder patch pin differs')
-    files = patch['files']
-    if not files or any(not name.startswith('libavcodec/hevc/') or '..' in Path(name).parts
-                        or Path(name).suffix not in ('.c', '.h') for name in files):
-        raise RuntimeError('Private decoder patch source scope differs')
-    if any((source / name).is_symlink() or not (source / name).is_file() for name in files):
+    initial, final, patches = {}, {}, []
+    for patch in specs['patches']:
+        path = ROOT / patch['path']
+        if not path.is_file() or pin(path) != patch['sha256']:
+            raise RuntimeError('Private decoder patch pin differs')
+        files = patch['files']
+        if not files or any(not name.startswith('libavcodec/hevc/') or '..' in Path(name).parts
+                            or Path(name).suffix not in ('.c', '.h') for name in files):
+            raise RuntimeError('Private decoder patch source scope differs')
+        for name, value in files.items():
+            if name in final and final[name] != value['base_sha256']:
+                raise RuntimeError('Private decoder patch chain differs')
+            initial.setdefault(name, value['base_sha256'])
+            final[name] = value['patched_sha256']
+        patches.append((path, files))
+    if any((source / name).is_symlink() or not (source / name).is_file() for name in final):
         raise RuntimeError('Private decoder patch source must be a regular file')
-    state = {name: pin(source / name) for name in files}
-    base = all(state[name] == value['base_sha256'] for name, value in files.items())
-    changed = all(state[name] == value['patched_sha256'] for name, value in files.items())
+    state = {name: pin(source / name) for name in final}
+    base = state == initial
+    changed = state == final
     if not enabled:
         if not base:
             raise RuntimeError('Baseline decoder needs a separate unpatched output directory')
@@ -44,17 +51,22 @@ def source_patches(source, manifest, enabled=True):
         # Validate the complete result before replacing any cached source file.
         with tempfile.TemporaryDirectory(prefix='sfnp-hevc-backport-') as directory:
             scratch = Path(directory)
-            for name in files:
+            for name in final:
                 target = scratch / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source / name, target)
-            subprocess.run(['patch', '--batch', '--fuzz=0', '--no-backup-if-mismatch',
-                            '-p1', '-i', str(path.resolve())], cwd=scratch, check=True, timeout=20)
-            if any(pin(scratch / name) != value['patched_sha256'] for name, value in files.items()):
-                raise RuntimeError('Private decoder patch output differs')
-            for name in files:
+            for path, files in patches:
+                if any(pin(scratch / name) != value['base_sha256'] for name, value in files.items()):
+                    raise RuntimeError('Private decoder patch predecessor differs')
+                subprocess.run(['patch', '--batch', '--fuzz=0', '--no-backup-if-mismatch',
+                                '-p1', '-i', str(path.resolve())], cwd=scratch, check=True, timeout=20)
+                if any(pin(scratch / name) != value['patched_sha256'] for name, value in files.items()):
+                    raise RuntimeError('Private decoder patch output differs')
+            if any(pin(scratch / name) != digest for name, digest in final.items()):
+                raise RuntimeError('Private decoder final source differs')
+            for name in final:
                 shutil.copyfile(scratch / name, source / name)
-    return specs['patches'], {name: value['patched_sha256'] for name, value in files.items()}
+    return specs['patches'], final
 
 
 def main():

@@ -1,0 +1,161 @@
+From: McFredward <frederik@lissek.info>
+Subject: [PATCH] hevc: omit unused Main8/420 chroma reconstruction in explicit gray mode
+
+Local R8-mask optimization, LGPL-2.1-or-later. Applied after the independent-NAL
+slice backport. Only an explicit AV_CODEC_FLAG_GRAY with Main8/420 opts in.
+Keep chroma syntax, entropy, residual parsing, neighbor metadata and complete
+luma reconstruction/filtering. Chroma planes are unspecified in this mode and
+must never be sampled. Other profiles and normal color decoding remain intact.
+
+--- a/libavcodec/hevc/hevcdec.c
++++ b/libavcodec/hevc/hevcdec.c
+@@ -1400,7 +1400,8 @@
+                 if (lc->cu.pred_mode == MODE_INTRA) {
+                     ff_hevc_set_neighbour_available(lc, x0, y0 + (i << log2_trafo_size_c),
+                                                     trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-                    s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (i << log2_trafo_size_c), 1);
++                    if (!ff_hevc_skip_chroma(s, sps))
++                        s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (i << log2_trafo_size_c), 1);
+                 }
+                 if (cbf_cb[i])
+                     ff_hevc_hls_residual_coding(lc, pps, x0, y0 + (i << log2_trafo_size_c),
+@@ -1430,7 +1431,8 @@
+                 if (lc->cu.pred_mode == MODE_INTRA) {
+                     ff_hevc_set_neighbour_available(lc, x0, y0 + (i << log2_trafo_size_c),
+                                                     trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-                    s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (i << log2_trafo_size_c), 2);
++                    if (!ff_hevc_skip_chroma(s, sps))
++                        s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (i << log2_trafo_size_c), 2);
+                 }
+                 if (cbf_cr[i])
+                     ff_hevc_hls_residual_coding(lc, pps, x0, y0 + (i << log2_trafo_size_c),
+@@ -1459,7 +1461,8 @@
+                 if (lc->cu.pred_mode == MODE_INTRA) {
+                     ff_hevc_set_neighbour_available(lc, xBase, yBase + (i << log2_trafo_size),
+                                                     trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-                    s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (i << log2_trafo_size), 1);
++                    if (!ff_hevc_skip_chroma(s, sps))
++                        s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (i << log2_trafo_size), 1);
+                 }
+                 if (cbf_cb[i])
+                     ff_hevc_hls_residual_coding(lc, pps, xBase, yBase + (i << log2_trafo_size),
+@@ -1469,7 +1472,8 @@
+                 if (lc->cu.pred_mode == MODE_INTRA) {
+                     ff_hevc_set_neighbour_available(lc, xBase, yBase + (i << log2_trafo_size),
+                                                 trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-                    s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (i << log2_trafo_size), 2);
++                    if (!ff_hevc_skip_chroma(s, sps))
++                        s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (i << log2_trafo_size), 2);
+                 }
+                 if (cbf_cr[i])
+                     ff_hevc_hls_residual_coding(lc, pps, xBase, yBase + (i << log2_trafo_size),
+@@ -1482,26 +1486,34 @@
+             int trafo_size_v = 1 << (log2_trafo_size_c + sps->vshift[1]);
+             ff_hevc_set_neighbour_available(lc, x0, y0, trafo_size_h, trafo_size_v,
+                                             sps->log2_ctb_size);
+-            s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0, 1);
+-            s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0, 2);
++            if (!ff_hevc_skip_chroma(s, sps))
++                s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0, 1);
++            if (!ff_hevc_skip_chroma(s, sps))
++                s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0, 2);
+             if (sps->chroma_format_idc == 2) {
+                 ff_hevc_set_neighbour_available(lc, x0, y0 + (1 << log2_trafo_size_c),
+                                                 trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-                s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (1 << log2_trafo_size_c), 1);
+-                s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (1 << log2_trafo_size_c), 2);
++                if (!ff_hevc_skip_chroma(s, sps))
++                    s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (1 << log2_trafo_size_c), 1);
++                if (!ff_hevc_skip_chroma(s, sps))
++                    s->hpc.intra_pred[log2_trafo_size_c - 2](lc, pps, x0, y0 + (1 << log2_trafo_size_c), 2);
+             }
+         } else if (blk_idx == 3) {
+             int trafo_size_h = 1 << (log2_trafo_size + 1);
+             int trafo_size_v = 1 << (log2_trafo_size + sps->vshift[1]);
+             ff_hevc_set_neighbour_available(lc, xBase, yBase,
+                                             trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-            s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase, 1);
+-            s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase, 2);
++            if (!ff_hevc_skip_chroma(s, sps))
++                s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase, 1);
++            if (!ff_hevc_skip_chroma(s, sps))
++                s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase, 2);
+             if (sps->chroma_format_idc == 2) {
+                 ff_hevc_set_neighbour_available(lc, xBase, yBase + (1 << log2_trafo_size),
+                                                 trafo_size_h, trafo_size_v, sps->log2_ctb_size);
+-                s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (1 << log2_trafo_size), 1);
+-                s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (1 << log2_trafo_size), 2);
++                if (!ff_hevc_skip_chroma(s, sps))
++                    s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (1 << log2_trafo_size), 1);
++                if (!ff_hevc_skip_chroma(s, sps))
++                    s->hpc.intra_pred[log2_trafo_size - 2](lc, pps, xBase, yBase + (1 << log2_trafo_size), 2);
+             }
+         }
+     }
+@@ -2168,7 +2180,7 @@
+                     lc->sh->luma_weight_l0[current_mv.ref_idx[0]],
+                     lc->sh->luma_offset_l0[current_mv.ref_idx[0]]);
+ 
+-        if (sps->chroma_format_idc) {
++        if (sps->chroma_format_idc && !ff_hevc_skip_chroma(s, sps)) {
+             chroma_mc_uni(lc, pps, sps, dst1, linesize[1], ref0->f->data[1], ref0->f->linesize[1],
+                           0, x0_c, y0_c, nPbW_c, nPbH_c, &current_mv,
+                           lc->sh->chroma_weight_l0[current_mv.ref_idx[0]][0], lc->sh->chroma_offset_l0[current_mv.ref_idx[0]][0]);
+@@ -2187,7 +2199,7 @@
+                     lc->sh->luma_weight_l1[current_mv.ref_idx[1]],
+                     lc->sh->luma_offset_l1[current_mv.ref_idx[1]]);
+ 
+-        if (sps->chroma_format_idc) {
++        if (sps->chroma_format_idc && !ff_hevc_skip_chroma(s, sps)) {
+             chroma_mc_uni(lc, pps, sps, dst1, linesize[1], ref1->f->data[1], ref1->f->linesize[1],
+                           1, x0_c, y0_c, nPbW_c, nPbH_c, &current_mv,
+                           lc->sh->chroma_weight_l1[current_mv.ref_idx[1]][0], lc->sh->chroma_offset_l1[current_mv.ref_idx[1]][0]);
+@@ -2206,7 +2218,7 @@
+                    &current_mv.mv[0], x0, y0, nPbW, nPbH,
+                    ref1->f, &current_mv.mv[1], &current_mv);
+ 
+-        if (sps->chroma_format_idc) {
++        if (sps->chroma_format_idc && !ff_hevc_skip_chroma(s, sps)) {
+             chroma_mc_bi(lc, pps, sps, dst1, linesize[1], ref0->f, ref1->f,
+                          x0_c, y0_c, nPbW_c, nPbH_c, &current_mv, 0);
+ 
+--- a/libavcodec/hevc/filter.c
++++ b/libavcodec/hevc/filter.c
+@@ -328,7 +328,7 @@
+         }
+     }
+ 
+-    for (c_idx = 0; c_idx < (sps->chroma_format_idc ? 3 : 1); c_idx++) {
++    for (c_idx = 0; c_idx < (sps->chroma_format_idc && !ff_hevc_skip_chroma(s, sps) ? 3 : 1); c_idx++) {
+         int x0       = x >> sps->hshift[c_idx];
+         int y0       = y >> sps->vshift[c_idx];
+         ptrdiff_t stride_src = s->cur_frame->f->linesize[c_idx];
+@@ -605,7 +605,7 @@
+         }
+     }
+ 
+-    if (sps->chroma_format_idc) {
++    if (sps->chroma_format_idc && !ff_hevc_skip_chroma(s, sps)) {
+         for (chroma = 1; chroma <= 2; chroma++) {
+             int h = 1 << sps->hshift[chroma];
+             int v = 1 << sps->vshift[chroma];
+--- a/libavcodec/hevc/hevcdec.h
++++ b/libavcodec/hevc/hevcdec.h
+@@ -596,6 +596,17 @@
+     AVBufferRef *rpu_buf;       ///< 0 or 1 Dolby Vision RPUs.
+     DOVIContext dovi_ctx;       ///< Dolby Vision decoding context
+ } HEVCContext;
++
++/* The private mask consumer publishes only Y. Preserve all syntax/entropy and
++ * luma reconstruction/filtering; other profiles retain complete reconstruction.
++ * Chroma samples are deliberately unspecified only for this explicit mode. */
++static av_always_inline int ff_hevc_skip_chroma(const HEVCContext *s, const HEVCSPS *sps)
++{
++    return (s->avctx->flags & AV_CODEC_FLAG_GRAY) &&
++           sps->ptl.general_ptl.profile_idc == AV_PROFILE_HEVC_MAIN &&
++           sps->chroma_format_idc == 1 && sps->bit_depth == 8 &&
++           sps->bit_depth_chroma == 8;
++}
+ 
+ /**
+  * Mark all frames in DPB as unused for reference.

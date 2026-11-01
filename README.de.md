@@ -32,6 +32,8 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
+Dev-Teststand: **0.3.16** · Frame **0.3.6**, PC **0.3.11** · 1. November 2026.
+
 ## Native Transparenz, kein Farbersatz
 
 Das Spiel sendet Transparenz getrennt von seinen Farben; keine Farbe wird aus

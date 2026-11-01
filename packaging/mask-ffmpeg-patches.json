@@ -34,6 +34,27 @@
       "upstream_patch_sha256": "078a4caaf2a7c40a2a11223eb619176f40b5c5435fc5834a353bd7c17fc1bd3b",
       "license": "LGPL-2.1-or-later",
       "author": "Phillip Blucas"
+    },
+    {
+      "path": "third_party/ffmpeg/patches/0002-hevc-luma-only-8.1.3.patch",
+      "sha256": "8f6f7861554a7afa13dd4ac4266943b87c2330c67187a9386e00d2683f92e2b3",
+      "files": {
+        "libavcodec/hevc/hevcdec.c": {
+          "base_sha256": "35dca67c73c4ab70c080c1806905ef9dab6aeb7552e6bd04063cdad0476badc5",
+          "patched_sha256": "b24ee1e7d234e899e3ad276d7492df41a451db55462109a3319fb95b2ba32368"
+        },
+        "libavcodec/hevc/filter.c": {
+          "base_sha256": "73c5daa7f90fd72747bfcd5227470cd23dcdfdc07d9ea0800d1da6cb1811484a",
+          "patched_sha256": "fcd0c67038c6147f6fc805fb6e384004668e93516269ce1cca3d0a3fa026518f"
+        },
+        "libavcodec/hevc/hevcdec.h": {
+          "base_sha256": "421d0d4cd3f71dbacdbd8ac151b437d59a4b903de309814924c099fda150c43a",
+          "patched_sha256": "7f0862d35202dbf7e98099025f2f4426596e1c68095bbf0d3d72a34c8423bb3a"
+        }
+      },
+      "license": "LGPL-2.1-or-later",
+      "author": "McFredward",
+      "purpose": "Explicit Main8/420 luma-only reconstruction for mask consumers; preserve all Y samples and original decode checks"
     }
   ]
 }

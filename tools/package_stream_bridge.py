@@ -56,6 +56,7 @@ def required_sources(root=ROOT):
                    'packaging/setup-textual.json','packaging/setup-python.json','packaging/setup-openssh.json',
                    'packaging/mask-ffmpeg.json','packaging/mask-ffmpeg-patches.json','tools/build_mask_hevc_ffmpeg.py',
                    'third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch',
+                   'third_party/ffmpeg/patches/0002-hevc-luma-only-8.1.3.patch',
                    'tools/configure_mask_codec.py',
                    'third_party/ffmpeg/README.md','third_party/ffmpeg/COPYING.LGPLv2.1'}|
                   {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES})
@@ -194,7 +195,8 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     files['tools/configure_mask_codec.py']=source_bytes['tools/configure_mask_codec.py']
     if mask_decoder is not None:
         for name in ('third_party/ffmpeg/README.md','third_party/ffmpeg/COPYING.LGPLv2.1','packaging/mask-ffmpeg.json','packaging/mask-ffmpeg-patches.json',
-                     'third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch','tools/build_mask_hevc_ffmpeg.py'):
+                     'third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch',
+                     'third_party/ffmpeg/patches/0002-hevc-luma-only-8.1.3.patch','tools/build_mask_hevc_ffmpeg.py'):
             files[name]=source_bytes[name]
     for name in ('steam_link_setup_auth.py','steam_link_setup_askpass_client.py','steam-link-askpass.sh'):
         files['setup/'+name]=source_bytes['setup/'+name]

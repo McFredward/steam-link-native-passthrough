@@ -50,6 +50,44 @@ class SourcePatches(unittest.TestCase):
         self.assertEqual(builder.source_patches(self.source, self.manifest), (patches, pins))
         self.assertEqual(self.file.stat().st_mtime_ns, timestamp)
 
+    def add_second_patch(self, predecessor=None):
+        patch = self.root / 'second.patch'
+        patch.write_text('--- a/libavcodec/hevc/example.c\n+++ b/libavcodec/hevc/example.c\n@@ -1 +1 @@\n-int value = 2;\n+int value = 3;\n')
+        self.record['patches'].append({'path': 'second.patch', 'sha256': digest(patch.read_bytes()),
+            'files': {'libavcodec/hevc/example.c': {'base_sha256': predecessor or digest(self.changed),
+                                                 'patched_sha256': digest(b'int value = 3;\n')}}})
+        self.save()
+        return patch
+
+    def test_ordered_overlapping_patches_and_final_cache_reuse(self):
+        self.add_second_patch()
+        result = builder.source_patches(self.source, self.manifest)
+        self.assertEqual(self.file.read_bytes(), b'int value = 3;\n')
+        self.assertEqual(len(result[0]), 2)
+        self.assertEqual(builder.source_patches(self.source, self.manifest), result)
+
+    def test_incoherent_patch_predecessor_is_refused_before_replacement(self):
+        self.add_second_patch('0' * 64)
+        with self.assertRaises(RuntimeError):
+            builder.source_patches(self.source, self.manifest)
+        self.assertEqual(self.file.read_bytes(), self.base)
+
+    def test_intermediate_cache_cannot_masquerade_as_final_output(self):
+        builder.source_patches(self.source, self.manifest)
+        self.add_second_patch()
+        with self.assertRaises(RuntimeError):
+            builder.source_patches(self.source, self.manifest)
+        self.assertEqual(self.file.read_bytes(), self.changed)
+
+    def test_failed_second_patch_keeps_original_cache(self):
+        patch = self.add_second_patch()
+        patch.write_bytes(patch.read_bytes() + b'@@ -3 +3 @@\n-missing\n+bad\n')
+        self.record['patches'][1]['sha256'] = digest(patch.read_bytes())
+        self.save()
+        with self.assertRaises(subprocess.CalledProcessError):
+            builder.source_patches(self.source, self.manifest)
+        self.assertEqual(self.file.read_bytes(), self.base)
+
     def test_explicit_upstream_baseline_does_not_apply_backport(self):
         self.assertEqual(builder.source_patches(self.source, self.manifest, False), ([], {}))
         self.assertEqual(self.file.read_bytes(), self.base)

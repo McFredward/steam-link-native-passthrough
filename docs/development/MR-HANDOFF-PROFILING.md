@@ -140,3 +140,7 @@ remain possible contributors, and visual acceptance needs another headset run.
 The private evidence is retained in the operator workspace under
 `build/mr-handoff-profile-20261101/` (`profile.json`, bounded journal, retrospective
 markers and their reference-log digests). Native runtime logs remain private.
+
+The subsequent [luma-only decoder candidate](MASK-LUMA-ONLY.md) records controlled
+Frame experiments and the source change selected for installer0.3.16/Frame0.3.6.
+It does not retroactively turn the observations above into a causal wobble proof.

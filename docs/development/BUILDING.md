@@ -76,9 +76,12 @@ actual portable sender-boundary fixtures, pass
 The production Frame build must include the private decoder; a facade compiled
 without explicit FFmpeg headers remains unavailable. Obtain the exact release,
 detached signature and key pinned by `packaging/mask-ffmpeg.json`. The offline
-tool verifies all inputs, applies the byte-pinned independent-slice backport from
+tool verifies all inputs, applies the byte-pinned independent-slice backport and
+explicit Main8/420 luma-only optimization from
 `packaging/mask-ffmpeg-patches.json` in scratch space, verifies base/result hashes
-and all upstream files, then records the actual patch set and library hashes.
+and all upstream files, then records the actual ordered patch set and library hashes.
+Only a complete upstream or complete current patched cache is reused; a cache
+with only an earlier patch set needs a fresh output directory.
 It needs GNU patch, GnuPG, make and the appropriate C toolchain. No build tool
 installs or restarts a device.
 
