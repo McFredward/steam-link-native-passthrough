@@ -16,6 +16,7 @@ the earlier implementation and evidence; its formats are not runtime fallbacks.
 | Build, test or publish | [Build and validation guide](development/BUILDING.md), [versioning](PATCH-VERSIONING.md), [payload publication](../distribution/README.md) |
 | Diagnose continuity | [Current compatibility and evidence](COMPATIBILITY.md), [versioned continuity record](development/FRAME-CONTINUITY.md) |
 | Investigate world stability | [Frame-local reference and bounded public timing experiment](development/WORLD-STABILITY.md) |
+| Develop Arcturus room capture | [Scope, experimental software core and pending live-camera boundary](development/ROOM-CAPTURE.md) |
 | Port to another PC backend | [AMD/Linux boundaries](PC-BACKENDS-AMD-LINUX-20261019.md); these are not supported installation paths |
 
 The headers and implementation are authoritative for byte layouts and admission.

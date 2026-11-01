@@ -1,0 +1,15 @@
+# Independent developer targets. Nothing here is installed or injected.
+if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
+    find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+    add_executable(test_room_camera_inventory tests/room_camera_probe_test.cpp)
+    target_include_directories(test_room_camera_inventory PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    if(MSVC)
+        target_compile_options(test_room_camera_inventory PRIVATE /W4 /WX)
+    else()
+        target_compile_options(test_room_camera_inventory PRIVATE -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME room_camera_inventory COMMAND test_room_camera_inventory)
+    add_test(NAME room_scan_core COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
+        -s tests -p test_room_scan.py -v)
+    set_tests_properties(room_scan_core PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
