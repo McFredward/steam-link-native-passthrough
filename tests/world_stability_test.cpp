@@ -15,11 +15,11 @@ struct Text:Sink {
 };
 struct Fake:Api {
     std::vector<std::string> calls;unsigned stage=0,created=0;bool cleanup=true;
-    Matrix initial=identity(),frozen{};Sample current{};
+    Matrix initial=identity(),frozen{};Mode mode=Mode::WorldReference;Sample current{};
     Fake(){current.head=current.framePose=identity();current.headValid=current.frameValid=current.framePoseValid=true;current.beginMicros=1;current.endMicros=2;}
     bool initialize()override{calls.push_back("initialize");return stage!=1;}
     bool head(Matrix& m)override{calls.push_back("head");m=initial;return stage!=2;}
-    bool create(const Matrix& m,Handle& h)override{calls.push_back("create");frozen=m;++created;h=7;return stage!=3;}
+    bool create(const Matrix& m,Mode selected,Handle& h)override{calls.push_back("create");mode=selected;frozen=m;++created;h=7;return stage!=3;}
     bool sample(Sample& s)override{calls.push_back("sample");s=current;return stage!=4;}
     bool hide(Handle)override{calls.push_back("hide");return cleanup;}
     bool clear(Handle)override{calls.push_back("clear");return cleanup;}
@@ -53,6 +53,19 @@ void frozenReference(){
     const std::vector<std::string> tail(api.calls.end()-4,api.calls.end());
     check(tail==std::vector<std::string>{"hide","clear","destroy","shutdown"},"owned overlay removed before SDK shutdown");
     check(text.value.find("\"exact_stream_pose_proven\":false")!=std::string::npos,"public context cannot claim a proved video pose");
+}
+void visibilityControl(){
+    Fake api;api.initial.m[0][3]=80;api.initial.m[1][3]=2;
+    Text text;Output output(text);Session session(api,output);
+    check(session.start(true,Mode::HeadVisibility),"explicit head-relative visibility control starts");
+    check(api.mode==Mode::HeadVisibility&&api.frozen.m[0][3]==0&&api.frozen.m[1][3]==0&&api.frozen.m[2][3]==-Distance,"control uses a head-relative pose rather than a standing anchor");
+    check(text.value.find("\"world_reference\":false")!=std::string::npos&&text.value.find("\"standing_anchor\":null")!=std::string::npos,"head-locked control cannot claim a world reference");
+    check(text.value.find("\"headset_visibility_verified\":false")!=std::string::npos,"API readiness cannot certify user visibility");
+    const auto pixels=pattern(Mode::HeadVisibility);
+    check(pixels[16*TextureSize+128].r==255&&pixels[16*TextureSize+128].g==180&&pixels[16*TextureSize+128].a==255,"visibility marker has a distinct amber border");
+    check(session.tick()&&session.command("still"),"control accepts bounded observer samples");
+    check(!session.command("yaw")&&!session.active(),"head-relative control refuses world-motion phase labels");
+    check(api.calls.back()=="shutdown","refused control phase removes the owned overlay");
 }
 void failures(){
     for(unsigned stage=1;stage<=3;++stage){
@@ -92,14 +105,16 @@ void budgets(){
 }
 }
 int main(int argc,char** argv){try{
-    if(argc==2&&std::string(argv[1])=="--transcript"){
+    if(argc==2&&(std::string(argv[1])=="--transcript"||std::string(argv[1])=="--transcript-visibility")){
+        const bool visibility=std::string(argv[1])=="--transcript-visibility";
         Fake api;Text text;Output output(text);Session session(api,output);
-        if(!session.start(true))return 2;
+        if(!session.start(true,visibility?Mode::HeadVisibility:Mode::WorldReference))return 2;
         for(const auto* phase:{"still","yaw","move"}){
+            if(visibility&&std::string(phase)!="still")continue;
             session.command(phase);api.current.beginMicros+=100;api.current.endMicros+=100;
             api.current.angular[1]=.5f;api.current.intervalMillis=11.1f;api.current.markerVisible=true;session.tick();
         }
         session.stop();std::fputs(text.value.c_str(),stdout);return 0;
     }
-    geometry();frozenReference();failures();budgets();std::printf("%u Frame-local world-reference checks PASS\n",checks);return 0;
+    geometry();frozenReference();visibilityControl();failures();budgets();std::printf("%u Frame-local world-reference checks PASS\n",checks);return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}}

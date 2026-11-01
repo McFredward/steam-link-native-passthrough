@@ -13,6 +13,11 @@ constexpr const char* Schema = "sfnp-frame-world-stability-v1";
 constexpr unsigned TextureSize = 256, MaxSamples = 6000, MaxLine = 2048;
 constexpr std::size_t MaxOutput = 8 * 1024 * 1024, TerminalReserve = 1024;
 constexpr float Distance = 1.2f, Width = .4f;
+enum class Mode { WorldReference, HeadVisibility };
+constexpr std::uint32_t SortOrder = UINT32_MAX;
+inline const char* modeName(Mode mode) {
+    return mode==Mode::WorldReference ? "world-fixed" : "head-locked-visibility";
+}
 using Handle = std::uint64_t;
 struct Matrix { float m[3][4]{}; };
 struct Pixel { std::uint8_t r=0,g=0,b=0,a=0; };
@@ -35,13 +40,22 @@ inline Matrix anchor(const Matrix& head) {
     for(unsigned i=0;i<3;++i) result.m[i][3]-=Distance*head.m[i][2];
     return result;
 }
-inline std::array<Pixel,TextureSize*TextureSize> pattern() {
+inline Matrix headRelative() {
+    Matrix result{};
+    result.m[0][0]=result.m[1][1]=result.m[2][2]=1;
+    result.m[2][3]=-Distance;
+    return result;
+}
+inline std::array<Pixel,TextureSize*TextureSize> pattern(Mode mode=Mode::WorldReference) {
     std::array<Pixel,TextureSize*TextureSize> result{};
     for(unsigned y=0;y<TextureSize;++y) for(unsigned x=0;x<TextureSize;++x) {
         const unsigned dx=x>128?x-128:128-x,dy=y>128?y-128:128-y;
         const bool outline=(dx<=4&&dy<=112)||(dy<=4&&dx<=112);
         const bool center=(dx<=1&&dy<=112)||(dy<=1&&dx<=112);
-        if(outline) result[y*TextureSize+x]=center?Pixel{255,255,255,255}:Pixel{0,0,0,255};
+        const bool border=mode==Mode::HeadVisibility && x>=12&&x<=244&&y>=12&&y<=244 &&
+            (x<20||x>236||y<20||y>236);
+        if(border) result[y*TextureSize+x]=Pixel{255,180,0,255};
+        else if(outline) result[y*TextureSize+x]=center?Pixel{255,255,255,255}:Pixel{0,0,0,255};
     }
     return result;
 }
@@ -61,7 +75,7 @@ struct Api {
     virtual ~Api()=default;
     virtual bool initialize()=0;
     virtual bool head(Matrix&)=0;
-    virtual bool create(const Matrix&,Handle&)=0;
+    virtual bool create(const Matrix&,Mode,Handle&)=0;
     virtual bool sample(Sample&)=0;
     virtual bool hide(Handle)=0;
     virtual bool clear(Handle)=0;
@@ -98,17 +112,24 @@ class Session {
 public:
     Session(Api& api,Output& output):api_(api),output_(output){}
     ~Session(){stop(active_?Reason::SampleFailure:Reason::Requested);}
-    bool start(bool explicitOptIn) {
+    bool start(bool explicitOptIn,Mode mode=Mode::WorldReference) {
         if(!explicitOptIn||attempted_)return false;
         attempted_=true;
         if(!api_.initialize()){refuse(1);stop();return false;}
         Matrix head{};
         if(!api_.head(head)||!rigid(head)){refuse(2);stop();return false;}
-        anchor_=anchor(head);
-        if(!api_.create(anchor_,handle_)||!handle_){refuse(3);stop();return false;}
+        mode_=mode;
+        anchor_=mode==Mode::WorldReference ? anchor(head) : headRelative();
+        if(!api_.create(anchor_,mode_,handle_)||!handle_){refuse(3);stop();return false;}
         std::ostringstream line;line.imbue(std::locale::classic());line<<std::setprecision(9);
         line<<prefix("ready")<<",\"frame_local\":true,\"native_api_ready\":true,\"headset_visibility_verified\":false,\"standing_anchor\":";
-        matrix(line,anchor_,true);line<<",\"width_m\":"<<Width<<",\"distance_m\":"<<Distance<<"}\n";
+        if(mode_==Mode::WorldReference) matrix(line,anchor_,true); else line<<"null";
+        line<<",\"head_relative_transform\":";
+        if(mode_==Mode::HeadVisibility) matrix(line,anchor_,true); else line<<"null";
+        line<<",\"reference_mode\":\""<<modeName(mode_)<<"\",\"world_reference\":"
+            <<(mode_==Mode::WorldReference?"true":"false")<<",\"dashboard_visibility_allowed\":"
+            <<(mode_==Mode::HeadVisibility?"true":"false")<<",\"sort_order\":"<<SortOrder
+            <<",\"width_m\":"<<Width<<",\"distance_m\":"<<Distance<<"}\n";
         if(!output_.emit(line.str())){stop();return false;}
         active_=true;return true;
     }
@@ -120,6 +141,7 @@ public:
         else if(text=="move")next=Phase::Translation;
         else if(text=="compare")next=Phase::Comparison;
         else {stop(Reason::InvalidInput);return false;}
+        if(mode_==Mode::HeadVisibility && next!=Phase::Still){stop(Reason::InvalidInput);return false;}
         phase_=next;
         return true;
     }
@@ -129,7 +151,8 @@ public:
         if(!api_.sample(s)){stop(Reason::SampleFailure);return false;}
         if(s.originChanged){stop(Reason::TrackingOriginChanged);return false;}
         if(s.runtimeQuit){stop(Reason::RuntimeQuit);return false;}
-        // The overlay transform is never updated from later tracking samples.
+        // The world transform is frozen; the visibility control follows the
+        // HMD through its native relative transform without observer updates.
         // FrameTiming is public compositor context, not the streamed image's pose.
         if(budget_)return true;
         bool numbers=true;
@@ -177,7 +200,7 @@ public:
     Reason reason()const{return reason_;}
 private:
     void refuse(unsigned stage){output_.emit(prefix("refused")+",\"stage\":"+std::to_string(stage)+"}\n",true);}
-    Api& api_;Output& output_;Handle handle_=0;Matrix anchor_{};Phase phase_=Phase::Still;Reason reason_=Reason::Requested;
+    Api& api_;Output& output_;Handle handle_=0;Matrix anchor_{};Mode mode_=Mode::WorldReference;Phase phase_=Phase::Still;Reason reason_=Reason::Requested;
     unsigned samples_=0;bool attempted_=false,stopped_=false,active_=false,budget_=false,clean_=true;
 };
 } // namespace world_stability

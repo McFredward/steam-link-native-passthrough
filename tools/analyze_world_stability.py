@@ -9,7 +9,7 @@ from pathlib import Path
 SCHEMA = "sfnp-frame-world-stability-v1"
 MAX_BYTES = 8 * 1024 * 1024
 PHASES = {0: "still", 1: "rotation", 2: "translation", 3: "comparison"}
-OBSERVATIONS = ("not-recorded", "reference-stable-scene-wobbles", "both-wobble", "reference-unseen", "unclear")
+OBSERVATIONS = ("not-recorded", "reference-stable-scene-wobbles", "both-wobble", "reference-unseen", "unclear", "visibility-marker-seen", "visibility-marker-unseen")
 
 
 def finite(value):
@@ -82,6 +82,20 @@ def analyze(text, observed="not-recorded"):
             raise ValueError("Unknown reference event")
     if not ready and not refused:
         raise ValueError("No reference session found")
+    mode=ready.get("reference_mode", "world-fixed") if ready else None
+    if ready:
+        if mode not in ("world-fixed", "head-locked-visibility"):
+            raise ValueError("Unknown reference mode")
+        if ready.get("world_reference", True) is not (mode=="world-fixed"):
+            raise ValueError("Reference mode and world authority disagree")
+        if mode=="head-locked-visibility" and ready.get("standing_anchor") is not None:
+            raise ValueError("A head-locked control cannot have a standing anchor")
+        if mode=="head-locked-visibility" and any(s["phase"]!=0 for s in samples):
+            raise ValueError("A head-locked control cannot record world-motion phases")
+        if mode=="head-locked-visibility" and observed in ("reference-stable-scene-wobbles", "both-wobble", "reference-unseen"):
+            raise ValueError("A head-locked visibility control cannot establish world stability")
+        if mode=="world-fixed" and observed.startswith("visibility-marker-"):
+            raise ValueError("Visibility-control observations require a visibility-control recording")
     phases = {}
     for phase, name in PHASES.items():
         selected = [s for s in samples if s["phase"] == phase]
@@ -100,10 +114,12 @@ def analyze(text, observed="not-recorded"):
             "public_client_interval_ms": quantiles(intervals),
             "public_frame_index_repeats": sum(a.get("frame_index")==b.get("frame_index") for a,b in zip(valid_frame,valid_frame[1:])),
             "marker_visible_api_samples": sum(s.get("marker_visible_api") is True for s in selected),
+            "dashboard_samples": sum(s.get("dashboard") is True for s in selected),
         }
     return {
         "schema": "sfnp-frame-world-stability-summary-v1", "samples": len(samples), "ignored_non_json_lines": ignored,
         "local_api_ready": ready is not None, "startup_refusal": refused,
+        "reference_mode": mode, "world_reference": bool(ready and mode=="world-fixed"),
         "clean_stop": bool(stopped and stopped.get("clean") is True),
         "requested_stop": bool(stopped and stopped.get("reason") == 0), "logging_budget_reached": budget,
         "explicit_user_visual_observation": observed, "phases": phases,
