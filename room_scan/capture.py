@@ -202,7 +202,7 @@ class Reconstruction:
 
 class ArcturusProviderUnavailable:
     """Production default until a calibrated live source has been established."""
-    reason = "Der Live-Zugriff auf die Arcturus-Kamera ist noch nicht verfügbar."
+    reason = "Live access to the Arcturus camera is not available yet."
 
     def open(self):
         raise RuntimeError(self.reason)

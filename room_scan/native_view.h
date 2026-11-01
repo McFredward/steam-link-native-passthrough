@@ -9,8 +9,8 @@ namespace room_native {
 inline void dashboard(Canvas& image,const Json& state,double seconds,const std::string& hovered=""){
     image.clear();image.rect(0,0,image.width,image.height,{12,24,30},24);
     image.rect(0,0,image.width,8,{52,224,204},0);
-    image.text(60,34,"RAUMEINRICHTUNG",18,Teal);
-    image.text(58,72,state.value("title","Dein Raum"),42,Ink);
+    image.text(60,34,"ROOM SETUP",18,Teal);
+    image.text(58,72,state.value("title","Your room"),42,Ink);
     const int step=state.value("step",0);
     for(int i=0;i<5;++i){const int x=60+i*188;image.rect(x,145,164,4,i<step?Teal:Color{42,65,72},2);}
     image.text(60,173,state.value("subtitle",""),23,Muted,900);

@@ -22,14 +22,14 @@ class Stage(str, Enum):
 
 
 class ScanSession:
-    def __init__(self, name="Mein Raum", *, provider=None, previous: Room | None = None):
+    def __init__(self, name="My Room", *, provider=None, previous: Room | None = None):
         text(name)
         require(previous is None or isinstance(previous, Room), "Invalid previous room")
         self.name, self.previous = name, previous
         self.room = previous
         self.provider = provider if provider is not None else ArcturusProviderUnavailable()
         self.stage = Stage.CHECKING
-        self.message = "Kamera und Raumverfolgung prüfen"
+        self.message = "Checking camera and room tracking"
         self.reconstruction = None
         self.binding = None
         self._history = []
@@ -47,20 +47,20 @@ class ScanSession:
         except (RuntimeError, RoomError, OSError):
             self.close()
             self.stage = Stage.UNAVAILABLE
-            self.message = "Live-Kamerazugriff nicht verfügbar. Der Raumscan wurde nicht gestartet."
+            self.message = "Live camera access is unavailable. Room scanning has not started."
             return False
         self.binding = binding
         if self.previous is not None:
             if (self.previous.origin_id != binding.origin_id or self.previous.test_only != binding.test_only):
                 self.stage = Stage.ALIGNMENT_REQUIRED
-                self.message = "Gespeicherten Raum zuerst in der aktuellen Umgebung ausrichten."
+                self.message = "Align the saved room with your current surroundings first."
                 self.close()
                 return False
             # Never mix an existing room with observations from a different
             # calibration. A later explicit re-registration adapter is needed.
             if self.previous.calibration_id != binding.calibration_id:
                 self.stage = Stage.ALIGNMENT_REQUIRED
-                self.message = "Kamerakalibrierung geändert. Raumzuordnung erneut prüfen."
+                self.message = "Camera calibration changed. Check room alignment again."
                 self.close()
                 return False
             self.room = replace(self.previous, partial_scan_accepted=False)
@@ -72,7 +72,7 @@ class ScanSession:
             self.reconstruction.retain_aligned_mesh(self.previous.mesh)
         self.tracking_verified = True
         self.stage = Stage.SCANNING
-        self.message = "Schau dich langsam um und erfasse Flächen aus mehreren Blickwinkeln."
+        self.message = "Look around slowly and capture surfaces from several viewpoints."
         return True
 
     def ingest(self, frame: DepthFrame):
@@ -82,15 +82,15 @@ class ScanSession:
         except RoomError as error:
             self.tracking_verified = False
             self.stage = Stage.PAUSED
-            self.message = "Scan pausiert. Tracking, Kamerazuordnung oder Messdaten müssen erneut geprüft werden."
+            self.message = "Scan paused. Tracking, camera association or measurements need to be checked again."
             raise error
-        self.message = ("Weitere Bereiche und andere Blickwinkel erfassen." if count
-                        else "Hier fehlen zuverlässige Messungen. Blickwinkel oder Beleuchtung ändern.")
+        self.message = ("Capture more areas from different viewpoints." if count
+                        else "Reliable measurements are missing here. Change your viewpoint or lighting.")
         return count
 
     def pause(self):
         require(self.stage == Stage.SCANNING, "Scan is not running")
-        self.stage, self.message = Stage.PAUSED, "Scan pausiert. Bisherige Messungen bleiben erhalten."
+        self.stage, self.message = Stage.PAUSED, "Scan paused. Existing measurements are preserved."
 
     def resume(self, binding: Binding, *, tracking_valid: bool):
         require(self.stage == Stage.PAUSED and type(tracking_valid) is bool and tracking_valid,
@@ -98,13 +98,13 @@ class ScanSession:
         if (binding.origin_id != self.binding.origin_id or binding.calibration_id != self.binding.calibration_id
                 or binding.test_only != self.binding.test_only):
             self.stage = Stage.ALIGNMENT_REQUIRED
-            self.message = "Raumzuordnung geändert. Vor dem Fortsetzen neu ausrichten."
+            self.message = "Room alignment changed. Align the room again before resuming."
             self.close()
             return False
         if binding != self.binding:
             self.reconstruction.rebind(binding)
             self.binding = binding
-        self.stage, self.message = Stage.SCANNING, "Raumscan fortsetzen"
+        self.stage, self.message = Stage.SCANNING, "Resume room scan"
         self.tracking_verified = True
         return True
 
@@ -159,13 +159,13 @@ class ScanSession:
         self.room = replace(self.room, mesh=mesh, partial_scan_accepted=False)
         self._history.clear()
         self.stage = Stage.REVIEW
-        self.message = "Raumflächen und Elemente prüfen. Sichtbare Messlücken bleiben unbekannt."
+        self.message = "Review room surfaces and elements. Visible measurement gaps remain unknown."
 
     def continue_scan(self):
         require(self.stage == Stage.REVIEW, "Room is not in review")
         self.room = replace(self.room, partial_scan_accepted=False)
         self.stage = Stage.PAUSED
-        self.message = "Tracking prüfen und fehlende Bereiche nachscannen."
+        self.message = "Check tracking, then scan any missing areas."
 
     def accept_captured_area(self):
         require(self.stage == Stage.REVIEW, "Review the room before accepting it")
@@ -187,13 +187,13 @@ class ScanSession:
     def save(self, store):
         require(self.stage == Stage.REVIEW and self.tracking_verified and not self.review_issues(), "Review is incomplete")
         saved = store.save(self.room, expected_revision=self.previous.revision if self.previous else 0)
-        self.room, self.stage, self.message = saved, Stage.SAVED, "Raum gespeichert"
+        self.room, self.stage, self.message = saved, Stage.SAVED, "Room saved"
         self.close()
         return saved
 
     def cancel(self):
         require(self.stage not in (Stage.SAVED, Stage.CANCELLED), "Session already ended")
-        self.stage, self.message = Stage.CANCELLED, "Einrichtung abgebrochen. Gespeicherter Raum bleibt erhalten."
+        self.stage, self.message = Stage.CANCELLED, "Setup cancelled. The saved room is preserved."
         self.close()
 
     def close(self):
@@ -224,5 +224,5 @@ class ScanSession:
                 "world_visuals_allowed": world_visuals,
                 "mesh": mesh.to_dict() if mesh and world_visuals else None,
                 "elements": [e.to_dict() for e in self.room.elements] if self.room else [],
-                "legend": {"building": "Im Aufbau", "reliable": "Zuverlässig erfasst", "uncertain": "Weitere Ansichten nötig"},
+                "legend": {"building": "Building", "reliable": "Reliably captured", "uncertain": "More views needed"},
                 "unknown_surfaces": "unobserved-no-geometry"}

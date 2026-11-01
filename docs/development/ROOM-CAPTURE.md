@@ -9,10 +9,10 @@ API compatibility or a production room-scanning release.
 
 ## Headset flow
 
-The entry point is the **Frame-local SteamVR dashboard icon “Raumeinrichtung”**.
+The entry point is the **Frame-local SteamVR dashboard icon “Room Setup”**.
 There is no Steam Library application. The installed user service starts the
 small overlay process with SteamVR. Opening its panel never starts capture;
-“Neuen Raum scannen” followed by “Scan starten” is explicit consent to acquisition.
+“Scan a new room” followed by “Start scan” is explicit consent to acquisition.
 
 The design follows Meta's [Space Setup and semantic Scene Model](https://developers.meta.com/vr/documentation/unity/unity-mr-utility-kit-manage-scene-data/):
 prepare, observe the room build up, enter semantic elements during capture,
@@ -28,7 +28,7 @@ review and explicitly save. Colours and exact interactions are our own.
 3. **Enter elements.** Choose Floor, Ceiling, Wall, Door, Window, Table, Couch,
    Bed, Storage or Other. Point at reliable mesh and press the trigger to mark
    the first, adjacent and opposite rectangle corner. Alternatively choose
-   “Am Controller messen” and place the controller at the three actual corners.
+   “Measure at controller” and place the controller at the three actual corners.
    The first edge is horizontal; surfaces remain gravity aligned. Three corners
    must agree with a rectangle within 3 cm. The preview can be undone before
    confirmation. Furniture volumes extend below the measured top; adjust their
@@ -79,6 +79,25 @@ numeric public API results. The headset shows a diagnostic code. This neither
 weakens stereo/calibration checks nor substitutes synthetic geometry. Candidate 2
 has software refusal/queue tests; its flicker, crash and actual source behaviour
 still require a coordinated headset retest.
+
+### Candidate 3: ARM manifest and English UI
+
+The next wearer test found candidate 2's entry missing. Read-only evidence showed
+42 service restarts and `Room application manifest was rejected by SteamVR`.
+The installed manifest did contain the generic and desktop Linux paths, yet the
+Frame still logged its generic missing-path message. The Frame-specific key is
+`binary_path_linux_arm`, also used by [FramePort's native overlay registration](https://github.com/spoopyghosty0/frameport/blob/186d4f629064c8c894626f60ef0e9b27155a7ccc/agent/frameport_agent.py#L2859).
+
+Candidate **0.3.16-roomscan.3** supplies that key and keeps application metadata
+registration independent of `CreateDashboardOverlay`. Missing/rejected metadata
+and failed optional identification remain diagnostic results rather than stopping
+the service before it creates the dashboard. Native function-table tests reproduce
+those failure modes and verify that the dashboard still gets created.
+
+All room-setup program strings, status messages, keyboard prompts and dashboard
+names are English, including on a German headset locale. Existing user-entered
+room/element names are preserved. This change does not establish live camera
+availability or a successful headset scan.
 
 ## Camera source and remaining hardware gate
 
@@ -200,7 +219,7 @@ mode renders the actual dashboard without opening OpenVR; `--preview-world`
 renders a software fixture's mesh. Such previews are **software evidence only**.
 
 Use the candidate's `patch-steam-link.cmd`, confirm its normal paired Apply, then
-open Frame SteamVR's dashboard and select “Raumeinrichtung”. First verify icon,
+open Frame SteamVR's dashboard and select “Room Setup”. First verify icon,
 menu/controller response and a clear camera-unavailable result where applicable.
 Only claim a scan after actual measured triangles stay aligned with the real room,
 elements can be confirmed/revised, and saved alignment survives the explicit

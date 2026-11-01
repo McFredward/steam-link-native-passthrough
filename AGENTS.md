@@ -18,6 +18,9 @@
   not authorize updating main or promoting the experiment to the stable release.
 - Commit as `McFredward <frederik@lissek.info>`. Speak German to the maintainer;
   source, comments and developer documentation are English.
+  The maintainer's 2026-11-01 room-setup preference requires all program UI,
+  notices and dashboard names in English, including on a German headset locale.
+  Continue communicating with the maintainer in German.
 - The intended input is real per-eye scene coverage, independent of scene RGB.
   Never derive mask coverage from a key colour in the explicit-mask path.
 - The maintainer explicitly authorized a PC Steam Link sender companion on
