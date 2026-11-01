@@ -73,6 +73,14 @@ under `build/frame-decode-benchmark-20261101/`. A clean packaged build has its o
 validation and artifact pins; do not silently extend a prototype binary's timing
 result to a differently built library.
 
+The clean production-tool codec was separately rechecked on the Frame: the same
+4,195,524 assertions passed. A further20 alternating trials with those exact
+codec bytes retained every Y hash; median per-trial mean decode was10.475ms for
+the color control versus9.120ms for the candidate (about13% lower). Median
+per-trial p95 call duration was20.646ms versus18.853ms. The same isolated-CPU
+scope and frequency/scheduling limits apply; no game or streaming runtime was
+replaced during that validation.
+
 ## Reproduction and acceptance
 
 Build the signed pinned SDK with both patches using the instructions in
