@@ -4,6 +4,7 @@
 #include "native_view.h"
 #include "native_present.h"
 #include "native_registration.h"
+#include "native_gpu.h"
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -27,13 +28,12 @@ class Runtime {
 public:
     VR_IVRSystem_FnTable* system=nullptr;VR_IVROverlay_FnTable* overlay=nullptr;
     VR_IVRApplications_FnTable* applications=nullptr;VR_IVRTrackedCamera_FnTable* camera=nullptr;
+    VR_IVRCompositor_FnTable* compositor=nullptr;OverlayGpu gpu;
+    bool graphicsAvailable=false;std::array<std::vector<std::uint8_t>,2> fallbackBytes;
     VROverlayHandle_t panel=0,thumbnail=0,hud=0;std::array<VROverlayHandle_t,2> world{};
     std::string manifest;
-    std::array<RawOverlayImage,5> images{{RawOverlayImage{},RawOverlayImage{},RawOverlayImage{},RawOverlayImage{.03},RawOverlayImage{.03}}};
-    struct Projection {HmdMatrix34_t pose{};VROverlayProjection_t frustum{};bool set=false;};
-    std::array<Projection,2> submittedProjection;
-    std::array<std::shared_ptr<const Json>,3> pendingUi,visibleUi;
-    std::array<unsigned,5> completionChannel{};
+    std::array<TextureOverlayImage,5> images{{TextureOverlayImage{},TextureOverlayImage{},TextureOverlayImage{},TextureOverlayImage{.03},TextureOverlayImage{.03}}};
+    std::array<std::shared_ptr<const Json>,3> visibleUi;
     bool initialize(const std::string& library){
         char canonical[4096]{};if(library.empty()||library.front()!='/'||!realpath(library.c_str(),canonical)||library!=canonical
             ||std::filesystem::path(library).filename()!="libopenvr_api.so")return false;
@@ -46,6 +46,7 @@ public:
         if(!symbol(init_,"VR_InitInternal2")||!symbol(get_,"VR_GetGenericInterface")||!symbol(shutdown_,"VR_ShutdownInternal"))return false;
         EVRInitError error=EVRInitError_VRInitError_None;init_(&error,EVRApplicationType_VRApplication_Overlay,nullptr);if(error)return false;started_=true;
         if(!table(system,"FnTable:IVRSystem_026")||!table(overlay,"FnTable:IVROverlay_028"))return false;
+        table(compositor,"FnTable:IVRCompositor_029");
         table(applications,"FnTable:IVRApplications_008");
         table(camera,"FnTable:IVRTrackedCamera_006");
         char model[128]{};ETrackedPropertyError e=ETrackedPropertyError_TrackedProp_Success;
@@ -60,6 +61,9 @@ public:
         std::fprintf(stderr,"Room application: key=sfnp.room.setup manifest_code=%d installed=%d identity_code=%d dashboard_code=%d\n",
             registration.manifestError,int(registration.installed),registration.identityError,int(registration.overlayError));
         if(registration.overlayError)throw std::runtime_error("Room dashboard creation failed code="+std::to_string(int(registration.overlayError)));
+        try{gpu.initialize(system,compositor);graphicsAvailable=true;
+            std::fprintf(stderr,"Room renderer: persistent Vulkan textures initialized\n");}
+        catch(const std::exception& error){std::fprintf(stderr,"Room renderer: graphics unavailable: %s\n",error.what());}
         HmdVector2_t scale{{1024,800}};
         if(overlay->SetOverlayWidthInMeters(panel,1.8f)||overlay->SetOverlayMouseScale(panel,&scale)
             ||overlay->SetOverlayInputMethod(panel,VROverlayInputMethod_Mouse))return false;
@@ -91,38 +95,25 @@ public:
         static const char* names[]{"dashboard","thumbnail","controls","left-mesh","right-mesh"};return names[index];
     }
     bool publish(unsigned index,const Canvas& image,double now){
-        return images.at(index).update(image,now,imageName(index),[&](void* bytes,unsigned width,unsigned height){
-            return overlay->SetOverlayRaw(imageHandle(index),bytes,width,height,4);});
+        return images.at(index).update(image,now,imageName(index),[&](const Canvas& canvas){
+            if(!graphicsAvailable){
+                // A single immutable diagnostic and icon remain visible if GPU
+                // startup fails. No hover, animation or camera actions run here.
+                if(index>1||images[index].loaded())throw std::runtime_error("Static graphics diagnostic cannot change");
+                fallbackBytes[index]=canvas.pixels;
+                return int(overlay->SetOverlayRaw(imageHandle(index),fallbackBytes[index].data(),unsigned(canvas.width),unsigned(canvas.height),4));
+            }
+            return gpu.present(index,canvas,[&](Texture_t* texture){return overlay->SetOverlayTexture(imageHandle(index),texture);});});
     }
     void publishUi(unsigned index,const Canvas& image,std::shared_ptr<const Json> state,double now){
-        if(publish(index,image,now))pendingUi.at(index)=std::move(state);
-        else if(!images[index].pending()&&images[index].matches(image))visibleUi.at(index)=std::move(state);
-    }
-    void imageEvent(unsigned index,const VREvent_t& event,unsigned channel=2){
-        if(event.eventType==EVREventType_VREvent_ImageLoaded||event.eventType==EVREventType_VREvent_ImageFailed){
-            if(!completionChannel[index])completionChannel[index]=channel;
-            if(completionChannel[index]!=channel)return;
-            const bool pending=images.at(index).pending();
-            images.at(index).complete(event.eventType==EVREventType_VREvent_ImageLoaded,imageName(index));
-            if(pending&&images[index].submissions()==1)
-                std::fprintf(stderr,"Room renderer: initial_image_loaded=%s completion_channel=%u\n",imageName(index),channel);
-            if(pending&&index<3)visibleUi[index]=pendingUi[index];
-            if(pending&&index>=3&&submittedProjection[index-3].set)applyProjection(index-3);
-        }
-    }
-    void applyProjection(unsigned eye){
-        auto& p=submittedProjection.at(eye);
-        const auto error=overlay->SetOverlayTransformProjection(world[eye],ETrackingUniverseOrigin_TrackingUniverseStanding,&p.pose,&p.frustum,EVREye(eye));
-        if(error)throw std::runtime_error("Native stereo projection failed code="+std::to_string(int(error)));
+        if(publish(index,image,now)||images[index].matches(image))visibleUi.at(index)=std::move(state);
     }
     void publishWorld(unsigned eye,const Canvas& image,const Mat& pose,const Frustum& f,double now){
         const unsigned index=3+eye;
-        if(images[index].pending())return;
         if(publish(index,image,now)||images[index].matches(image)){
-            auto& p=submittedProjection[eye];std::memcpy(&p.pose,&pose,sizeof(Mat));p.frustum={f.left,f.right,f.top,f.bottom};p.set=true;
-            // A raw image's projection changes only when that exact image has
-            // finished loading. Unchanged pixels need no new image submission.
-            if(!images[index].pending())applyProjection(eye);
+            HmdMatrix34_t nativePose{};std::memcpy(&nativePose,&pose,sizeof(Mat));VROverlayProjection_t frustum{f.left,f.right,f.top,f.bottom};
+            const auto error=overlay->SetOverlayTransformProjection(world[eye],ETrackingUniverseOrigin_TrackingUniverseStanding,&nativePose,&frustum,EVREye(eye));
+            if(error)throw std::runtime_error("Native stereo projection failed code="+std::to_string(int(error)));
         }
         if(images[index].loaded())overlay->ShowOverlay(world[eye]);
     }
@@ -215,7 +206,7 @@ int main(int argc,char** argv){
         std::array<Mat,64> controllerPoses{};std::array<bool,64> controllerValid{};
         double lastRenderReport=0;unsigned renderReports=0;
         const auto action=[&](const std::string& text){
-            if(text.empty())return;
+            if(text.empty()||!runtime.graphicsAvailable)return;
             const auto state=backend.latest();if(!state)return;
             bool enabled=false;for(const auto& button:state->at("buttons"))
                 if(button.value("action","")==text&&button.value("enabled",false))enabled=true;
@@ -234,18 +225,18 @@ int main(int argc,char** argv){
             backend.send({{"event","action"},{"action",text}});
             if(text=="add"||text=="elements"){char key[]="sfnp.room.setup";runtime.overlay->ShowDashboard(key);}
         };
+        const auto graphicsUnavailable=std::make_shared<const Json>(Json{{"page","graphics_unavailable"},{"title","Room Setup"},
+            {"subtitle","Room Setup could not initialize its graphics. Check for an update before trying again."},
+            {"notice","Diagnostic code: room-graphics-unavailable"},{"buttons",Json::array()},{"room",nullptr},
+            {"pending",nullptr},{"corners",Json::array()},{"world_revision",0}});
         while(!stopping&&backend.alive){
-            const double now=seconds();const auto state=backend.latest();VREvent_t event{};
+            const double now=seconds();const auto state=runtime.graphicsAvailable?backend.latest():graphicsUnavailable;VREvent_t event{};
             for(unsigned n=0;n<64&&runtime.system->PollNextEvent(&event,sizeof(event));++n){
-                if(event.eventType==EVREventType_VREvent_ImageLoaded||event.eventType==EVREventType_VREvent_ImageFailed)
-                    for(unsigned index=0;index<runtime.images.size();++index)
-                        if(event.data.overlay.overlayHandle==runtime.imageHandle(index))runtime.imageEvent(index,event,1);
                 if(event.eventType==EVREventType_VREvent_Quit||event.eventType==EVREventType_VREvent_ProcessQuit)stopping=1;
                 if(event.eventType==EVREventType_VREvent_ChaperoneUniverseHasChanged||event.eventType==EVREventType_VREvent_SeatedZeroPoseReset){
                     std::atomic_store(&origin,std::make_shared<const std::string>(randomId()));invalidate=true;originInvalid=true;spatial=false;}
             }
             for(unsigned n=0;n<64&&runtime.overlay->PollNextOverlayEvent(runtime.panel,&event,sizeof(event));++n){
-                runtime.imageEvent(0,event);
                 if(event.eventType==EVREventType_VREvent_Quit)stopping=1;
                 if(!state)continue;
                 const auto displayed=runtime.visibleUi[0];
@@ -257,14 +248,12 @@ int main(int argc,char** argv){
             }
             for(unsigned index=1;index<runtime.images.size();++index)
                 for(unsigned n=0;n<64&&runtime.overlay->PollNextOverlayEvent(runtime.imageHandle(index),&event,sizeof(event));++n){
-                    runtime.imageEvent(index,event);
                     if(event.eventType==EVREventType_VREvent_Quit)stopping=1;
                 }
             if(stopping)break;
-            for(unsigned index=0;index<runtime.images.size();++index)runtime.images[index].check(now,runtime.imageName(index));
             if(now-lastRenderReport>=10&&renderReports<120){
-                std::fprintf(stderr,"Room renderer: panel_submissions=%llu panel_waiting=%d panel_coalesced=%llu world_submissions=%llu\n",
-                    static_cast<unsigned long long>(runtime.images[0].submissions()),int(runtime.images[0].pending()),
+                std::fprintf(stderr,"Room renderer: panel_submissions=%llu panel_rate_skips=%llu world_submissions=%llu\n",
+                    static_cast<unsigned long long>(runtime.images[0].submissions()),
                     static_cast<unsigned long long>(runtime.images[0].coalesced()),
                     static_cast<unsigned long long>(runtime.images[3].submissions()+runtime.images[4].submissions()));
                 lastRenderReport=now;++renderReports;

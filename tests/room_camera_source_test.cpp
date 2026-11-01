@@ -8,23 +8,26 @@ struct Fixture {
     int acquires=0,releases=0,layoutCalls=0;
     EVRTrackedCameraError cameraError=EVRTrackedCameraError_VRTrackedCameraError_None;
     ETrackedPropertyError countError=ETrackedPropertyError_TrackedProp_Success;
-    bool invalidIntrinsics=false;float separation=.064f;
+    bool invalidIntrinsics=false,metadataAvailable=true;float separation=.064f;
 } fixture;
 void check(bool value,const char* reason){if(!value)throw std::runtime_error(reason);}
 std::array<Mat,2> geometry(){std::array<Mat,2> m{};m[0].m[0][3]=-fixture.separation/2;m[1].m[0][3]=fixture.separation/2;return m;}
 EVRTrackedCameraError has(TrackedDeviceIndex_t,bool* value){*value=fixture.camera;return fixture.cameraError;}
 std::int32_t property(TrackedDeviceIndex_t,ETrackedDeviceProperty prop,ETrackedPropertyError* error){
     if(prop==ETrackedDeviceProperty_Prop_NumCameras_Int32){*error=fixture.countError;return fixture.count;}
-    ++fixture.layoutCalls;*error=ETrackedPropertyError_TrackedProp_Success;return fixture.layout;
+    ++fixture.layoutCalls;*error=ETrackedPropertyError_TrackedProp_Success;return fixture.metadataAvailable?fixture.layout:0;
 }
 std::uint32_t array(TrackedDeviceIndex_t,ETrackedDeviceProperty,PropertyTypeTag_t,void* bytes,std::uint32_t size,ETrackedPropertyError* error){
     const auto matrices=geometry();check(size==sizeof(matrices),"bounded public extrinsic extent");
+    if(!fixture.metadataAvailable){*error=ETrackedPropertyError_TrackedProp_UnknownProperty;return 0;}
     std::memcpy(bytes,matrices.data(),size);*error=ETrackedPropertyError_TrackedProp_Success;return size;
 }
 EVRTrackedCameraError frameSize(TrackedDeviceIndex_t,EVRTrackedCameraFrameType,std::uint32_t* w,std::uint32_t* h,std::uint32_t* bytes){
+    if(!fixture.metadataAvailable)return EVRTrackedCameraError_VRTrackedCameraError_OperationFailed;
     *w=640;*h=240;*bytes=(*w)*(*h)*4;return EVRTrackedCameraError_VRTrackedCameraError_None;
 }
 EVRTrackedCameraError intrinsics(TrackedDeviceIndex_t,std::uint32_t,EVRTrackedCameraFrameType,HmdVector2_t* f,HmdVector2_t* c){
+    if(!fixture.metadataAvailable)return EVRTrackedCameraError_VRTrackedCameraError_OperationFailed;
     *f=HmdVector2_t{{fixture.invalidIntrinsics?0.f:220.f,220.f}};*c=HmdVector2_t{{159.5f,119.5f}};
     return EVRTrackedCameraError_VRTrackedCameraError_None;
 }
@@ -44,6 +47,14 @@ int main(){try{
     fixture=Fixture{};fixture.count=6;
     check(!camera.start("session","origin")&&camera.status=="camera-count-unsupported"&&fixture.layoutCalls==0&&fixture.acquires==0,"unsupported camera count stops before acquisition");
     check(camera.diagnostics.at("camera_count")==6&&camera.diagnostics.at("check")=="camera-count","journal diagnostics retain the failing gate and actual count");
+    fixture=Fixture{};fixture.count=0;fixture.metadataAvailable=false;
+    check(!camera.start("session","origin")&&camera.status=="camera-metadata-unavailable"&&fixture.acquires==0,"Frame's zero count is missing API metadata, not an unsupported physical camera");
+    check(camera.diagnostics.at("formats").size()==3&&camera.diagnostics.at("arcturus_factory_geometry_readable")==true,"zero-count inventory checks actual formats and factory availability without acquiring");
+    fixture=Fixture{};fixture.count=0;
+    check(camera.start("session","origin")&&fixture.acquires==1,"real stereo format, exactly two factory-matched extrinsics and valid intrinsics can establish stereo independently of a missing count");
+    camera.stop();
+    fixture=Fixture{};fixture.count=0;fixture.invalidIntrinsics=true;
+    check(!camera.start("session","origin")&&fixture.acquires==0,"zero-count metadata never bypasses intrinsic validation");
     fixture=Fixture{};fixture.countError=ETrackedPropertyError_TrackedProp_UnknownProperty;
     check(!camera.start("session","origin")&&camera.status=="camera-count-query-failed"&&fixture.acquires==0,"a property error is distinct from a mismatching count");
     fixture=Fixture{};fixture.layout=0;

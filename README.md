@@ -32,15 +32,17 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.3**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.4**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
 ```
 
-It also installs the Frame-local **Room Setup** dashboard. Live camera access,
-projection alignment and passthrough coexistence still require headset validation;
+It also installs the Frame-local **Room Setup** dashboard. **Live scanning is
+blocked on the tested Frame SteamVR 2.18.2:** its public camera API reports a
+camera but exposes no calibrated stereo stream. Projection alignment and
+passthrough coexistence still require headset validation;
 automatic object recognition and game/Venture room adapters are pending.
 See [room capture](docs/development/ROOM-CAPTURE.md) for the test flow and limits.
 

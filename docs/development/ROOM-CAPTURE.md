@@ -1,11 +1,14 @@
 # Arcturus room capture
 
-Status: **installable experimental candidate; first headset UI test failed**.
+Status: **installable room-editor experiment; live scanning blocked on tested Frame SteamVR 2.18.2**.
 The native dashboard, controller editor, bounded stereo reconstruction and owned
-installer integration are implemented. Actual Arcturus image availability through
-the public Frame camera interface is unverified. A successful build or an attached
-colour camera does not establish a working live scan. This is not yet Quest Scene
-API compatibility or a production room-scanning release.
+installer integration are implemented. Candidate 3 restores the dashboard, but
+its headset test still found hover-triggered flicker and refused camera access.
+Read-only logs prove `HasCamera=true`, a successful camera-count property query
+and count `0`. The legacy API has not established usable Arcturus frames.
+An attached colour module and visible compositor passthrough do not give an
+application access to the pixels. This is not yet a working live room scanner
+or Quest Scene API compatibility.
 
 ## Headset flow
 
@@ -98,6 +101,47 @@ All room-setup program strings, status messages, keyboard prompts and dashboard
 names are English, including on a German headset locale. Existing user-entered
 room/element names are preserved. This change does not establish live camera
 availability or a successful headset scan.
+
+### Candidate 4: persistent GPU textures and the real camera boundary
+
+The 2026-11-02 wearer report narrowed the flicker to button hover. Candidate 3's
+service is running with zero restarts; its installed executable matches the
+published artifact. Image-completion events arrive and there is no upload queue,
+but every hover still replaces an asynchronous raw bitmap. Valve explicitly
+[recommends GPU textures for changing overlay content](https://github.com/ValveSoftware/openvr/issues/941).
+
+Candidate **0.3.16-roomscan.4** replaces all five normal raw-image paths with persistent
+Vulkan images and `SetOverlayTexture`. Runtime-required extensions and the actual
+headset output GPU are queried rather than pinned. The overlay thread owns its
+queue, fixed staging buffers and image allocations. Images are handed to OpenVR
+in `TRANSFER_SRC_OPTIMAL`; a bounded fence retires OpenVR's queued copy before
+reusing the bytes. OpenVR shuts down before destroying the graphics resources.
+If GPU startup fails, one immutable raw diagnostic and icon remain available with
+all actions disabled; this fallback never animates or acquires the camera.
+Hover highlighting and mesh reveal animations remain enabled. Local offscreen
+GPU readback tests exercise 150 changing frames with exact RGBA and fixed image
+handles. These tests do not establish headset import or visual stability.
+
+The camera error was `camera-count-unsupported`, but its log shows
+`has_camera=true`, `camera_count=0` and API/property error `0`. Zero now triggers
+a complete bounded metadata inventory, rather than declaring an
+unsupported physical Arcturus module. Missing stereo metadata is reported as
+`camera-metadata-unavailable`. Exactly two real extrinsics and a stereo frame
+format can establish the camera count independently, while every factory,
+intrinsic and exposure/pose check still applies.
+An explicit Start request records the three public frame formats, both bounded
+intrinsic queries, layout/extrinsic status and factory-geometry availability
+without acquiring images. This gathers the real API boundary rather than assuming
+two cameras or bypassing calibration.
+
+[Arcturus' developer page](https://arcturus.vision/developers), checked 2026-11-02,
+states that a direct camera access API is not yet available. The same
+[Frame/OpenVR failure](https://github.com/ValveSoftware/openvr/issues/1926) was
+reported independently. The compositor's working passthrough path does not fix
+this public API. A different camera source must establish Arcturus eye identity,
+factory geometry, pixel layout and exact exposure/pose association before a real
+scan can work. This candidate fixes the renderer path and misleading diagnosis;
+it does **not** fix live camera access or claim a successful room scan.
 
 ## Camera source and remaining hardware gate
 
@@ -205,7 +249,7 @@ not approval to promote the feature to main.
 cmake -S . -B build/room-core -DFRAME_ROOM_SCAN_ONLY=ON
 cmake --build build/room-core
 ctest --test-dir build/room-core --output-on-failure
-bash tools/build_room_overlay.sh /path/to/openvr-header /path/to/json-single-include /path/to/DejaVuSans.ttf build/room-dashboard
+bash tools/build_room_overlay.sh /path/to/openvr-header /path/to/json-single-include /path/to/DejaVuSans.ttf build/room-dashboard /path/to/vulkan-headers
 python3 -B -m unittest discover -s tests -p 'test_room_scan*.py' -v
 python3 -B -m unittest discover -s tests -p test_stream_bridge_install.py -v
 python3 -B -m unittest discover -s tests -p test_package_stream_bridge.py -v
