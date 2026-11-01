@@ -21,8 +21,8 @@
       "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
     },
     "room_overlay": {
-      "bytes": 1772000,
-      "sha256": "aac7a477bff0d3df190e341bf438151ffdcd8d1701f416a4d8ee8f372e70dd02"
+      "bytes": 1903072,
+      "sha256": "f2d080bd964f5169ee81fea60125649a680e48417900bf6b50dc36dc99030516"
     }
   },
   "bridge_protocol": {
@@ -137,11 +137,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 90,
-      "sha256": "f08d5e041e71421c66beb9591136ce03aac4cb10b13e3eeb8dc779f92976c2ad"
+      "sha256": "39202b7efe5d916908ba919155a41e4663ca03b5ca758c6c98cc5fe869eab56e"
     },
     "VERSION": {
       "bytes": 18,
-      "sha256": "65bcf16f16a00bd5b4511cf7da1123952991bb9ceabf70608e225df9266e8754"
+      "sha256": "231489f7fdc79723045716f9dbf9b74d108bb4682a570943be05c89238c00e3c"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -150,6 +150,10 @@
     "packaging/mask-ffmpeg.json": {
       "bytes": 452,
       "sha256": "7279c53e7353130676821a68a44ed454f44d65440b8eebd1a314e2de51d877bb"
+    },
+    "packaging/room-vulkan-headers.json": {
+      "bytes": 1519,
+      "sha256": "73ae1a4fd3d0be1b4e87808fa041a5130937ac20dd4761297e4a14081c34a136"
     },
     "packaging/setup-openssh.json": {
       "bytes": 1029,
@@ -176,8 +180,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 24651,
-      "sha256": "a714aa0da9a138acafea0dc2b092794c48da6e00bb77e22f7e96d93a7fe22409"
+      "bytes": 24808,
+      "sha256": "0225db3110a125bd70b6fd5e6fe984f400ab21d8f52b8d8d879d752cb00792d2"
     },
     "room_scan/capture.py": {
       "bytes": 10562,
@@ -204,24 +208,28 @@
       "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
     },
     "room_scan/native_camera.h": {
-      "bytes": 19357,
-      "sha256": "0e7e0dd561ac9dfa315029dbfb264d5be5941588a2047a597b0d0b6f6c960cab"
+      "bytes": 22371,
+      "sha256": "80b1f10f499b3674db60e8be407eb67e82bb411f332d2e792c10aceae342b07f"
+    },
+    "room_scan/native_gpu.h": {
+      "bytes": 15578,
+      "sha256": "661d5ccd81233d8b70ebb6191e7b1fc1136992c0a842003166106b6a9e5a3f3e"
     },
     "room_scan/native_math.h": {
       "bytes": 3489,
       "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
     },
     "room_scan/native_overlay.cpp": {
-      "bytes": 26147,
-      "sha256": "4b5a9c0e36a59fd1c988937c8f4e1fc2353ccb0eadf4211bfe63388294f0e81a"
+      "bytes": 25695,
+      "sha256": "5711cb5973f55a019feda7a17c7063612c00cd39c3728b810e8c035acf32b6a6"
     },
     "room_scan/native_pipe.h": {
       "bytes": 4337,
       "sha256": "3e32fe2b2e8da756b2de6e7d24374cb0295b9abbbc6a02abcc5bf9ef5d95283a"
     },
     "room_scan/native_present.h": {
-      "bytes": 2675,
-      "sha256": "99c6bb143487961eeeed9eb725aec3170b7269761c3bd7b5bcfff39d57c392e5"
+      "bytes": 1976,
+      "sha256": "e3494778a65d490d05599ca0d1a56d0cdf516799798212dfb7d8b0f5ba647952"
     },
     "room_scan/native_raster.h": {
       "bytes": 4984,
@@ -348,8 +356,8 @@
       "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
     },
     "tools/build_room_overlay.sh": {
-      "bytes": 2362,
-      "sha256": "4da8d76c1c4cd159b801dbece5acb556f2fbb1c0709dfb986d3b8346f871424e"
+      "bytes": 3055,
+      "sha256": "0d291c25e6aee0b4e9f830652ab41701fbe0b095d445ccc9468bfa9f02e8c3bc"
     },
     "tools/build_setup_askpass.py": {
       "bytes": 6373,
@@ -392,8 +400,8 @@
       "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
     },
     "tools/package_stream_bridge.py": {
-      "bytes": 23579,
-      "sha256": "576ba0c37d79392fab3f03f78ff0c95febccc7c3ad863a06e1386547d724d9b6"
+      "bytes": 23747,
+      "sha256": "0844892b887440a95a5aad563fe90a89a6cbd147220df4617bcb4d350c112b51"
     },
     "tools/package_stream_link_setup.py": {
       "bytes": 7826,
@@ -408,5 +416,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "3d8f551bca8dd95b9f1b003973c74dd32b251298"
+  "source_revision": "abe56407e38160f2938c7338fb94a313a6812da9"
 }
