@@ -1,7 +1,7 @@
 name: PC and Frame setup checks
 on:
   push:
-    branches: [dev, main]
+    branches: [dev, main, arcturus-room-setup]
     paths:
       - 'VERSION'
       - 'get.ps1'

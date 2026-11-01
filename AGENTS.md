@@ -12,6 +12,10 @@
   approved publishing the tested0.3.15 candidate to main on2026-10-30, with
   Important logging and refreshed developer documentation. This approval covers
   this release; subsequent candidates still integrate on dev unless approved.
+  On 2026-11-01 the maintainer explicitly authorized a separate public
+  `arcturus-room-setup` branch with the room candidate integrated into its normal
+  `get.ps1` installer. This is a scoped exception to the dev-only rule; it does
+  not authorize updating main or promoting the experiment to the stable release.
 - Commit as `McFredward <frederik@lissek.info>`. Speak German to the maintainer;
   source, comments and developer documentation are English.
 - The intended input is real per-eye scene coverage, independent of scene RGB.

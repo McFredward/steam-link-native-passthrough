@@ -32,6 +32,19 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.1** gibt es den
+separaten Installer auf dem Branch `arcturus-room-setup`:
+
+```powershell
+irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
+```
+
+Er installiert das Frame-Dashboard **Raumeinrichtung** mit. Live-Kamerazugriff,
+Ausrichtung und gleichzeitiger Passthrough-Betrieb müssen noch auf der Brille
+geprüft werden. Automatische Objekterkennung und die Raumdaten-Anbindung an
+Spiele/Venture stehen noch aus. Ablauf und Grenzen stehen in der
+[Raumscan-Dokumentation](docs/development/ROOM-CAPTURE.md).
+
 ## Native Transparenz, kein Farbersatz
 
 Das Spiel sendet Transparenz getrennt von seinen Farben; keine Farbe wird aus

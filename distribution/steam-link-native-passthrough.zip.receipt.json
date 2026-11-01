@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20216605,
-    "sha256": "57244ab25663fb974e5453d34aed83fcab0ae6b03fd01cd21b9fa8fc7e3f6907"
+    "bytes": 20759264,
+    "sha256": "6197fce5c321ee407bd5e01a805919562b94fbe2af73dd8e84f830ccd9c826aa"
   },
   "artifacts": {
     "frame_layer": {
@@ -23,10 +23,14 @@
     "pc_provider": {
       "bytes": 2094080,
       "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
+    },
+    "room_overlay": {
+      "bytes": 1772000,
+      "sha256": "0330e4e077036720906c7121859f23d31ecd039ff4129ada1f9d7d9a4bc31ac0"
     }
   },
   "component_versions": {
-    "frame": "0.3.5",
+    "frame": "0.3.6-roomscan.1",
     "pc": "0.3.11"
   },
   "device_actions": false,
@@ -36,8 +40,8 @@
   "readiness": "release",
   "result": "PASS",
   "runtime_profile": {
-    "bytes": 11548,
-    "sha256": "72cbb7660c689c6a193e245485fe885ad5acc98cd5752ab7b8287a9fd0415f46"
+    "bytes": 14426,
+    "sha256": "1517e7a870553827b6e484603a5d51f93b3e46fe127143f36490b8153402236c"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -46,12 +50,12 @@
       "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
     },
     "PATCH_VERSIONS.json": {
-      "bytes": 79,
-      "sha256": "d8269283f154d73ce0d451f2b6b733d588c0600848a2b54ed3e1be371bc37169"
+      "bytes": 90,
+      "sha256": "17914a96f88d89c1c61c4d25113322a7ffaf9e01f4625a896a3a990c6bfabb56"
     },
     "VERSION": {
-      "bytes": 7,
-      "sha256": "304ee74090c149b24dd0a0c279da94cdff8469db1dda00a60560626a54c4cfec"
+      "bytes": 18,
+      "sha256": "03f1588175ae7ac181310271889fcd130ca60d3840f048bbcacb91df092446da"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -76,6 +80,74 @@
     "pc/stream-bridge-sender-provider.vrdrivermanifest": {
       "bytes": 138,
       "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
+    },
+    "room_scan/__init__.py": {
+      "bytes": 250,
+      "sha256": "06916ad8fab4dbd6ffc79faebc79543403407116262df234ea94c00661bc66b6"
+    },
+    "room_scan/__main__.py": {
+      "bytes": 2229,
+      "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
+    },
+    "room_scan/app.py": {
+      "bytes": 23714,
+      "sha256": "376531776e5f046147a0d987419964c1a26768f69da504d0a8556a2bfdee2099"
+    },
+    "room_scan/capture.py": {
+      "bytes": 10573,
+      "sha256": "113956d584b318ddad434cfcf7cadd9b4f74001a473acdfa2e816a898ad35a17"
+    },
+    "room_scan/editor.py": {
+      "bytes": 5529,
+      "sha256": "3ed9e81dd1b2f3e0bda9d9133bbd60668758795759eed360446c239387e1119c"
+    },
+    "room_scan/geometry.py": {
+      "bytes": 6095,
+      "sha256": "937c6705f2a543a93fdc789297c59567693995467e1889922f6bf13be8891b05"
+    },
+    "room_scan/licenses/DejaVu.txt": {
+      "bytes": 3857,
+      "sha256": "e81d9dced49fea2a7d576cbea283873de58563c5d488f954deb282843c3ea79c"
+    },
+    "room_scan/licenses/nlohmann-json.txt": {
+      "bytes": 1075,
+      "sha256": "c0d068392ea65358b798b8c165103560f06e9e3b38c4ab4e2d8810a7b931af86"
+    },
+    "room_scan/model.py": {
+      "bytes": 9339,
+      "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
+    },
+    "room_scan/native_camera.h": {
+      "bytes": 16432,
+      "sha256": "454256ddf458a2063706355c0300170f8d8b055ac812840705baaf1336d48c91"
+    },
+    "room_scan/native_math.h": {
+      "bytes": 3489,
+      "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
+    },
+    "room_scan/native_overlay.cpp": {
+      "bytes": 20769,
+      "sha256": "556321f3b16de00100faf8c3962c3ebfa5610c4d48d8d128210e371b2d0277e7"
+    },
+    "room_scan/native_pipe.h": {
+      "bytes": 4337,
+      "sha256": "3e32fe2b2e8da756b2de6e7d24374cb0295b9abbbc6a02abcc5bf9ef5d95283a"
+    },
+    "room_scan/native_raster.h": {
+      "bytes": 4984,
+      "sha256": "b1b98fd7f31440054db1f5dc3d8e52600ba099e5ef54c9edfbd964cd274f9e62"
+    },
+    "room_scan/native_view.h": {
+      "bytes": 9290,
+      "sha256": "d3d8a891cf5b99003194dae3fb2ce0e31b609ed75719985f61b3ef73852a0c9b"
+    },
+    "room_scan/store.py": {
+      "bytes": 6838,
+      "sha256": "f573ebac56f5e49a86853d8c2711f150587c362b295e320c109341cdc201d49a"
+    },
+    "room_scan/workflow.py": {
+      "bytes": 11017,
+      "sha256": "5300c8f7953b975c8a44041449c0480246be07806d5c5db6c5a0bbbf6f842f17"
     },
     "setup/patch-steam-link.cmd": {
       "bytes": 1266,
@@ -146,8 +218,8 @@
       "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 173055,
-      "sha256": "a82e7eef93096c2049b352a738f70e184c5201fc579a250f591c9e8a99798c75"
+      "bytes": 177627,
+      "sha256": "46152f395958b11db2d1495ae5519a9cbbd4f7e34e2726abc68fc69bfd8fb602"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -176,6 +248,14 @@
     "tools/build_mask_hevc_ffmpeg.py": {
       "bytes": 7970,
       "sha256": "2a7bc3b34b280f8d0b314f67dd70b7750920493a408653b364a9589b8990f66f"
+    },
+    "tools/build_room_font.py": {
+      "bytes": 1706,
+      "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
+    },
+    "tools/build_room_overlay.sh": {
+      "bytes": 2015,
+      "sha256": "d1bf691e72e79f59574b671929bd6aa9dd5e63ffb254f0b2d1c9ab545289a2db"
     },
     "tools/build_setup_askpass.py": {
       "bytes": 6373,
@@ -218,8 +298,8 @@
       "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
     },
     "tools/package_stream_bridge.py": {
-      "bytes": 20736,
-      "sha256": "90a4e83a8ac3c10a2e5cc9bda2fcdc43afb859cf32f24cb51e6c61c17871bc91"
+      "bytes": 23525,
+      "sha256": "e86014b6b118176e292df125fbcba91f628f0882d3fbda0c6bd96fb49d2dea95"
     },
     "tools/package_stream_link_setup.py": {
       "bytes": 7826,
@@ -234,7 +314,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "2804943d26948f865be1b62375ed3c11fa460510",
+  "source_revision": "9a392e152f365ac13f31cd36fbbee4697b4305e6",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -247,14 +327,17 @@
         "ordinary_rgba_source",
         "owned_coverage_gpu",
         "pc_provider_build",
+        "room_dashboard_flow",
+        "room_installer_transaction",
+        "room_overlay_build",
         "startup_health_logic"
       ],
       "hardware_verified": false,
       "pin": {
-        "bytes": 8584,
-        "sha256": "6ce8debb8dffe2ed6b5135cf87958bc0893e8277f8f1f6e23a0003ca15691d1c"
+        "bytes": 11567,
+        "sha256": "919abfa457947d1dc68c38b90d64df37b86ffc77742a18fdff9b9018eea4dc50"
       }
     }
   ],
-  "version": "0.3.15"
+  "version": "0.3.16-roomscan.1"
 }

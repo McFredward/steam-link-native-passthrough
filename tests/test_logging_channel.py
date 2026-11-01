@@ -38,7 +38,7 @@ class Tests(unittest.TestCase):
         new=members(quiet);self.assertEqual(set(old),set(new))
         for n in p.DEFAULTS:self.assertEqual(new[n],b'Important\n')
         for n in old:
-            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n:self.assertEqual(old[n],new[n],n)
+            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n or n.endswith('/sfnp-room-overlay'):self.assertEqual(old[n],new[n],n)
         self.assertEqual(json.loads(new['stream-bridge-bundle.json'])['logging'],{'channel':'main','level':'Important'})
         same,changed=p.retarget(quiet,'main');self.assertFalse(changed);self.assertEqual(same,quiet)
         verbose,changed=p.retarget(quiet,'dev');self.assertTrue(changed)
@@ -57,6 +57,15 @@ class Tests(unittest.TestCase):
         with self.assertRaises(ValueError):p.retarget(archive(files),'dev')
     def test_wrong_channel_rejected(self):
         with self.assertRaises(ValueError):p.retarget(self.fixture(),'feature/guess')
+    def test_room_dashboard_retains_its_exact_native_artifact(self):
+        files=members(self.fixture());files.pop('bootstrap-package.json')
+        name='frame/room-setup/sfnp-room-overlay';files[name]=b'explicit synthetic dashboard image'
+        bundle=json.loads(files['stream-bridge-bundle.json']);bundle['files'][name]=p.pin(files[name])
+        source=json.loads(files['stream-bridge-package-source.json']);source['native_artifacts']['room_overlay']=p.pin(files[name])
+        files['stream-bridge-bundle.json']=p.encoded(bundle);files['stream-bridge-package-source.json']=p.encoded(source)
+        self.check_roundtrip(archive(files))
+        files[name]=b'changed dashboard image'
+        with self.assertRaises(ValueError):p.retarget(archive(files),'dev')
     def test_changed_payload_refused_even_on_matching_channel(self):
         raw=members(self.fixture());raw.pop('bootstrap-package.json');raw['frame/libVkLayer_steam_link_bridge.so']=b'changed'
         for channel in ('dev','main'):
