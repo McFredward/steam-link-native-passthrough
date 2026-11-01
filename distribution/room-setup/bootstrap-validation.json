@@ -1,0 +1,19 @@
+{
+  "bootstrap_checks": 39,
+  "bootstrap_source_sha256": "d43b08cbf8368f1fe7a9be8f3c9c6768806dd98f27fcb335b57cd18d1a8e02ab",
+  "bootstrap_tests_log": {
+    "bytes": 99,
+    "sha256": "e3fcf261e3eb5a8d4ef2a585367d388842e34fc5419bfce2bd8ba50ef195f2b6"
+  },
+  "branch": "arcturus-room-setup",
+  "dashboard_payload_verified": true,
+  "device_actions": false,
+  "digest": "sha256:2e0a52ce484a5cbb0d41f95dfb14f3acfe172dd792f3423aca58159963990086",
+  "hardware_verified": false,
+  "powershell_version": "7.6.9",
+  "result": "PASS",
+  "runtime": "setup/runtime/python/python.exe",
+  "scope": "ActualPowerShellFunctions_RealCandidateArchive_NoWindowsACL_NoDevice",
+  "url": "https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/345159a9c7585ca3e4bd53a10abb4a17e6046d0d/distribution/steam-link-native-passthrough.zip",
+  "version": "0.3.16-roomscan.4"
+}
