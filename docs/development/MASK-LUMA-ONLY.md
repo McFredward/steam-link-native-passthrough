@@ -81,6 +81,19 @@ per-trial p95 call duration was20.646ms versus18.853ms. The same isolated-CPU
 scope and frequency/scheduling limits apply; no game or streaming runtime was
 replaced during that validation.
 
+The independent optimized-host CI also exposed an existing pool scheduling
+failure: a fast idle worker could take a new group's IDR and discard its own
+still-needed P reference while another decoder context was unused. The candidate
+now prefers unused contexts and retires the owner hint after a successful final
+IPPP8 picture or a decoder failure. It keeps four workers/eight slots and the
+existing cold-worker ownership, source/epoch and output checks. No stale result
+is substituted. A gated real-codec regression keeps partial groups on three
+workers, completes the fourth, then gives a partial owner first opportunity to
+steal a fresh IDR. The original pool fails on the old group's next P picture;
+the corrected pool retains the exact frame and every reference Y byte. This
+control and the full suite pass ASan/UBSan with4,195,585 assertions. That result
+extends the software checks above; a fresh visual test remains necessary.
+
 ## Reproduction and acceptance
 
 Build the signed pinned SDK with both patches using the instructions in

@@ -10,6 +10,9 @@
 #include <cstdio>
 #include <fstream>
 #include <stdexcept>
+#include <condition_variable>
+#include <map>
+#include <mutex>
 namespace hevc=stream_bridge_mask_hevc;
 namespace sb=stream_bridge;
 namespace fs=std::filesystem;
@@ -267,5 +270,61 @@ void independentSlices(const hevc::Libraries& libs,const fs::path& root,unsigned
     check(recovered,"new source recovers after parallel pool cancellation");
 }
 
+void idleOwnerContinuation(const hevc::Libraries& libs,const fs::path& root){
+    struct Gate {
+        std::mutex lock;std::condition_variable changed;bool stopping=false;
+        std::map<std::thread::id,unsigned> owners;
+        std::array<unsigned,4> entered{},exited{},permits{};
+        static void wake(void* context)noexcept{
+            auto& g=*static_cast<Gate*>(context);std::unique_lock<std::mutex> lock(g.lock);
+            const auto thread=std::this_thread::get_id();
+            if(!g.owners.count(thread))g.owners.emplace(thread,unsigned(g.owners.size()));
+            const auto owner=g.owners.at(thread);if(owner>=4)return;
+            ++g.entered[owner];g.changed.notify_all();
+            g.changed.wait(lock,[&]{return g.stopping||g.permits[owner];});
+            if(g.permits[owner])--g.permits[owner];
+            ++g.exited[owner];g.changed.notify_all();
+        }
+        void release(unsigned owner){std::lock_guard<std::mutex> guard(lock);++permits[owner];changed.notify_all();}
+        void wait(unsigned owner,unsigned count,bool leaving=false){
+            std::unique_lock<std::mutex> guard(lock);
+            check(changed.wait_for(guard,std::chrono::seconds(2),[&]{return (leaving?exited[owner]:entered[owner])>=count;}),"controlled codec worker reached its gate");
+        }
+    } gate;
+    hevc::Pool pool;
+    struct ReleaseOnExit {Gate& gate;~ReleaseOnExit(){std::lock_guard<std::mutex> lock(gate.lock);gate.stopping=true;gate.changed.notify_all();}} releaseOnExit{gate};
+    check(pool.prepareCold(libs,Gate::wake,&gate),"controlled continuation pool prepared");
+    std::array<std::vector<std::uint8_t>,8> coded;
+    for(unsigned n=0;n<8;++n){char name[32];std::snprintf(name,sizeof name,"nal-%03u.hevc",n);coded[n]=read(root/"independent-slices-2"/name);}
+    auto submit=[&](unsigned owner,unsigned picture,std::uint64_t frame){
+        std::vector<std::uint8_t> packet;auto& au=coded[picture];
+        check(sb::wrapHevcTemporalCoverage(bytes(au),256,256,81+owner,picture+1,picture?picture:0,!picture,1,packet),"controlled exact IPPP8 packet wrapped");
+        auto in=input(bytes(packet));in.descriptor.codedWidth=in.descriptor.codedHeight=256;in.descriptor.sourceFrame=frame;
+        check(pool.submit(in),"controlled packet admitted within fixed pool bounds");
+    };
+    hevc::Pool::Result result;
+    auto collect=[&](std::uint64_t frame){
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        bool found=false;while(!(found=pool.take(result))&&std::chrono::steady_clock::now()<deadline)std::this_thread::yield();
+        if(found&&result.status!=hevc::Status::Ok)std::fprintf(stderr,"controlled continuation: frame=%llu status=%s\n",(unsigned long long)frame,hevc::statusName(result.status));
+        check(found&&result.status==hevc::Status::Ok&&result.identity.descriptor.sourceFrame==frame&&result.decoded.descriptor.sourceFrame==frame,"idle worker retains its exact P-picture reference when a free context exists");
+    };
+    // Hold four distinct real workers after their first decoded IDR. Only the
+    // last worker finishes its group, leaving that context reusable.
+    for(unsigned owner=0;owner<4;++owner){submit(owner,0,1000+owner);gate.wait(owner,1);collect(1000+owner);}
+    for(unsigned picture=1;picture<8;++picture){submit(3,picture,1010+picture);gate.release(3);gate.wait(3,picture+1);collect(1010+picture);}
+    submit(4,0,1100);gate.release(0);gate.wait(0,1,true);
+    {
+        // Give the idle partial-chain owner exclusive opportunity to steal the
+        // new IDR. The completed worker remains gated until this interval ends.
+        std::unique_lock<std::mutex> lock(gate.lock);
+        gate.changed.wait_for(lock,std::chrono::milliseconds(250),[&]{return gate.entered[0]>=2;});
+    }
+    gate.release(3);collect(1100);
+    submit(0,1,1200);gate.release(0);collect(1200);
+    std::ifstream reference(root/"independent-slices-2/reference.sha256");std::string first,second;reference>>first>>second;
+    check(pixelDigest(result.decoded.samples)==second,"retained continuation matches every reference alpha byte");
 }
-int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);temporal(libraries,argv[3]);temporalPool(libraries,argv[3]);temporalPool(libraries,argv[3],true);reuse(libraries,argv[3]);pool(libraries,argv[3]);independentSlices(libraries,argv[3],2);independentSlices(libraries,argv[3],4);independentSlices(libraries,argv[3],2,"sao-2");independentSlices(libraries,argv[3],2,"cross-2");independentSlices(libraries,argv[3],2,"cross-sao-2");std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}
+
+}
+int main(int argc,char** argv){try{if(argc!=4){std::fprintf(stderr,"Usage: test_stream_bridge_mask_hevc CODEC_LIBRARY UTILITY_LIBRARY FIXTURE_DIRECTORY\n");return 2;}const hevc::Libraries libraries{fs::absolute(argv[1]),fs::absolute(argv[2])};unavailable(libraries);decode(libraries,argv[3]);temporal(libraries,argv[3]);temporalPool(libraries,argv[3]);temporalPool(libraries,argv[3],true);reuse(libraries,argv[3]);pool(libraries,argv[3]);independentSlices(libraries,argv[3],2);independentSlices(libraries,argv[3],4);independentSlices(libraries,argv[3],2,"sao-2");independentSlices(libraries,argv[3],2,"cross-2");independentSlices(libraries,argv[3],2,"cross-sao-2");idleOwnerContinuation(libraries,argv[3]);std::printf("%u real HEVC mask decoder checks passed\n",checks);return 0;}catch(const std::exception& error){std::fprintf(stderr,"FAIL: %s\n",error.what());return 1;}}

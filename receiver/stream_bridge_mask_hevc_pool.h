@@ -8,6 +8,8 @@ namespace stream_bridge_mask_hevc {
 // rejoin the exact still-current certificate and native image lease. Lifecycle
 // prepare/stop has one quiescent cold owner. Submit/take/cancel are synchronized;
 // none of these methods belongs on a rendering callback.
+// New groups prefer unused contexts over idle owners of an incomplete group;
+// a successful final IPPP8 picture or decoder failure retires that owner hint.
 class Pool {
 public:
     static constexpr unsigned Workers=4,Capacity=8;

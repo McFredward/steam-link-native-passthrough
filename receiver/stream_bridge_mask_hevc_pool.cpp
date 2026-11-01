@@ -25,7 +25,7 @@ struct Pool::Impl {
     };
     struct Slot {
         Phase phase=Phase::Free;std::uint64_t ticket=0,epoch=0,queuedAt=0,completedAt=0;
-        Input input{};Chain chain{};std::vector<std::uint8_t> encoded;Result result;
+        Input input{};Chain chain{};bool endsGroup=false;std::vector<std::uint8_t> encoded;Result result;
     };
     mutable std::mutex gate;std::condition_variable available;
     std::array<Slot,Capacity> slots{};std::array<std::thread,Workers> threads;
@@ -38,6 +38,9 @@ struct Pool::Impl {
         if(slot.phase!=Phase::Queued)return false;
         if(!slot.chain.temporal)return true;
         for(unsigned i=0;i<Workers;++i)if(chains[i]==slot.chain)return i==index;
+        // A fast idle owner must not steal another group's IDR while an unused
+        // context is available: its own P continuation may arrive just later.
+        if(chains[index].temporal&&std::any_of(chains.begin(),chains.end(),[](const auto& chain){return !chain.temporal;}))return false;
         // A new independent group can use an idle context, but cannot evict
         // another group's queued/running reference chain. No global P bottleneck.
         for(const auto& pending:slots)if((pending.phase==Phase::Queued||pending.phase==Phase::Running)&&pending.chain==chains[index])return false;
@@ -64,8 +67,10 @@ struct Pool::Impl {
             bool publish=false;
             {
                 std::lock_guard<std::mutex> lock(gate);measurements[decoder]=decoders[decoder]->statistics();
-                if(!stopping&&slot->epoch==epoch){slot->completedAt=clockMicros();slot->phase=Phase::Done;publish=true;}
-                else *slot={};
+                if(!stopping&&slot->epoch==epoch){
+                    if(temporal&&(slot->endsGroup||result.status!=Status::Ok))chains[index]={};
+                    slot->completedAt=clockMicros();slot->phase=Phase::Done;publish=true;
+                }else {chains[index]={};*slot={};}
             }
             available.notify_all();if(publish&&wake)wake(context);
         }
@@ -101,18 +106,19 @@ bool Pool::submit(const Input& input)noexcept{
     try{
         const auto pixels=std::size_t(input.descriptor.codedWidth)*input.descriptor.codedHeight;
         if(!input.payload.data||input.payload.size<stream_bridge::HevcCoverageHeaderBytes||input.payload.size>stream_bridge::HevcTemporalHeaderBytes+stream_bridge::MaximumHevcCoverageBitstreamBytes||!pixels||pixels>MaximumPixels)return false;
-        Impl::Chain chain;
+        Impl::Chain chain;bool endsGroup=false;
         chain.temporal=input.payload.size>4&&!std::memcmp(input.payload.data,"SFHT",4);
         if(chain.temporal){stream_bridge::HevcCoverageView view;
             if(!stream_bridge::inspectHevcTemporalCoverage(input.payload,input.descriptor.codedWidth,input.descriptor.codedHeight,view))return false;
-            chain.source=input.source;chain.descriptor=input.descriptor;chain.binding=input.binding;chain.codecEpoch=view.epoch;chain.anchor=view.anchor;}
+            chain.source=input.source;chain.descriptor=input.descriptor;chain.binding=input.binding;chain.codecEpoch=view.epoch;chain.anchor=view.anchor;
+            endsGroup=!view.keyframe&&view.poc==stream_bridge::HevcTemporalGop-1;}
         std::lock_guard<std::mutex> lock(impl_->gate);if(!impl_->prepared||impl_->stopping||impl_->nextTicket==UINT64_MAX)return false;
         for(auto& slot:impl_->slots)if(slot.phase==Impl::Phase::Free){
             // Publish only after this bounded copy succeeds; never retain the
             // caller's packet memory while a worker decodes asynchronously.
             slot.encoded.assign(input.payload.data,input.payload.data+input.payload.size);
             slot.input=input;slot.input.payload={slot.encoded.data(),slot.encoded.size()};slot.epoch=impl_->epoch;slot.ticket=++impl_->nextTicket;
-            chain.cancelEpoch=impl_->epoch;slot.chain=chain;slot.queuedAt=clockMicros();slot.phase=Impl::Phase::Queued;impl_->available.notify_all();return true;
+            chain.cancelEpoch=impl_->epoch;slot.chain=chain;slot.endsGroup=endsGroup;slot.queuedAt=clockMicros();slot.phase=Impl::Phase::Queued;impl_->available.notify_all();return true;
         }
     }catch(...){}
     return false;
@@ -126,7 +132,7 @@ bool Pool::take(Result& output)noexcept{
         // storage into the free slot; no consumer or worker retains its view.
         auto recycled=std::move(output.decoded.samples);
         output=std::move(slot.result);
-        slot.input={};slot.chain={};slot.result={};slot.encoded.clear();
+        slot.input={};slot.chain={};slot.endsGroup=false;slot.result={};slot.encoded.clear();
         slot.result.decoded.samples=std::move(recycled);
         slot.phase=Impl::Phase::Free;slot.ticket=slot.epoch=slot.queuedAt=slot.completedAt=0;
         return true;
