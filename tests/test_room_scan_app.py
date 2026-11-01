@@ -1,5 +1,6 @@
 """Owned native-pipe/controller-flow fixtures, not a camera or headset test."""
 from dataclasses import replace
+from contextlib import redirect_stderr
 import io
 import json
 from pathlib import Path
@@ -77,6 +78,23 @@ class AppTests(unittest.TestCase):
         with self.assertRaises(RoomError):
             self.app.event(dict(event="point", origin_id=IDS[4], sample_ns=1, controller_position=[0, 0, 0]))
         self.assertFalse(self.app.draft.points)
+
+    def test_camera_refusal_has_a_visible_diagnostic_code(self):
+        self.app.action("new")
+        self.app.event(dict(event="camera_warming"))
+        self.app.event(dict(event="camera_unavailable", reason="camera-count-unsupported"))
+        view=self.app.view()
+        self.assertIn("Prüfcode: camera-count-unsupported",view["notice"])
+        self.assertFalse(view["camera_check_pending"])
+        self.assertFalse(view["capture_active"])
+
+    def test_invalid_events_log_bounded_metadata_and_keep_controller_alive(self):
+        incoming=io.BytesIO(b'{"event":"unknown"}\n'*70)
+        outgoing=io.BytesIO();errors=io.StringIO()
+        with redirect_stderr(errors):run(self.store.root,incoming,outgoing)
+        self.assertEqual(64,len(errors.getvalue().splitlines()))
+        states=[json.loads(line) for line in outgoing.getvalue().splitlines()]
+        self.assertEqual(71,len(states));self.assertTrue(states[-1]["notice"])
 
     def test_saved_room_is_explicitly_realigned_and_revisioned(self):
         self.test_controller_measurement_confirm_review_save_query()

@@ -1166,7 +1166,8 @@ class FrameInstall:
         data = self.root.parent/'rooms'
         arguments = ['--openvr', native, '--data', str(data)]
         manifest = {'source':'builtin', 'applications':[{
-            'app_key':'sfnp.room.setup', 'launch_type':'binary', 'binary_path_linux':str(root/'sfnp-room-overlay'),
+            'app_key':'sfnp.room.setup', 'launch_type':'binary', 'binary_path':str(root/'sfnp-room-overlay'),
+            'binary_path_linux':str(root/'sfnp-room-overlay'),
             'arguments':shlex.join(arguments), 'is_dashboard_overlay':True,
             'strings':{'en_us':{'name':'Room setup','description':'Scan and edit your mixed reality room'},
                        'de_de':{'name':'Raumeinrichtung','description':'Raum scannen und Möbel eintragen'}}}]}

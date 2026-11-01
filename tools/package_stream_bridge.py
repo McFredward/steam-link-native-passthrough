@@ -63,7 +63,7 @@ def required_sources(root=ROOT):
                   {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
                   {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
-                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h',
+                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h',
                    'tools/build_room_font.py','tools/build_room_overlay.sh'})
 
 

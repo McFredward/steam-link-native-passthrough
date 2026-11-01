@@ -247,11 +247,18 @@ class Application:
             self.session.provider_open = True
             self.starting = False
         elif kind == "camera_unavailable":
+            reason = event.get("reason")
             self.notice = {
                 "camera-calibration-unverified": "Die Arcturus-Kalibrierung konnte nicht geprüft werden. Der Scan bleibt aus.",
                 "camera-module-association-unverified": "Die Kamerabilder passen nicht zur Arcturus-Kalibrierung. Der Scan bleibt aus.",
                 "head-tracking-unavailable": "Die Raumverfolgung ist noch nicht bereit. Schau dich um und versuche es erneut.",
-            }.get(event.get("reason"), "SteamVR stellt keine verlässlich zugeordneten Stereo-Kamerabilder bereit. Der Scan bleibt aus.")
+                "public-camera-api-unavailable": "Die öffentliche Kameraschnittstelle ist nicht verfügbar. Der Scan bleibt aus.",
+                "camera-not-exposed": "SteamVR meldet keine zugängliche Kamera. Der Scan bleibt aus.",
+                "camera-count-unsupported": "Die gemeldete Kamera-Anordnung ist noch nicht unterstützt. Der Scan bleibt aus.",
+                "camera-layout-unsupported": "Das Kamerabild hat kein bestätigtes Stereo-Layout. Der Scan bleibt aus.",
+            }.get(reason, "Die Stereo-Kamera konnte nicht verifiziert werden. Der Scan bleibt aus.")
+            if type(reason) is str and 0 < len(reason) <= 64 and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in reason):
+                self.notice += " Prüfcode: "+reason
             self.page = self.camera_request_page if self.camera_request_page in ("prepare", "alignment") else "scan"
             self.starting = False
         elif kind == "depth":
@@ -386,6 +393,7 @@ class Application:
                 "notice": self.notice, "step": step, "buttons": buttons,
                 "capture_active": bool(self.session and self.session.provider_open),
                 "capture_collecting": bool(self.session and self.session.stage == Stage.SCANNING),
+                "camera_check_pending": self.starting,
                 "world_revision": self.world_revision, "room": state,
                 "pending": self.pending.to_dict() if self.pending else None,
                 "corners": list(self.draft.points) if self.draft else [],
@@ -406,6 +414,7 @@ class Application:
 
 def run(root, incoming, outgoing):
     app = Application(RoomStore(root))
+    errors = 0
     def emit():
         raw = (json.dumps(app.view(), ensure_ascii=False, allow_nan=False, separators=(",", ":"))+"\n").encode()
         require(len(raw) <= MAX_BYTES, "Dashboard snapshot exceeds its budget")
@@ -418,9 +427,16 @@ def run(root, incoming, outgoing):
             if not raw:
                 break
             require(len(raw) <= MAX_BYTES and raw.endswith(b"\n"), "Native event exceeds its budget")
+            event = None
             try:
-                app.event(decode(raw))
-            except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration):
+                event = decode(raw)
+                app.event(event)
+            except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration) as error:
+                if errors < 64:
+                    kind = event.get("event", "invalid") if isinstance(event, dict) else "invalid"
+                    kind = kind if type(kind) is str and kind.isascii() and kind.replace("_", "").isalnum() and len(kind) <= 64 else "invalid"
+                    print(f"Room controller: event={kind} error={type(error).__name__}", file=sys.stderr)
+                errors += 1
                 app.notice = "Diese Aktion konnte nicht abgeschlossen werden. Prüfe die Raumzuordnung und deine Eingabe."
             emit()
     finally:
