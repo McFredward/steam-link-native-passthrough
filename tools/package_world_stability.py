@@ -14,6 +14,7 @@ SOURCES = ("probe/world_stability_core.h", "probe/world_stability_frame.cpp",
            "tools/analyze_world_stability.py", "tools/build_world_stability.sh",
            "tools/package_world_stability.py", "docs/development/WORLD-STABILITY.md")
 MODES = {"--reference": "world-fixed", "--visibility-check": "head-locked-visibility"}
+HARDWARE_REFERENCE_SHA256 = "109af43953f303d6b58bc7d1ade34a43c1c81bc2e5b061d79c1b97dda3594e7c"
 SDK_SHA256 = "3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7"
 MEMBERS = {"sfnp-world-stability-frame", "analyze_world_stability.py", "WORLD-STABILITY.md", "LICENSE", "manifest.json"}
 
@@ -45,6 +46,10 @@ def verify(archive):
             value = bundle.read(name)
             if expected != {"bytes": len(value), "sha256": digest(value)}:
                 raise ValueError("Changed diagnostic member")
+        observed_binary = digest(bundle.read("sfnp-world-stability-frame")) == HARDWARE_REFERENCE_SHA256
+        if (manifest.get("hardware_observation_binary_sha256") != HARDWARE_REFERENCE_SHA256 or
+                manifest.get("hardware_observation_matches_binary") is not observed_binary):
+            raise ValueError("Hardware observation does not match the declared native binary")
         expected_sources = {name: digest((ROOT / name).read_bytes()) for name in SOURCES}
         if manifest["source_files_sha256"] != expected_sources or manifest["public_openvr_capi_sha256"] != SDK_SHA256:
             raise ValueError("Archive source snapshot differs from this checkout")
@@ -82,7 +87,11 @@ def main():
         "cross_compiler": subprocess.check_output(["aarch64-linux-gnu-g++", "-dumpfullversion", "-dumpversion"], text=True).strip(),
         "required_glibc": sorted(set(re.findall(r"Name: (GLIBC_[0-9.]+)", versions))),
         "files": {name: {"bytes": len(value), "sha256": digest(value)} for name, value in data.items()},
-        "hardware_validation": "pending coordinated reference-visibility and motion test",
+        "hardware_observation_binary_sha256": HARDWARE_REFERENCE_SHA256,
+        "hardware_observation_matches_binary": digest(binary) == HARDWARE_REFERENCE_SHA256,
+        "hardware_validation": ("wearer confirmed both reference modes visible with this exact native binary; qualitative MR/VR comparison documented; no stability fix or latency proof"
+                                if digest(binary) == HARDWARE_REFERENCE_SHA256 else
+                                "pending for this native binary; documented hardware observation applies to hardware_observation_binary_sha256 only"),
     }
     # The receipt describes reproducible inputs and pending hardware boundaries;
     # no software build flag can certify a physical headset image.
