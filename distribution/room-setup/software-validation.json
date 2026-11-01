@@ -22,7 +22,7 @@
     },
     "room_overlay": {
       "bytes": 1772000,
-      "sha256": "719ffe638552f84d725e24f4b0ef58d67bf3dba2bf2564df04fbbeae679e456d"
+      "sha256": "aac7a477bff0d3df190e341bf438151ffdcd8d1701f416a4d8ee8f372e70dd02"
     }
   },
   "checks": {
@@ -41,7 +41,7 @@
   },
   "hardware_verified": false,
   "result": "PASS",
-  "runtime_profile_sha256": "3f882773b11968a894e10e8ecc737589295d54ac779696c2f4660052cfc2f530",
+  "runtime_profile_sha256": "5b61b2e7348da9251422d3a733ba95eef34aa664691f09ef3b9dbfe5897ee0e8",
   "schema": "sfnp-stream-bridge-release-validation-v1",
   "source_pins": {
     "LICENSE": {
@@ -50,11 +50,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 90,
-      "sha256": "748ba170f702acabb9171ff96192e99a40e1b1c3803e8e109f3d53988e07f07e"
+      "sha256": "f08d5e041e71421c66beb9591136ce03aac4cb10b13e3eeb8dc779f92976c2ad"
     },
     "VERSION": {
       "bytes": 18,
-      "sha256": "2855b073b59fc79737b7be865ee77d40e120f5e2c7a6aba2566cf11a7efe62b3"
+      "sha256": "65bcf16f16a00bd5b4511cf7da1123952991bb9ceabf70608e225df9266e8754"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -89,12 +89,12 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 24930,
-      "sha256": "a366f9ec005adc3426f9f36f6cecc55cc3b8e3d4384cc3e8bd2345e648d2eeb6"
+      "bytes": 24651,
+      "sha256": "a714aa0da9a138acafea0dc2b092794c48da6e00bb77e22f7e96d93a7fe22409"
     },
     "room_scan/capture.py": {
-      "bytes": 10573,
-      "sha256": "113956d584b318ddad434cfcf7cadd9b4f74001a473acdfa2e816a898ad35a17"
+      "bytes": 10562,
+      "sha256": "7b08c50b5aa8a7fb9eb81947ef2f023fb3b6d2e02e3c14899f0f8a62fdf507c2"
     },
     "room_scan/editor.py": {
       "bytes": 5529,
@@ -125,8 +125,8 @@
       "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
     },
     "room_scan/native_overlay.cpp": {
-      "bytes": 26196,
-      "sha256": "1dc1ea60b4638eb4df74fceea41710c92bf603df2a78bdc634fc512a22608ac2"
+      "bytes": 26147,
+      "sha256": "4b5a9c0e36a59fd1c988937c8f4e1fc2353ccb0eadf4211bfe63388294f0e81a"
     },
     "room_scan/native_pipe.h": {
       "bytes": 4337,
@@ -140,17 +140,21 @@
       "bytes": 4984,
       "sha256": "b1b98fd7f31440054db1f5dc3d8e52600ba099e5ef54c9edfbd964cd274f9e62"
     },
+    "room_scan/native_registration.h": {
+      "bytes": 1443,
+      "sha256": "a790fd5b76a10952b07312b12761ecc12431c073b56d217ad02f974162d7ce81"
+    },
     "room_scan/native_view.h": {
-      "bytes": 9290,
-      "sha256": "d3d8a891cf5b99003194dae3fb2ce0e31b609ed75719985f61b3ef73852a0c9b"
+      "bytes": 9285,
+      "sha256": "8229717022f6effbdfc20048ce12feb600c4d068c32a9410a1201fe7c24b94b7"
     },
     "room_scan/store.py": {
       "bytes": 6838,
       "sha256": "f573ebac56f5e49a86853d8c2711f150587c362b295e320c109341cdc201d49a"
     },
     "room_scan/workflow.py": {
-      "bytes": 11017,
-      "sha256": "5300c8f7953b975c8a44041449c0480246be07806d5c5db6c5a0bbbf6f842f17"
+      "bytes": 10943,
+      "sha256": "a948b404735e6e1496b30f1cb3e587bb4934f84960490d7ca433b496ff3d0543"
     },
     "setup/patch-steam-link.cmd": {
       "bytes": 1266,
@@ -221,8 +225,8 @@
       "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 177684,
-      "sha256": "e41effdaa60c6e39ecb291dce684f4a0212282ea349ae1d2d1f5156e73e79689"
+      "bytes": 177750,
+      "sha256": "89260405c258b60c157511b1f190b047d00fce2161c631400e213c3f595fa782"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -257,8 +261,8 @@
       "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
     },
     "tools/build_room_overlay.sh": {
-      "bytes": 2190,
-      "sha256": "d82c20f9f3116e3234c7ecc72636f11dfc6888a7d14e102d1688d59b7c24e5ee"
+      "bytes": 2362,
+      "sha256": "4da8d76c1c4cd159b801dbece5acb556f2fbb1c0709dfb986d3b8346f871424e"
     },
     "tools/build_setup_askpass.py": {
       "bytes": 6373,
@@ -301,8 +305,8 @@
       "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
     },
     "tools/package_stream_bridge.py": {
-      "bytes": 23554,
-      "sha256": "10f33dd4fd9e3e2715cdb0d951f4d06384b28402c4021bf8ff217543b6021552"
+      "bytes": 23579,
+      "sha256": "576ba0c37d79392fab3f03f78ff0c95febccc7c3ad863a06e1386547d724d9b6"
     },
     "tools/package_stream_link_setup.py": {
       "bytes": 7826,
@@ -317,5 +321,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "29e120c2a9ee60e5c6feacb08bbf46db9aff0251"
+  "source_revision": "3d8f551bca8dd95b9f1b003973c74dd32b251298"
 }

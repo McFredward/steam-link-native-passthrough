@@ -1,8 +1,8 @@
 {
   "baseline_receipt": {
     "archive": {
-      "bytes": 20759264,
-      "sha256": "6197fce5c321ee407bd5e01a805919562b94fbe2af73dd8e84f830ccd9c826aa"
+      "bytes": 20769656,
+      "sha256": "aa02c6cca486244bb268792f8f306c000421f7c232e06cef423236d140477c67"
     },
     "artifacts": {
       "frame_layer": {
@@ -27,11 +27,11 @@
       },
       "room_overlay": {
         "bytes": 1772000,
-        "sha256": "0330e4e077036720906c7121859f23d31ecd039ff4129ada1f9d7d9a4bc31ac0"
+        "sha256": "719ffe638552f84d725e24f4b0ef58d67bf3dba2bf2564df04fbbeae679e456d"
       }
     },
     "component_versions": {
-      "frame": "0.3.6-roomscan.1",
+      "frame": "0.3.6-roomscan.2",
       "pc": "0.3.11"
     },
     "device_actions": false,
@@ -41,8 +41,8 @@
     "readiness": "release",
     "result": "PASS",
     "runtime_profile": {
-      "bytes": 14426,
-      "sha256": "1517e7a870553827b6e484603a5d51f93b3e46fe127143f36490b8153402236c"
+      "bytes": 14573,
+      "sha256": "3f882773b11968a894e10e8ecc737589295d54ac779696c2f4660052cfc2f530"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -52,11 +52,11 @@
       },
       "PATCH_VERSIONS.json": {
         "bytes": 90,
-        "sha256": "17914a96f88d89c1c61c4d25113322a7ffaf9e01f4625a896a3a990c6bfabb56"
+        "sha256": "748ba170f702acabb9171ff96192e99a40e1b1c3803e8e109f3d53988e07f07e"
       },
       "VERSION": {
         "bytes": 18,
-        "sha256": "03f1588175ae7ac181310271889fcd130ca60d3840f048bbcacb91df092446da"
+        "sha256": "2855b073b59fc79737b7be865ee77d40e120f5e2c7a6aba2566cf11a7efe62b3"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -91,8 +91,8 @@
         "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
       },
       "room_scan/app.py": {
-        "bytes": 23714,
-        "sha256": "376531776e5f046147a0d987419964c1a26768f69da504d0a8556a2bfdee2099"
+        "bytes": 24930,
+        "sha256": "a366f9ec005adc3426f9f36f6cecc55cc3b8e3d4384cc3e8bd2345e648d2eeb6"
       },
       "room_scan/capture.py": {
         "bytes": 10573,
@@ -119,20 +119,24 @@
         "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
       },
       "room_scan/native_camera.h": {
-        "bytes": 16432,
-        "sha256": "454256ddf458a2063706355c0300170f8d8b055ac812840705baaf1336d48c91"
+        "bytes": 19357,
+        "sha256": "0e7e0dd561ac9dfa315029dbfb264d5be5941588a2047a597b0d0b6f6c960cab"
       },
       "room_scan/native_math.h": {
         "bytes": 3489,
         "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
       },
       "room_scan/native_overlay.cpp": {
-        "bytes": 20769,
-        "sha256": "556321f3b16de00100faf8c3962c3ebfa5610c4d48d8d128210e371b2d0277e7"
+        "bytes": 26196,
+        "sha256": "1dc1ea60b4638eb4df74fceea41710c92bf603df2a78bdc634fc512a22608ac2"
       },
       "room_scan/native_pipe.h": {
         "bytes": 4337,
         "sha256": "3e32fe2b2e8da756b2de6e7d24374cb0295b9abbbc6a02abcc5bf9ef5d95283a"
+      },
+      "room_scan/native_present.h": {
+        "bytes": 2675,
+        "sha256": "99c6bb143487961eeeed9eb725aec3170b7269761c3bd7b5bcfff39d57c392e5"
       },
       "room_scan/native_raster.h": {
         "bytes": 4984,
@@ -219,8 +223,8 @@
         "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
       },
       "setup/stream_bridge_install.py": {
-        "bytes": 177627,
-        "sha256": "46152f395958b11db2d1495ae5519a9cbbd4f7e34e2726abc68fc69bfd8fb602"
+        "bytes": 177684,
+        "sha256": "e41effdaa60c6e39ecb291dce684f4a0212282ea349ae1d2d1f5156e73e79689"
       },
       "third_party/ffmpeg/COPYING.LGPLv2.1": {
         "bytes": 26517,
@@ -255,8 +259,8 @@
         "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
       },
       "tools/build_room_overlay.sh": {
-        "bytes": 2015,
-        "sha256": "d1bf691e72e79f59574b671929bd6aa9dd5e63ffb254f0b2d1c9ab545289a2db"
+        "bytes": 2190,
+        "sha256": "d82c20f9f3116e3234c7ecc72636f11dfc6888a7d14e102d1688d59b7c24e5ee"
       },
       "tools/build_setup_askpass.py": {
         "bytes": 6373,
@@ -299,8 +303,8 @@
         "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
       },
       "tools/package_stream_bridge.py": {
-        "bytes": 23525,
-        "sha256": "e86014b6b118176e292df125fbcba91f628f0882d3fbda0c6bd96fb49d2dea95"
+        "bytes": 23554,
+        "sha256": "10f33dd4fd9e3e2715cdb0d951f4d06384b28402c4021bf8ff217543b6021552"
       },
       "tools/package_stream_link_setup.py": {
         "bytes": 7826,
@@ -315,7 +319,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "9a392e152f365ac13f31cd36fbbee4697b4305e6",
+    "source_revision": "29e120c2a9ee60e5c6feacb08bbf46db9aff0251",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -335,12 +339,12 @@
         ],
         "hardware_verified": false,
         "pin": {
-          "bytes": 11567,
-          "sha256": "919abfa457947d1dc68c38b90d64df37b86ffc77742a18fdff9b9018eea4dc50"
+          "bytes": 11714,
+          "sha256": "c5a18f841127dcf953c4f6c79bb9ea34d6e71920d58e36c989af3fdc5cb74d27"
         }
       }
     ],
-    "version": "0.3.16-roomscan.1"
+    "version": "0.3.16-roomscan.2"
   },
   "build_inputs": {
     "atlas": {
@@ -349,7 +353,7 @@
     },
     "compiler": "aarch64-linux-gnu-g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
     "device_actions": false,
-    "dynamic_dependencies": "\nDynamic section at offset 0x1aee00 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x16e80\n 0x000000000000000d (FINI)               0x137edc\n 0x0000000000000019 (INIT_ARRAY)         0x1b7220\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x1b7280\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1178\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1712 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x1bf010\n 0x0000000000000002 (PLTRELSZ)           3480 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x160e8\n 0x0000000000000007 (RELA)               0x1a30\n 0x0000000000000008 (RELASZ)             83640 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x1960\n 0x000000006fffffff (VERNEEDNUM)         3\n 0x000000006ffffff0 (VERSYM)             0x1828\n 0x000000006ffffff9 (RELACOUNT)          3404\n 0x0000000000000000 (NULL)               0x0\n",
+    "dynamic_dependencies": "\nDynamic section at offset 0x1aee00 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x16e80\n 0x000000000000000d (FINI)               0x133e4c\n 0x0000000000000019 (INIT_ARRAY)         0x1a7220\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x1a7280\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1178\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1712 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x1af010\n 0x0000000000000002 (PLTRELSZ)           3480 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x160e8\n 0x0000000000000007 (RELA)               0x1a30\n 0x0000000000000008 (RELASZ)             83640 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x1960\n 0x000000006fffffff (VERNEEDNUM)         3\n 0x000000006ffffff0 (VERSYM)             0x1828\n 0x000000006ffffff9 (RELACOUNT)          3404\n 0x0000000000000000 (NULL)               0x0\n",
     "font": {
       "bytes": 759720,
       "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
@@ -367,11 +371,11 @@
     "symbol_versions": "\nVersion symbols section '.gnu.version' contains 155 entries:\n Addr: 0x0000000000001828  Offset: 0x00001828  Link: 5 (.dynsym)\n  000:   0 (*local*)       0 (*local*)       0 (*local*)       1 (*global*)   \n  004:   1 (*global*)      2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  008:   4 (GLIBC_2.36)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  00c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    3 (GLIBC_2.34) \n  010:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  014:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  018:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  01c:   5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  020:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17) \n  024:   6 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    7 (GLIBC_2.32) \n  028:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  02c:   8 (GLIBC_2.35)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  030:   1 (*global*)      1 (*global*)      1 (*global*)      2 (GLIBC_2.17) \n  034:   2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  038:   2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  03c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    9 (GLIBC_2.25)    2 (GLIBC_2.17) \n  040:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  044:   9 (GLIBC_2.25)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  048:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  04c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    5 (GLIBC_2.33) \n  050:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  054:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    a (GLIBC_2.17) \n  058:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  05c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    b (GLIBC_2.38) \n  060:   2 (GLIBC_2.17)    b (GLIBC_2.38)    1 (*global*)      2 (GLIBC_2.17) \n  064:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    a (GLIBC_2.17) \n  068:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  06c:   2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  070:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    a (GLIBC_2.17) \n  074:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  078:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  07c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  080:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17) \n  084:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  088:   b (GLIBC_2.38)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  08c:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    5 (GLIBC_2.33)    2 (GLIBC_2.17) \n  090:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  094:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  098:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34) \n\nVersion needs section '.gnu.version_r' contains 3 entries:\n Addr: 0x0000000000001960  Offset: 0x00001960  Link: 6 (.dynstr)\n  000000: Version: 1  File: libm.so.6  Cnt: 1\n  0x0010:   Name: GLIBC_2.17  Flags: none  Version: 10\n  0x0020: Version: 1  File: ld-linux-aarch64.so.1  Cnt: 1\n  0x0030:   Name: GLIBC_2.17  Flags: none  Version: 6\n  0x0040: Version: 1  File: libc.so.6  Cnt: 8\n  0x0050:   Name: GLIBC_2.38  Flags: none  Version: 11\n  0x0060:   Name: GLIBC_2.25  Flags: none  Version: 9\n  0x0070:   Name: GLIBC_2.35  Flags: none  Version: 8\n  0x0080:   Name: GLIBC_2.32  Flags: none  Version: 7\n  0x0090:   Name: GLIBC_2.33  Flags: none  Version: 5\n  0x00a0:   Name: GLIBC_2.36  Flags: none  Version: 4\n  0x00b0:   Name: GLIBC_2.34  Flags: none  Version: 3\n  0x00c0:   Name: GLIBC_2.17  Flags: none  Version: 2\n"
   },
   "camera_tests": "Missing interface, no exposed camera, unsupported count/layout, property failure, invalid intrinsics, baseline and calibration reject before acquisition. Valid synthetic metadata acquires/releases once. No-frame never creates depth.",
-  "change_scope": "Generic binary_path and checked application identity; bounded asynchronous image ownership; input bound to completed UI; precise camera diagnostic gates. Existing video/mask/codec binaries unchanged.",
+  "change_scope": "Frame binary_path_linux_arm manifest key; optional metadata registration cannot suppress dashboard creation; English room UI, notices and keyboard labels. Existing video/mask/codec binaries unchanged.",
   "current_software_checks": {
     "bootstrap.log": {
       "bytes": 99,
-      "sha256": "f8c685bbaff9eaf42bd2d9693b4e33a45d7578b1c22f4c400cf7d1c55cafa910"
+      "sha256": "079dce9e4bc5196a8767f2f057f316e84da741afd11bc902acf86561d203a573"
     },
     "camera-sanitizers.log": {
       "bytes": 79,
@@ -379,19 +383,19 @@
     },
     "ctest.log": {
       "bytes": 475,
-      "sha256": "257c5d93997361ac89ebe5f61c4ee1e6787ec243c79208cb36d79a199d4d409d"
+      "sha256": "bd650aa9b51270a4b900a1dbd3e7f46cb08d2e3a38e7916725fa34081179ca3c"
     },
     "installer.log": {
       "bytes": 396,
-      "sha256": "3ddfaca4efbba826c47888838a30d55352b563a79333d9299d76fea68909cd74"
+      "sha256": "b8d7c6bd6deb74ec3bf2b368e67bb2f3e1e9aae9e1c27163fa1ae378072d3100"
     },
     "logging.log": {
       "bytes": 97,
-      "sha256": "b45264bdc05b3c62d06cfd04a718285ecdad9a2398f76a01c6f120d985417959"
+      "sha256": "121749fa5c60852e7a4a0597fc3ae2948c1f07fa4e9ab9374fd2037a2d273430"
     },
     "native-build.log": {
-      "bytes": 468,
-      "sha256": "517b7a55b7f9f355388d3e5902b6dfd9faf1105adf84dea9914259bd4b18d467"
+      "bytes": 554,
+      "sha256": "0116b6f4bdbd9c021993a1c0601c69cee53c3b6a202041848ff5867f7469f697"
     },
     "native-sanitizers.log": {
       "bytes": 61,
@@ -399,30 +403,35 @@
     },
     "package.log": {
       "bytes": 98,
-      "sha256": "d65ef76930738ca2f82b634bab2c05aa0fa506b403378d6398673177622b7767"
+      "sha256": "6b37c91da896908e6fca4f8332a58b2692b55ac0b468e6e6cd6d2bfb9d416e06"
     },
     "pc-only.log": {
       "bytes": 596,
-      "sha256": "6dad012b76a8704a3f13a2269a0da936b9f1d6ca4022157b4ab07c785caee4aa"
+      "sha256": "88e45b0cb497768d306a80e8db6f4686acb1c11f97c8952b67193bea041510fe"
+    },
+    "registration-sanitizers.log": {
+      "bytes": 86,
+      "sha256": "3b7c8bc19628ab3e013121135a63376a454a63d8cbc659587dd4c64a8275801a"
     },
     "room-flow.log": {
       "bytes": 98,
-      "sha256": "94d80e928bbe9f864456886eee24f21088c8e6f016c928fd585a6a903ab3c003"
+      "sha256": "66d47d7f801efd495020d901f8565236f1ba38b69a0e2d877eb43c02fc0cee47"
     }
   },
   "device_actions": false,
   "hardware_verified": false,
   "limits": [
     "Candidate 1 UI flicker, source refusal and concurrent compositor crash were observed. Cause of that crash was not isolated.",
-    "Candidate 2 UI stability, image-completion events and source admission have not been tested on Frame.",
+    "Candidate 2 was confirmed installed but exited before dashboard creation because its manifest was rejected. Candidate 3 fixes that startup path; its dashboard, UI stability, image completion and source admission still require a wearer test.",
     "No claim of working live scan, automatic detection or game/Venture room adapters."
   ],
   "prior_artifact_provenance": {
-    "bytes": 21597,
-    "sha256": "7217565e86bd5efe685651f830ae6c6ffdb09720f8358a5aceb587dd53952b0c"
+    "bytes": 22666,
+    "sha256": "5a0009145ec1f73a667a0741cca28920c2e3feb260d36b7483ece45ddf5478c0"
   },
   "renderer_tests": "100 changing updates while one image is pending retain immutable bytes and create one submission. Completion permits the current image. Unchanged images do not resubmit. Missing completion expires. Stale controls cannot start a hidden camera action.",
-  "source_revision": "29e120c2a9ee60e5c6feacb08bbf46db9aff0251",
+  "source_revision": "3d8f551bca8dd95b9f1b003973c74dd32b251298",
+  "startup_tests": "Skipped or rejected manifests, optional application API absence and failed identification all preserve dashboard creation. Valid metadata is associated normally.",
   "unchanged_compiled_source_paths": [
     "layer",
     "receiver",
