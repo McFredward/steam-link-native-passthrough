@@ -127,7 +127,44 @@ public:
             const int count=system->GetInt32TrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_NumCameras_Int32,&error);
             diagnostics["camera_count"]=count;diagnostics["property_error"]=int(error);
             if(error)return reject("camera-count-query-failed");
-            if(count!=2)return reject("camera-count-unsupported");
+            if(count==0){
+                // Frame can report HasCamera=true while the legacy tracked-camera
+                // API exposes neither cameras nor frames. Inventory that boundary
+                // without acquiring a stream or inventing stereo/calibration data.
+                diagnostics["check"]="public-camera-metadata";
+                ETrackedPropertyError layoutError=ETrackedPropertyError_TrackedProp_Success;
+                diagnostics["layout"]=system->GetInt32TrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_CameraFrameLayout_Int32,&layoutError);
+                diagnostics["layout_error"]=int(layoutError);
+                for(unsigned kind=0;kind<3;++kind){
+                    std::uint32_t w=0,h=0,n=0;const auto type=EVRTrackedCameraFrameType(kind);
+                    const auto sizeError=api->GetCameraFrameSize(0,type,&w,&h,&n);
+                    Json format={{"type",kind},{"error",int(sizeError)},{"size",{w,h,n}}};
+                    for(unsigned eye=0;eye<2;++eye){HmdVector2_t f{},c{};
+                        const auto result=api->GetCameraIntrinsics(0,eye,type,&f,&c);
+                        format["intrinsics"].push_back({{"eye",eye},{"error",int(result)},{"fx_fy_cx_cy",{f.v[0],f.v[1],c.v[0],c.v[1]}}});
+                    }
+                    diagnostics["formats"].push_back(format);
+                }
+                std::array<HmdMatrix34_t,2> matrices{};ETrackedPropertyError matrixError=ETrackedPropertyError_TrackedProp_Success;
+                diagnostics["extrinsic_bytes"]=system->GetArrayTrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_CameraToHeadTransforms_Matrix34_Array,
+                    k_unHmdMatrix34PropertyTag,matrices.data(),sizeof(matrices),&matrixError);
+                diagnostics["extrinsic_error"]=int(matrixError);
+                try{factoryGeometry();diagnostics["arcturus_factory_geometry_readable"]=true;}
+                catch(const std::exception&){diagnostics["arcturus_factory_geometry_readable"]=false;}
+                const auto& undistorted=diagnostics["formats"][1];
+                const auto& size=undistorted["size"];
+                const auto w=size[0].get<std::uint64_t>(),h=size[1].get<std::uint64_t>(),n=size[2].get<std::uint64_t>();
+                const int reportedLayout=diagnostics["layout"].get<int>();
+                if(layoutError||!(reportedLayout&2)||((reportedLayout&48)!=16&&(reportedLayout&48)!=32)
+                    ||matrixError||diagnostics["extrinsic_bytes"]!=sizeof(matrices)
+                    ||undistorted["error"]!=0||!w||!h||w>8192||h>8192||w*h*4!=n||n>64u*1024*1024)
+                    return reject("camera-metadata-unavailable");
+                // Exactly two exposed extrinsics and a real stereo format can
+                // establish the count independently. Factory association, both
+                // intrinsics and exposure headers must still pass below.
+                diagnostics["camera_count_source"]="stereo-format-and-extrinsics";
+            }
+            if(count!=0&&count!=2)return reject("camera-count-unsupported");
             diagnostics["check"]="stereo-layout";
             layout=system->GetInt32TrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_CameraFrameLayout_Int32,&error);
             diagnostics["layout"]=layout;diagnostics["property_error"]=int(error);

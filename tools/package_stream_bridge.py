@@ -63,8 +63,8 @@ def required_sources(root=ROOT):
                   {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
                   {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
-                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h',
-                   'tools/build_room_font.py','tools/build_room_overlay.sh'})
+                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h','room_scan/native_gpu.h',
+                   'tools/build_room_font.py','tools/build_room_overlay.sh','packaging/room-vulkan-headers.json'})
 
 
 def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,room_overlay=None):
@@ -250,7 +250,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
             '\nEXPERIMENTAL ARCTURUS ROOM SETUP\n'
             'After the confirmed paired installation, open the Frame-local SteamVR dashboard and choose Room Setup.\n'
             'Choose Scan a new room, then Start scan. Startup alone never acquires camera images.\n'
-            'Use visible native colour passthrough. Actual public Arcturus stereo access, projection alignment and active-game coexistence are not hardware verified.\n'
+            'Use visible native colour passthrough. The tested Frame SteamVR 2.18.2 reports a camera but exposes no calibrated camera stream to this app. Live scanning is blocked on that runtime. Projection alignment and active-game coexistence are not hardware verified.\n'
             'If the camera source cannot be verified, scanning stays unavailable. This package contains no simulated room fallback.\n'
             'Mark three rectangle corners with the trigger, using reliable scan surfaces or Measure at controller. Confirm the preview, then review and save.\n'
             'Tables, walls, doors/windows and furniture support manual entry. Automatic object recognition and game/Venture scene adapters are not included yet.\n'

@@ -254,7 +254,8 @@ class Application:
                 "head-tracking-unavailable": "Room tracking is not ready. Look around and try again.",
                 "public-camera-api-unavailable": "The public camera interface is unavailable. Scanning has not started.",
                 "camera-not-exposed": "SteamVR reports no accessible camera. Scanning has not started.",
-                "camera-count-unsupported": "The reported camera arrangement is not supported yet. Scanning has not started.",
+                "camera-metadata-unavailable": "SteamVR exposes no calibrated camera stream to this app. Live room scanning is unavailable.",
+                "camera-count-unsupported": "SteamVR exposes a camera configuration this scanner cannot read yet. Scanning has not started.",
                 "camera-layout-unsupported": "The camera image has no verified stereo layout. Scanning has not started.",
             }.get(reason, "The stereo camera could not be verified. Scanning has not started.")
             if type(reason) is str and 0 < len(reason) <= 64 and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in reason):

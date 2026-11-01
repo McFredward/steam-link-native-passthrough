@@ -81,12 +81,15 @@ class AppTests(unittest.TestCase):
 
     def test_camera_refusal_has_a_visible_diagnostic_code(self):
         self.app.action("new")
-        self.app.event(dict(event="camera_warming"))
-        self.app.event(dict(event="camera_unavailable", reason="camera-count-unsupported"))
-        view=self.app.view()
-        self.assertIn("Diagnostic code: camera-count-unsupported",view["notice"])
-        self.assertFalse(view["camera_check_pending"])
-        self.assertFalse(view["capture_active"])
+        for reason in ["camera-count-unsupported", "camera-metadata-unavailable"]:
+            self.app.event(dict(event="camera_warming"))
+            self.app.event(dict(event="camera_unavailable", reason=reason))
+            view=self.app.view()
+            self.assertIn("Diagnostic code: "+reason,view["notice"])
+            self.assertFalse(view["camera_check_pending"])
+            self.assertFalse(view["capture_active"])
+        self.assertIn("no calibrated camera stream",view["notice"])
+        self.assertNotIn("not supported",view["notice"])
 
     def test_invalid_events_log_bounded_metadata_and_keep_controller_alive(self):
         incoming=io.BytesIO(b'{"event":"unknown"}\n'*70)
