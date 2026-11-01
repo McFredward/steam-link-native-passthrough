@@ -27,6 +27,7 @@ BOOTSTRAP='sfnp-bootstrap-stream-bridge-v1'
 CHECKS=frozenset(('pc_provider_build','frame_layer_build','frame_selector_build',
                  'ordinary_rgba_source','exact_frame_association','opaque_fallback',
                  'owned_coverage_gpu','installer_transaction','startup_health_logic'))
+ROOM_CHECKS=frozenset(('room_overlay_build','room_dashboard_flow','room_installer_transaction'))
 MAX_ARCHIVE=128*1024*1024
 MAX_EXPANDED=192*1024*1024
 
@@ -58,16 +59,26 @@ def required_sources(root=ROOT):
                    'third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch',
                    'tools/configure_mask_codec.py',
                    'third_party/ffmpeg/README.md','third_party/ffmpeg/COPYING.LGPLv2.1'}|
-                  {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES})
+                  {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES} |
+                  {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
+                  {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
+                   'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
+                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h',
+                   'tools/build_room_font.py','tools/build_room_overlay.sh'})
 
 
-def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None):
+def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,room_overlay=None):
     artifacts={name:engine.read(path) for name,path in
                [('pc_provider',pc_provider),('frame_layer',frame_layer),('frame_selector',frame_selector)]}
     if mask_decoder is not None:
         engine.require(type(mask_decoder)is dict and set(mask_decoder)=={'mask_codec','mask_util'},
                        'A complete private mask decoder pair is required.')
         artifacts.update({name:engine.read(path) for name,path in mask_decoder.items()})
+    if room_overlay is not None:
+        raw=engine.read(room_overlay)
+        engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and
+                       struct.unpack_from('<HH',raw,16)==(3,183),'Unsupported native room dashboard image.')
+        artifacts['room_overlay']=raw
     pc=artifacts['pc_provider'];engine.require(len(pc)>=128 and pc[:2]==b'MZ','The PC provider must be the reviewed x64 DLL.')
     offset=struct.unpack_from('<I',pc,60)[0]
     engine.require(offset<=len(pc)-26 and pc[offset:offset+4]==b'PE\0\0' and
@@ -94,6 +105,7 @@ def patch_versions(engine,bridge,raw):
 def validation(engine,profile,profile_raw,artifacts,receipts):
     engine.require(receipts and len(receipts)<=8,'Release packaging needs explicit software validation receipts.')
     matched=set();pins={name:pin(raw) for name,raw in artifacts.items()};accepted=[]
+    checks=CHECKS | (ROOM_CHECKS if 'room_overlay' in artifacts else frozenset())
     for path in receipts:
         raw=engine.read(path,128*1024);value=engine.parse(raw)
         engine.require(set(value)=={'schema','result','runtime_profile_sha256','source_revision','source_pins',
@@ -102,18 +114,18 @@ def validation(engine,profile,profile_raw,artifacts,receipts):
                        value['runtime_profile_sha256']==pin(profile_raw)['sha256'] and
                        value['source_revision']==profile['source_revision'] and
                        value['source_pins']==profile['source_pins'] and value['artifacts']==pins and
-                       type(value['checks'])is dict and set(value['checks'])<=CHECKS and value['checks'] and
+                       type(value['checks'])is dict and set(value['checks'])<=checks and value['checks'] and
                        all(v is True for v in value['checks'].values()) and
                        type(value['hardware_verified'])is bool,
                        'A release validation receipt is incomplete or belongs to different artifacts/sources.')
         matched.update(value['checks']);accepted.append({'pin':pin(raw),'checks':sorted(value['checks']),
                                                        'hardware_verified':value['hardware_verified']})
-    engine.require(matched==CHECKS,'Required software validation evidence is missing; prototype packaging remains available.')
+    engine.require(matched==checks,'Required software validation evidence is missing; prototype packaging remains available.')
     return accepted
 
 
 def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,openssh_zip,
-          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None):
+          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None,room_overlay=None):
     engine=load('sfnp_bridge_package_engine',root/'setup/steam_link_setup.py')
     bridge=load('sfnp_bridge_package_install',root/'setup/stream_bridge_install.py')
     shared=load('sfnp_bridge_package_runtime',root/'tools/package_stream_link_setup.py')
@@ -123,7 +135,11 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
                    profile['schema']==PROFILE and type(profile['source_revision'])is str and
                    re.fullmatch('[0-9a-f]{40}',profile['source_revision']), 'Unknown runtime profile or source revision.')
     engine.protocol(profile['bridge_protocol'])
-    sources=required_sources(root);engine.records(profile['source_pins'])
+    sources=required_sources(root)
+    engine.require(type(profile['source_pins'])is dict and 1<=len(profile['source_pins'])<=128,
+                   'Bounded exact source inventory required.')
+    items=list(profile['source_pins'].items())
+    for at in range(0,len(items),64):engine.records(dict(items[at:at+64]))
     engine.require(set(profile['source_pins'])==set(sources),'The runtime profile lacks exact transitive owned setup sources.')
     source_bytes={name:engine.read(root/engine.relative(name)) for name in sources}
     engine.require({name:pin(raw) for name,raw in source_bytes.items()}==profile['source_pins'],
@@ -131,7 +147,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     version=bridge.patch_version(source_bytes['VERSION'].decode('ascii').strip())
     engine.require(version is not None,'An installer semantic version is required.')
     components=patch_versions(engine,bridge,source_bytes['PATCH_VERSIONS.json'])
-    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder)
+    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder,room_overlay)
     engine.require(profile['artifacts']=={name:pin(raw) for name,raw in artifacts.items()},
                    'A native artifact differs from the reviewed runtime profile.')
     pc,frame=profile['pc'],profile['frame']
@@ -149,6 +165,11 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
         payload.update({'frame/libavcodec-sfnp-mask.so.62':artifacts['mask_codec'],
                         'frame/libavutil-sfnp-mask.so.60':artifacts['mask_util']})
     payload.update({name:source_bytes[name.removeprefix('frame/')] for name in bridge.TOOLS|bridge.PROFILES})
+    if room_overlay is not None:
+        payload['frame/room-setup/sfnp-room-overlay']=artifacts['room_overlay']
+        payload.update({'frame/room-setup/room_scan/'+name:source_bytes['room_scan/'+name] for name in bridge.ROOM_PYTHON})
+        for name in ('DejaVu.txt','nlohmann-json.txt'):
+            payload['frame/room-setup/licenses/'+name]=source_bytes['room_scan/licenses/'+name]
     if channel is None:
         import subprocess
         channel=os.environ.get('GITHUB_REF_NAME')
@@ -224,6 +245,16 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
         'When Frame changes are needed, setup restarts/checks its interface and asks you to confirm the picture.\n'+
         'A failed start restores the exact original operation checkpoint and restarts the original Frame interface. Incomplete recovery offers Retry.\n'+
         'Use the current guided paired setup. There is no Frame-only atlas fallback.\n').encode()
+    if room_overlay is not None:
+        files['README.txt'] += (
+            '\nEXPERIMENTAL ARCTURUS ROOM SETUP\n'
+            'After the confirmed paired installation, open the Frame-local SteamVR dashboard and choose Raumeinrichtung.\n'
+            'Choose Neuen Raum scannen, then Scan starten. Startup alone never acquires camera images.\n'
+            'Use visible native colour passthrough. Actual public Arcturus stereo access, projection alignment and active-game coexistence are not hardware verified.\n'
+            'If the camera source cannot be verified, scanning stays unavailable. This package contains no simulated room fallback.\n'
+            'Mark three rectangle corners with the trigger, using reliable scan surfaces or Am Controller messen. Confirm the preview, then review and save.\n'
+            'Tables, walls, doors/windows and furniture support manual entry. Automatic object recognition and game/Venture scene adapters are not included yet.\n'
+            'Saved rooms require explicit realignment after restarting. User rooms survive update, Undo and uninstall.\n').encode()
     engine.require(len(files)<4096 and sum(map(len,files.values()))<=MAX_EXPANDED,'Setup package exceeds its bounded inventory.')
     outer={'schema':BOOTSTRAP,'readiness':bundle['readiness'],'windows_python':'setup/runtime/python/python.exe',
            'files':{name:pin(raw) for name,raw in sorted(files.items())}}
@@ -263,11 +294,12 @@ def main(argv=None):
     parser.add_argument('--validation-receipt',action='append',type=Path,default=[])
     parser.add_argument('--mask-codec',type=Path)
     parser.add_argument('--mask-util',type=Path)
+    parser.add_argument('--room-overlay',type=Path)
     args=parser.parse_args(argv)
     if bool(args.mask_codec)!=bool(args.mask_util):parser.error('Supply both --mask-codec and --mask-util.')
     decoder={'mask_codec':args.mask_codec,'mask_util':args.mask_util} if args.mask_codec else None
     raw,receipt=build(args.pc_provider,args.frame_layer,args.frame_selector,args.runtime_profile,args.python_zip,args.openssh_zip,
-                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder)
+                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder,room_overlay=args.room_overlay)
     sidecar=args.output.with_suffix(args.output.suffix+'.receipt.json')
     if args.output.exists() or sidecar.exists():raise ValueError('An output or receipt already exists; it was preserved.')
     publish(args.output,raw)

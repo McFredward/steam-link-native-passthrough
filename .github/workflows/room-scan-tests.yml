@@ -1,0 +1,41 @@
+name: Experimental room setup
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'room_scan/**'
+      - 'probe/room_camera*'
+      - 'tests/*room*'
+      - 'cmake/RoomScan.cmake'
+      - 'setup/stream_bridge_install.py'
+      - 'tools/*room*'
+      - 'tools/package_stream_bridge.py'
+      - '.github/workflows/room-scan-tests.yml'
+  pull_request:
+    paths:
+      - 'room_scan/**'
+      - 'tests/*room*'
+      - 'cmake/RoomScan.cmake'
+      - 'setup/stream_bridge_install.py'
+      - 'tools/*room*'
+      - 'tools/package_stream_bridge.py'
+      - '.github/workflows/room-scan-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-and-installation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the isolated portable room checks
+        run: |
+          cmake -S . -B build/room-core -DFRAME_ROOM_SCAN_ONLY=ON
+          cmake --build build/room-core
+          ctest --test-dir build/room-core --output-on-failure
+      - name: Verify installer transactions and optional dashboard package
+        run: |
+          python3 -B -m unittest discover -s tests -p test_stream_bridge_install.py -q
+          python3 -B -m unittest discover -s tests -p test_package_stream_bridge.py -q
+          python3 -B -m unittest discover -s tests -p test_pc_only_setup.py -q

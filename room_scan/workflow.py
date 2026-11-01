@@ -68,6 +68,8 @@ class ScanSession:
             self.room = Room(str(uuid.uuid4()), self.name, 0, binding.origin_id,
                              binding.calibration_id, test_only=binding.test_only)
         self.reconstruction = Reconstruction(binding)
+        if self.previous is not None:
+            self.reconstruction.retain_aligned_mesh(self.previous.mesh)
         self.tracking_verified = True
         self.stage = Stage.SCANNING
         self.message = "Schau dich langsam um und erfasse Flächen aus mehreren Blickwinkeln."
@@ -93,11 +95,15 @@ class ScanSession:
     def resume(self, binding: Binding, *, tracking_valid: bool):
         require(self.stage == Stage.PAUSED and type(tracking_valid) is bool and tracking_valid,
                 "Valid tracking is required to resume")
-        if binding != self.binding:
+        if (binding.origin_id != self.binding.origin_id or binding.calibration_id != self.binding.calibration_id
+                or binding.test_only != self.binding.test_only):
             self.stage = Stage.ALIGNMENT_REQUIRED
             self.message = "Raumzuordnung geändert. Vor dem Fortsetzen neu ausrichten."
             self.close()
             return False
+        if binding != self.binding:
+            self.reconstruction.rebind(binding)
+            self.binding = binding
         self.stage, self.message = Stage.SCANNING, "Raumscan fortsetzen"
         self.tracking_verified = True
         return True
@@ -209,6 +215,7 @@ class ScanSession:
                 and self.stage in (Stage.SCANNING, Stage.PAUSED) else self.room.mesh if self.room else None)
         world_visuals = self.tracking_verified and self.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW)
         return {"stage": self.stage.value, "message": self.message,
+                "origin_id": self.room.origin_id if self.room else None,
                 "test_only": self.binding.test_only if self.binding else None,
                 "can_add_element": self.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW),
                 "can_review": self.stage in (Stage.SCANNING, Stage.PAUSED) and world_visuals and bool(mesh and mesh.triangles),

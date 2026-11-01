@@ -254,6 +254,62 @@ class Tests(unittest.TestCase):
         self.bundle=b.Bundle(self.bundle_root,s)
         return self.bundle
 
+    def add_room_dashboard_fixture(self):
+        for name in b.ROOM_FILES:
+            raw = (self.bundle.files['frame/'+b.LIBRARY] if name.endswith('sfnp-room-overlay')
+                   else b'# owned room fixture, never executed\n')
+            s.put(self.bundle_root/name,raw)
+            self.manifest['files'][name]={'bytes':len(raw),'sha256':s.sha(raw)}
+        self.manifest['frame']['files']=sorted(n for n in self.manifest['files'] if n.startswith('frame/'))
+        s.put(self.bundle_root/'stream-bridge-bundle.json',s.encoded(self.manifest),s.read(self.bundle_root/'stream-bridge-bundle.json'))
+        self.bundle=b.Bundle(self.bundle_root,s)
+
+    def test_room_dashboard_installs_and_undo_preserves_user_rooms(self):
+        self.add_room_dashboard_fixture()
+        data=self.froot.parent/'rooms'/'user-room.json';s.put(data,b'private room stays here\n')
+        with self.fake_generation():
+            self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
+        executable=self.froot/'room-setup/sfnp-room-overlay'
+        self.assertEqual(executable.stat().st_mode&0o777,0o700)
+        manifest=s.parse(s.read(self.froot/'room-setup/room.vrmanifest'))['applications'][0]
+        self.assertEqual(manifest['app_key'],'sfnp.room.setup')
+        self.assertTrue(manifest['is_dashboard_overlay'])
+        self.assertIn(str(self.froot.parent/'rooms'),manifest['arguments'])
+        unit=self.fhome/'.config/systemd/user'/b.ROOM_UNIT
+        hook=self.fhome/'.config/systemd/user/steamvr.service.d'/b.ROOM_HOOK
+        self.assertIn(b'PartOf=steamvr.service',s.read(unit))
+        self.assertIn(b'Wants=sfnp-room-setup.service',s.read(hook))
+        self.unit.tx.rollback()
+        self.assertFalse(executable.exists());self.assertFalse(unit.exists());self.assertFalse(hook.exists())
+        self.assertEqual(data.read_bytes(),b'private room stays here\n')
+
+    def test_partial_room_dashboard_payload_is_refused(self):
+        self.add_room_dashboard_fixture()
+        name=next(n for n in b.ROOM_FILES if n.endswith('app.py'))
+        del self.manifest['files'][name];self.manifest['frame']['files'].remove(name)
+        s.put(self.bundle_root/'stream-bridge-bundle.json',s.encoded(self.manifest),s.read(self.bundle_root/'stream-bridge-bundle.json'))
+        with self.assertRaises(s.SetupError):b.Bundle(self.bundle_root,s)
+
+    def test_existing_installation_adds_room_dashboard_and_checkpoint_restores_old_files(self):
+        with self.fake_generation():
+            b.remote_request(s,b.request(self.bundle,'bridge-prepare',pairing={**self.pair,'role':'receiver'},
+                address='192.168.1.4',port=47631,automated=True),unit=self.unit)
+        self.unit.tx.commit();self.unit.checkpoint().finish()
+        original=self.unit.tx.state()
+        self.add_room_dashboard_fixture()
+        self.assertFalse(self.unit.inventory(self.bundle)['component_files_current'])
+        data=self.froot.parent/'rooms'/'saved-room';s.put(data,b'user geometry')
+        with self.fake_generation():
+            b.remote_request(s,b.request(self.bundle,'bridge-prepare',pairing={**self.pair,'role':'receiver'},
+                address='192.168.1.4',port=47631,automated=True),unit=self.unit)
+        self.assertTrue((self.froot/'room-setup/sfnp-room-overlay').exists())
+        self.assertTrue(self.unit.inventory(self.bundle)['component_files_current'])
+        self.unit.checkpoint().restore()
+        self.unit.checkpoint().verify_restored()
+        self.assertEqual(original,self.unit.tx.state())
+        self.assertFalse((self.froot/'room-setup/sfnp-room-overlay').exists())
+        self.assertEqual(data.read_bytes(),b'user geometry')
+
     def change_runtime(self,side,role):
         pins=self.bundle.pc['runtime_files'] if side=='pc' else self.bundle.frame['runtime_files']
         path=(self.runtime if side=='pc' else self.fsvr)/pins[role]['path']

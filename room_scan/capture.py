@@ -31,7 +31,7 @@ class Binding:
 class DepthFrame:
     binding: Binding
     sequence: int
-    exposure_ns: int
+    exposure_ticks: int
     camera_to_room: Pose
     width: int
     height: int
@@ -47,7 +47,7 @@ class DepthFrame:
     def __post_init__(self):
         require(isinstance(self.binding, Binding) and isinstance(self.camera_to_room, Pose), "Invalid depth binding")
         require(type(self.sequence) is int and 0 < self.sequence < 2**63
-                and type(self.exposure_ns) is int and 0 < self.exposure_ns < 2**63, "Invalid exposure identity")
+                and type(self.exposure_ticks) is int and 0 < self.exposure_ticks < 2**63, "Invalid exposure identity")
         require(type(self.width) is int and type(self.height) is int and 2 <= self.width <= 160
                 and 2 <= self.height <= 120, "Depth grid budget exceeded")
         require(number(self.fx, 100000) > 0 and number(self.fy, 100000) > 0
@@ -98,12 +98,13 @@ class Reconstruction:
         self.max_vertices, self.max_triangles = max_vertices, max_triangles
         self.cells = {}
         self.triangles = set()
-        self.sequence = self.exposure_ns = self.accepted_frames = 0
+        self.base_mesh = Mesh()
+        self.sequence = self.exposure_ticks = self.accepted_frames = 0
 
     def integrate(self, frame: DepthFrame):
         require(isinstance(frame, DepthFrame) and frame.binding == self.binding, "Capture origin/calibration/session changed")
         require(frame.tracking_valid, "Tracking lost; scan must pause")
-        require(frame.sequence > self.sequence and frame.exposure_ns > self.exposure_ns, "Stale exposure")
+        require(frame.sequence > self.sequence and frame.exposure_ticks > self.exposure_ticks, "Stale exposure")
         require(self.accepted_frames < 60000, "Scan exposure budget reached")
         observations, grid = {}, {}
         for i, (z, confidence) in enumerate(zip(frame.depth_m, frame.confidence)):
@@ -118,7 +119,7 @@ class Reconstruction:
             # independent observations or multiple camera viewpoints.
             if key not in observations or confidence > observations[key][1]:
                 observations[key] = (point, confidence)
-        require(len(self.cells.keys() | observations.keys()) <= self.max_vertices, "Scan geometry budget reached")
+        require(len(self.cells.keys() | observations.keys()) + len(self.base_mesh.vertices) <= self.max_vertices, "Scan geometry budget reached")
         changes = {}
         viewpoint = frame.camera_to_room.position
         for key, (point, confidence) in observations.items():
@@ -158,23 +159,42 @@ class Reconstruction:
                         # Canonical cyclic rotation preserves the measured
                         # front face; sorting vertices would flip normals.
                         added.add(min(keys, keys[1:]+keys[:1], keys[2:]+keys[:2]))
-        require(len(self.triangles | added) <= self.max_triangles, "Scan triangle budget reached")
+        require(len(self.triangles | added) + len(self.base_mesh.triangles) <= self.max_triangles, "Scan triangle budget reached")
         # Commit only after the entire exposure passes capacity/identity checks.
         self.cells.update(changes)
         self.triangles.update(added)
-        self.sequence, self.exposure_ns = frame.sequence, frame.exposure_ns
+        self.sequence, self.exposure_ticks = frame.sequence, frame.exposure_ticks
         self.accepted_frames += 1
         return len(observations)
+
+    def rebind(self, binding: Binding):
+        require(binding.origin_id == self.binding.origin_id and binding.calibration_id == self.binding.calibration_id
+                and binding.test_only == self.binding.test_only, "Changed room origin/calibration requires alignment")
+        self.binding = binding
+        self.sequence = self.exposure_ticks = 0
+
+    def retain_aligned_mesh(self, mesh: Mesh):
+        """Retain explicitly aligned measured geometry; never invent view evidence.
+
+        The application calls this only after the user confirms re-registration.
+        New observations keep their own cells and quality evidence. Old geometry
+        counts against the same total budget and is not silently erased by rescan.
+        """
+        require(isinstance(mesh, Mesh) and not self.base_mesh.vertices, "Aligned base mesh already set")
+        require(len(mesh.vertices)+len(self.cells) <= self.max_vertices
+                and len(mesh.triangles)+len(self.triangles) <= self.max_triangles, "Aligned geometry budget reached")
+        self.base_mesh = mesh
 
     def mesh(self):
         keys = sorted(self.cells)
         indices = {k: i for i, k in enumerate(keys)}
-        return Mesh(tuple(self.cells[k].point for k in keys),
-                    tuple(tuple(indices[k] for k in t) for t in sorted(self.triangles)),
-                    tuple(self.cells[k].quality for k in keys))
+        base = self.base_mesh
+        return Mesh(base.vertices + tuple(self.cells[k].point for k in keys),
+                    base.triangles + tuple(tuple(indices[k]+len(base.vertices) for k in t) for t in sorted(self.triangles)),
+                    base.quality + tuple(self.cells[k].quality for k in keys))
 
     def status(self):
-        qualities = [cell.quality for cell in self.cells.values()]
+        qualities = list(self.base_mesh.quality) + [cell.quality for cell in self.cells.values()]
         return {"observed_cells": len(qualities), "reliable_cells": qualities.count("reliable"),
                 "uncertain_cells": qualities.count("uncertain"), "building_cells": qualities.count("building"),
                 "accepted_frames": self.accepted_frames, "whole_room_percentage": None}
