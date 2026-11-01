@@ -63,7 +63,7 @@ def required_sources(root=ROOT):
                   {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
                   {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
-                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h',
+                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h',
                    'tools/build_room_font.py','tools/build_room_overlay.sh'})
 
 
@@ -248,11 +248,11 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     if room_overlay is not None:
         files['README.txt'] += (
             '\nEXPERIMENTAL ARCTURUS ROOM SETUP\n'
-            'After the confirmed paired installation, open the Frame-local SteamVR dashboard and choose Raumeinrichtung.\n'
-            'Choose Neuen Raum scannen, then Scan starten. Startup alone never acquires camera images.\n'
+            'After the confirmed paired installation, open the Frame-local SteamVR dashboard and choose Room Setup.\n'
+            'Choose Scan a new room, then Start scan. Startup alone never acquires camera images.\n'
             'Use visible native colour passthrough. Actual public Arcturus stereo access, projection alignment and active-game coexistence are not hardware verified.\n'
             'If the camera source cannot be verified, scanning stays unavailable. This package contains no simulated room fallback.\n'
-            'Mark three rectangle corners with the trigger, using reliable scan surfaces or Am Controller messen. Confirm the preview, then review and save.\n'
+            'Mark three rectangle corners with the trigger, using reliable scan surfaces or Measure at controller. Confirm the preview, then review and save.\n'
             'Tables, walls, doors/windows and furniture support manual entry. Automatic object recognition and game/Venture scene adapters are not included yet.\n'
             'Saved rooms require explicit realignment after restarting. User rooms survive update, Undo and uninstall.\n').encode()
     engine.require(len(files)<4096 and sum(map(len,files.values()))<=MAX_EXPANDED,'Setup package exceeds its bounded inventory.')

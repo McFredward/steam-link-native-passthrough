@@ -18,9 +18,9 @@ from .model import Label, Room
 from .store import MAX_BYTES, RoomStore, decode
 from .workflow import ScanSession, Stage
 
-LABELS = {Label.FLOOR: "Boden", Label.CEILING: "Decke", Label.WALL_FACE: "Wand",
-          Label.DOOR_FRAME: "Tür", Label.WINDOW_FRAME: "Fenster", Label.TABLE: "Tisch",
-          Label.COUCH: "Sofa", Label.BED: "Bett", Label.STORAGE: "Schrank", Label.OTHER: "Möbelstück"}
+LABELS = {Label.FLOOR: "Floor", Label.CEILING: "Ceiling", Label.WALL_FACE: "Wall",
+          Label.DOOR_FRAME: "Door", Label.WINDOW_FRAME: "Window", Label.TABLE: "Table",
+          Label.COUCH: "Couch", Label.BED: "Bed", Label.STORAGE: "Storage", Label.OTHER: "Other furniture"}
 VOLUMES = (Label.COUCH, Label.BED, Label.STORAGE, Label.OTHER)
 
 
@@ -96,7 +96,7 @@ class Application:
             self.label = Label(action.split(":", 1)[1])
             if self.label in (Label.WINDOW_FRAME, Label.DOOR_FRAME):
                 walls = self.session.room.query(Label.WALL_FACE)
-                require(bool(walls), "Bitte zuerst die zugehörige Wand eintragen.")
+                require(bool(walls), "Add the containing wall first.")
                 self.page = "walls"
                 self.list_page = 0
             else:
@@ -228,7 +228,7 @@ class Application:
             align = self.page == "alignment"
             b = event["binding"]
             self.provider.binding = Binding(b["session_id"], b["origin_id"], b["calibration_id"], test_only=False)
-            self.session = ScanSession(f"Raum {len(self.rooms)+1}", provider=self.provider)
+            self.session = ScanSession(f"Room {len(self.rooms)+1}", provider=self.provider)
             require(self.session.start(), "Capture could not start")
             self.page = "scan"
             self.starting = False
@@ -249,16 +249,16 @@ class Application:
         elif kind == "camera_unavailable":
             reason = event.get("reason")
             self.notice = {
-                "camera-calibration-unverified": "Die Arcturus-Kalibrierung konnte nicht geprüft werden. Der Scan bleibt aus.",
-                "camera-module-association-unverified": "Die Kamerabilder passen nicht zur Arcturus-Kalibrierung. Der Scan bleibt aus.",
-                "head-tracking-unavailable": "Die Raumverfolgung ist noch nicht bereit. Schau dich um und versuche es erneut.",
-                "public-camera-api-unavailable": "Die öffentliche Kameraschnittstelle ist nicht verfügbar. Der Scan bleibt aus.",
-                "camera-not-exposed": "SteamVR meldet keine zugängliche Kamera. Der Scan bleibt aus.",
-                "camera-count-unsupported": "Die gemeldete Kamera-Anordnung ist noch nicht unterstützt. Der Scan bleibt aus.",
-                "camera-layout-unsupported": "Das Kamerabild hat kein bestätigtes Stereo-Layout. Der Scan bleibt aus.",
-            }.get(reason, "Die Stereo-Kamera konnte nicht verifiziert werden. Der Scan bleibt aus.")
+                "camera-calibration-unverified": "Arcturus calibration could not be verified. Scanning has not started.",
+                "camera-module-association-unverified": "Camera images do not match the Arcturus calibration. Scanning has not started.",
+                "head-tracking-unavailable": "Room tracking is not ready. Look around and try again.",
+                "public-camera-api-unavailable": "The public camera interface is unavailable. Scanning has not started.",
+                "camera-not-exposed": "SteamVR reports no accessible camera. Scanning has not started.",
+                "camera-count-unsupported": "The reported camera arrangement is not supported yet. Scanning has not started.",
+                "camera-layout-unsupported": "The camera image has no verified stereo layout. Scanning has not started.",
+            }.get(reason, "The stereo camera could not be verified. Scanning has not started.")
             if type(reason) is str and 0 < len(reason) <= 64 and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in reason):
-                self.notice += " Prüfcode: "+reason
+                self.notice += " Diagnostic code: "+reason
             self.page = self.camera_request_page if self.camera_request_page in ("prepare", "alignment") else "scan"
             self.starting = False
         elif kind == "depth":
@@ -273,7 +273,7 @@ class Application:
             if self.session and self.session.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW):
                 self.session.tracking_verified = False
                 self.session.stage = Stage.PAUSED
-                self.notice = "Raumverfolgung unterbrochen. Scan pausiert."
+                self.notice = "Room tracking lost. Scanning is paused."
                 self.world_revision += 1
         elif kind == "point":
             require(self.page in ("place", "align_place") and self.draft is not None, "No element is being placed")
@@ -282,7 +282,7 @@ class Application:
                 point = event["controller_position"]
             else:
                 hit = pick_surface(self.session.reconstruction.mesh(), event["ray_origin"], event["ray_direction"])
-                require(hit is not None, "Hier fehlt eine zuverlässige Scanfläche. Weitere Ansichten erfassen oder mit dem Controller messen.")
+                require(hit is not None, "No reliable scanned surface here. Capture more views or measure at the controller.")
                 point = hit[1]
             self.draft.add_corner(point, origin_id=event["origin_id"], sample_ns=event["sample_ns"], tracking_valid=True)
             self.finish_draft()
@@ -310,79 +310,79 @@ class Application:
             for item in items[self.list_page*8:(self.list_page+1)*8]:
                 button(prefix+item.id, item.name)
             if count > 1:
-                button("page_previous", "Vorherige Seite", self.list_page > 0)
-                button("page_next", "Weitere Einträge", self.list_page+1 < count)
-        title, subtitle, step = "Dein Raum", "Richte deine Umgebung für Mixed Reality ein.", 0
+                button("page_previous", "Previous page", self.list_page > 0)
+                button("page_next", "More entries", self.list_page+1 < count)
+        title, subtitle, step = "Your room", "Set up your surroundings for mixed reality.", 0
         if self.page == "home":
-            button("new", "Neuen Raum scannen", primary=True)
+            button("new", "Scan a new room", primary=True)
             listing(self.rooms, "load:")
         elif self.page == "prepare":
-            title, subtitle, step = "Raum erfassen", "Schau dich langsam um. Erfasse Boden, Wände und Möbel aus mehreren Blickwinkeln.", 1
-            button("start", "Kamera wird geprüft" if self.starting else "Scan starten", not self.starting, primary=True)
-            button("back", "Zurück", not self.starting)
+            title, subtitle, step = "Capture your room", "Look around slowly. Capture the floor, walls and furniture from several viewpoints.", 1
+            button("start", "Checking camera" if self.starting else "Start scan", not self.starting, primary=True)
+            button("back", "Back", not self.starting)
         elif self.page == "scan":
-            title, subtitle, step = "Dein Raum entsteht", "Türkis zeigt erfasste Flächen. Gelbe Bereiche benötigen weitere Ansichten.", 2
+            title, subtitle, step = "Your room is taking shape", "Teal marks captured surfaces. Amber areas need more views.", 2
             active = self.session.stage == Stage.SCANNING
-            button("pause" if active else "resume", "Pause" if active else "Fortsetzen", not self.starting)
-            button("add", "Element hinzufügen", self.session.tracking_verified, True)
-            button("elements", "Elemente bearbeiten")
-            button("review", "Scan prüfen", self.session.view()["can_review"])
-            button("undo", "Rückgängig", bool(self.session._history))
-            button("cancel", "Einrichtung beenden")
+            button("pause" if active else "resume", "Pause" if active else "Resume", not self.starting)
+            button("add", "Add element", self.session.tracking_verified, True)
+            button("elements", "Edit elements")
+            button("review", "Review scan", self.session.view()["can_review"])
+            button("undo", "Undo", bool(self.session._history))
+            button("cancel", "End setup")
         elif self.page in ("types", "walls", "elements", "edit"):
-            title, subtitle, step = "Raumelemente", "Wähle Flächen und Möbel aus und passe ihre Begrenzungen an.", 3
+            title, subtitle, step = "Room elements", "Choose surfaces and furniture, then adjust their boundaries.", 3
             if self.page == "types":
                 for label, name in LABELS.items():
                     button("type:"+label.value, name)
             elif self.page == "walls":
-                subtitle = "Zu welcher Wand gehört die Tür oder das Fenster?"
+                subtitle = "Which wall contains this door or window?"
                 listing(self.session.room.query(Label.WALL_FACE), "wall:")
             elif self.page == "elements":
                 listing(self.session.room.elements, "element:")
             else:
-                button("remeasure", "Begrenzung ändern", primary=True)
-                button("rename_element", "Element benennen")
-                button("delete_element", "Element entfernen")
-            button("back", "Zurück")
+                button("remeasure", "Change boundary", primary=True)
+                button("rename_element", "Name element")
+                button("delete_element", "Remove element")
+            button("back", "Back")
         elif self.page in ("place", "align_place"):
-            title, step = LABELS[self.label]+" eintragen", 3
+            title, step = "Add "+LABELS[self.label], 3
             align = self.page == "align_place"
             if align:
-                title = "Raum wiederfinden"
+                title = "Align saved room"
             if self.pending:
-                subtitle = "Prüfe die farbige Begrenzung im Raum und bestätige das Element."
+                subtitle = "Check the highlighted boundary in your room, then confirm the element."
                 if align:
-                    subtitle = "Prüfe, ob die Raumvorschau auf deiner echten Umgebung liegt."
-                button("confirm_alignment" if align else "confirm_element", "Zuordnung bestätigen" if align else "Element bestätigen",
+                    subtitle = "Check that the room preview matches your real surroundings."
+                button("confirm_alignment" if align else "confirm_element", "Confirm alignment" if align else "Confirm element",
                        not align or self.aligned_preview is not None, primary=True)
                 if not align and (self.label == Label.TABLE or self.label in VOLUMES):
-                    subtitle += f" Möbelhöhe: {self.furniture_depth:.2f} m"
-                    button("depth_less", "Flacher")
-                    button("depth_more", "Höher")
+                    subtitle += f" Furniture height: {self.furniture_depth:.2f} m"
+                    button("depth_less", "Lower")
+                    button("depth_more", "Higher")
             else:
-                instructions = ("Erste Ecke markieren", "Benachbarte Ecke markieren", "Gegenüberliegende Ecke markieren")
-                subtitle = instructions[min(2, len(self.draft.points))]+". Mit dem Trigger bestätigen."
+                instructions = ("Mark the first corner", "Mark the adjacent corner", "Mark the opposite corner")
+                subtitle = instructions[min(2, len(self.draft.points))]+". Press the trigger to confirm."
                 if align:
                     subtitle = self.alignment_anchor.name+": "+subtitle
-                button("measure_controller", "Am Controller messen" if not self.measure_with_controller else "Auf Scanfläche zeigen")
-            button("corner_undo", "Letzte Ecke zurück", bool(self.draft.points))
-            button("back", "Abbrechen")
+                button("measure_controller", "Measure at controller" if not self.measure_with_controller else "Point at scanned surface")
+            button("corner_undo", "Undo last corner", bool(self.draft.points))
+            button("back", "Cancel")
         elif self.page == "review":
-            title, subtitle, step = "Passt dein Raum?", "Prüfe Flächen und Elemente. Tisch, Boden oder Wand dienen später als Referenz. Ungescannte Bereiche bleiben unbekannt.", 4
-            button("save", "Erfassten Bereich speichern", primary=True)
-            button("continue", "Weiter scannen")
-            button("elements", "Elemente bearbeiten")
-            button("rename", "Raum benennen")
+            title, subtitle, step = "Does your room look right?", "Check surfaces and elements. Add a table, floor or wall for future alignment. Unscanned areas remain unknown.", 4
+            button("save", "Save captured area", primary=True)
+            button("continue", "Continue scanning")
+            button("elements", "Edit elements")
+            button("rename", "Name room")
         elif self.page == "saved":
-            title, subtitle, step = "Dein Raum ist gespeichert", self.session.room.name, 5
-            button("back", "Zur Übersicht", primary=True)
+            title, subtitle, step = "Your room has been saved", self.session.room.name, 5
+            button("back", "Back to rooms", primary=True)
         elif self.page == "alignment":
-            title, subtitle = "Raumzuordnung prüfen", "Der gespeicherte Raum muss vor der Verwendung mit der aktuellen Umgebung ausgerichtet werden."
+            title, subtitle = "Check room alignment", "Align the saved room with your current surroundings before using it."
             if self.alignment_anchor is None:
-                subtitle = "Hier fehlt eine Referenzfläche. Richte einen neuen Raum ein und trage einen Tisch, Boden oder eine Wand ein."
-                button("new", "Neuen Raum scannen", primary=True)
-            button("align_start", "Raum wiederfinden", self.alignment_anchor is not None and not self.starting, primary=True)
-            button("back", "Zurück", not self.starting)
+                subtitle = "This room has no reference surface. Set up a new room and add a table, floor or wall."
+                button("new", "Scan a new room", primary=True)
+            button("align_start", "Align saved room", self.alignment_anchor is not None and not self.starting, primary=True)
+            button("back", "Back", not self.starting)
         state = self.session.view() if self.session else None
         if self.page == "align_place" and self.aligned_preview is not None and state is not None:
             state = {**state, "mesh": self.aligned_preview.mesh.to_dict(),
@@ -437,7 +437,7 @@ def run(root, incoming, outgoing):
                     kind = kind if type(kind) is str and kind.isascii() and kind.replace("_", "").isalnum() and len(kind) <= 64 else "invalid"
                     print(f"Room controller: event={kind} error={type(error).__name__}", file=sys.stderr)
                 errors += 1
-                app.notice = "Diese Aktion konnte nicht abgeschlossen werden. Prüfe die Raumzuordnung und deine Eingabe."
+                app.notice = "This action could not be completed. Check room alignment and your input."
             emit()
     finally:
         app.close()

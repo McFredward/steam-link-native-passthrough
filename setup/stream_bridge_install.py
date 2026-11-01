@@ -1168,9 +1168,10 @@ class FrameInstall:
         manifest = {'source':'builtin', 'applications':[{
             'app_key':'sfnp.room.setup', 'launch_type':'binary', 'binary_path':str(root/'sfnp-room-overlay'),
             'binary_path_linux':str(root/'sfnp-room-overlay'),
+            'binary_path_linux_arm':str(root/'sfnp-room-overlay'),
             'arguments':shlex.join(arguments), 'is_dashboard_overlay':True,
-            'strings':{'en_us':{'name':'Room setup','description':'Scan and edit your mixed reality room'},
-                       'de_de':{'name':'Raumeinrichtung','description':'Raum scannen und Möbel eintragen'}}}]}
+            'strings':{'en_us':{'name':'Room Setup','description':'Scan and edit your mixed reality room'},
+                       'de_de':{'name':'Room Setup','description':'Scan and edit your mixed reality room'}}}]}
         unit = ('[Unit]\nDescription=Steam Link room setup\nAfter=steamvr.service\n'
                 'BindsTo=steamvr.service\nPartOf=steamvr.service\n\n[Service]\nType=simple\nExecStart=' +
                 ' '.join(self.systemd(arg) for arg in [str(root/'sfnp-room-overlay'), *arguments]) +

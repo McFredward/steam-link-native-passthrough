@@ -276,6 +276,8 @@ class Tests(unittest.TestCase):
         self.assertTrue(manifest['is_dashboard_overlay'])
         self.assertEqual(str(executable),manifest['binary_path'])
         self.assertEqual(manifest['binary_path'],manifest['binary_path_linux'])
+        self.assertEqual(manifest['binary_path'],manifest['binary_path_linux_arm'])
+        self.assertEqual('Room Setup',manifest['strings']['de_de']['name'])
         self.assertIn(str(self.froot.parent/'rooms'),manifest['arguments'])
         self.assertIn(str((self.fsvr/'bin/linuxarm64/libopenvr_api.so').resolve()),manifest['arguments'])
         unit=self.fhome/'.config/systemd/user'/b.ROOM_UNIT

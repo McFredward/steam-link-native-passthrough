@@ -3,6 +3,7 @@
 #include "native_pipe.h"
 #include "native_view.h"
 #include "native_present.h"
+#include "native_registration.h"
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -44,7 +45,8 @@ public:
         struct stat after{};if(stat(library.c_str(),&after)||info.st_dev!=after.st_dev||info.st_ino!=after.st_ino)return false;
         if(!symbol(init_,"VR_InitInternal2")||!symbol(get_,"VR_GetGenericInterface")||!symbol(shutdown_,"VR_ShutdownInternal"))return false;
         EVRInitError error=EVRInitError_VRInitError_None;init_(&error,EVRApplicationType_VRApplication_Overlay,nullptr);if(error)return false;started_=true;
-        if(!table(system,"FnTable:IVRSystem_026")||!table(overlay,"FnTable:IVROverlay_028")||!table(applications,"FnTable:IVRApplications_008"))return false;
+        if(!table(system,"FnTable:IVRSystem_026")||!table(overlay,"FnTable:IVROverlay_028"))return false;
+        table(applications,"FnTable:IVRApplications_008");
         table(camera,"FnTable:IVRTrackedCamera_006");
         char model[128]{};ETrackedPropertyError e=ETrackedPropertyError_TrackedProp_Success;
         const auto size=system->GetStringTrackedDeviceProperty(0,ETrackedDeviceProperty_Prop_ModelNumber_String,model,sizeof(model),&e);
@@ -53,20 +55,17 @@ public:
     }
     bool create(const std::string& root){
         manifest=root+"/room.vrmanifest";
-        if(applications->AddApplicationManifest(manifest.data(),true))return false;
-        registered_=true;
-        char key[]="sfnp.room.setup",name[]="Raumeinrichtung";
-        if(!applications->IsApplicationInstalled(key))throw std::runtime_error("Room application manifest was rejected by SteamVR");
-        const auto identity=applications->IdentifyApplication(std::uint32_t(getpid()),key);
-        if(identity)throw std::runtime_error("Room application identification failed code="+std::to_string(int(identity)));
-        std::fprintf(stderr,"Room application: key=sfnp.room.setup registered=yes identified=yes\n");
-        if(overlay->CreateDashboardOverlay(key,name,&panel,&thumbnail))return false;
+        const auto registration=createRoomDashboard(applications,overlay,manifest,std::uint32_t(getpid()),panel,thumbnail);
+        registered_=registration.manifestAdded;
+        std::fprintf(stderr,"Room application: key=sfnp.room.setup manifest_code=%d installed=%d identity_code=%d dashboard_code=%d\n",
+            registration.manifestError,int(registration.installed),registration.identityError,int(registration.overlayError));
+        if(registration.overlayError)throw std::runtime_error("Room dashboard creation failed code="+std::to_string(int(registration.overlayError)));
         HmdVector2_t scale{{1024,800}};
         if(overlay->SetOverlayWidthInMeters(panel,1.8f)||overlay->SetOverlayMouseScale(panel,&scale)
             ||overlay->SetOverlayInputMethod(panel,VROverlayInputMethod_Mouse))return false;
         Canvas iconImage(128,128);icon(iconImage);
         publish(1,iconImage,seconds());
-        for(unsigned eye=0;eye<2;++eye){const auto id="sfnp.room.mesh."+std::to_string(eye);std::string label="Raumscan";
+        for(unsigned eye=0;eye<2;++eye){const auto id="sfnp.room.mesh."+std::to_string(eye);std::string label="Room Scan";
             if(overlay->CreateOverlay(const_cast<char*>(id.c_str()),label.data(),&world[eye]))return false;
             overlay->SetOverlayInputMethod(world[eye],VROverlayInputMethod_None);
             overlay->SetOverlayFlag(world[eye],VROverlayFlags_IsPremultiplied,true);
@@ -74,7 +73,7 @@ public:
             overlay->SetOverlayFlag(world[eye],VROverlayFlags_VisibleInDashboard,true);
             overlay->SetOverlaySortOrder(world[eye],UINT32_MAX-2);
         }
-        char hudKey[]="sfnp.room.controls",hudName[]="Raumscan-Steuerung";
+        char hudKey[]="sfnp.room.controls",hudName[]="Room Scan Controls";
         if(overlay->CreateOverlay(hudKey,hudName,&hud))return false;
         overlay->SetOverlayFlag(panel,VROverlayFlags_IsPremultiplied,true);
         overlay->SetOverlayFlag(hud,VROverlayFlags_IsPremultiplied,true);
@@ -130,7 +129,7 @@ public:
     ~Runtime(){
         if(overlay){for(const auto handle:{world[0],world[1],hud})if(handle){overlay->HideOverlay(handle);overlay->ClearOverlayTexture(handle);overlay->DestroyOverlay(handle);}
             for(const auto handle:{panel,thumbnail})if(handle){overlay->ClearOverlayTexture(handle);overlay->DestroyOverlay(handle);}}
-        if(registered_&&applications)applications->RemoveApplicationManifest(manifest.data());
+        if(registered_&&applications&&applications->RemoveApplicationManifest)applications->RemoveApplicationManifest(manifest.data());
         if(started_)shutdown_();
         if(module_)dlclose(module_);
         if(fd_>=0)close(fd_);
@@ -153,7 +152,7 @@ std::string hudAction(const Json& state,const Mat& head,const Mat& controller){
         if(b.value("enabled",false)&&x>=20+i*334&&x<=334+i*334)return b.value("action","");}return {};
 }
 void miniPanel(Canvas& image,const Json& state){image.clear();image.rect(0,0,1024,240,{12,24,30,235},22);
-    image.text(24,14,state.value("title","Raumscan"),30,Ink);image.text(24,65,state.value("subtitle",""),19,Muted,970);
+    image.text(24,14,state.value("title","Room Scan"),30,Ink);image.text(24,65,state.value("subtitle",""),19,Muted,970);
     for(std::size_t i=0;i<std::min<std::size_t>(3,state["buttons"].size());++i){const auto& b=state["buttons"][i];const bool enabled=b.value("enabled",false);
         image.rect(20+int(i)*334,145,314,70,enabled?Color{29,79,82}:Color{25,40,45},12);
         image.text(35+int(i)*334,162,b.value("label",""),21,enabled?Ink:Muted,285,1);}}
@@ -228,7 +227,7 @@ int main(int argc,char** argv){
                 return;}
             if(text=="rename"||text=="rename_element"){
                 keyboardEvent=text;
-                std::string description=text=="rename"?"Raum benennen":"Element benennen",existing;
+                std::string description=text=="rename"?"Name room":"Name element",existing;
                 runtime.overlay->ShowKeyboardForOverlay(runtime.panel,EGamepadTextInputMode_k_EGamepadTextInputModeNormal,
                     EGamepadTextInputLineMode_k_EGamepadTextInputLineModeSingleLine,0,description.data(),80,existing.data(),0);return;
             }

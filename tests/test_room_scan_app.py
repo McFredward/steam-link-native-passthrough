@@ -57,7 +57,7 @@ class AppTests(unittest.TestCase):
         for n, point in enumerate(((0, .8, 0), (2, .8, 0), (2, .8, -1)), 1):
             self.app.event(dict(event="point", origin_id=IDS[1], sample_ns=n,
                                 controller_position=point, ray_origin=[0, 0, 0], ray_direction=[0, 0, -1]))
-        self.assertEqual("Tisch", self.app.pending.name)
+        self.assertEqual("Table", self.app.pending.name)
         self.assertFalse(self.app.pending.confirmed)
         self.app.action("depth_more")
         self.assertAlmostEqual(.85, self.app.pending.geometry.box_size[2])
@@ -84,7 +84,7 @@ class AppTests(unittest.TestCase):
         self.app.event(dict(event="camera_warming"))
         self.app.event(dict(event="camera_unavailable", reason="camera-count-unsupported"))
         view=self.app.view()
-        self.assertIn("Prüfcode: camera-count-unsupported",view["notice"])
+        self.assertIn("Diagnostic code: camera-count-unsupported",view["notice"])
         self.assertFalse(view["camera_check_pending"])
         self.assertFalse(view["capture_active"])
 
