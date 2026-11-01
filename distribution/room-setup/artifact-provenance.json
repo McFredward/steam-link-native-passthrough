@@ -1,0 +1,392 @@
+{
+  "baseline_receipt": {
+    "archive": {
+      "bytes": 20216605,
+      "sha256": "57244ab25663fb974e5453d34aed83fcab0ae6b03fd01cd21b9fa8fc7e3f6907"
+    },
+    "artifacts": {
+      "frame_layer": {
+        "bytes": 3723200,
+        "sha256": "9a30a0a48c93742d7b9cff831cb205b21398d01d720cb3717d97170a2944e3c9"
+      },
+      "frame_selector": {
+        "bytes": 73360,
+        "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+      },
+      "mask_codec": {
+        "bytes": 1576456,
+        "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+      },
+      "mask_util": {
+        "bytes": 854736,
+        "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+      },
+      "pc_provider": {
+        "bytes": 2094080,
+        "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
+      }
+    },
+    "component_versions": {
+      "frame": "0.3.5",
+      "pc": "0.3.11"
+    },
+    "device_actions": false,
+    "hardware_verified": false,
+    "native_installable": true,
+    "online_bootstrap_currently_accepts_schema": true,
+    "readiness": "release",
+    "result": "PASS",
+    "runtime_profile": {
+      "bytes": 11548,
+      "sha256": "72cbb7660c689c6a193e245485fe885ad5acc98cd5752ab7b8287a9fd0415f46"
+    },
+    "schema": "sfnp-stream-bridge-packaging-result-v1",
+    "source_pins": {
+      "LICENSE": {
+        "bytes": 1067,
+        "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
+      },
+      "PATCH_VERSIONS.json": {
+        "bytes": 79,
+        "sha256": "d8269283f154d73ce0d451f2b6b733d588c0600848a2b54ed3e1be371bc37169"
+      },
+      "VERSION": {
+        "bytes": 7,
+        "sha256": "304ee74090c149b24dd0a0c279da94cdff8469db1dda00a60560626a54c4cfec"
+      },
+      "packaging/mask-ffmpeg-patches.json": {
+        "bytes": 1943,
+        "sha256": "30ec1f3ff40509a32fa77861e94fe0e7ada5b04c861e9002add43e6268036075"
+      },
+      "packaging/mask-ffmpeg.json": {
+        "bytes": 452,
+        "sha256": "7279c53e7353130676821a68a44ed454f44d65440b8eebd1a314e2de51d877bb"
+      },
+      "packaging/setup-openssh.json": {
+        "bytes": 1029,
+        "sha256": "98fd5e79c4a21896b211aaf22b86fc804ce83f68c03ac1f4b476b5693f1b45f3"
+      },
+      "packaging/setup-python.json": {
+        "bytes": 313,
+        "sha256": "c1cc8013531d54aa2f3aee2e83c77ded92c9a6b43e9f32c5a4aaaffedf2847d1"
+      },
+      "packaging/setup-textual.json": {
+        "bytes": 4750,
+        "sha256": "2f71a814da80c73e8cbd0f7f123ec932ac0edb7c192c89f049b6417e7210ec14"
+      },
+      "pc/stream-bridge-sender-provider.vrdrivermanifest": {
+        "bytes": 138,
+        "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
+      },
+      "setup/patch-steam-link.cmd": {
+        "bytes": 1266,
+        "sha256": "c68e7f6deaf23354604dd397d97e70b8c1243bfc149132161df37dba62001fb3"
+      },
+      "setup/patch-steam-link.sh": {
+        "bytes": 613,
+        "sha256": "1b1887ec6836f39ef7a0e3ab9ba8c9724f8e4326fb998ea8f890bd1981a2cff8"
+      },
+      "setup/steam-link-askpass.sh": {
+        "bytes": 282,
+        "sha256": "46873e19b1a36677169d6c9f52d6e3f13bdc3ac493608dd8e17dd07421d360ed"
+      },
+      "setup/steam_link_askpass.c": {
+        "bytes": 6488,
+        "sha256": "a4974678c286dbf95aa609698ef9569c877baec353d18eda90ce118453f4e919"
+      },
+      "setup/steam_link_setup.py": {
+        "bytes": 70844,
+        "sha256": "cd8e21d0ce7bb05a0cd262d0a5aa8a0171e70cf033460e97a08a64be8f0024e8"
+      },
+      "setup/steam_link_setup_askpass_client.py": {
+        "bytes": 3466,
+        "sha256": "1c1bf2965a4146dd012f5110b204a8cc6a3e367bd65ac7b94d1c4b83086bdd18"
+      },
+      "setup/steam_link_setup_auth.py": {
+        "bytes": 7036,
+        "sha256": "fa497fcb37f7647ba129b3ed8ed59ce016f0a86edcd8432e715e43ffc8c22db6"
+      },
+      "setup/steam_link_setup_checkpoint.py": {
+        "bytes": 19846,
+        "sha256": "320b3e958c52b16cb1b1c610e267869584dce277c73a1ae8dd91c8e5ccdd1a2e"
+      },
+      "setup/steam_link_setup_frame.py": {
+        "bytes": 21103,
+        "sha256": "655cde8d59e02adc18b60b5cbe088860293c48facd871d4f36d8042d43c146b3"
+      },
+      "setup/steam_link_setup_legacy.py": {
+        "bytes": 9473,
+        "sha256": "73757c85571f8c4b0fa886a8ad3b4da82b824add3bd0de68d729d5ad009e35cc"
+      },
+      "setup/steam_link_setup_log.py": {
+        "bytes": 20768,
+        "sha256": "46f2efee468b5c829645a5d4c8edfa571501e397edfbb5c7fac9193fe0711933"
+      },
+      "setup/steam_link_setup_pc.py": {
+        "bytes": 23932,
+        "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
+      },
+      "setup/steam_link_setup_session.py": {
+        "bytes": 18278,
+        "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
+      },
+      "setup/steam_link_setup_textual.py": {
+        "bytes": 59855,
+        "sha256": "3298d94454b63f1067a6add2496ed8754135751dd19d6e5c8f4ebbcab409173d"
+      },
+      "setup/steam_link_setup_ui.py": {
+        "bytes": 82008,
+        "sha256": "bfe583d14f3b517d217df9b8e52d32b68dd8c4b73a0f47d3e4192db3bb829b55"
+      },
+      "setup/steam_link_setup_vendor.py": {
+        "bytes": 2108,
+        "sha256": "00208745e459d4d0303dbcde8c2bc9c3e1c20072eeeb48a025396c7bdb4d62a1"
+      },
+      "setup/steam_link_setup_workflow.py": {
+        "bytes": 11433,
+        "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
+      },
+      "setup/stream_bridge_install.py": {
+        "bytes": 173055,
+        "sha256": "a82e7eef93096c2049b352a738f70e184c5201fc579a250f591c9e8a99798c75"
+      },
+      "third_party/ffmpeg/COPYING.LGPLv2.1": {
+        "bytes": 26517,
+        "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+      },
+      "third_party/ffmpeg/README.md": {
+        "bytes": 2150,
+        "sha256": "8bf7ca20dcc271cc8b2d4891cb28350c4ff7710c8d9f7b2e16e59b0e1a144b6d"
+      },
+      "third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch": {
+        "bytes": 78231,
+        "sha256": "0cec20a610189776c11009d5672fda2c657461c3403082342e5848be08bb7844"
+      },
+      "third_party/lz4/LICENSE": {
+        "bytes": 1311,
+        "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+      },
+      "third_party/zstd/LICENSE": {
+        "bytes": 1549,
+        "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+      },
+      "tools/app_payload_probe.py": {
+        "bytes": 23988,
+        "sha256": "2b13ce344ed60318fd660a98522c2562f584326b954c588ed37b06854492c81f"
+      },
+      "tools/build_mask_hevc_ffmpeg.py": {
+        "bytes": 7970,
+        "sha256": "2a7bc3b34b280f8d0b314f67dd70b7750920493a408653b364a9589b8990f66f"
+      },
+      "tools/build_setup_askpass.py": {
+        "bytes": 6373,
+        "sha256": "89c789e09d30b8ed6a7b836208a3b1bad9d1d48d6d98ca34f8e052e0f9cf6913"
+      },
+      "tools/compositor_startup_health.py": {
+        "bytes": 89190,
+        "sha256": "b4e7d5e63484e9a45658302a735749cd2c09d697192662c05048b966a3b3eea3"
+      },
+      "tools/configure_mask_codec.py": {
+        "bytes": 2791,
+        "sha256": "25c36853b9e912d7edf253c96ea7fe3636d5168ed05b9be4dfa81cd6ac7f8add"
+      },
+      "tools/native_fragment_count1_interface.py": {
+        "bytes": 2874,
+        "sha256": "19bb5ba700cd961fc7c7ecd1805ee746991f60ec8afcfcbc5b744678e6c10b5a"
+      },
+      "tools/native_fragment_ssa_probe.py": {
+        "bytes": 13496,
+        "sha256": "a375a068bc68f0c8e34fa2051bb7371d816aa737cbf527bcfaaac0e5dcb06a93"
+      },
+      "tools/native_fragment_stream_coverage.py": {
+        "bytes": 8750,
+        "sha256": "a8e947aa49bd1881d66ae9a2bed6b3eeb5761e0a5e3368165467495f4046a511"
+      },
+      "tools/native_shader_contract.json": {
+        "bytes": 13764,
+        "sha256": "fa56730966a22ee374c4b77a7b5303c75788e1dc4fc604793d266fcc8e4093b5"
+      },
+      "tools/native_shader_contract.py": {
+        "bytes": 3006,
+        "sha256": "8c1925915b587ba330bcdcaf7be592532e5fd64d67465417e87bec67b84cef94"
+      },
+      "tools/package_setup_dependencies.py": {
+        "bytes": 7369,
+        "sha256": "7c4ab33e63922e652f790632e092349d48179dfb1cf188738051a9d57a0a3a1a"
+      },
+      "tools/package_setup_textual.py": {
+        "bytes": 10460,
+        "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
+      },
+      "tools/package_stream_bridge.py": {
+        "bytes": 20736,
+        "sha256": "90a4e83a8ac3c10a2e5cc9bda2fcdc43afb859cf32f24cb51e6c61c17871bc91"
+      },
+      "tools/package_stream_link_setup.py": {
+        "bytes": 7826,
+        "sha256": "755b5c2dc8729e924675ef39c96621c1401663ef6c480f62a05c41c4c1073a19"
+      },
+      "tools/pixel_payload_recovery.py": {
+        "bytes": 21355,
+        "sha256": "cf18f0f5432acc38f1ab4c299310f29e79dbd26b19957ffc16fcc0edb024df9d"
+      },
+      "tools/stream_bridge_camera.py": {
+        "bytes": 46343,
+        "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
+      }
+    },
+    "source_revision": "2804943d26948f865be1b62375ed3c11fa460510",
+    "temporary_contract_tree_removed": true,
+    "validation_receipts": [
+      {
+        "checks": [
+          "exact_frame_association",
+          "frame_layer_build",
+          "frame_selector_build",
+          "installer_transaction",
+          "opaque_fallback",
+          "ordinary_rgba_source",
+          "owned_coverage_gpu",
+          "pc_provider_build",
+          "startup_health_logic"
+        ],
+        "hardware_verified": false,
+        "pin": {
+          "bytes": 8584,
+          "sha256": "6ce8debb8dffe2ed6b5135cf87958bc0893e8277f8f1f6e23a0003ca15691d1c"
+        }
+      }
+    ],
+    "version": "0.3.15"
+  },
+  "build_inputs": {
+    "atlas": {
+      "bytes": 179052,
+      "sha256": "cf8b64038906112a73fe15d55662bd8c2ffc40c3a34e44f7b50ad8cc7e885812"
+    },
+    "compiler": "aarch64-linux-gnu-g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "device_actions": false,
+    "dynamic_dependencies": "\nDynamic section at offset 0x1aee58 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x14448\n 0x000000000000000d (FINI)               0x13201c\n 0x0000000000000019 (INIT_ARRAY)         0x1a8358\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x1a83b8\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1160\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1705 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x1af068\n 0x0000000000000002 (PLTRELSZ)           3456 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x136c8\n 0x0000000000000007 (RELA)               0x1a10\n 0x0000000000000008 (RELASZ)             72888 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x1940\n 0x000000006fffffff (VERNEEDNUM)         3\n 0x000000006ffffff0 (VERSYM)             0x180a\n 0x000000006ffffff9 (RELACOUNT)          2956\n 0x0000000000000000 (NULL)               0x0\n",
+    "font": {
+      "bytes": 759720,
+      "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
+    },
+    "hardware_verified": false,
+    "json": {
+      "bytes": 953436,
+      "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63"
+    },
+    "pillow": "12.2.0",
+    "sdk": {
+      "bytes": 180293,
+      "sha256": "3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7"
+    },
+    "symbol_versions": "\nVersion symbols section '.gnu.version' contains 154 entries:\n Addr: 0x000000000000180a  Offset: 0x0000180a  Link: 5 (.dynsym)\n  000:   0 (*local*)       0 (*local*)       0 (*local*)       1 (*global*)   \n  004:   1 (*global*)      2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  008:   4 (GLIBC_2.36)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  00c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    3 (GLIBC_2.34) \n  010:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  014:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  018:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  01c:   5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  020:   2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17)    6 (GLIBC_2.17) \n  024:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    7 (GLIBC_2.32)    2 (GLIBC_2.17) \n  028:   2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17)    8 (GLIBC_2.35) \n  02c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  030:   1 (*global*)      1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  034:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  038:   1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  03c:   2 (GLIBC_2.17)    9 (GLIBC_2.25)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  040:   2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17)    9 (GLIBC_2.25) \n  044:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17) \n  048:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  04c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    5 (GLIBC_2.33)    2 (GLIBC_2.17) \n  050:   2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  054:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    a (GLIBC_2.17)    3 (GLIBC_2.34) \n  058:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  05c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    b (GLIBC_2.38)    2 (GLIBC_2.17) \n  060:   b (GLIBC_2.38)    1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  064:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    a (GLIBC_2.17)    2 (GLIBC_2.17) \n  068:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  06c:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  070:   2 (GLIBC_2.17)    3 (GLIBC_2.34)    a (GLIBC_2.17)    2 (GLIBC_2.17) \n  074:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  078:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  07c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34) \n  080:   2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  084:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    b (GLIBC_2.38) \n  088:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34) \n  08c:   2 (GLIBC_2.17)    5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  090:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  094:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  098:   2 (GLIBC_2.17)    3 (GLIBC_2.34) \n\nVersion needs section '.gnu.version_r' contains 3 entries:\n Addr: 0x0000000000001940  Offset: 0x00001940  Link: 6 (.dynstr)\n  000000: Version: 1  File: libm.so.6  Cnt: 1\n  0x0010:   Name: GLIBC_2.17  Flags: none  Version: 10\n  0x0020: Version: 1  File: ld-linux-aarch64.so.1  Cnt: 1\n  0x0030:   Name: GLIBC_2.17  Flags: none  Version: 6\n  0x0040: Version: 1  File: libc.so.6  Cnt: 8\n  0x0050:   Name: GLIBC_2.38  Flags: none  Version: 11\n  0x0060:   Name: GLIBC_2.25  Flags: none  Version: 9\n  0x0070:   Name: GLIBC_2.35  Flags: none  Version: 8\n  0x0080:   Name: GLIBC_2.32  Flags: none  Version: 7\n  0x0090:   Name: GLIBC_2.33  Flags: none  Version: 5\n  0x00a0:   Name: GLIBC_2.36  Flags: none  Version: 4\n  0x00b0:   Name: GLIBC_2.34  Flags: none  Version: 3\n  0x00c0:   Name: GLIBC_2.17  Flags: none  Version: 2\n"
+  },
+  "cmake_separate_room_target_diff": "diff --git a/CMakeLists.txt b/CMakeLists.txt\nindex 93f7a65..60d1b71 100644\n--- a/CMakeLists.txt\n+++ b/CMakeLists.txt\n@@ -27,6 +27,11 @@ if(FRAME_DASHBOARD_TRANSITION_PROBE)\n     target_link_libraries(test_dashboard_transition_probe PRIVATE Threads::Threads)\n endif()\n include(CTest)\n+option(FRAME_ROOM_SCAN_ONLY \"Build only the uninstalled experimental room capture checks\" OFF)\n+if(FRAME_ROOM_SCAN_ONLY)\n+    include(cmake/RoomScan.cmake)\n+    return()\n+endif()\n option(FRAME_STREAM_BRIDGE_ONLY\n     \"Build only the uninstalled negotiated stream-bridge prototype and its focused tests\" OFF)\n option(FRAME_STREAM_BRIDGE_RECEIVER \"Build the negotiated full-resolution receiver (not automatically installed)\" OFF)\ndiff --git a/cmake/RoomScan.cmake b/cmake/RoomScan.cmake\nnew file mode 100644\nindex 0000000..22df345\n--- /dev/null\n+++ b/cmake/RoomScan.cmake\n@@ -0,0 +1,15 @@\n+# Independent developer targets. Nothing here is installed or injected.\n+if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)\n+    find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)\n+    add_executable(test_room_camera_inventory tests/room_camera_probe_test.cpp)\n+    target_include_directories(test_room_camera_inventory PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})\n+    if(MSVC)\n+        target_compile_options(test_room_camera_inventory PRIVATE /W4 /WX)\n+    else()\n+        target_compile_options(test_room_camera_inventory PRIVATE -Wall -Wextra -Wpedantic -Werror)\n+    endif()\n+    add_test(NAME room_camera_inventory COMMAND test_room_camera_inventory)\n+    add_test(NAME room_scan_core COMMAND ${Python3_EXECUTABLE} -B -m unittest discover\n+        -s tests -p \"test_room_scan*.py\" -v)\n+    set_tests_properties(room_scan_core PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})\n+endif()",
+  "current_software_checks": {
+    "artifact.log": {
+      "bytes": 97,
+      "sha256": "2cd4222e9a96468cf1e2f81e923b7dcab8d2d60b61ae7558e918196c26b2d092"
+    },
+    "bootstrap.log": {
+      "bytes": 110,
+      "sha256": "9412ca89c2fa1b6dedeb7df0774bca59d5fb9539fe9a7f5ea9232727d18f60f1"
+    },
+    "checkpoint.log": {
+      "bytes": 97,
+      "sha256": "fbcd6a375525f8923864dc85bb90460780a76aef4911ffcc9b449ed706b538ce"
+    },
+    "ctest.log": {
+      "bytes": 465,
+      "sha256": "79c5a1b7e5e636adf611e6dec3d027d4c78db827bb1357a0fb3dc412f15b3b5f"
+    },
+    "installer.log": {
+      "bytes": 396,
+      "sha256": "d62c784d4e286480ae3ed4fa3ed3b46c94daeb5b4e1145e5b1bbc6ff91a4c9bf"
+    },
+    "logging.log": {
+      "bytes": 97,
+      "sha256": "82a87d124efdcc1954d80f822cff25dee8d38bce945d16f42ad8e6023dac5731"
+    },
+    "native-sanitizers.log": {
+      "bytes": 61,
+      "sha256": "c0d4e8fbe9e245cb2b38d6394655e8242a2f57296e8177df3615e5a9b44266e8"
+    },
+    "package.log": {
+      "bytes": 98,
+      "sha256": "bd9b911fdace6db0e6d2c43261743bc3d4cecdb32fb4c10e19018b0d3ac8eb9f"
+    },
+    "pc-only.log": {
+      "bytes": 596,
+      "sha256": "f720b25b69b319ec56e679ffb891c23e99f52f3b852b9b71e5fce98d706a9432"
+    },
+    "room-flow.log": {
+      "bytes": 98,
+      "sha256": "bf1d8faeb921c087e7637d06ae5fe3d732f9a39db4d897bf917f49e236b4acb0"
+    },
+    "source-mask-install.log": {
+      "bytes": 97,
+      "sha256": "853c59bed89c894b2ab830a518c05ca42dc33f7a62cdfe21de4738279ebcf1cc"
+    }
+  },
+  "device_actions": false,
+  "documentation_only_native_closure_diff": [
+    "pc/stream-bridge-mask-hevc.md"
+  ],
+  "final_archive": {
+    "bytes": 20759264,
+    "sha256": "6197fce5c321ee407bd5e01a805919562b94fbe2af73dd8e84f830ccd9c826aa"
+  },
+  "hardware_verified": false,
+  "limits": [
+    "Public Arcturus image availability unverified",
+    "Projection/controller/passthrough coexistence unverified on Frame",
+    "No automatic object detector or game/Venture room adapters"
+  ],
+  "native_build_log": {
+    "bytes": 394,
+    "sha256": "196f4ba07dafa340c3aea5021ed7e6d0cfeb81b7748adf4f7f0c6768cd8f40c7"
+  },
+  "packaged_pipe_check": {
+    "bytes": 95,
+    "sha256": "269560a03f395823cb1e882ce1d9ccf1def1c2375a2864c3c10b2a366a7d9061"
+  },
+  "prior_artifact_provenance": {
+    "bytes": 23847,
+    "sha256": "17e346daf08789d172706299a4dd61bccd01e58e7165b04ace0ded67cc532d3b"
+  },
+  "prior_software_validation": {
+    "bytes": 8584,
+    "sha256": "6ce8debb8dffe2ed6b5135cf87958bc0893e8277f8f1f6e23a0003ca15691d1c"
+  },
+  "room_binary_build_source_revision": "28065e97818acde1682bbb247325cb58045cf773",
+  "source_revision": "9a392e152f365ac13f31cd36fbbee4697b4305e6",
+  "unchanged_compiled_source_paths": [
+    "layer",
+    "receiver",
+    "pc",
+    "bridge",
+    "third_party"
+  ],
+  "unchanged_native_artifacts": [
+    "pc_provider",
+    "frame_layer",
+    "frame_selector",
+    "mask_codec",
+    "mask_util"
+  ],
+  "unchanged_room_compiled_sources": [
+    "room_scan/native_camera.h",
+    "room_scan/native_math.h",
+    "room_scan/native_overlay.cpp",
+    "room_scan/native_pipe.h",
+    "room_scan/native_raster.h",
+    "room_scan/native_view.h",
+    "tools/build_room_font.py",
+    "tools/build_room_overlay.sh",
+    "tests/room_native_test.cpp",
+    "tests/room_pipe_test.cpp"
+  ],
+  "validation_basis": "Retain exact reviewed native binaries and their source closure; rerun affected room, installer, package, PC-only, checkpoint, bootstrap and source-contract checks. No claim of rerunning the unchanged decoder/GPU hardware suite."
+}

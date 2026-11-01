@@ -1,7 +1,7 @@
 name: Experimental room setup
 on:
   push:
-    branches: [dev]
+    branches: [dev, arcturus-room-setup]
     paths:
       - 'room_scan/**'
       - 'probe/room_camera*'

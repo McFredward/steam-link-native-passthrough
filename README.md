@@ -36,6 +36,18 @@ PC0.3.13 fixes a native texture-edge rounding error that could leave passthrough
 black in Venture. The fix was confirmed on Steam Frame. Updating an intact
 Frame0.3.5 installation changes only the PC patch and does not restart the Frame.
 
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.1**, use
+the separate `arcturus-room-setup` branch installer:
+
+```powershell
+irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
+```
+
+It also installs the Frame-local **Raumeinrichtung** dashboard. Live camera access,
+projection alignment and passthrough coexistence still require headset validation;
+automatic object recognition and game/Venture room adapters are pending.
+See [room capture](docs/development/ROOM-CAPTURE.md) for the test flow and limits.
+
 ## Native transparency, no colour replacement
 
 The game sends transparency separately from its colours, so no colour is removed

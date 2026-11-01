@@ -46,6 +46,8 @@ def retarget(raw,channel):
     if any(name in files for name in decoder.values()):
         if not all(name in files for name in decoder.values()):raise ValueError('Incomplete private mask decoder pair')
         native.update(decoder)
+    room='frame/room-setup/sfnp-room-overlay'
+    if room in files:native['room_overlay']=room
     if source['native_artifacts']!={role:pin(files[name]) for role,name in native.items()}:raise ValueError('Native artifact provenance differs')
     if bundle['logging']==logging:return raw,False
     before=dict(files)

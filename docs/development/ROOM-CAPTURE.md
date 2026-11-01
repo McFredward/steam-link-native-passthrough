@@ -144,6 +144,18 @@ changing environment depth are separate work.
 
 ## Reproduce and test
 
+The maintainer authorized the separate public `arcturus-room-setup` branch on
+2026-11-01. Its normal bootstrap installs the candidate and dashboard together:
+
+```powershell
+irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
+```
+
+The bootstrap pins an immutable archive commit, size and SHA256. The archive's
+source revision remains the reviewed native/setup source; later bootstrap/docs
+commits do not rebuild those binaries. This is an experimental branch publication,
+not approval to promote the feature to main.
+
 ```sh
 cmake -S . -B build/room-core -DFRAME_ROOM_SCAN_ONLY=ON
 cmake --build build/room-core

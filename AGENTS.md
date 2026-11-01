@@ -16,6 +16,10 @@
   and approved release0.3.18 with PC0.3.13, unchanged Frame0.3.5 and stable setup
   logic. This approval covers this fix, not the parked installer replacement or
   the development Frame decoder. Future releases require another approval.
+  On 2026-11-01 the maintainer explicitly authorized a separate public
+  `arcturus-room-setup` branch with the room candidate integrated into its normal
+  `get.ps1` installer. This is a scoped exception to the dev-only rule; it does
+  not authorize updating main or promoting the experiment to the stable release.
 - Commit as `McFredward <frederik@lissek.info>`. Speak German to the maintainer;
   source, comments and developer documentation are English.
 - The intended input is real per-eye scene coverage, independent of scene RGB.

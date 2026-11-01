@@ -1,0 +1,404 @@
+{
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3723200,
+      "sha256": "9a30a0a48c93742d7b9cff831cb205b21398d01d720cb3717d97170a2944e3c9"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2094080,
+      "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
+    },
+    "room_overlay": {
+      "bytes": 1772000,
+      "sha256": "0330e4e077036720906c7121859f23d31ecd039ff4129ada1f9d7d9a4bc31ac0"
+    }
+  },
+  "bridge_protocol": {
+    "major": 1,
+    "minor": 0,
+    "wire_sha256": "752a1ab3c7d1b12fddf8b3ee46e45d027387553ffe842ab9b0aa3167ae4386e9"
+  },
+  "frame": {
+    "generated": {
+      "camera-only.spv": {
+        "bytes": 7072,
+        "sha256": "a8f7c2a375abb3f8d5188fdf129c00b2a2a1b13f3f3d8e7620b0a833510ea8ee"
+      },
+      "coverage.spv": {
+        "bytes": 7420,
+        "sha256": "37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3"
+      }
+    },
+    "reviewed": true,
+    "runtime_files": {
+      "compositor": {
+        "base": "steamvr",
+        "bytes": 6026096,
+        "path": "bin/linuxarm64/vrcompositor",
+        "sha256": "0bb148eda6b5e54e2fbed09d475a43671f5ff6fcb6c2b4f48345b1a9fe8d6f96"
+      },
+      "driver": {
+        "base": "system",
+        "bytes": 18850240,
+        "path": "usr/lib/libvulkan_freedreno.so",
+        "sha256": "dfed0652b592b263a400ba0a64fbdd421870a938abed4d447a9aafa6a4ad789a"
+      },
+      "fragment": {
+        "base": "steamvr",
+        "bytes": 6620,
+        "path": "resources/shaders/vulkan/distort_ps_achromatic_se2.spv",
+        "sha256": "f28dd5d22a570cbee64057da03d0418b80aee88a8eeed988b2f776e8d9a513f2"
+      },
+      "ld_linux": {
+        "base": "system",
+        "bytes": 204048,
+        "path": "usr/lib/ld-linux-aarch64.so.1",
+        "sha256": "2ddc56a02f476765a21e31d69144e68bee933950fe613747d54b87a2369a037e"
+      },
+      "libc": {
+        "base": "system",
+        "bytes": 1722992,
+        "path": "usr/lib/libc.so.6",
+        "sha256": "be7ee393429d493c4d3b996ed25cbb02fabb2896a77efe6d57e5993ead5bbb3b"
+      },
+      "libgcc": {
+        "base": "system",
+        "bytes": 723544,
+        "path": "usr/lib/libgcc_s.so.1",
+        "sha256": "791528a025faecaceed64a2c70ee4b8dc36daad1fb4edd18323f6ba6e8946fed"
+      },
+      "libm": {
+        "base": "system",
+        "bytes": 592192,
+        "path": "usr/lib/libm.so.6",
+        "sha256": "8c81e7271794ab5592a760651d82773b344670f3c6857109463c91a4f7a9128e"
+      },
+      "libstdcxx": {
+        "base": "system",
+        "bytes": 22461112,
+        "path": "usr/lib/libstdc++.so.6.0.34",
+        "sha256": "13b851ae84397771a54ff8b17bde8981056ac26e92ec7e1f83e76dd15496fdbf"
+      },
+      "openvr": {
+        "base": "steamvr",
+        "bytes": 249168,
+        "path": "bin/linuxarm64/libopenvr_api.so",
+        "sha256": "a07163c436b3d791a0aa2442029d2ef0ba40a772ebf1dc6006d610c3a7934ee2"
+      },
+      "vrlink": {
+        "base": "steamvr",
+        "bytes": 2425024,
+        "path": "tools/vrlink/bin/linuxarm64/vrlink",
+        "sha256": "31addef0c9553d3770b5570487699e96d70271d4073cd6c03b080fdee6ae2153"
+      },
+      "vulkan_loader": {
+        "base": "home",
+        "bytes": 592464,
+        "path": ".local/share/Steam/steamrtarm64/libvulkan.so.1",
+        "sha256": "d114974137bb80154f08c12531a2adef6431dde112566a0d2625e307fbd7eedf"
+      }
+    }
+  },
+  "pc": {
+    "platform": "windows-x86_64",
+    "reviewed": true,
+    "runtime_files": {
+      "vrlink": {
+        "base": "steamvr",
+        "bytes": 13928600,
+        "path": "drivers/vrlink/bin/win64/driver_vrlink.dll",
+        "sha256": "8e7100b6b1e88d3ad6dd05f30f030dc9a69b092b64a60d35347cebb5c516b55d"
+      },
+      "vrpathreg": {
+        "base": "steamvr",
+        "bytes": 840856,
+        "path": "bin/win64/vrpathreg.exe",
+        "sha256": "8a9c2fbc591b9ef65393d26c1b21f6ef1bfce055d7a5d9f94ee539b0cddbf4dc"
+      }
+    }
+  },
+  "schema": "sfnp-stream-bridge-runtime-profile-v1",
+  "source_pins": {
+    "LICENSE": {
+      "bytes": 1067,
+      "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
+    },
+    "PATCH_VERSIONS.json": {
+      "bytes": 90,
+      "sha256": "17914a96f88d89c1c61c4d25113322a7ffaf9e01f4625a896a3a990c6bfabb56"
+    },
+    "VERSION": {
+      "bytes": 18,
+      "sha256": "03f1588175ae7ac181310271889fcd130ca60d3840f048bbcacb91df092446da"
+    },
+    "packaging/mask-ffmpeg-patches.json": {
+      "bytes": 1943,
+      "sha256": "30ec1f3ff40509a32fa77861e94fe0e7ada5b04c861e9002add43e6268036075"
+    },
+    "packaging/mask-ffmpeg.json": {
+      "bytes": 452,
+      "sha256": "7279c53e7353130676821a68a44ed454f44d65440b8eebd1a314e2de51d877bb"
+    },
+    "packaging/setup-openssh.json": {
+      "bytes": 1029,
+      "sha256": "98fd5e79c4a21896b211aaf22b86fc804ce83f68c03ac1f4b476b5693f1b45f3"
+    },
+    "packaging/setup-python.json": {
+      "bytes": 313,
+      "sha256": "c1cc8013531d54aa2f3aee2e83c77ded92c9a6b43e9f32c5a4aaaffedf2847d1"
+    },
+    "packaging/setup-textual.json": {
+      "bytes": 4750,
+      "sha256": "2f71a814da80c73e8cbd0f7f123ec932ac0edb7c192c89f049b6417e7210ec14"
+    },
+    "pc/stream-bridge-sender-provider.vrdrivermanifest": {
+      "bytes": 138,
+      "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
+    },
+    "room_scan/__init__.py": {
+      "bytes": 250,
+      "sha256": "06916ad8fab4dbd6ffc79faebc79543403407116262df234ea94c00661bc66b6"
+    },
+    "room_scan/__main__.py": {
+      "bytes": 2229,
+      "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
+    },
+    "room_scan/app.py": {
+      "bytes": 23714,
+      "sha256": "376531776e5f046147a0d987419964c1a26768f69da504d0a8556a2bfdee2099"
+    },
+    "room_scan/capture.py": {
+      "bytes": 10573,
+      "sha256": "113956d584b318ddad434cfcf7cadd9b4f74001a473acdfa2e816a898ad35a17"
+    },
+    "room_scan/editor.py": {
+      "bytes": 5529,
+      "sha256": "3ed9e81dd1b2f3e0bda9d9133bbd60668758795759eed360446c239387e1119c"
+    },
+    "room_scan/geometry.py": {
+      "bytes": 6095,
+      "sha256": "937c6705f2a543a93fdc789297c59567693995467e1889922f6bf13be8891b05"
+    },
+    "room_scan/licenses/DejaVu.txt": {
+      "bytes": 3857,
+      "sha256": "e81d9dced49fea2a7d576cbea283873de58563c5d488f954deb282843c3ea79c"
+    },
+    "room_scan/licenses/nlohmann-json.txt": {
+      "bytes": 1075,
+      "sha256": "c0d068392ea65358b798b8c165103560f06e9e3b38c4ab4e2d8810a7b931af86"
+    },
+    "room_scan/model.py": {
+      "bytes": 9339,
+      "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
+    },
+    "room_scan/native_camera.h": {
+      "bytes": 16432,
+      "sha256": "454256ddf458a2063706355c0300170f8d8b055ac812840705baaf1336d48c91"
+    },
+    "room_scan/native_math.h": {
+      "bytes": 3489,
+      "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
+    },
+    "room_scan/native_overlay.cpp": {
+      "bytes": 20769,
+      "sha256": "556321f3b16de00100faf8c3962c3ebfa5610c4d48d8d128210e371b2d0277e7"
+    },
+    "room_scan/native_pipe.h": {
+      "bytes": 4337,
+      "sha256": "3e32fe2b2e8da756b2de6e7d24374cb0295b9abbbc6a02abcc5bf9ef5d95283a"
+    },
+    "room_scan/native_raster.h": {
+      "bytes": 4984,
+      "sha256": "b1b98fd7f31440054db1f5dc3d8e52600ba099e5ef54c9edfbd964cd274f9e62"
+    },
+    "room_scan/native_view.h": {
+      "bytes": 9290,
+      "sha256": "d3d8a891cf5b99003194dae3fb2ce0e31b609ed75719985f61b3ef73852a0c9b"
+    },
+    "room_scan/store.py": {
+      "bytes": 6838,
+      "sha256": "f573ebac56f5e49a86853d8c2711f150587c362b295e320c109341cdc201d49a"
+    },
+    "room_scan/workflow.py": {
+      "bytes": 11017,
+      "sha256": "5300c8f7953b975c8a44041449c0480246be07806d5c5db6c5a0bbbf6f842f17"
+    },
+    "setup/patch-steam-link.cmd": {
+      "bytes": 1266,
+      "sha256": "c68e7f6deaf23354604dd397d97e70b8c1243bfc149132161df37dba62001fb3"
+    },
+    "setup/patch-steam-link.sh": {
+      "bytes": 613,
+      "sha256": "1b1887ec6836f39ef7a0e3ab9ba8c9724f8e4326fb998ea8f890bd1981a2cff8"
+    },
+    "setup/steam-link-askpass.sh": {
+      "bytes": 282,
+      "sha256": "46873e19b1a36677169d6c9f52d6e3f13bdc3ac493608dd8e17dd07421d360ed"
+    },
+    "setup/steam_link_askpass.c": {
+      "bytes": 6488,
+      "sha256": "a4974678c286dbf95aa609698ef9569c877baec353d18eda90ce118453f4e919"
+    },
+    "setup/steam_link_setup.py": {
+      "bytes": 70844,
+      "sha256": "cd8e21d0ce7bb05a0cd262d0a5aa8a0171e70cf033460e97a08a64be8f0024e8"
+    },
+    "setup/steam_link_setup_askpass_client.py": {
+      "bytes": 3466,
+      "sha256": "1c1bf2965a4146dd012f5110b204a8cc6a3e367bd65ac7b94d1c4b83086bdd18"
+    },
+    "setup/steam_link_setup_auth.py": {
+      "bytes": 7036,
+      "sha256": "fa497fcb37f7647ba129b3ed8ed59ce016f0a86edcd8432e715e43ffc8c22db6"
+    },
+    "setup/steam_link_setup_checkpoint.py": {
+      "bytes": 19846,
+      "sha256": "320b3e958c52b16cb1b1c610e267869584dce277c73a1ae8dd91c8e5ccdd1a2e"
+    },
+    "setup/steam_link_setup_frame.py": {
+      "bytes": 21103,
+      "sha256": "655cde8d59e02adc18b60b5cbe088860293c48facd871d4f36d8042d43c146b3"
+    },
+    "setup/steam_link_setup_legacy.py": {
+      "bytes": 9473,
+      "sha256": "73757c85571f8c4b0fa886a8ad3b4da82b824add3bd0de68d729d5ad009e35cc"
+    },
+    "setup/steam_link_setup_log.py": {
+      "bytes": 20768,
+      "sha256": "46f2efee468b5c829645a5d4c8edfa571501e397edfbb5c7fac9193fe0711933"
+    },
+    "setup/steam_link_setup_pc.py": {
+      "bytes": 23932,
+      "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
+    },
+    "setup/steam_link_setup_session.py": {
+      "bytes": 18278,
+      "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
+    },
+    "setup/steam_link_setup_textual.py": {
+      "bytes": 59855,
+      "sha256": "3298d94454b63f1067a6add2496ed8754135751dd19d6e5c8f4ebbcab409173d"
+    },
+    "setup/steam_link_setup_ui.py": {
+      "bytes": 82008,
+      "sha256": "bfe583d14f3b517d217df9b8e52d32b68dd8c4b73a0f47d3e4192db3bb829b55"
+    },
+    "setup/steam_link_setup_vendor.py": {
+      "bytes": 2108,
+      "sha256": "00208745e459d4d0303dbcde8c2bc9c3e1c20072eeeb48a025396c7bdb4d62a1"
+    },
+    "setup/steam_link_setup_workflow.py": {
+      "bytes": 11433,
+      "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
+    },
+    "setup/stream_bridge_install.py": {
+      "bytes": 177627,
+      "sha256": "46152f395958b11db2d1495ae5519a9cbbd4f7e34e2726abc68fc69bfd8fb602"
+    },
+    "third_party/ffmpeg/COPYING.LGPLv2.1": {
+      "bytes": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    "third_party/ffmpeg/README.md": {
+      "bytes": 2150,
+      "sha256": "8bf7ca20dcc271cc8b2d4891cb28350c4ff7710c8d9f7b2e16e59b0e1a144b6d"
+    },
+    "third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch": {
+      "bytes": 78231,
+      "sha256": "0cec20a610189776c11009d5672fda2c657461c3403082342e5848be08bb7844"
+    },
+    "third_party/lz4/LICENSE": {
+      "bytes": 1311,
+      "sha256": "8b58c446121a109ccf32edc094bba3010a3d85e4ee3702950db55e4d3e87736c"
+    },
+    "third_party/zstd/LICENSE": {
+      "bytes": 1549,
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    "tools/app_payload_probe.py": {
+      "bytes": 23988,
+      "sha256": "2b13ce344ed60318fd660a98522c2562f584326b954c588ed37b06854492c81f"
+    },
+    "tools/build_mask_hevc_ffmpeg.py": {
+      "bytes": 7970,
+      "sha256": "2a7bc3b34b280f8d0b314f67dd70b7750920493a408653b364a9589b8990f66f"
+    },
+    "tools/build_room_font.py": {
+      "bytes": 1706,
+      "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
+    },
+    "tools/build_room_overlay.sh": {
+      "bytes": 2015,
+      "sha256": "d1bf691e72e79f59574b671929bd6aa9dd5e63ffb254f0b2d1c9ab545289a2db"
+    },
+    "tools/build_setup_askpass.py": {
+      "bytes": 6373,
+      "sha256": "89c789e09d30b8ed6a7b836208a3b1bad9d1d48d6d98ca34f8e052e0f9cf6913"
+    },
+    "tools/compositor_startup_health.py": {
+      "bytes": 89190,
+      "sha256": "b4e7d5e63484e9a45658302a735749cd2c09d697192662c05048b966a3b3eea3"
+    },
+    "tools/configure_mask_codec.py": {
+      "bytes": 2791,
+      "sha256": "25c36853b9e912d7edf253c96ea7fe3636d5168ed05b9be4dfa81cd6ac7f8add"
+    },
+    "tools/native_fragment_count1_interface.py": {
+      "bytes": 2874,
+      "sha256": "19bb5ba700cd961fc7c7ecd1805ee746991f60ec8afcfcbc5b744678e6c10b5a"
+    },
+    "tools/native_fragment_ssa_probe.py": {
+      "bytes": 13496,
+      "sha256": "a375a068bc68f0c8e34fa2051bb7371d816aa737cbf527bcfaaac0e5dcb06a93"
+    },
+    "tools/native_fragment_stream_coverage.py": {
+      "bytes": 8750,
+      "sha256": "a8e947aa49bd1881d66ae9a2bed6b3eeb5761e0a5e3368165467495f4046a511"
+    },
+    "tools/native_shader_contract.json": {
+      "bytes": 13764,
+      "sha256": "fa56730966a22ee374c4b77a7b5303c75788e1dc4fc604793d266fcc8e4093b5"
+    },
+    "tools/native_shader_contract.py": {
+      "bytes": 3006,
+      "sha256": "8c1925915b587ba330bcdcaf7be592532e5fd64d67465417e87bec67b84cef94"
+    },
+    "tools/package_setup_dependencies.py": {
+      "bytes": 7369,
+      "sha256": "7c4ab33e63922e652f790632e092349d48179dfb1cf188738051a9d57a0a3a1a"
+    },
+    "tools/package_setup_textual.py": {
+      "bytes": 10460,
+      "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
+    },
+    "tools/package_stream_bridge.py": {
+      "bytes": 23525,
+      "sha256": "e86014b6b118176e292df125fbcba91f628f0882d3fbda0c6bd96fb49d2dea95"
+    },
+    "tools/package_stream_link_setup.py": {
+      "bytes": 7826,
+      "sha256": "755b5c2dc8729e924675ef39c96621c1401663ef6c480f62a05c41c4c1073a19"
+    },
+    "tools/pixel_payload_recovery.py": {
+      "bytes": 21355,
+      "sha256": "cf18f0f5432acc38f1ab4c299310f29e79dbd26b19957ffc16fcc0edb024df9d"
+    },
+    "tools/stream_bridge_camera.py": {
+      "bytes": 46343,
+      "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
+    }
+  },
+  "source_revision": "9a392e152f365ac13f31cd36fbbee4697b4305e6"
+}
