@@ -22,7 +22,7 @@
     },
     "room_overlay": {
       "bytes": 1772000,
-      "sha256": "0330e4e077036720906c7121859f23d31ecd039ff4129ada1f9d7d9a4bc31ac0"
+      "sha256": "719ffe638552f84d725e24f4b0ef58d67bf3dba2bf2564df04fbbeae679e456d"
     }
   },
   "checks": {
@@ -41,7 +41,7 @@
   },
   "hardware_verified": false,
   "result": "PASS",
-  "runtime_profile_sha256": "1517e7a870553827b6e484603a5d51f93b3e46fe127143f36490b8153402236c",
+  "runtime_profile_sha256": "3f882773b11968a894e10e8ecc737589295d54ac779696c2f4660052cfc2f530",
   "schema": "sfnp-stream-bridge-release-validation-v1",
   "source_pins": {
     "LICENSE": {
@@ -50,11 +50,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 90,
-      "sha256": "17914a96f88d89c1c61c4d25113322a7ffaf9e01f4625a896a3a990c6bfabb56"
+      "sha256": "748ba170f702acabb9171ff96192e99a40e1b1c3803e8e109f3d53988e07f07e"
     },
     "VERSION": {
       "bytes": 18,
-      "sha256": "03f1588175ae7ac181310271889fcd130ca60d3840f048bbcacb91df092446da"
+      "sha256": "2855b073b59fc79737b7be865ee77d40e120f5e2c7a6aba2566cf11a7efe62b3"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -89,8 +89,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 23714,
-      "sha256": "376531776e5f046147a0d987419964c1a26768f69da504d0a8556a2bfdee2099"
+      "bytes": 24930,
+      "sha256": "a366f9ec005adc3426f9f36f6cecc55cc3b8e3d4384cc3e8bd2345e648d2eeb6"
     },
     "room_scan/capture.py": {
       "bytes": 10573,
@@ -117,20 +117,24 @@
       "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
     },
     "room_scan/native_camera.h": {
-      "bytes": 16432,
-      "sha256": "454256ddf458a2063706355c0300170f8d8b055ac812840705baaf1336d48c91"
+      "bytes": 19357,
+      "sha256": "0e7e0dd561ac9dfa315029dbfb264d5be5941588a2047a597b0d0b6f6c960cab"
     },
     "room_scan/native_math.h": {
       "bytes": 3489,
       "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
     },
     "room_scan/native_overlay.cpp": {
-      "bytes": 20769,
-      "sha256": "556321f3b16de00100faf8c3962c3ebfa5610c4d48d8d128210e371b2d0277e7"
+      "bytes": 26196,
+      "sha256": "1dc1ea60b4638eb4df74fceea41710c92bf603df2a78bdc634fc512a22608ac2"
     },
     "room_scan/native_pipe.h": {
       "bytes": 4337,
       "sha256": "3e32fe2b2e8da756b2de6e7d24374cb0295b9abbbc6a02abcc5bf9ef5d95283a"
+    },
+    "room_scan/native_present.h": {
+      "bytes": 2675,
+      "sha256": "99c6bb143487961eeeed9eb725aec3170b7269761c3bd7b5bcfff39d57c392e5"
     },
     "room_scan/native_raster.h": {
       "bytes": 4984,
@@ -217,8 +221,8 @@
       "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 177627,
-      "sha256": "46152f395958b11db2d1495ae5519a9cbbd4f7e34e2726abc68fc69bfd8fb602"
+      "bytes": 177684,
+      "sha256": "e41effdaa60c6e39ecb291dce684f4a0212282ea349ae1d2d1f5156e73e79689"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -253,8 +257,8 @@
       "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
     },
     "tools/build_room_overlay.sh": {
-      "bytes": 2015,
-      "sha256": "d1bf691e72e79f59574b671929bd6aa9dd5e63ffb254f0b2d1c9ab545289a2db"
+      "bytes": 2190,
+      "sha256": "d82c20f9f3116e3234c7ecc72636f11dfc6888a7d14e102d1688d59b7c24e5ee"
     },
     "tools/build_setup_askpass.py": {
       "bytes": 6373,
@@ -297,8 +301,8 @@
       "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
     },
     "tools/package_stream_bridge.py": {
-      "bytes": 23525,
-      "sha256": "e86014b6b118176e292df125fbcba91f628f0882d3fbda0c6bd96fb49d2dea95"
+      "bytes": 23554,
+      "sha256": "10f33dd4fd9e3e2715cdb0d951f4d06384b28402c4021bf8ff217543b6021552"
     },
     "tools/package_stream_link_setup.py": {
       "bytes": 7826,
@@ -313,5 +317,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "9a392e152f365ac13f31cd36fbbee4697b4305e6"
+  "source_revision": "29e120c2a9ee60e5c6feacb08bbf46db9aff0251"
 }
