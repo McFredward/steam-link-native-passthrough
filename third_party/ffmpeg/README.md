@@ -2,6 +2,10 @@
 
 The private LGPL-2.1-or-later decoder uses the authenticated FFmpeg8.1.3 release
 pinned by `packaging/mask-ffmpeg.json`. It is separate from Steam/Valve libraries.
+The unchanged release archive, detached signature and public signing key are in
+`inputs/` so verified builds do not depend on a live connection to ffmpeg.org.
+The builder still checks every pinned hash and the release-signing fingerprint.
+The source archive retains upstream's complete license and attribution notices.
 
 `packaging/mask-ffmpeg-patches.json` pins the ordered patches and every predecessor
 and result source hash, the original proposal archive and attribution. The slice
