@@ -34,6 +34,44 @@ class ReportTest(unittest.TestCase):
         self.assertIsNone(report["motion_to_photon_ms"])
         self.assertFalse(report["exact_stream_pose_proven"] or report["world_lock_error_measured"] or report["causal_diagnosis_proven"])
 
+    def test_visibility_control_is_not_a_world_reference(self):
+        transcript = subprocess.check_output([BINARY, "--transcript-visibility"], text=True)
+        report = analyze(transcript, "visibility-marker-seen")
+        self.assertEqual(report["reference_mode"], "head-locked-visibility")
+        self.assertFalse(report["world_reference"] or report["world_lock_error_measured"] or report["causal_diagnosis_proven"])
+        self.assertTrue(report["clean_stop"])
+        for observation in ("reference-stable-scene-wobbles", "both-wobble", "reference-unseen"):
+            with self.subTest(observation=observation), self.assertRaises(ValueError):
+                analyze(transcript, observation)
+        with self.assertRaises(ValueError):
+            analyze(self.transcript, "visibility-marker-seen")
+
+    def test_legacy_world_recordings_remain_readable(self):
+        records = copy.deepcopy(self.records)
+        for key in ("reference_mode", "world_reference", "head_relative_transform", "dashboard_visibility_allowed", "sort_order"):
+            records[0].pop(key, None)
+        report = analyze(self.encoded(records), "reference-unseen")
+        self.assertEqual(report["reference_mode"], "world-fixed")
+        self.assertTrue(report["world_reference"])
+
+    def test_wrong_mode_or_head_control_motion_claim_is_rejected(self):
+        transcript = subprocess.check_output([BINARY, "--transcript-visibility"], text=True)
+        for key, value in (("reference_mode", "unknown"), ("world_reference", True), ("standing_anchor", [0]*12)):
+            records = [json.loads(line) for line in transcript.splitlines()]
+            records[0][key] = value
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                analyze(self.encoded(records))
+        records = [json.loads(line) for line in transcript.splitlines()]
+        records[1]["phase"] = 1
+        with self.assertRaises(ValueError):
+            analyze(self.encoded(records))
+
+    def test_dashboard_samples_are_reported_separately(self):
+        records = copy.deepcopy(self.records)
+        records[2]["dashboard"] = True
+        report = analyze(self.encoded(records))
+        self.assertEqual(report["phases"]["rotation"]["dashboard_samples"], 1)
+
     def test_partial_capture_does_not_claim_a_clean_end(self):
         report = analyze(self.encoded(self.records[:-1]))
         self.assertFalse(report["clean_stop"] or report["requested_stop"])

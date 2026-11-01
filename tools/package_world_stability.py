@@ -13,6 +13,7 @@ SOURCES = ("probe/world_stability_core.h", "probe/world_stability_frame.cpp",
            "tests/world_stability_test.cpp", "tests/test_world_stability_report.py",
            "tools/analyze_world_stability.py", "tools/build_world_stability.sh",
            "tools/package_world_stability.py", "docs/development/WORLD-STABILITY.md")
+MODES = {"--reference": "world-fixed", "--visibility-check": "head-locked-visibility"}
 SDK_SHA256 = "3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7"
 MEMBERS = {"sfnp-world-stability-frame", "analyze_world_stability.py", "WORLD-STABILITY.md", "LICENSE", "manifest.json"}
 
@@ -37,6 +38,9 @@ def verify(archive):
         files = manifest["files"]
         if set(files) != MEMBERS - {"manifest.json"} or manifest.get("native_companions_modified") is not False:
             raise ValueError("This is not a standalone reference")
+        if (manifest.get("experiment_revision") != 2 or manifest.get("entry_modes") != MODES or
+                manifest.get("requires_native_patch_reinstall") is not False):
+            raise ValueError("Unexpected reference modes or companion update requirement")
         for name, expected in files.items():
             value = bundle.read(name)
             if expected != {"bytes": len(value), "sha256": digest(value)}:
@@ -71,6 +75,7 @@ def main():
     versions = subprocess.check_output(["aarch64-linux-gnu-readelf", "--version-info", str(args.binary)], text=True)
     manifest = {
         "schema": "sfnp-world-stability-artifact-v1", "diagnostic_only": True,
+        "experiment_revision": 2, "entry_modes": MODES,
         "native_companions_modified": False, "requires_native_patch_reinstall": False,
         "source_files_sha256": {name: digest((ROOT / name).read_bytes()) for name in SOURCES},
         "public_openvr_capi_sha256": SDK_SHA256,

@@ -8,7 +8,7 @@ on:
       - 'tests/test_world_stability_report.py'
       - 'tools/*world_stability*'
       - 'docs/development/WORLD-STABILITY.md'
-      - 'distribution/experiments/world-stability-v1*'
+      - 'distribution/experiments/world-stability-v*'
       - '.github/workflows/world-stability-tests.yml'
   pull_request:
     paths:
@@ -42,6 +42,6 @@ jobs:
           ASAN_OPTIONS=detect_leaks=1 build/world-stability/sanitized-test
       - name: Package reproducible inputs without Valve payloads
         run: |
-          python3 -B tools/package_world_stability.py --binary build/world-stability/sfnp-world-stability-frame --output build/world-stability/world-stability-v1.zip
-          python3 -B tools/package_world_stability.py --verify build/world-stability/world-stability-v1.zip
-          python3 -B tools/package_world_stability.py --verify distribution/experiments/world-stability-v1.zip
+          python3 -B tools/package_world_stability.py --binary build/world-stability/sfnp-world-stability-frame --output build/world-stability/world-stability-v2.zip
+          python3 -B tools/package_world_stability.py --verify build/world-stability/world-stability-v2.zip
+          python3 -B tools/package_world_stability.py --verify distribution/experiments/world-stability-v2.zip

@@ -56,6 +56,8 @@ public:
             &&compositor_->GetFrameTiming&&compositor_->GetTrackingSpace
             &&overlay_->CreateOverlay&&overlay_->DestroyOverlay&&overlay_->HideOverlay&&overlay_->ClearOverlayTexture
             &&overlay_->SetOverlayRaw&&overlay_->SetOverlayAlpha&&overlay_->SetOverlayWidthInMeters
+            &&overlay_->SetOverlaySortOrder&&overlay_->GetOverlaySortOrder
+            &&overlay_->SetOverlayTransformTrackedDeviceRelative&&overlay_->GetOverlayTransformTrackedDeviceRelative
             &&overlay_->SetOverlayTexelAspect&&overlay_->SetOverlayFlag&&overlay_->SetOverlayInputMethod
             &&overlay_->SetOverlayTransformAbsolute&&overlay_->GetOverlayTransformAbsolute
             &&overlay_->ShowOverlay&&overlay_->IsOverlayVisible&&overlay_->IsDashboardVisible&&frameIdentity();
@@ -71,9 +73,9 @@ public:
         TrackedDevicePose_t pose{};system_->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding,0,&pose,1);
         value=matrix(pose.mDeviceToAbsoluteTracking);return pose.bDeviceIsConnected&&pose.bPoseIsValid&&rigid(value);
     }
-    bool create(const Matrix& at,Handle& owned)override{
+    bool create(const Matrix& at,Mode mode,Handle& owned)override{
         char key[96]{};std::snprintf(key,sizeof key,"sfnp.world-stability.%ld.%llu",long(getpid()),static_cast<unsigned long long>(nowMicros()));
-        char name[]="Steam Frame local stability reference";
+        char name[]="Steam Frame local reference diagnostic";
         VROverlayHandle_t handle=0;
         if(!overlayOk(overlay_->CreateOverlay(key,name,&handle),"overlay-create")||!handle)return false;
         owned=handle;owned_=handle;
@@ -81,16 +83,30 @@ public:
         if(!overlayOk(overlay_->SetOverlayAlpha(handle,0),"overlay-initial-alpha")
             ||!overlayOk(overlay_->SetOverlayWidthInMeters(handle,Width),"overlay-width")
             ||!overlayOk(overlay_->SetOverlayTexelAspect(handle,1),"overlay-aspect")
-            ||!overlayOk(overlay_->SetOverlayFlag(handle,VROverlayFlags_VisibleInDashboard,false),"overlay-dashboard")
-            ||!overlayOk(overlay_->SetOverlayInputMethod(handle,VROverlayInputMethod_None),"overlay-no-input")
-            ||!overlayOk(overlay_->SetOverlayTransformAbsolute(handle,ETrackingUniverseOrigin_TrackingUniverseStanding,&pose),"overlay-absolute-pose"))return false;
-        pixels_=pattern();
+            ||!overlayOk(overlay_->SetOverlaySortOrder(handle,SortOrder),"overlay-sort-order")
+            ||!overlayOk(overlay_->SetOverlayFlag(handle,VROverlayFlags_VisibleInDashboard,mode==Mode::HeadVisibility),"overlay-dashboard")
+            ||!overlayOk(overlay_->SetOverlayInputMethod(handle,VROverlayInputMethod_None),"overlay-no-input"))return false;
+        if(mode==Mode::WorldReference){
+            if(!overlayOk(overlay_->SetOverlayTransformAbsolute(handle,ETrackingUniverseOrigin_TrackingUniverseStanding,&pose),"overlay-absolute-pose"))return false;
+        }else{
+            if(!overlayOk(overlay_->SetOverlayTransformTrackedDeviceRelative(handle,k_unTrackedDeviceIndex_Hmd,&pose),"overlay-head-relative-pose"))return false;
+        }
+        pixels_=pattern(mode);
         if(!overlayOk(overlay_->SetOverlayRaw(handle,pixels_.data(),TextureSize,TextureSize,sizeof(Pixel)),"overlay-raw-texture")
             ||!overlayOk(overlay_->ShowOverlay(handle),"overlay-show")
             ||!overlayOk(overlay_->SetOverlayAlpha(handle,1),"overlay-reveal"))return false;
-        ETrackingUniverseOrigin origin=ETrackingUniverseOrigin_TrackingUniverseSeated;HmdMatrix34_t actual{};
-        if(!overlayOk(overlay_->GetOverlayTransformAbsolute(handle,&origin,&actual),"overlay-pose-readback")
-            ||origin!=ETrackingUniverseOrigin_TrackingUniverseStanding)return false;
+        std::uint32_t sort=0;
+        if(!overlayOk(overlay_->GetOverlaySortOrder(handle,&sort),"overlay-sort-readback")||sort!=SortOrder)return false;
+        HmdMatrix34_t actual{};
+        if(mode==Mode::WorldReference){
+            ETrackingUniverseOrigin origin=ETrackingUniverseOrigin_TrackingUniverseSeated;
+            if(!overlayOk(overlay_->GetOverlayTransformAbsolute(handle,&origin,&actual),"overlay-pose-readback")
+                ||origin!=ETrackingUniverseOrigin_TrackingUniverseStanding)return false;
+        }else{
+            TrackedDeviceIndex_t device=k_unTrackedDeviceIndexInvalid;
+            if(!overlayOk(overlay_->GetOverlayTransformTrackedDeviceRelative(handle,&device,&actual),"overlay-head-pose-readback")
+                ||device!=k_unTrackedDeviceIndex_Hmd)return false;
+        }
         for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c)if(std::abs(actual.m[r][c]-at.m[r][c])>1e-5f)return false;
         return true;
     }
@@ -156,8 +172,8 @@ private:
 };
 }
 int main(int argc,char** argv){
-    if(argc!=4||std::strcmp(argv[1],"--reference")||std::strcmp(argv[2],"--openvr")){
-        std::fprintf(stderr,"Usage: sfnp-world-stability-frame --reference --openvr /absolute/installed/libopenvr_api.so\n");return 2;
+    if(argc!=4||(std::strcmp(argv[1],"--reference")&&std::strcmp(argv[1],"--visibility-check"))||std::strcmp(argv[2],"--openvr")){
+        std::fprintf(stderr,"Usage: sfnp-world-stability-frame (--reference | --visibility-check) --openvr /absolute/installed/libopenvr_api.so\n");return 2;
     }
 #if !defined(__aarch64__)
     std::fprintf(stderr,"This reference must run locally on the AArch64 Frame.\n");return 2;
@@ -165,7 +181,8 @@ int main(int argc,char** argv){
     std::signal(SIGINT,stopSignal);std::signal(SIGTERM,stopSignal);std::signal(SIGHUP,stopSignal);std::signal(SIGPIPE,SIG_IGN);
     try{
         Stdout sink;Output output(sink);Native api(argv[3]);Session session(api,output);
-        if(!session.start(true)){std::fprintf(stderr,"Frame reference refused: operation=%s native-code=%d cleanup=%s\n",api.operation(),api.code(),session.stop()?"clean":"failed");return 3;}
+        const auto mode=std::strcmp(argv[1],"--reference") ? Mode::HeadVisibility : Mode::WorldReference;
+        if(!session.start(true,mode)){std::fprintf(stderr,"Frame reference refused: operation=%s native-code=%d cleanup=%s\n",api.operation(),api.code(),session.stop()?"clean":"failed");return 3;}
         std::string command;unsigned result=0;std::uint64_t nextSample=0;
         while(!stopping&&session.active()){
             const auto now=nowMicros();
