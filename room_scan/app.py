@@ -361,7 +361,7 @@ class Application:
             button("corner_undo", "Letzte Ecke zurück", bool(self.draft.points))
             button("back", "Abbrechen")
         elif self.page == "review":
-            title, subtitle, step = "Passt dein Raum?", "Prüfe Flächen und Elemente. Nicht erfasste Bereiche bleiben unbekannt.", 4
+            title, subtitle, step = "Passt dein Raum?", "Prüfe Flächen und Elemente. Tisch, Boden oder Wand dienen später als Referenz. Ungescannte Bereiche bleiben unbekannt.", 4
             button("save", "Erfassten Bereich speichern", primary=True)
             button("continue", "Weiter scannen")
             button("elements", "Elemente bearbeiten")
@@ -371,6 +371,9 @@ class Application:
             button("back", "Zur Übersicht", primary=True)
         elif self.page == "alignment":
             title, subtitle = "Raumzuordnung prüfen", "Der gespeicherte Raum muss vor der Verwendung mit der aktuellen Umgebung ausgerichtet werden."
+            if self.alignment_anchor is None:
+                subtitle = "Hier fehlt eine Referenzfläche. Richte einen neuen Raum ein und trage einen Tisch, Boden oder eine Wand ein."
+                button("new", "Neuen Raum scannen", primary=True)
             button("align_start", "Raum wiederfinden", self.alignment_anchor is not None and not self.starting, primary=True)
             button("back", "Zurück", not self.starting)
         state = self.session.view() if self.session else None

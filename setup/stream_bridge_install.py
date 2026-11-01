@@ -1161,7 +1161,7 @@ class FrameInstall:
         observed = snapshot['openvr']
         self.e.require(observed['matches'] or observed['format_valid'], 'The native OpenVR library is missing or damaged.')
         base = {'steamvr':self.steamvr, 'home':self.home, 'system':Path('/')}[pin['base']]
-        native = str(base/self.e.relative(pin['path']))
+        native = str((base/self.e.relative(pin['path'])).resolve(strict=True))
         root = self.root/'room-setup'
         data = self.root.parent/'rooms'
         arguments = ['--openvr', native, '--data', str(data)]
