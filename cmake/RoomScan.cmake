@@ -10,6 +10,6 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     endif()
     add_test(NAME room_camera_inventory COMMAND test_room_camera_inventory)
     add_test(NAME room_scan_core COMMAND ${Python3_EXECUTABLE} -B -m unittest discover
-        -s tests -p test_room_scan.py -v)
+        -s tests -p "test_room_scan*.py" -v)
     set_tests_properties(room_scan_core PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 endif()

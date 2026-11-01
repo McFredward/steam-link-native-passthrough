@@ -91,6 +91,18 @@ class Tests(unittest.TestCase):
         decoder['mask_util'].write_bytes(elf()+b'changed private dependency')
         with self.assertRaises(ValueError):self.build(mask_decoder=decoder)
 
+    def test_room_dashboard_requires_its_own_software_checks_and_full_payload(self):
+        room=self.base/'room-overlay';room.write_bytes(elf()+b'explicit synthetic room ELF')
+        self.profile['artifacts']['room_overlay']=p.pin(room.read_bytes());self.save_profile()
+        with self.assertRaises(ValueError):
+            self.build(room_overlay=room,release=True,validation_receipts=[self.validation()])
+        raw,receipt=self.build(room_overlay=room,release=True,validation_receipts=[self.validation(p.CHECKS|p.ROOM_CHECKS)])
+        self.assertTrue(receipt['native_installable']);self.assertFalse(receipt['hardware_verified'])
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            self.assertEqual(room.read_bytes(),archive.read('frame/room-setup/sfnp-room-overlay'))
+            self.assertIn('frame/room-setup/room_scan/app.py',archive.namelist())
+            self.assertIn('frame/room-setup/licenses/DejaVu.txt',archive.namelist())
+
     def test_partial_or_wrong_architecture_hevc_pair_is_refused(self):
         codec=self.base/'mask.so';codec.write_bytes(elf())
         with self.assertRaises(ValueError):self.build(mask_decoder={'mask_codec':codec})

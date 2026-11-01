@@ -1,206 +1,171 @@
 # Arcturus room capture
 
-Status: **experimental software core and an uninstalled native camera inventory**.
-There is no usable headset scan application yet. The shipping PC/Frame companions,
-installer, camera leases and Venture are unchanged. This work must not be advertised
-as working room scanning or Quest Scene compatibility.
+Status: **installable experimental candidate, no headset validation for this feature**.
+The native dashboard, controller editor, bounded stereo reconstruction and owned
+installer integration are implemented. Actual Arcturus image availability through
+the public Frame camera interface is unverified. A successful build or an attached
+colour camera does not establish a working live scan. This is not yet Quest Scene
+API compatibility or a production room-scanning release.
 
-## Accepted scope
+## Headset flow
 
-The initial feature requires a Steam Frame with the Arcturus colour camera and
-serves both PC mods and Quest apps through Venture. Capture is an explicit setup
-experience in the headset. It creates one static room at a time, with persistent
-mesh geometry and user-editable semantic elements. The user must see the measured
-surfaces build up, which areas need more observations, and where coverage remains
-unknown. Scanning and adding elements belong to the same setup experience.
+The entry point is the **Frame-local SteamVR dashboard icon “Raumeinrichtung”**.
+There is no Steam Library application. The installed user service starts the
+small overlay process with SteamVR. Opening its panel never starts capture;
+“Neuen Raum scannen” followed by “Scan starten” is explicit consent to acquisition.
 
-The reference is Meta's [guided Space Setup and semantic Scene Model](https://developers.meta.com/vr/documentation/unity/unity-mr-utility-kit-manage-scene-data/).
-Our colours and exact interactions below are authored design decisions, not a
-claim to duplicate a particular Horizon OS version's UI.
+The design follows Meta's [Space Setup and semantic Scene Model](https://developers.meta.com/vr/documentation/unity/unity-mr-utility-kit-manage-scene-data/):
+prepare, observe the room build up, enter semantic elements during capture,
+review and explicitly save. Colours and exact interactions are our own.
 
-### Dashboard entry point
+1. **Prepare.** Check valid tracking and a calibrated Arcturus stereo source.
+   Missing images/calibration produce an unavailable message, with no simulated
+   scan, fabricated room, or guessed completion percentage.
+2. **Scan.** The native renderer overlays actual reconstructed triangles.
+   New vertices reveal over 250 ms. Reliable measured surfaces use turquoise;
+   uncertain surfaces use amber hatching. Holes have no invented geometry.
+   Move slowly and translate the headset to obtain independent views.
+3. **Enter elements.** Choose Floor, Ceiling, Wall, Door, Window, Table, Couch,
+   Bed, Storage or Other. Point at reliable mesh and press the trigger to mark
+   the first, adjacent and opposite rectangle corner. Alternatively choose
+   “Am Controller messen” and place the controller at the three actual corners.
+   The first edge is horizontal; surfaces remain gravity aligned. Three corners
+   must agree with a rectangle within 3 cm. The preview can be undone before
+   confirmation. Furniture volumes extend below the measured top; adjust their
+   height in 5 cm steps. Door/window entry first selects the containing wall.
+4. **Edit.** Rename, re-measure or remove elements, undo edits, or continue scanning.
+   Lists paginate. Confirmed authored elements are retained while mesh grows.
+   The dashboard holds all controls; a smaller controller-ray HUD provides the
+   first three current actions when the dashboard is closed.
+5. **Review/save.** Review measured coverage and semantic geometry, name the room
+   and explicitly accept the captured area. Saving atomically publishes an
+   immutable revision; unseen space remains unknown. Drafts cannot become game
+   data. Cancel/normal shutdown checkpoints acquired geometry separately.
+6. **Reuse.** Loading never assumes a persistent spatial anchor. Mark the same
+   three corners of the stored reference surface (preferably a table), in the
+   same order, then inspect and explicitly confirm the transformed room preview.
+   Dimensions must agree within 5 cm or 5%; gravity must agree. Save creates a
+   new revision while preserving room/element IDs and the previous revision.
 
-The agreed primary entry is a **native SteamVR dashboard overlay on the Frame**,
-with its own "Room setup" icon/tab. A Steam Library entry is not the intended
-user flow. The installed component registers as a dashboard overlay application;
-starting it with SteamVR makes its controls available but must not start camera
-capture or scanning. The user explicitly chooses "Scan a new room", "Use a saved
-room", or "Edit/rescan room" inside its dashboard panel.
+The 3D feedback is separate from the dashboard: two eye-specific public OpenVR
+projection overlays plus a small head-relative control panel. This keeps work
+outside Valve's compositor callbacks and leaves native reprojection intact.
+Local overlay visibility was established by the earlier
+[world-reference diagnostic](WORLD-STABILITY.md); **this new projection renderer,
+controller mapping and alignment accuracy still require a headset check**.
 
-The public OpenVR [dashboard overlay interface](https://github.com/ValveSoftware/openvr/wiki/IVROverlay_Overview)
-provides the main panel and thumbnail via `CreateDashboardOverlay`. A driver/add-on
-registration alone does not create that UI. The component must run in the Frame's
-local native SteamVR instance; a dashboard overlay registered only in PC SteamVR
-does not establish a local Frame dashboard entry.
+## Camera source and remaining hardware gate
 
-After the user starts setup, the 3D scan feedback and element handles must remain
-world-aligned when the dashboard closes. The dashboard panel is the entry/control
-surface; the stereo world visualization needs its own verified rendering path.
-Camera ownership, coexistence with an active Steam Link session, local icon
-placement and visibility still require implementation and hardware verification.
-This design change does not claim an installed overlay or authorize device setup.
+`native_camera.h` uses public `IVRTrackedCamera_006`, without root, capabilities,
+DMA-BUF interception, private hooks or RGB streaming to the PC. Admission requires:
 
-1. **Check camera and tracking.** Start only with a current Arcturus source,
-   calibrated geometry and camera-exposure poses in one known tracking origin.
-   Explain an unavailable camera without showing fabricated scan activity.
-2. **Scan.** Keep the real colour passthrough visible. Overlay measured surfaces
-   using a subtle turquoise mesh. Retain their world position as the user looks
-   away. Building geometry uses a sparse mesh; uncertain geometry uses amber
-   hatching. Unknown space gets no invented surface.
-3. **Add elements at any time.** Offer Floor, Ceiling, Wall, Door, Window, Table,
-   Couch, Bed, Storage and Other. Accept automatically detected elements as
-   suggestions only. Manual creation must remain available when detection misses
-   an object. Confirmed user edits must survive rescanning.
-4. **Refine.** Guide the user toward observed mesh frontiers and weak measurements.
-   Use contextual instructions, not a timer or a guessed whole-room percentage.
-   Pause on invalid tracking, changed calibration/origin, or capacity exhaustion.
-   Retain measurements, but hide world overlays while their alignment is invalid.
-5. **Review.** Allow mesh/element visibility controls, corrections, deletion and
-   undo. Resolve rescan conflicts and unconfirmed elements. Explain that unseen
-   surfaces remain unknown; accepting the captured area is explicit.
-6. **Save.** Name the room and publish an immutable revision. Failed/aborted setup
-   must preserve the last committed revision. Drafts are separate from game data.
-7. **Reuse.** Verify/re-establish alignment in the current tracking origin before
-   publishing any room queries. Recentring, restarting or loading a file alone
-   must never silently create a persistent spatial anchor.
+- The local runtime identifies a Steam Frame; the public device exposes exactly
+  two cameras, a declared horizontal/vertical stereo RGBA layout and undistorted
+  intrinsics at the actual returned extent.
+- The Arcturus EEPROM exposes both passthrough cameras and the device head
+  calibration. Public camera extrinsics match that geometry within 1.5 cm and
+  forward-axis dot product 0.98; baseline is between 3 and 10 cm.
+- Pixels and the exposure-associated device pose come from **the same** public
+  frame-buffer call. Sequence and exposure ticks increase; tracking, dimensions,
+  layout and calibration stay consistent. Host ticks are not called nanoseconds
+  or joined to the current head pose.
 
-### Element editing
+The worker rectifies to 320×240 and uses census stereo, uniqueness/reverse checks,
+subpixel disparity and metric baseline to produce bounded 160×120 depth.
+Out-of-image rectification support and textureless/ambiguous regions remain
+unknown. A missing fresh observation for five seconds pauses capture. Stale
+images, invalid poses and origin changes never authorize world overlays.
+Quality uses experimental confidence/residual checks and at least three camera
+positions separated by 5 cm. These are heuristics, not measured sensor accuracy.
 
-The first controller interaction is a gravity-aligned rectangle: lower-left (or
-first tabletop corner), adjacent corner, opposite corner. Reliable measured
-triangles can provide ray hits. Uncertain geometry and unknown pixels cannot
-silently supply snap targets. The native renderer/controller bridge is pending;
-`SurfaceDraft` implements the geometry and origin checks independently of it.
+The vendor documents [no direct public camera API](https://arcturus.vision/developers).
+Its [recording/reconstruction workflow](https://arcturus.vision/apps) establishes
+offline reconstruction, not this public live route. EEPROM conventions were
+cross-checked against the MIT [Frametop calibration reader](https://github.com/Frametop/frametop)
+at `adebd7d6cfc938477bf8e42a8bcb1c41a32a6f9c`; none of its privileged camera
+capture code is included. Public OpenVR contracts are in
+[Valve's header](https://github.com/ValveSoftware/openvr/blob/master/headers/openvr.h).
 
-| Element | Persisted geometry and meaning |
-| --- | --- |
-| Floor, Ceiling, Wall | Pose and bounded plane |
-| Door, Window | Bounded plane and explicit parent wall |
-| Table | Tabletop plane, height through its pose, optional furniture box |
-| Couch, Bed, Storage, Other | Oriented bounded volume, with optional surface |
+If Frame does not expose this source, the candidate must report unavailable.
+A verified vendor/native provider would then still be needed. Do not treat this
+conditional implementation as evidence that the camera actually exposes images.
 
-Element UUIDs survive edits and revisions. Door/window boundaries must remain
-coplanar with and contained in their parent wall; moving or deleting a wall cannot
-silently orphan its openings. Door frames describe static geometry: live open/closed
-door tracking is outside this first feature. Scene-mesh geometry is not automatically
-cut into holes or made passable merely because a door/window label exists.
+**Passthrough presentation is also a hardware gate.** This candidate does not
+force global room-view settings or replace native camera presentation. Begin the
+headset check in the Frame's visible colour passthrough environment. Acquiring a
+camera stream alone does not prove passthrough stays visible after closing the
+dashboard or while a streamed game is active. That coexistence needs a coordinated
+check before claiming an end-to-end scan experience.
 
-## Implemented checkpoint
+## Installation and data ownership
 
-- `room_scan/model.py`: versioned immutable room/element model with semantic
-  labels, poses, convex planar boundaries, boxes and wall relationships.
-- `room_scan/editor.py`: measured controller-corner construction, table volumes,
-  and nearest reliable triangle picking. No guessed distance hit for missing mesh.
-- `room_scan/capture.py`: bounded incremental depth-grid projection, surface-cell
-  accumulation, independent viewpoint evidence, and mesh connectivity that
-  preserves invalid-pixel holes and rejects depth jumps. Rectified calibrated
-  disparity can be converted to metric depth; stereo matching itself is pending.
-- `room_scan/workflow.py`: availability, capture, pause/resume, element edits,
-  suggestions/conflicts, undo, review, acceptance and save. `view()` provides
-  renderer-facing geometry, state, actions and quality. It is not a native UI.
-- `room_scan/store.py`: private storage, immutable revisions, atomic current-room
-  publication, optimistic revision checks, isolated drafts and confirmed semantic
-  queries. Test captures and a mismatching origin are refused by game queries.
-- `probe/room_camera_frame.cpp`: a standalone AArch64 background OpenVR client
-  reporting public camera availability, bounded dimensions, intrinsics and
-  camera-to-head transforms when supported. It never acquires a video stream,
-  reads pixels, changes settings, installs anything, or restarts SteamVR.
+Packaging accepts `--room-overlay` only with the complete Python/license payload
+and additional source/artifact-bound software checks. The AArch64 executable,
+Python modules, generated application manifest, user service and SteamVR Wants
+drop-in participate in the existing install/update/checkpoint/Undo transaction.
+The normal confirmed Apply stages files while the Frame UI runs, then performs
+its existing coordinated restart. There is no extra developer-side restart.
 
-The default production provider is deliberately unavailable. Injected test providers
-are fixtures, not native camera evidence. `test_only` is persisted and cannot be
-used as a real room through the store query API. Source/provider trust is a future
-adapter responsibility; a JSON file or a caller-supplied origin UUID is not runtime
-attestation or a persistent anchor.
+- Program: `~/.local/share/SteamLinkNativePassthrough/stream-bridge/room-setup/`
+- Rooms: `~/.local/share/SteamLinkNativePassthrough/rooms/`
+- User service: `sfnp-room-setup.service`, tied to `steamvr.service`
 
-The native inventory always reports `room_scan_ready: false` and
-`arcturus_identity_verified: false`: public API metadata alone proves neither
-module identity, raw stereo layout, nor exposure/pose association. An unavailable
-public API also does **not** prove that the attached camera or a private provider
-cannot support reconstruction.
+Rooms are outside managed program files and survive update, Undo and uninstall.
+The manifest is registered temporarily while the overlay process runs. The
+service releases its owned camera handle on stop and does no acquisition at
+startup. Older bundles without the optional payload remain readable. Removing
+an optional dashboard in a later package removes only receipt-owned program and
+service files. A PC-only update still leaves the Frame untouched.
 
-## Coordinate and capture contract
+## Data and consumer scope
 
-Room and camera poses use metres and right-handed XR axes: +X right, +Y up, -Z
-forward. Quaternions are normalized XYZW. Element planes lie in local XY with +Z
-normal; box size/centre use those same element axes. Optical depth is positive
-forward: `(u-cx)*z/fx, -(v-cy)*z/fy, -z` is transformed by the camera exposure pose.
+Poses use metres, right-handed XR axes (+X right, +Y up, -Z forward), normalized
+XYZW quaternions. Element planes use local XY; boxes share the element axes.
+Door/window boundaries are coplanar with and contained in their explicit parent
+wall. A label does not cut mesh holes or track door motion. Deleting a wall with
+openings is rejected until its children are handled.
 
-Every accepted depth grid binds one source session UUID, tracking-origin UUID,
-calibration UUID, increasing exposure sequence and exposure timestamp. Intrinsics
-describe that exact rectified grid. A current head pose is not an exposure pose.
-Changing the source, origin or calibration pauses/refuses fusion. Calibration
-must preserve metric scale and camera-to-head alignment.
+`RoomStore` provides private immutable revisions, optimistic publication checks,
+separate drafts and confirmed semantic queries. Queries reject test data and a
+mismatching live origin. The owned native/Python pipe is local, bounded and has
+no network listener. An arbitrary JSON origin UUID is not runtime attestation.
 
-Limits: 160x120 depth grid, 100,000 spatial cells, 200,000 measured triangles,
-60,000 exposures per scan, 256 semantic elements, 64 corners per strictly convex
-plane, 32 undo snapshots, and 16 MiB per persisted document. Quality currently uses
-experimental confidence/residual thresholds and three camera positions separated
-by at least 5 cm. These are software heuristics, not certified sensor accuracy.
-They must be evaluated on recordings before selecting shipping thresholds.
+Limits: 160×120 depth, 100,000 cells, 200,000 measured triangles, 60,000 exposures,
+256 elements, 64 convex plane corners, 32 undo snapshots and 16 MiB documents.
+CPU/memory usage and visual latency on Frame have not been measured. Normal
+shutdown attempts draft preservation; abrupt power loss is not guaranteed.
 
-All work belongs in a capture/reconstruction worker or the standalone application,
-outside Valve's compositor callbacks. A renderer consumes prepared snapshots;
-it must not run Python mesh processing or persistence inside a render callback.
-Large-room throughput, mesh simplification, live guidance and memory/latency on
-the device have not been measured.
+Still outside this candidate: automatic furniture/structural detection,
+continuous handle dragging, draft-resume UI, mesh visibility toggles, negotiated
+PC room transport, game-facing OpenXR/Meta Scene implementations and Venture
+adapters. The persisted geometric/semantic model is the common foundation; games
+cannot yet consume it merely by installing this candidate. Dynamic occlusion and
+changing environment depth are separate work.
 
-## Remaining implementation
-
-1. Establish an actual Arcturus image/calibration/exposure-pose source. The vendor
-   currently documents [no public direct camera API](https://arcturus.vision/developers).
-   Its [recording/reconstruction workflow](https://arcturus.vision/apps) is evidence
-   for offline reconstruction, not an incremental live provider.
-2. Implement stereo rectification/matching or consume verified native depth;
-   connect a bounded live worker to the reconstruction core. No online RGB transfer
-   or raw-camera recording is implicitly enabled by this work.
-3. Implement and verify the Frame-local dashboard overlay and its scan view:
-   application registration, dashboard icon/panel, explicit capture start, stereo world mesh, controls,
-   element handles, hatching, frontier guidance, previews and startup/teardown.
-   The existing world-stability experiment has no confirmed visible reference yet;
-   it is not evidence that a native scene overlay has already been established.
-4. Add structural/semantic detection proposals; the manual editor and suggestion
-   conflict rules are ready, but there is no object detector in this checkpoint.
-5. Implement explicit relocalization and recovery from a changed origin. The
-   current core refuses the operation rather than silently relocating geometry.
-6. Add a negotiated local PC/mod service and Venture adapters for room queries,
-   spatial entities, scene-capture completion and mesh access. The Python query
-   API is not an OpenXR runtime, Meta SDK implementation or game integration.
-
-Dynamic people/hand occlusion and continuously changing environment depth remain
-separate work. The approved first version requires static geometric/semantic room
-data, including manually entered objects, to work end to end in both consumers.
-
-## Build and validate
+## Reproduce and test
 
 ```sh
 cmake -S . -B build/room-core -DFRAME_ROOM_SCAN_ONLY=ON
 cmake --build build/room-core
 ctest --test-dir build/room-core --output-on-failure
-python3 -B -m room_scan status
-bash tools/build_room_camera_probe.sh /path/to/reviewed-openvr-sdk build/room-camera
-python3 -B tools/package_room_camera_probe.py --binary build/room-camera/sfnp-room-camera-frame --output build/room-camera/camera-inventory.zip
-python3 -B tools/package_room_camera_probe.py --verify build/room-camera/camera-inventory.zip
+bash tools/build_room_overlay.sh /path/to/openvr-header /path/to/json-single-include /path/to/DejaVuSans.ttf build/room-dashboard
+python3 -B -m unittest discover -s tests -p 'test_room_scan*.py' -v
+python3 -B -m unittest discover -s tests -p test_stream_bridge_install.py -v
+python3 -B -m unittest discover -s tests -p test_package_stream_bridge.py -v
 ```
 
-The public `openvr_capi.h` is the existing reviewed SDK pin
-`3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7`.
-No SDK header or Valve library is bundled. The archive records source hashes,
-compiler version and required GLIBC symbol versions. These are software checks.
-No Arcturus/headset result has been obtained for this feature.
+The build script checks the exact OpenVR/JSON/font input hashes. It generates a
+font atlas locally and builds host/native tests plus the AArch64 executable with
+warnings as errors. SDK/header binaries are not redistributed; embedded font and
+JSON attribution ship with the app. The host `--preview state.json --output x.rgba`
+mode renders the actual dashboard without opening OpenVR; `--preview-world`
+renders a software fixture's mesh. Such previews are **software evidence only**.
 
-### Next coordinated hardware check
-
-Agree readiness with the wearer before copying or running the inventory client.
-Use an owned temporary directory and the canonical installed native
-`libopenvr_api.so` path. Keep the current native SteamVR session running; this
-inventory requires no companion update, settings changes or restart. Capture
-stdout privately and remove only the owned temporary client after completion:
-
-```sh
-./sfnp-room-camera-frame --inspect --openvr /canonical/installed/libopenvr_api.so
-```
-
-Scope: one public-API inventory, no image recording, no streaming acquisition,
-no installation and no service changes. If the public camera interface is absent,
-record that result and investigate another source separately. Do not infer module
-absence, scan support or raw-frame availability from discovery alone.
+Use the candidate's `patch-steam-link.cmd`, confirm its normal paired Apply, then
+open Frame SteamVR's dashboard and select “Raumeinrichtung”. First verify icon,
+menu/controller response and a clear camera-unavailable result where applicable.
+Only claim a scan after actual measured triangles stay aligned with the real room,
+elements can be confirmed/revised, and saved alignment survives the explicit
+reuse flow. Record the exact candidate hash, runtime versions and wearer result.
+No headset installation or restart is authorized by a local build alone; coordinate
+wearer readiness before any developer device operation.

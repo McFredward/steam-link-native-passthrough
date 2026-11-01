@@ -66,6 +66,18 @@ class Pose:
         x, y, z, w = self.orientation
         return Pose((0., 0., 0.), (-x, -y, -z, w)).rotate(sub(point, self.position))
 
+    def inverse(self):
+        x, y, z, w = self.orientation
+        inverse = Pose((0., 0., 0.), (-x, -y, -z, w))
+        return Pose(inverse.rotate(tuple(-p for p in self.position)), inverse.orientation)
+
+    def compose(self, other):
+        x, y, z, w = self.orientation
+        a, b, c, d = other.orientation
+        q = (w*a+x*d+y*c-z*b, w*b-x*c+y*d+z*a, w*c+x*b-y*a+z*d, w*d-x*a-y*b-z*c)
+        norm = math.sqrt(dot(q, q))
+        return Pose(self.transform(other.position), tuple(v/norm for v in q))
+
     def to_dict(self):
         return {"position": list(self.position), "orientation_xyzw": list(self.orientation)}
 

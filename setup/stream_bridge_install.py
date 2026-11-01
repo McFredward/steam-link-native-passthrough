@@ -84,6 +84,13 @@ TOOLS = frozenset('frame/tools/'+name+'.py' for name in (
 PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
+ROOM_PYTHON = ('__init__.py', 'app.py', 'capture.py', 'editor.py', 'geometry.py',
+               'model.py', 'store.py', 'workflow.py', '__main__.py')
+ROOM_FILES = frozenset({'frame/room-setup/sfnp-room-overlay',
+                       'frame/room-setup/licenses/DejaVu.txt', 'frame/room-setup/licenses/nlohmann-json.txt'} |
+                      {'frame/room-setup/room_scan/'+name for name in ROOM_PYTHON})
+ROOM_UNIT = 'sfnp-room-setup.service'
+ROOM_HOOK = '90-sfnp-room-setup.conf'
 MASK_CODEC_FILES = frozenset({'frame/libavcodec-sfnp-mask.so.62','frame/libavutil-sfnp-mask.so.60'})
 GENERATED = {'coverage.spv': {'bytes':7420,'sha256':'37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3'},
              'camera-only.spv': {'bytes':7072,'sha256':'a8f7c2a375abb3f8d5188fdf129c00b2a2a1b13f3f3d8e7620b0a833510ea8ee'}}
@@ -246,6 +253,12 @@ class Bundle:
             self.files[name] = raw
         engine.require(sum(map(len,self.files.values()))<=engine.MAX_TOTAL,'Package exceeds setup size limit.')
         self.pc, self.frame = v['pc'], v['frame']
+        room_files = set(self.files) & ROOM_FILES
+        engine.require(not room_files or room_files == ROOM_FILES, 'The room setup dashboard package is incomplete.')
+        if room_files:
+            binary = self.files['frame/room-setup/sfnp-room-overlay']
+            engine.require(len(binary) >= 64 and binary[:7] == b'\x7fELF\x02\x01\x01'
+                           and binary[18:20] == b'\xb7\x00', 'Unsupported native room dashboard architecture.')
         engine.require(type(self.pc)is dict and set(self.pc)-{'version'}=={'reviewed','platform','files','runtime_files'} and
                        self.pc['platform']=='windows-x86_64' and type(self.pc['reviewed'])is bool and
                        type(self.pc['files'])is list and set(self.pc['files'])==pc_files,
@@ -253,12 +266,12 @@ class Bundle:
         engine.require(type(self.frame)is dict and set(self.frame)-{'version'}=={'reviewed','files','runtime_files','generated'} and
                        type(self.frame['reviewed'])is bool and type(self.frame['files'])is list and
                        len(self.frame['files'])==len(set(self.frame['files'])) and
-                       set(self.frame['files'])==TOOLS|PROFILES|frame_defaults|mask_files|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} and
+                       set(self.frame['files'])==TOOLS|PROFILES|frame_defaults|mask_files|room_files|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} and
                        self.frame['generated']==GENERATED and
                        {'frame/'+LIBRARY,'frame/tools/native_fragment_stream_coverage.py',
                         'frame/tools/native_fragment_count1_interface.py','frame/libsfnp_stream_launch.so',
                         'frame/tools/compositor_startup_health.py'}<=set(self.frame['files']) and
-                       all(n in PROFILES|frame_defaults|mask_files|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} or re.fullmatch(r'frame/tools/[a-z0-9_]+[.]py',n)
+                       all(n in PROFILES|frame_defaults|mask_files|room_files|{'frame/'+LIBRARY,'frame/libsfnp_stream_launch.so'} or re.fullmatch(r'frame/tools/[a-z0-9_]+[.]py',n)
                            for n in self.frame['files']), 'Unsupported Frame connection package.')
         for name in mask_files:
             raw=self.files[name]
@@ -695,7 +708,9 @@ class FrameTransaction:
                  self.home/'.config/SteamFrameNativePassthrough/control.json',
                  Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'vulkan/implicit_layer.d'/MANIFEST,
                  Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
-                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steamvr.service.d'/CAMERA_HOOK}
+                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steamvr.service.d'/CAMERA_HOOK,
+                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user'/ROOM_UNIT,
+                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steamvr.service.d'/ROOM_HOOK}
         allowed_settings={self.settings_path(),self.home/'.local/share/Steam/config/steamvr.vrsettings'}
         e.require(Path(v['settings'].get('path','')) in allowed_settings,
                   'The recorded camera settings path is not owned by this installation.')
@@ -911,9 +926,12 @@ class FrameInstall:
                   self.home/'.config/SteamFrameNativePassthrough/control.json',
                   self.config/'vulkan/implicit_layer.d'/MANIFEST,
                   self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
-                  self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK}
+                  self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK,
+                  self.config/'systemd/user'/ROOM_UNIT,
+                  self.config/'systemd/user/steamvr.service.d'/ROOM_HOOK}
         names={LIBRARY,'libsfnp_stream_launch.so','coverage.spv','camera-only.spv','receiver.conf','launch.conf',
-               'receiver.enable','pairings/active.json','install.json',CAMERA_CONFIG,'camera-session.pause',LOG_DEFAULT}|{n.removeprefix('frame/') for n in TOOLS|PROFILES|MASK_CODEC_FILES}|RETIRED_FRAME_FILES
+               'receiver.enable','pairings/active.json','install.json',CAMERA_CONFIG,'camera-session.pause',LOG_DEFAULT,
+               'room-setup/room.vrmanifest'}|{n.removeprefix('frame/') for n in TOOLS|PROFILES|MASK_CODEC_FILES|ROOM_FILES}|RETIRED_FRAME_FILES
         def allowed(path):
             if path in external:return True
             if legacy_helper.allowed(self.home,path):return True
@@ -1040,7 +1058,12 @@ class FrameInstall:
                 patch_current=patch_current and len(raw)==pin['bytes'] and self.e.sha(raw)==pin['sha256']
         # The complete Frame payload is independent of the global bundle pin.
         # A changed PC DLL/installer does not make unchanged Frame files stale.
-        component_files_current=state is not None and mask_pair_current
+        room_group_current=True
+        if state:
+            recorded_rooms={name for name in ROOM_FILES
+                if operations.get(str(self.root/Path(name).relative_to('frame'))) is not None}
+            room_group_current=recorded_rooms==(set(bundle.value['files'])&ROOM_FILES)
+        component_files_current=state is not None and mask_pair_current and room_group_current
         if state:
             for name in bundle.frame['files']:
                 owned=operations.get(str(self.root/Path(name).relative_to('frame')))
@@ -1129,6 +1152,33 @@ class FrameInstall:
         config=str(self.root/'launch.conf')
         return ('[Service]\nEnvironment='+self.systemd('LD_PRELOAD='+preload)+'\nEnvironment='+
                 self.systemd('SFNP_STREAM_BRIDGE_CONFIG='+config)+'\n').encode()
+
+    def room_dashboard_files(self, bundle, snapshot):
+        """Payload and user-service lifecycle share the existing owned transaction."""
+        if not ROOM_FILES <= set(bundle.files):
+            return {}
+        pin = bundle.frame['runtime_files']['openvr']
+        observed = snapshot['openvr']
+        self.e.require(observed['matches'] or observed['format_valid'], 'The native OpenVR library is missing or damaged.')
+        base = {'steamvr':self.steamvr, 'home':self.home, 'system':Path('/')}[pin['base']]
+        native = str(base/self.e.relative(pin['path']))
+        root = self.root/'room-setup'
+        data = self.root.parent/'rooms'
+        arguments = ['--openvr', native, '--data', str(data)]
+        manifest = {'source':'builtin', 'applications':[{
+            'app_key':'sfnp.room.setup', 'launch_type':'binary', 'binary_path_linux':str(root/'sfnp-room-overlay'),
+            'arguments':shlex.join(arguments), 'is_dashboard_overlay':True,
+            'strings':{'en_us':{'name':'Room setup','description':'Scan and edit your mixed reality room'},
+                       'de_de':{'name':'Raumeinrichtung','description':'Raum scannen und Möbel eintragen'}}}]}
+        unit = ('[Unit]\nDescription=Steam Link room setup\nAfter=steamvr.service\n'
+                'BindsTo=steamvr.service\nPartOf=steamvr.service\n\n[Service]\nType=simple\nExecStart=' +
+                ' '.join(self.systemd(arg) for arg in [str(root/'sfnp-room-overlay'), *arguments]) +
+                '\nRestart=on-failure\nRestartSec=3\nTimeoutStopSec=5\n')
+        files = {self.root/Path(name).relative_to('frame'):bundle.files[name] for name in ROOM_FILES}
+        files[root/'room.vrmanifest'] = self.e.encoded(manifest)
+        files[self.config/'systemd/user'/ROOM_UNIT] = unit.encode()
+        files[self.config/'systemd/user/steamvr.service.d'/ROOM_HOOK] = ('[Unit]\nWants='+ROOM_UNIT+'\n').encode()
+        return files
 
     def camera_checkpoint_preflight(self,checkpoint,value):
         """Prove exact reversal scope before any live native settings mutation."""
@@ -1516,6 +1566,8 @@ class FrameInstall:
             if name in TOOLS|PROFILES|FRAME_DEFAULTS|MASK_CODEC_FILES:files[str(Path(name).relative_to('frame'))]=bundle.files[name]
         operations=self.legacy_operations()
         for name,raw in files.items():operations.append(self.tx.operation(self.root/name,raw))
+        for path,raw in self.room_dashboard_files(bundle,snapshot).items():
+            operations.append(self.tx.operation(path,raw,mode=0o700 if path.name=='sfnp-room-overlay' else 0o600))
         manifest=self.config/'vulkan/implicit_layer.d'/MANIFEST
         operations.append(self.tx.operation(manifest,e.encoded(layer_manifest(self.root/LIBRARY))))
         dropin=self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf'
@@ -1636,6 +1688,7 @@ class FrameInstall:
         wanted.update({self.root/name:raw for name,raw in outputs.items()})
         wanted.update({self.root/Path(name).relative_to('frame'):bundle.files[name]
                        for name in TOOLS|PROFILES|FRAME_DEFAULTS|MASK_CODEC_FILES if name in bundle.files})
+        wanted.update(self.room_dashboard_files(bundle,snapshot))
         if current.get('activation_mode')=='inactive':
             wanted.update({self.root/'receiver.enable':MARKER,
                 self.root/'launch.conf':b'SFNP_STREAM_LAUNCH/1\n'+str(self.steamvr/bundle.frame['runtime_files']['vrlink']['path']).encode()+b'\n'+str(self.root/'libsfnp_stream_launch.so').encode()+b'\n'+str(self.root/LIBRARY).encode()+b'\n',
@@ -1648,11 +1701,17 @@ class FrameInstall:
         for name in MASK_CODEC_FILES:
             path=self.root/Path(name).relative_to('frame')
             if name not in bundle.files and str(path) in by_path:wanted[path]=None
+        if not ROOM_FILES <= set(bundle.files):
+            retired = {self.root/Path(name).relative_to('frame') for name in ROOM_FILES} | {
+                self.root/'room-setup/room.vrmanifest', self.config/'systemd/user'/ROOM_UNIT,
+                self.config/'systemd/user/steamvr.service.d'/ROOM_HOOK}
+            for path in retired:
+                if str(path) in by_path:wanted[path]=None
         for path,raw in wanted.items():
             observed=self.tx.current(path);desired=None if raw is None else {'kind':'file','bytes':base64.b64encode(raw).decode()}
             if str(path) in by_path:by_path[str(path)]['after']=desired
             else:
-                op=self.tx.operation(path,raw);operations.append(op);by_path[str(path)]=op
+                op=self.tx.operation(path,raw,mode=0o700 if path.name=='sfnp-room-overlay' else 0o600);operations.append(op);by_path[str(path)]=op
             if observed!=desired:
                 changes.append({'path':str(path),'before':observed,'after':desired,'mode':by_path[str(path)]['mode']})
         for op in operations:
@@ -1710,6 +1769,9 @@ class FrameInstall:
                     self.config/'vulkan/implicit_layer.d'/MANIFEST,
                     self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
                     self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK,
+                    self.config/'systemd/user'/ROOM_UNIT,
+                    self.config/'systemd/user/steamvr.service.d'/ROOM_HOOK,
+                    *(self.root/Path(name).relative_to('frame') for name in ROOM_FILES),
                     *(self.root/Path(name).relative_to('frame') for name in MASK_CODEC_FILES))
                 self.e.require(not any(os.path.lexists(path) for path in artifacts),
                     'The Frame removal receipt is missing; remaining patch components were preserved and complete uninstall could not be verified.')
