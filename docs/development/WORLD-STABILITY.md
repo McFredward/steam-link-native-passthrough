@@ -227,7 +227,12 @@ Prioritize MR-dependent presentation work: exact decoder handoff waits, HEVC mas
 readiness/publication, frame scheduling and the app's MR render-pose/scale/depth
 changes. The main logging level does not print the existing paired handoff/stage
 counters (`reportFlowCold` requires Debug). Existing public FrameTiming data must
-not be treated as streamed game FPS or motion-to-photon timing. A later coordinated
-Debug-logging comparison is needed before attributing the observed wobble to a
-particular wait, decoder or pose transform. Preserve exact current image/mask/eye
-proof and camera authority while investigating any added delay.
+not be treated as streamed game FPS or motion-to-photon timing. A subsequent
+read-only device inspection found Debug already active and retained counters for
+both reference runs. The [handoff profiling result](MR-HANDOFF-PROFILING.md)
+records 7.719 ms mean video callback duration in the MR rotation window versus
+0.232 ms with MR off, plus separate mask-stage evidence and relay-clock limits.
+This establishes an MR-dependent wait in those logs, not a measured visual error
+or its causal diagnosis. No runtime restart or logging change was needed.
+Preserve exact current image/mask/eye proof and camera authority while examining
+the decoder/queue and any native presentation or app pose changes.
