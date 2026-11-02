@@ -4,6 +4,9 @@ on:
     branches: [dev, arcturus-room-setup]
     paths:
       - 'room_scan/**'
+      - 'room_reconstruction/**'
+      - 'setup/steam_link_setup_room.py'
+      - 'packaging/room-*.json'
       - 'probe/room_camera*'
       - 'probe/start_room_camera_api.py'
       - 'tests/*room*'
@@ -15,6 +18,9 @@ on:
   pull_request:
     paths:
       - 'room_scan/**'
+      - 'room_reconstruction/**'
+      - 'setup/steam_link_setup_room.py'
+      - 'packaging/room-*.json'
       - 'probe/room_camera*'
       - 'probe/start_room_camera_api.py'
       - 'tests/*room*'
@@ -27,6 +33,26 @@ on:
 permissions:
   contents: read
 jobs:
+  pc-gaussian-mapping:
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install the exact PC numerical test dependencies
+        run: python -m pip install numpy==2.5.4 scipy==1.18.1
+      - name: Check metric rays, real gaps, revisit refinement and bounded transport
+        run: python -B -m unittest discover -s tests -p test_room_pc_live.py -q
+      - name: Check the offline Gaussian trainer adapter separately
+        run: python -B -m unittest discover -s tests -p test_room_reconstruction.py -q
+      - name: Load the private Windows CUDA libraries and execute the actual model on CPU
+        if: runner.os == 'Windows'
+        run: python -B tools/check_room_pc_runtime.py --cache "${{ runner.temp }}/room-pc-runtime"
   dashboard-controls:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -52,10 +78,49 @@ jobs:
           build/room-registration-test
       - name: Verify native source admission, exposure timing and pose-history bounds
         run: |
-          for test in room_camera_source_test room_arcturus_geometry_test room_arcturus_timing_test; do
+          for test in room_projection_test room_camera_source_test room_arcturus_geometry_test room_arcturus_timing_test; do
             g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I . -isystem build/dashboard-sdk -isystem build/native-room-json tests/$test.cpp -o build/$test -pthread
             build/$test
           done
+  native-room-and-vision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare ordinary build tools and software Vulkan
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq g++-aarch64-linux-gnu glslc spirv-tools python3-pil fonts-dejavu-core mesa-vulkan-drivers
+      - name: Prepare exact public graphics and API headers
+        run: |
+          python3 - <<'PYHEADERS'
+          from pathlib import Path
+          import hashlib,json,urllib.request
+          inputs={
+            'openvr/openvr_capi.h':('https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_capi.h','3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7'),
+            'json/nlohmann/json.hpp':('https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp','aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63')}
+          for name,pin in json.loads(Path('packaging/room-vulkan-headers.json').read_text())['files'].items():
+              inputs['vulkan/'+name]=('https://raw.githubusercontent.com/KhronosGroup/Vulkan-Headers/v1.3.275/include/'+name,pin['sha256'])
+          for name,(url,digest) in inputs.items():
+              raw=urllib.request.urlopen(url,timeout=30).read(2*1024*1024)
+              assert hashlib.sha256(raw).hexdigest()==digest,name
+              target=Path('build/room-deps')/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(raw)
+          PYHEADERS
+          python3 -B tools/fetch_room_xr_headers.py build/room-deps/openxr
+      - uses: actions/cache@v4
+        with:
+          path: |
+            build/room-vision-sources
+            build/room-vision-host
+            build/room-vision-arm
+          key: ${{ runner.os }}-room-vision-${{ hashFiles('packaging/room-vision.json', 'tools/build_room_vision.py') }}
+      - name: Build pinned CPU vision modules without system installation
+        run: |
+          python3 -B tools/build_room_vision.py build/room-vision-sources build/room-vision-host --arch host --jobs 4
+          python3 -B tools/build_room_vision.py build/room-vision-sources build/room-vision-arm --arch aarch64 --jobs 4
+      - name: Exercise native dashboard, MR scene, real GPU and fusion paths
+        run: |
+          bash tools/build_room_overlay.sh build/room-deps/openvr build/room-deps/json /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf build/room-native build/room-deps/vulkan build/room-deps/openxr build/room-vision-host/libsfnp-room-vision.so build/room-vision-arm/libsfnp-room-vision.so
   manual-camera-prototype:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

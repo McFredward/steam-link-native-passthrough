@@ -37,7 +37,7 @@ int main(){try{
             api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()}};},
                 [&](const Json& request){return request.at("sensor")=="fixture"?&image:nullptr;},
                 [](){return Json{{"status","no-fresh-pair"}};});
-            usleep(1000);
+            api.wait();
         }
         _exit(0);
     }catch(const std::exception& error){std::fprintf(stderr,"%s\n",error.what());_exit(1);}}

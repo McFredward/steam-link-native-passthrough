@@ -37,6 +37,10 @@ MAX_NEIGHBORS = 64
 VIRTUAL = re.compile(r'(?i)(vpn|wireguard|tailscale|zerotier|virtual|vmware|vbox|hyper-v|docker|podman|loopback|^lo$|^wsl|^tun\d*|^tap\d*|^veth|^virbr|^br-)')
 TEXT = {
     'en': {
+        'bridge_room_pc_preparing': 'Preparing private PC reconstruction dependencies (about 1.6 GB on first use). No system Python, CUDA toolkit or GPU driver is changed.',
+        'bridge_room_pc_warming': 'Warming up Fast-FoundationStereo on your NVIDIA GPU. Room Setup will become ready after warmup.',
+        'bridge_room_pc_ready': 'PC reconstruction is running. Keep this installer window open while using Room Setup on your Frame. Closing it pauses reconstruction and preserves your scan.',
+        'bridge_room_pc_failed': 'PC reconstruction could not start or stopped. Room measurements are preserved. Check NVIDIA GPU availability and reopen this installer to retry.',
         'bridge_room_capture_plan': 'Enabling read-only camera access for this session using temporary administrator access. SteamVR stays running. Capture turns off after a Frame reboot.',
         'bridge_room_capture_offer': 'Room Setup is installed. Enable read-only room capture for this session? This uses temporary administrator access and stays off after a Frame reboot.',
         'bridge_room_capture_enabled': 'Room capture is enabled for this session. Open Room Setup in the SteamVR dashboard, then choose Scan a new room and Start scan.',
@@ -195,6 +199,10 @@ TEXT = {
         'cancelled': 'Setup stopped. Any recovery details are shown below.',
     },
     'de': {
+        'bridge_room_pc_preparing': 'Preparing private PC reconstruction dependencies (about 1.6 GB on first use). No system Python, CUDA toolkit or GPU driver is changed.',
+        'bridge_room_pc_warming': 'Warming up Fast-FoundationStereo on your NVIDIA GPU. Room Setup will become ready after warmup.',
+        'bridge_room_pc_ready': 'PC reconstruction is running. Keep this installer window open while using Room Setup on your Frame. Closing it pauses reconstruction and preserves your scan.',
+        'bridge_room_pc_failed': 'PC reconstruction could not start or stopped. Room measurements are preserved. Check NVIDIA GPU availability and reopen this installer to retry.',
         'bridge_room_capture_plan': 'Enabling read-only camera access for this session using temporary administrator access. SteamVR stays running. Capture turns off after a Frame reboot.',
         'bridge_room_capture_offer': 'Room Setup is installed. Enable read-only room capture for this session? This uses temporary administrator access and stays off after a Frame reboot.',
         'bridge_room_capture_enabled': 'Room capture is enabled for this session. Open Room Setup in the SteamVR dashboard, then choose Scan a new room and Start scan.',

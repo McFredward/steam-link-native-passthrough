@@ -256,7 +256,7 @@ class Tests(unittest.TestCase):
 
     def add_room_dashboard_fixture(self):
         for name in b.ROOM_FILES:
-            raw = (self.bundle.files['frame/'+b.LIBRARY] if name.endswith(('sfnp-room-overlay','sfnp-room-camera-native'))
+            raw = (self.bundle.files['frame/'+b.LIBRARY] if name in b.ROOM_BINARIES
                    else (ROOT/'room_scan/capture_session.py').read_bytes() if name==b.ROOM_SESSION
                    else b'# owned room fixture, never executed\n')
             s.put(self.bundle_root/name,raw)
@@ -272,6 +272,10 @@ class Tests(unittest.TestCase):
             self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
         executable=self.froot/'room-setup/sfnp-room-overlay'
         self.assertEqual(executable.stat().st_mode&0o777,0o700)
+        renderer=self.froot/'room-setup/sfnp-room-renderer'
+        vision=self.froot/'room-setup/libsfnp-room-vision.so'
+        self.assertEqual(renderer.stat().st_mode&0o777,0o700)
+        self.assertEqual(vision.stat().st_mode&0o777,0o600)
         manifest=s.parse(s.read(self.froot/'room-setup/room.vrmanifest'))['applications'][0]
         self.assertEqual(manifest['app_key'],'sfnp.room.setup')
         self.assertTrue(manifest['is_dashboard_overlay'])
@@ -287,6 +291,7 @@ class Tests(unittest.TestCase):
         self.assertIn(b'Wants=sfnp-room-setup.service',s.read(hook))
         self.unit.tx.rollback()
         self.assertFalse(executable.exists());self.assertFalse(unit.exists());self.assertFalse(hook.exists())
+        self.assertFalse(renderer.exists());self.assertFalse(vision.exists())
         self.assertEqual(data.read_bytes(),b'private room stays here\n')
 
     def test_partial_room_dashboard_payload_is_refused(self):
@@ -319,6 +324,55 @@ class Tests(unittest.TestCase):
         self.assertEqual(before,s.read(self.unit.tx.path))
         self.assertNotIn(secret.encode(),before)
         self.assertEqual(before_commands,self.commands)
+
+    def test_room_install_automatically_arms_after_commit_without_a_second_opt_in(self):
+        self.add_room_dashboard_fixture();self.mock_shader_pin()
+        def armed(*args,**kwargs):
+            self.assertEqual(self.unit.tx.state()['phase'],'installed')
+            self.assertFalse((self.froot/'setup-restore.json').exists())
+            return True
+        with self.fake_generation(),mock.patch.object(b,'manage_room_capture',side_effect=armed) as capture:
+            result,ui=self.wizard()
+        self.assertEqual(0,result);capture.assert_called_once()
+        self.assertNotIn('bridge_room_capture_offer',ui.questions)
+
+    def test_automatic_room_arming_failure_preserves_the_completed_installation(self):
+        self.add_room_dashboard_fixture();self.mock_shader_pin()
+        with self.fake_generation(),mock.patch.object(b,'manage_room_capture',return_value=False):
+            result,ui=self.wizard()
+        self.assertEqual(0,result)
+        self.assertEqual('installed',self.unit.tx.state()['phase'])
+        self.assertFalse((self.froot/'setup-restore.json').exists())
+
+    def test_current_interactive_room_install_arms_without_restarting_or_rewriting_frame(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        before=self.unit.tx.path.read_bytes();commands=list(self.commands)
+        with mock.patch.object(b,'manage_room_capture',return_value=True) as capture:
+            result,ui=self.wizard(action=None)
+        self.assertEqual(0,result);capture.assert_called_once()
+        self.assertEqual('check',ui.choices[0][1]['recommended'])
+        self.assertIn('room_capture_stop',ui.choices[0][0])
+        self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
+
+    def test_read_only_room_checks_never_arm_capture(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        before=self.unit.tx.path.read_bytes();commands=list(self.commands)
+        with mock.patch.object(b,'manage_room_capture') as capture:
+            for check,dry_run in ((True,False),(False,True)):
+                result,_=self.wizard(action=None,check=check,dry_run=dry_run)
+                self.assertEqual(0,result)
+        capture.assert_not_called()
+        self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
+
+    def test_pc_update_inventory_does_not_automatically_arm_the_current_frame(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        self.version_bundle('0.2.12','0.2.11')
+        before=self.unit.tx.path.read_bytes();commands=list(self.commands)
+        with mock.patch.object(b,'manage_room_capture') as capture:
+            result,ui=self.wizard(action=None)
+        self.assertEqual(0,result);self.assertEqual('update',ui.choices[0][1]['recommended'])
+        capture.assert_not_called()
+        self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
 
     def test_room_capture_refuses_changed_helper_without_recovery_or_native_restart(self):
         self.add_room_dashboard_fixture()
@@ -386,7 +440,7 @@ class Tests(unittest.TestCase):
         snapshot=b.LocalInstall(s,self.local).snapshot(self.bundle,self.local.inventory()) if side=='pc' else self.unit.snapshot(self.bundle)
         return {'bundle':self.bundle.pin,'snapshot':snapshot}
 
-    def wizard(self,*,untested=True,change_after_confirm=None,action='install'):
+    def wizard(self,*,untested=True,change_after_confirm=None,action='install',check=False,dry_run=False):
         import types,contextlib
         owner=self
         class UI:
@@ -422,7 +476,7 @@ class Tests(unittest.TestCase):
             def close(inner):pass
         real=b.load_helper
         def helper(engine,name):return types.SimpleNamespace(Lifecycle=Runtime) if name=='steam_link_setup_pc' else real(engine,name)
-        args=types.SimpleNamespace(bundle=self.bundle_root,check=False,dry_run=False,lang='en',frame='192.168.1.25',user='steamos',action=action)
+        args=types.SimpleNamespace(bundle=self.bundle_root,check=check,dry_run=dry_run,lang='en',frame='192.168.1.25',user='steamos',action=action)
         with mock.patch.object(s.sys.stdin,'isatty',return_value=True),mock.patch.object(s,'load_presentation',return_value=types.SimpleNamespace(Presenter=lambda **kw:ui)),mock.patch.object(b,'local_address',return_value='192.168.1.4'),mock.patch.object(b,'load_helper',side_effect=helper):
             result=b.run(args,s,self.local,remote_factory=lambda *a,**kw:Peer())
         return result,ui

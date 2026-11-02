@@ -10,8 +10,12 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import sys
+import time
+import queue
+import threading
 
-from .capture import Binding, DepthFrame
+from .capture import Binding, CaptureCapacityError, DepthFrame
+from .fusion import NativeTsdfReconstruction
 from .editor import SurfaceDraft, pick_surface
 from .geometry import Mesh, Pose, RoomError, require
 from .model import Label, Room
@@ -38,8 +42,9 @@ class PipeProvider:
 
 
 class Application:
-    def __init__(self, store: RoomStore):
+    def __init__(self, store: RoomStore, *, reconstruction_factory=NativeTsdfReconstruction):
         self.store, self.provider = store, PipeProvider()
+        self.reconstruction_factory = reconstruction_factory
         self.session = None
         self.page = "home"
         self.notice = ""
@@ -55,6 +60,8 @@ class Application:
         self.camera_request_page = "prepare"
         self.alignment_room = self.alignment_anchor = self.aligned_preview = None
         self.rooms = self.saved_rooms()
+        self.pc_relay = None
+        self.pc_pending_action = None
 
     def saved_rooms(self):
         rooms = []
@@ -69,6 +76,14 @@ class Application:
 
     def action(self, action):
         self.notice = ""
+        if (action in ("review", "add") and self.pc_relay and self.session
+                and self.session.reconstruction.status().get("gaussians", 0)
+                and not self.session.reconstruction.mesh().triangles):
+            self.pc_pending_action = action
+            if self.session.stage == Stage.SCANNING:
+                self.session.pause()
+            self.notice = "Preparing measured surfaces on your PC. Your room stays visible."
+            return
         if action == "close":
             try:
                 self.close()
@@ -229,11 +244,39 @@ class Application:
     def event(self, event):
         require(type(event) is dict and type(event.get("event")) is str, "Invalid native event")
         kind = event["event"]
-        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable", "capture_hint", "depth"):
+        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable", "renderer_unavailable", "capture_hint", "depth", "stereo_observation", "pc_model", "pc_mesh", "pc_error", "pc_hint"):
             # A completion queued before closing must not reopen capture, even
             # if the user has already opened the window again.
             if event.get("capture_epoch", self.capture_epoch) != self.capture_epoch:
                 return
+        if kind == "stereo_observation":
+            if self.pc_relay and self.session and self.session.stage == Stage.SCANNING:
+                self.pc_relay.offer(event)
+            return
+        if kind == "pc_hint":
+            self.notice = "No consistent depth here yet. Look at an edge or textured surface, then move slowly to the side."
+            return
+        if kind == "pc_error":
+            if self.session and self.session.stage == Stage.SCANNING:
+                self.session.pause()
+            self.pc_pending_action = None
+            self.notice = "PC reconstruction stopped. Your scan is preserved. Check the installer, then choose Resume."
+            return
+        if kind in ("pc_model", "pc_mesh"):
+            if not self.session or self.session.stage not in (Stage.SCANNING, Stage.PAUSED) or not self.pc_relay:
+                return
+            self.session.reconstruction.accept(event)
+            self.world_revision += 1
+            self.notice = ("Move slowly into empty areas. Amber patches need another viewpoint."
+                           if not event.get("at_capacity") else "Preview budget reached. Revisit areas to refine them, or continue to review.")
+            if kind == "pc_mesh" and self.pc_pending_action:
+                action, self.pc_pending_action = self.pc_pending_action, None
+                if action == "review":
+                    self.session.review()
+                    self.page = "review"
+                else:
+                    self.page = "types"
+            return
         if kind == "close":
             epoch = event["capture_epoch"]
             require(type(epoch) is int and self.capture_epoch < epoch < 2**62, "Invalid close epoch")
@@ -249,8 +292,13 @@ class Application:
             align = self.page == "alignment"
             b = event["binding"]
             self.provider.binding = Binding(b["session_id"], b["origin_id"], b["calibration_id"], test_only=False)
-            self.session = ScanSession(f"Room {len(self.rooms)+1}", provider=self.provider)
-            require(self.session.start(), "Capture could not start")
+            self.session = ScanSession(f"Room {len(self.rooms)+1}", provider=self.provider,
+                                       reconstruction_factory=self.reconstruction_factory)
+            if not self.session.start():
+                self.starting = False
+                self.notice = self.session.message+" Diagnostic code: room-vision-unavailable"
+                self.world_revision += 1
+                return
             self.page = "scan"
             self.starting = False
             if align:
@@ -278,7 +326,13 @@ class Application:
                 "camera-metadata-unavailable": "SteamVR exposes no calibrated camera stream to this app. Live room scanning is unavailable.",
                 "camera-count-unsupported": "SteamVR exposes a camera configuration this scanner cannot read yet. Scanning has not started.",
                 "camera-layout-unsupported": "The camera image has no verified stereo layout. Scanning has not started.",
-                "room-capture-not-armed": "Enable room capture for this session in the installer, then try again. Capture stays off after a reboot.",
+                "room-capture-not-armed": "Run the installer to enable room capture for this session, then try again. Capture stays off after a reboot.",
+                "room-projection-calibration-unavailable": "The room view could not be aligned with the headset's eye projections. Scanning has not started.",
+                "room-renderer-unavailable": "The native room view is unavailable. Check for an update and try again. Scanning has not started.",
+                "room-input-unavailable": "SteamVR room controls are unavailable. Check for an update and try again. Scanning has not started.",
+                "room-pc-unavailable": "Keep the installer open on your PC and wait for PC reconstruction to become ready, then try again.",
+                "room-vision-unavailable": "The native room vision module is unavailable. Check for an update and try again. Scanning has not started.",
+                "room-renderer-scene-busy": "Close the running VR app before scanning a room. Room Setup stays available in the SteamVR dashboard.",
                 "room-camera-no-live-pair": "No fresh stereo images. Keep colour passthrough visible and try again.",
                 "room-capture-session-unavailable": "The camera session is unavailable. Enable room capture again in the installer.",
                 "room-camera-eye-unverified": "The connected camera's left and right sensors could not be verified.",
@@ -287,6 +341,15 @@ class Application:
                 self.notice += " Diagnostic code: "+reason
             self.page = self.camera_request_page if self.camera_request_page in ("prepare", "alignment") else "scan"
             self.starting = False
+        elif kind == "renderer_unavailable":
+            if self.session and self.session.stage == Stage.SCANNING:
+                self.session.pause()
+            self.starting = False
+            self.notice = "The room view stopped. Scanning is paused. Choose Resume to try again. Diagnostic code: room-renderer-unavailable"
+            if self.session is None:
+                self.page = self.camera_request_page
+                self.notice = "The native room view could not start. Try again or check for an update. Diagnostic code: room-renderer-unavailable"
+            self.world_revision += 1
         elif kind == "capture_hint":
             if self.session and self.session.stage == Stage.SCANNING:
                 message = event["message"]
@@ -298,7 +361,13 @@ class Application:
                 binding = Binding(b["session_id"], b["origin_id"], b["calibration_id"], test_only=False)
                 frame = DepthFrame(binding, event["sequence"], event["exposure_ticks"], Pose.from_dict(event["pose"]),
                                    event["width"], event["height"], *event["intrinsics"], event["depth_m"], event["confidence"])
-                self.session.ingest(frame)
+                try:
+                    self.session.ingest(frame)
+                except CaptureCapacityError as error:
+                    self.notice = self.session.message
+                    print(f"Room scan: paused capacity={error.code}", file=sys.stderr)
+                    self.world_revision += 1
+                    return
                 self.notice = ""
                 self.world_revision += 1
         elif kind == "tracking_lost":
@@ -353,12 +422,13 @@ class Application:
             button("start", "Checking camera" if self.starting else "Start scan", not self.starting, primary=True)
             button("back", "Back", not self.starting)
         elif self.page == "scan":
-            title, subtitle, step = "Your room is taking shape", "Teal marks captured surfaces. Amber areas need more views.", 2
+            title, subtitle, step = "Discover your room", "Turquoise reveals new surfaces. Amber needs another view. Look into empty areas, then revisit them from the side.", 2
             active = self.session.stage == Stage.SCANNING
-            button("pause" if active else "resume", "Pause" if active else "Resume", not self.starting)
-            button("add", "Add element", self.session.tracking_verified, True)
+            button("review", "Continue", self.session.view()["can_review"], True)
+            button("add", "Add furniture or surfaces", self.session.tracking_verified)
+            button("pause" if active else "resume", "Pause" if active else "Resume",
+                   not self.starting and (active or not self.session.capacity_reached))
             button("elements", "Edit elements")
-            button("review", "Review scan", self.session.view()["can_review"])
             button("undo", "Undo", bool(self.session._history))
             button("cancel", "End setup")
         elif self.page in ("types", "walls", "elements", "edit"):
@@ -424,7 +494,11 @@ class Application:
         return {"schema": "sfnp-room-dashboard-v1", "page": self.page, "title": title, "subtitle": subtitle,
                 "notice": self.notice, "step": step, "buttons": buttons,
                 "capture_active": bool(self.session and self.session.provider_open),
-                "capture_collecting": bool(self.session and self.session.stage == Stage.SCANNING),
+                "capture_collecting": bool(self.session and self.session.stage == Stage.SCANNING and not self.pc_pending_action),
+                "pc_ready": self.pc_relay.ready if self.pc_relay else False,
+                "gaussian_file": str(self.session.reconstruction.path) if self.pc_relay and self.session
+                    and getattr(self.session.reconstruction, "path", None) and not self.session.reconstruction.mesh().triangles
+                    and self.page not in ("review", "saved", "home", "prepare", "alignment") else None,
                 "camera_check_pending": self.starting,
                 "capture_epoch": self.capture_epoch,
                 "world_revision": self.world_revision, "room": state,
@@ -434,7 +508,7 @@ class Application:
 
     def checkpoint(self):
         room = self.session.room
-        if self.session.reconstruction is not None and (self.session.reconstruction.cells or self.session.reconstruction.base_mesh.vertices):
+        if self.session.reconstruction is not None and self.session.reconstruction.mesh().vertices:
             room = replace(room, mesh=self.session.reconstruction.mesh())
         self.store.save_draft(self.session.binding.session_id, room)
 
@@ -448,9 +522,29 @@ class Application:
 
 
 def run(root, incoming, outgoing):
-    app = Application(RoomStore(root))
+    from .pc_relay import PcRelay
+    from .pc_reconstruction import PcReconstruction
+    relay = PcRelay()
+    app = Application(RoomStore(root), reconstruction_factory=lambda binding: PcReconstruction(binding, root))
+    app.pc_relay = relay
+    inbox = queue.Queue(maxsize=8)
+    def read_input():
+        while True:
+            raw = incoming.readline(MAX_BYTES+1)
+            inbox.put(raw)
+            if not raw:
+                break
+    reader = threading.Thread(target=read_input, daemon=True)
+    reader.start()
     errors = 0
+    last_report, reports = 0., 0
     def emit():
+        binding = ({"session_id": app.session.binding.session_id, "origin_id": app.session.binding.origin_id,
+                    "calibration_id": app.session.binding.calibration_id} if app.session and app.session.binding else None)
+        intent = "finish" if app.pc_pending_action else "scan" if app.session and app.session.stage == Stage.SCANNING else "idle"
+        reconstruction = app.session.reconstruction if app.session else None
+        relay.set_scan(binding, app.capture_epoch, intent, app.session.room.id if app.session and app.session.room else None,
+                       getattr(reconstruction, "path", None), getattr(reconstruction, "sequence", 0))
         raw = (json.dumps(app.view(), ensure_ascii=False, allow_nan=False, separators=(",", ":"))+"\n").encode()
         require(len(raw) <= MAX_BYTES, "Dashboard snapshot exceeds its budget")
         outgoing.write(raw)
@@ -458,14 +552,40 @@ def run(root, incoming, outgoing):
     try:
         emit()
         while True:
-            raw = incoming.readline(MAX_BYTES+1)
-            if not raw:
-                break
-            require(len(raw) <= MAX_BYTES and raw.endswith(b"\n"), "Native event exceeds its budget")
+            if app.session and (app.session.stage == Stage.SCANNING or app.pc_pending_action) and not relay.ready:
+                app.event({"event": "pc_error", "capture_epoch": app.capture_epoch})
+                emit()
+            try:
+                relay_event = relay.events.get_nowait()
+                raw = None
+            except queue.Empty:
+                try:
+                    raw = inbox.get(timeout=.1)
+                except queue.Empty:
+                    # The dashboard must learn worker readiness even before a scan.
+                    ready = relay.ready
+                    if ready != getattr(app, "_last_pc_ready", False):
+                        app._last_pc_ready = ready
+                        emit()
+                    continue
+                if not raw:
+                    break
+                require(len(raw) <= MAX_BYTES and raw.endswith(b"\n"), "Native event exceeds its budget")
             event = None
             try:
-                event = decode(raw)
+                event = decode(raw) if raw is not None else relay_event
                 app.event(event)
+                if event.get("event") == "stereo_observation":
+                    continue
+                if (event.get("event") in ("depth", "pc_model", "pc_mesh") and app.session and app.session.reconstruction
+                        and time.monotonic()-last_report >= 5 and reports < 120):
+                    reconstruction = app.session.reconstruction
+                    status, mesh = reconstruction.status(), reconstruction.mesh()
+                    print(f"Room scan: frames={status['accepted_frames']} vertices={len(mesh.vertices)} "
+                          f"triangles={len(mesh.triangles)} reliable={status['reliable_cells']} "
+                          f"uncertain={status['uncertain_cells']} gaussians={status.get('gaussians', 0)} "
+                          f"compute_ms={event.get('compute_ms', 0)} accepted_pixels={event.get('accepted_pixels', 0)}", file=sys.stderr)
+                    last_report, reports = time.monotonic(), reports+1
             except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration) as error:
                 if errors < 64:
                     kind = event.get("event", "invalid") if isinstance(event, dict) else "invalid"
@@ -475,7 +595,10 @@ def run(root, incoming, outgoing):
                 app.notice = "This action could not be completed. Check room alignment and your input."
             emit()
     finally:
-        app.close()
+        try:
+            app.close()
+        finally:
+            relay.close()
 
 
 if __name__ == "__main__":

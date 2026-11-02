@@ -31,7 +31,7 @@ int main(int argc,char** argv){
             signal(SIGINT,stop);signal(SIGTERM,stop);signal(SIGHUP,stop);signal(SIGPIPE,SIG_IGN);
             StereoSnapshots<BorrowedFrames::Image> snapshots;
             while(!stopped&&!api.stopping()&&frames.alive()&&owner.alive()){
-                const auto events=trace.read(producer.pid);exposure.read(exposureTrace,producer.pid);
+                const auto events=trace.read(producer.pid,0);exposure.read(exposureTrace,producer.pid);
                 for(const auto& event:events)if(auto image=frames.copy(event,api.framesRequested())){
                     image->metadata["source_session"]=api.address();
                     const auto& timing=image->metadata.at("capture_metadata");
@@ -40,6 +40,7 @@ int main(int argc,char** argv){
                 }
                 api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},
                     [&](const Json& request){return snapshots.latest(request,monotonicNs());},[&](){return snapshots.pair(monotonicNs());});
+                api.wait();
             }
             return 0;
         }

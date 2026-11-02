@@ -1,0 +1,20 @@
+{
+  "schema": "sfnp-room-vision-build-v1",
+  "opencv_version": "4.13.0",
+  "sources": {
+    "opencv": {
+      "repository": "opencv/opencv",
+      "commit": "fe38fc608f6acb8b68953438a62305d8318f4fcd",
+      "archive_url": "https://codeload.github.com/opencv/opencv/tar.gz/fe38fc608f6acb8b68953438a62305d8318f4fcd",
+      "archive_bytes": 95450266,
+      "archive_sha256": "6a7508554941c1a698c243b2212b2985ce59a65a3e0348d53c2158607d801e61"
+    },
+    "opencv_contrib": {
+      "repository": "opencv/opencv_contrib",
+      "commit": "d99ad2a188210cc35067c2e60076eed7c2442bc3",
+      "archive_url": "https://codeload.github.com/opencv/opencv_contrib/tar.gz/d99ad2a188210cc35067c2e60076eed7c2442bc3",
+      "archive_bytes": 55518735,
+      "archive_sha256": "8d2f5665a4f47fd6763eb75f5017676cbcdeb813074b32a9fda72c25d52abdd4"
+    }
+  }
+}

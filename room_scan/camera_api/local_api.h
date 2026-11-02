@@ -5,6 +5,7 @@
 #include <sys/random.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <poll.h>
 
 namespace room_camera_api {
 class LocalApi {
@@ -30,6 +31,16 @@ public:
     const std::string& address()const{return address_;}
     bool stopping()const{return stopping_;}
     bool framesRequested()const{for(const auto& client:clients_)if(client.frames)return true;return false;}
+    void wait(){
+        // Camera trace waits must not delay local API requests. A parked reader
+        // sleeps on its owned sockets; active capture checks fresh trace data
+        // every 2 ms without spinning or touching any native service settings.
+        std::array<pollfd,4> descriptors{};std::size_t count=0;
+        descriptors[count++]={listener_.get(),POLLIN,0};
+        for(const auto& client:clients_)descriptors[count++]={client.fd.get(),POLLIN,0};
+        if(::poll(descriptors.data(),count,framesRequested()?2:25)<0&&errno!=EINTR)
+            throw std::runtime_error("Camera API wait failed");
+    }
     template<class Describe,class Frame,class Pair>void poll(Describe describe,Frame frame,Pair pair){
         // Release disconnected slots before admitting a new control client.
         for(auto it=clients_.begin();it!=clients_.end();){char byte=0;const auto count=recv(it->fd.get(),&byte,1,MSG_PEEK|MSG_DONTWAIT);

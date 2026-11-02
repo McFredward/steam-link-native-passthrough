@@ -32,6 +32,9 @@ int main(){try{
     std::fill(left.begin(),left.end(),0);std::fill(right.begin(),right.end(),0);
     const auto unknown=matchStereo(left,right,220,.064f);
     for(float z:unknown.depth)check(z==0,"textureless areas remain unknown");
+    for(unsigned y=0;y<240;++y)for(unsigned x=0;x<320;++x)left[y*320+x]=right[y*320+x]=std::uint8_t((x%8<4)?230:20);
+    const auto repeated=matchStereo(left,right,220,.064f);
+    for(float z:repeated.depth)check(z==0,"repeated texture cannot become a unique depth match");
     Canvas image(128,128);image.line(-1e8f,64,1e8f,64,Teal);check(image.pixels.size()==128*128*4,"offscreen raster bounded");
     float x=0,y=0;check(!project({0,0,.1f},Frustum{},128,128,x,y),"behind-eye geometry excluded");
     check(project({0,0,-1},Frustum{},128,128,x,y)&&x==64&&y==64,"projection centre");
@@ -39,6 +42,13 @@ int main(){try{
     check(hitButton(state,20,20)=="test"&&hitButton(state,70,70).empty(),"controller panel hit bounds");
     check(hitButton(state,964,52)=="close"&&hitButton(Json::object(),964,52)=="close","top-right close works independently of page controls and camera availability");
     check(!hitClose(935,52)&&!hitClose(993,52)&&!hitClose(964,23)&&!hitClose(964,81),"close does not consume neighboring title or status clicks");
+    const Mat head=pose({1,1.5f,-.2f},{0,std::sin(.2f),0,std::cos(.2f)});
+    const V3 buttonWorld=transform(multiply(head,miniPanelPose()),{(964.f/1024-.5f)*MiniPanelWidth,(.5f-52.f/240)*(MiniPanelWidth*240.f/1024),0});
+    Mat controller;const V3 origin=transform(head,{0,-.2f,-.3f});
+    const V3 cz=normalized(origin-buttonWorld),cx=normalized(cross({0,1,0},cz)),cy=cross(cz,cx);
+    const std::array<V3,4> columns{cx,cy,cz,origin};for(unsigned c=0;c<4;++c){controller.m[0][c]=columns[c].x;controller.m[1][c]=columns[c].y;controller.m[2][c]=columns[c].z;}
+    const auto mini=miniPanelCoordinates(head,controller);
+    check(mini&&hitClose((*mini)[0],(*mini)[1]),"the controller ray hits X at its actual smaller in-room panel position");
     Json visual={{"world_revision",1},{"pending",nullptr},{"corners",Json::array()},
         {"room",{{"world_visuals_allowed",true},{"elements",Json::array()},
             {"mesh",{{"vertices",{{-.5f,-.5f,-2.f},{.5f,-.5f,-2.f},{0.f,.5f,-2.f}}},
@@ -46,8 +56,22 @@ int main(){try{
     MeshView measured;measured.update(visual,0);Canvas early(128,128),revealed(128,128);
     measured.render(early,Mat{},Frustum{},0);measured.render(revealed,Mat{},Frustum{},.3);
     check(early.pixels!=revealed.pixels,"new measured geometry has a visible reveal animation");
+    Canvas occlusion(64,64);std::vector<float> zbuffer;SurfaceCanvas surface(occlusion,zbuffer);
+    const SurfacePoint a{8,8,1,{0,0,-1},true},b{56,8,1,{1,0,-1},true},c{32,56,1,{.5f,1,-1},true};
+    surface.face(a,b,c,{40,180,220,80},false);const auto front=occlusion.pixels;
+    auto farA=a,farB=b,farC=c;farA.z=farB.z=farC.z=3;
+    surface.face(farA,farB,farC,{255,50,0,255},false);
+    check(occlusion.pixels==front,"a rear room surface cannot draw through a nearer measured surface");
+    check(occlusion.pixels[(32*64+32)*4+3]==80,"measured surfaces have a visible transparent fill");
+    check(occlusion.pixels[3]==0,"unobserved space stays fully transparent");
     visual["world_revision"]=2;measured.update(visual,1);
     check(measured.firstSeen.size()==3&&measured.firstSeen[0]==0,"existing geometry does not restart its animation on another observation");
+    visual["room"]["mesh"]["triangles"].push_back({0,2,1});visual["world_revision"]=3;measured.update(visual,2);
+    check(measured.faceFirstSeen.size()==2&&measured.faceFirstSeen[0]==0&&measured.faceFirstSeen[1]==0,"face identity is independent of triangle winding");
+    visual["room"]["mesh"]["vertices"].push_back({.5f,.5f,-2.f});visual["room"]["mesh"]["quality"].push_back("reliable");
+    visual["world_revision"]=4;measured.update(visual,3);
+    visual["room"]["mesh"]["triangles"].push_back({1,3,2});visual["world_revision"]=5;measured.update(visual,4);
+    check(measured.firstSeen[3]==3&&measured.faceFirstSeen.back()==4,"new connectivity has its own visible reveal time instead of inheriting old vertex ages");
     visual["room"]["world_visuals_allowed"]=false;measured.update(visual,2);
     check(!measured.allowed&&measured.vertices.empty(),"invalid room tracking removes world geometry");
     TextureOverlayImage upload;Canvas bitmap(32,16);bitmap.rect(0,0,32,16,Teal);unsigned calls=0;

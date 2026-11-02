@@ -156,6 +156,30 @@ class ReconstructionTests(unittest.TestCase):
             normal_z = (b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0])
             self.assertGreater(normal_z, 0.)
 
+    def test_three_available_quad_corners_form_only_their_measured_triangle(self):
+        reconstruction = Reconstruction(Binding(SESSION, ORIGIN, CALIBRATION))
+        reconstruction.integrate(frame(depths=(1., 1., 0., 0., 1., 0., 0., 0., 0.)))
+        mesh = reconstruction.mesh()
+        self.assertEqual(3, len(mesh.vertices))
+        self.assertEqual(1, len(mesh.triangles))
+        self.assertNotIn((-.05, 0., -1.), mesh.vertices)
+
+    def test_camera_rotation_and_translation_preserve_an_independent_room_wall(self):
+        binding = Binding(SESSION, ORIGIN, CALIBRATION)
+        reconstruction = Reconstruction(binding)
+        for sequence, yaw in enumerate((-.25, 0., .3), 1):
+            pose = Pose((sequence*.06, .7, .1), (0., math.sin(yaw/2), 0., math.cos(yaw/2)))
+            depths = []
+            for v in range(3):
+                for u in range(3):
+                    direction = pose.rotate(((u-1)/20, -(v-1)/20, -1.))
+                    depths.append((-2.-pose.position[2])/direction[2])
+            observation = replace(frame(sequence, binding=binding), camera_to_room=pose, depth_m=tuple(depths))
+            reconstruction.integrate(observation)
+        self.assertGreater(len(reconstruction.mesh().triangles), 0)
+        for point in reconstruction.mesh().vertices:
+            self.assertAlmostEqual(-2., point[2], places=6)
+
     def test_repeated_view_does_not_establish_reliable_coverage(self):
         reconstruction = Reconstruction(Binding(SESSION, ORIGIN, CALIBRATION))
         for sequence in range(1, 5):

@@ -32,30 +32,49 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.7**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.8**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
 ```
 
-It installs the Frame-local **Room Setup** dashboard and the manual Arcturus
-camera reader. After updating, select **Enable room capture** when offered.
-This uses temporary administrator access for setup; the reader then drops its
-privileges. It has no boot integration. A Frame reboot turns this access off;
-run the installer again to enable it for another session or choose **Stop room capture**.
+It installs **Room Setup** in the Frame's SteamVR dashboard and starts a
+read-only Arcturus reader for this session after the confirmed paired update.
+Camera access stays off after a Frame reboot; reopening the verified current
+feature installer enables it again. **Stop room capture** disables it immediately.
+No firmware, camera driver or native camera service is replaced.
 
-In Room Setup, choose **Scan a new room → Start scan**. Keep colour passthrough
-visible, look very slowly and pause briefly to capture detail. Move a little
-sideways for additional viewpoints. Real measured triangles build up; furniture,
-walls, doors and windows can be added with the controllers. The top-right **X**
-returns to the SteamVR menu, stops capture and preserves the open dashboard and
-Room Setup entry. The reader stays parked until another explicit scan request.
+This candidate reconstructs on a **Windows PC with an NVIDIA GPU**. The installer
+prepares a private CUDA/ONNX Runtime and NVIDIA C-Fast-FoundationStereo model
+(about 1.6 GB on first use, 5 GB free disk space required). It changes no system
+Python, CUDA toolkit or GPU driver. Wait for **PC reconstruction is running** and
+**keep the installer open** throughout the scan. At least 3 GB free NVIDIA VRAM
+is required; resolution and map size scale with available memory. This is a
+first test candidate, not a measured GPU compatibility list.
 
-The source has produced real head-pose-associated depth on the tested Frame.
-This is an experimental combined test version: visual alignment and scan quality
-still need wearer feedback. Automatic object recognition and game/Venture room
-adapters are pending. See [room capture](docs/development/ROOM-CAPTURE.md).
+In Room Setup, choose **Scan a new room → Start scan** with colour passthrough
+visible. Checked stereo images and exposure-time tracking travel to the PC over
+the installer's authenticated SSH connection. The Frame renders returned 3D
+Gaussian surface patches locally: new coverage reveals in turquoise, amber asks
+for another viewpoint, and unobserved gaps stay empty. Revisit surfaces from the
+side to refine them. These are depth-initialized geometric Gaussians, not a
+photometrically optimized radiance field.
+
+**Continue** extracts polygons from measured Gaussian neighbourhoods for review
+and saving. **Add furniture or surfaces** prepares the same surfaces for marking
+floors, walls, tables, doors, windows and furniture with the controllers. The
+native menu laser handles buttons; focused XR aim actions place world corners.
+The top-right **X** stops capture and returns to the SteamVR menu with the
+dashboard and Room Setup entry preserved. Closing the installer pauses PC
+reconstruction and retains the current map on the Frame.
+
+Software checks include the real ONNX model, rolling-row geometry, bilateral
+rays, Gaussian revisit refinement, visible-gap preservation, native Vulkan
+Gaussian shaders and install/rollback behaviour. Complete NVIDIA/headset
+performance, surface accuracy and controller usability still require wearer
+testing. Automatic recognition and game/Quest Scene API adapters remain pending.
+See [PC reconstruction](docs/development/ROOM-PC-RECONSTRUCTION.md).
 
 ## Native transparency, no colour replacement
 

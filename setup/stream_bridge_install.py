@@ -85,12 +85,16 @@ PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
 ROOM_PYTHON = ('__init__.py', 'app.py', 'capture.py', 'editor.py', 'geometry.py',
-               'model.py', 'store.py', 'workflow.py', '__main__.py', 'capture_session.py')
+               'model.py', 'store.py', 'workflow.py', '__main__.py', 'capture_session.py', 'fusion.py',
+               'pc_relay.py', 'pc_reconstruction.py')
 ROOM_CAMERA = 'frame/room-setup/sfnp-room-camera-native'
+ROOM_RENDERER = 'frame/room-setup/sfnp-room-renderer'
+ROOM_VISION = 'frame/room-setup/libsfnp-room-vision.so'
+ROOM_LICENSES = ('NativeCamera.txt', 'DejaVu.txt', 'nlohmann-json.txt', 'ArcturusOpenXR.txt', 'OpenXR.txt', 'OpenCV.txt', 'Open3D.txt',
+                 'NVIDIA-Open-Model.txt', 'NVIDIA-Stereo-Model-Card.txt')
+ROOM_BINARIES = frozenset({'frame/room-setup/sfnp-room-overlay', ROOM_CAMERA, ROOM_RENDERER, ROOM_VISION})
 ROOM_SESSION = 'frame/room-setup/room_scan/capture_session.py'
-ROOM_FILES = frozenset({'frame/room-setup/sfnp-room-overlay',
-                       ROOM_CAMERA, 'frame/room-setup/licenses/NativeCamera.txt',
-                       'frame/room-setup/licenses/DejaVu.txt', 'frame/room-setup/licenses/nlohmann-json.txt'} |
+ROOM_FILES = frozenset(ROOM_BINARIES | {'frame/room-setup/licenses/'+name for name in ROOM_LICENSES} |
                       {'frame/room-setup/room_scan/'+name for name in ROOM_PYTHON})
 ROOM_UNIT = 'sfnp-room-setup.service'
 ROOM_HOOK = '90-sfnp-room-setup.conf'
@@ -259,7 +263,7 @@ class Bundle:
         room_files = set(self.files) & ROOM_FILES
         engine.require(not room_files or room_files == ROOM_FILES, 'The room setup dashboard package is incomplete.')
         if room_files:
-            for name in ('frame/room-setup/sfnp-room-overlay', ROOM_CAMERA):
+            for name in ROOM_BINARIES:
                 binary = self.files[name]
                 engine.require(len(binary) >= 64 and binary[:7] == b'\x7fELF\x02\x01\x01'
                                and binary[18:20] == b'\xb7\x00', 'Unsupported native room component architecture.')
@@ -1611,7 +1615,7 @@ class FrameInstall:
         operations=self.legacy_operations()
         for name,raw in files.items():operations.append(self.tx.operation(self.root/name,raw))
         for path,raw in self.room_dashboard_files(bundle,snapshot).items():
-            operations.append(self.tx.operation(path,raw,mode=0o700 if path.name=='sfnp-room-overlay' else 0o600))
+            operations.append(self.tx.operation(path,raw,mode=0o700 if path.name in ('sfnp-room-overlay','sfnp-room-renderer') else 0o600))
         manifest=self.config/'vulkan/implicit_layer.d'/MANIFEST
         operations.append(self.tx.operation(manifest,e.encoded(layer_manifest(self.root/LIBRARY))))
         dropin=self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf'
@@ -1757,7 +1761,7 @@ class FrameInstall:
             observed=self.tx.current(path);desired=None if raw is None else {'kind':'file','bytes':base64.b64encode(raw).decode()}
             if str(path) in by_path:by_path[str(path)]['after']=desired
             else:
-                op=self.tx.operation(path,raw,mode=0o700 if path.name=='sfnp-room-overlay' else 0o600);operations.append(op);by_path[str(path)]=op
+                op=self.tx.operation(path,raw,mode=0o700 if path.name in ('sfnp-room-overlay','sfnp-room-renderer') else 0o600);operations.append(op);by_path[str(path)]=op
             if observed!=desired:
                 changes.append({'path':str(path),'before':observed,'after':desired,'mode':by_path[str(path)]['mode']})
         for op in operations:
@@ -1924,6 +1928,8 @@ class ReadOnlyView:
             e.relative(pin['path']);e.records({pin['path']:{k:pin[k] for k in ('bytes','sha256')}})
 
 def remote_request(engine,request,*,unit=None):
+    if request.get('command')=='bridge-room-pc-exchange':
+        return load_helper(engine,'steam_link_setup_room').exchange_frame(request['room'])
     e=engine;unit=unit or FrameInstall(e)
     command=request['command']
     view=ReadOnlyView(e,request['manifest']);pin=view.value['files']['frame/'+CAMERA_TOOL]
@@ -2026,7 +2032,7 @@ class Remote:
         self.engine_source=Path(engine.__file__).read_bytes()
         self.bridge_source=Path(__file__).read_bytes()
         self.helper_sources={name:Path(__file__).with_name(name+'.py').read_bytes() for name in
-                             ('steam_link_setup_checkpoint','steam_link_setup_frame','steam_link_setup_legacy')}
+                             ('steam_link_setup_checkpoint','steam_link_setup_frame','steam_link_setup_legacy','steam_link_setup_room')}
         self.camera_source=local_camera_source()
         self.checks=fixed_checks(self.engine_source,self.bridge_source,self.camera_source,*self.helper_sources.values())
 
@@ -2044,7 +2050,8 @@ class Remote:
         stage={'bridge-inventory':'frame_inventory','bridge-prepare':'frame_prepare',
                'bridge-commit':'frame_commit','bridge-undo':'undo',
                'bridge-health-baseline':'startup_baseline','bridge-health':'startup_health'}.get(command,'preflight')
-        if self.log:self.log.event(stage,'stage',command=command,status='started')
+        quiet=command=='bridge-room-pc-exchange'
+        if self.log and not quiet:self.log.event(stage,'stage',command=command,status='started')
         if self.session is None:
             # One authenticated SSH process for the entire wizard, including
             # Check/prepare/commit/health/Undo. OpenSSH keeps the connection;
@@ -2083,6 +2090,7 @@ class Remote:
                 failure=e.SetupError(str(error));failure._sfnp_public_connection_failure=True
                 raise failure from None
             raise e.SetupError('The SSH connection ended or timed out. The result is unconfirmed. Choose Try again to check the recorded state before continuing.') from None
+        if quiet:return result
         if result.get('error'):
             failure=result.get('failure',{})
             if type(failure)is not dict:failure={}
@@ -2111,6 +2119,16 @@ def request(bundle,command,**values):
     return result
 
 
+def start_room_companion(engine,remote,ui,context,local):
+    if context.get('room_companion') is not None or local.system!='Windows':return
+    helper=load_helper(engine,'steam_link_setup_room')
+    setup_directory=engine.no_links(Path(engine.__file__)).parent
+    if not (setup_directory/'room-pc-runtime.json').is_file():return
+    context['room_companion']=helper.Companion(
+        lambda message:remote.call({'command':'bridge-room-pc-exchange','room':message}),
+        setup_directory,local.root/'room-pc-runtime',ui,getattr(ui,'cancelled',lambda:False))
+
+
 def terminal_scope(engine,ui,remote):
     # An established OpenSSH session needs no terminal. Keeping normal RPCs in
     # the app preserves its progress/health/recovery display during long work.
@@ -2118,7 +2136,7 @@ def terminal_scope(engine,ui,remote):
 
 
 def manage_room_capture(engine,bundle,remote,ui,context,*,address,login,stop=False):
-    """An explicit session action; never part of boot, repair or native restart."""
+    """Arm or stop this session's reader without boot integration or a restart."""
     command='bridge-room-capture-stop' if stop else 'bridge-room-capture-enable'
     password=None
     try:
@@ -2518,6 +2536,7 @@ def run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=No
             # Keep its admitted live connection instead of asking again.
             context['paths_printed']=False
     finally:
+        if context.get('room_companion') is not None:context['room_companion'].close()
         for peer in context['peers']:
             close=getattr(peer,'close',None)
             if close:
@@ -2678,7 +2697,19 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
             item['activation_mode']=='active' for item in (report['pc'],frame)):
         recommended='check'
     if pc_finishing:actions=['retry','check','exit'];recommended='retry'
-    elif not pending and frame is not None and frame.get('room_capture_available') is True:
+    if (interactive and args.action is None and components_current and recommended=='check' and not pending
+            and frame is not None and frame.get('room_capture_available') is True
+            and frame.get('room_capture_state')!='armed' and not context.get('room_capture_auto_attempted')):
+        # This feature build automatically arms a verified current installation
+        # when opened again after reboot. Read-only CLI checks returned above;
+        # changed PC components cannot enter this path or touch the Frame.
+        context['room_capture_auto_attempted']=True
+        if manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user):
+            frame={**frame,'room_capture_state':'armed'}
+    if (interactive and args.action is None and components_current and recommended=='check' and not pending
+            and frame is not None and frame.get('room_capture_state')=='armed'):
+        start_room_companion(e,remote,ui,context,local)
+    if not pc_finishing and not pending and frame is not None and frame.get('room_capture_available') is True:
         actions.insert(0,'room_capture_stop' if frame.get('room_capture_state')=='armed' else 'room_capture')
     resumed=context.pop('confirmed_apply',None)
     if resumed is not None:
@@ -2699,7 +2730,11 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         return 0
     e.require(interactive and action in actions,'That action is not available for this checked package.')
     if action in ('room_capture','room_capture_stop'):
+        if action=='room_capture_stop' and context.get('room_companion') is not None:
+            context.pop('room_companion').close()
         manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user,stop=action=='room_capture_stop')
+        if action=='room_capture':start_room_companion(e,remote,ui,context,local)
+        if context.get('room_companion') is not None:return -1
         return 0
     if pc_finishing:
         if action!='retry':return 0
@@ -2732,6 +2767,8 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         if hasattr(ui,'version_plan'):ui.version_plan(pc=pc_versions,frame=frame_versions)
         if not confirm('bridge_confirm'):return 0
     context['operation_action']=action
+    if context.get('room_companion') is not None:
+        context.pop('room_companion').close()
     automation=PcOnlyAutomation if pc_plan or pc_scope is not None else Automation
     ports=automation(e,bundle,local,installed,remote,ui,context,factory,address,args.user)
     if action in ('install','update','repair') and not ports.confirm_runtime():return 0
@@ -2740,8 +2777,10 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         if result==0:
             ready=refresh_inventory()
             if not pc_plan and action in ('install','update','repair') and ROOM_FILES<=set(bundle.files) and ready is not None:
-                if ready.get('room_capture_available') is True and ready.get('room_capture_state')!='armed' and ui.confirm('bridge_room_capture_offer'):
+                if ready.get('room_capture_available') is True and ready.get('room_capture_state')!='armed':
                     manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user)
+                start_room_companion(e,remote,ui,context,local)
+                if context.get('room_companion') is not None:return -1
         return result
     if pending and action in ('install','update','repair','uninstall') and not (pc_scope is not None and not pc_plan):
         result=flow.run(action,reconcile=True)

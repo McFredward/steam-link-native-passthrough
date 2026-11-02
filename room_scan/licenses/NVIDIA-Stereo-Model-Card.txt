@@ -1,0 +1,199 @@
+---
+license: other
+license_name: nvidia-open-model-agreement
+license_link: https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/
+pipeline_tag: depth-estimation
+tags:
+- TAO Toolkit
+- computer-vision
+- depth-estimation
+- stereo-matching
+- disparity-estimation
+- stereo-depth
+- foundation-model
+- real-time
+- zero-shot
+- transformer
+- edgenext
+- convgru
+- pytorch
+- nvidia
+---
+
+<p align="center"><b>Model Card - C-Fast-FoundationStereo</b></p>
+
+#  C-Fast-FoundationStereo
+
+## Description
+
+The Fast-FoundationStereo model estimates the disparity of each pixel in a rectified binocular stereo pair of images. This is a transformer based foundational model which shows strong generalization running in real-time. This model is for research and evaluation purposes only.
+
+<p align="center">
+  <img src="https://nvlabs.github.io/Fast-FoundationStereo/static/media/intro.jpg" alt="Fast-FoundationStereo overview" width="75%">
+</p>
+
+*Fast-FoundationStereo delivers zero-shot stereo disparity estimation at real-time frame rates.*
+
+<p align="center">
+  <img src="https://nvlabs.github.io/Fast-FoundationStereo/static/media/bp2_vs_runtime.jpg" alt="Accuracy vs. runtime trade-off" width="75%">
+</p>
+
+*Accuracy vs. runtime: Fast-FoundationStereo runs over 10× faster than FoundationStereo while closely matching its zero-shot accuracy.*
+
+### License/Terms of Use
+
+GOVERNING TERMS: Use of this model is governed by the [NVIDIA Open Model Agreement](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/). **Additional Information**: The TAO Fast-FoundationStereo finetuning code is released under [Apache 2.0](https://huggingface.co/datasets/choosealicense/licenses/blob/main/markdown/apache-2.0.md).
+
+### Deployment Geography
+
+Global
+
+### Use Case
+
+Researchers and developers in the field of computer vision, specifically those interested in depth estimation, are expected to use this method for tasks such as three dimensional reconstruction, object detection, object pose estimation, and scene understanding.
+
+### Release Date
+
+Github [02/01/2026] via [https://github.com/NVlabs/Fast-FoundationStereo]
+
+## Reference(s)
+
+[Fast-FoundationStereo: Real-Time Zero-Shot Stereo Matching](https://arxiv.org/abs/2512.11130)
+
+## Model Architecture
+
+**Architecture Type:** Transformers and convolutional neural networks (CNNs).
+
+**Network Architecture:** The network contains three parts:  1) EdgeNeXt student module that distills the original FoundationStereo feature extractor.  2) Set of blocks (CNNs and transformers) that performs matching with long-range dependencies.  3) Reduced set of convGRU blocks.
+
+<p align="center">
+  <img src="https://nvlabs.github.io/Fast-FoundationStereo/static/media/pipeline.jpg" alt="Fast-FoundationStereo architecture" width="75%">
+</p>
+
+*Divide-and-conquer acceleration: feature extraction is distilled into a single student backbone, the refinement GRU is structurally pruned, and the cost-filtering network is built from blockwise neural-architecture-search candidates.*
+
+**Number of model parameters:** 14.6M.
+
+## Computational Load (Internal Only: For NVIDIA Models Only)
+
+**Cumulative Compute:** 8.76e+13
+
+**Estimated Energy and Emissions for Model Training:** 774.144
+
+## Input
+
+**Input Type(s):** A pair of two rectified binocular stereo images
+
+**Input Format(s):** Red, Green, Blue (RGB)
+
+**Input Parameters:** The input parameters to this model are rectified stereo images, specifically Two-Dimensional (2D) images from a camera like Zed.  In addition, the baseline is needed to convert disparity to depth.
+
+**Other Properties Related to Input:** Additional input properties:
+- No Alpha Channel or Pre-Processing Needed.  Bit:  24-bit.
+
+## Output
+
+**Output Type(s):** Disparity image
+
+**Output Format(s):** 16-bit unsigned integer
+
+**Output Parameters:** The output parameter of this model is the final 2D disparity map.
+
+**Other Properties Related to Output:** No Alpha Channel or Post-Processing Needed Bit:  16 bit.
+
+Our AI models are designed and/or optimized to run on NVIDIA GPU-accelerated systems. By leveraging NVIDIA’s hardware (e.g. GPU cores) and software frameworks (e.g., CUDA libraries), the model achieves faster training and inference times compared to CPU-only solutions.
+
+## Software Integration
+
+**Runtime Engine(s):**
+
+* NVIDIA TAO <br>
+* PyTorch <br>
+* TensorRT <br>
+* ONNXRuntime (via ONNX export) <br>
+
+**Supported Hardware Microarchitecture Compatibility:**
+
+* on NVIDIA Ampere <br>
+* NVIDIA Hopper <br>
+* NVIDIA Blackwell <br>
+
+**[Preferred/Supported] Operating System(s):**
+Linux
+
+## Model Version(s)
+
+v1.0: Initial model version with full capabilities, unpruned and trained.
+
+# Training and Evaluation Datasets:
+
+## Training Dataset
+
+**Data Modality:**
+Image
+
+**Image Training Data Size:**
+1 Million to 1 Billion Images.
+
+
+**Link:** Internal, proprietary dataset, and Stereo4D dataset
+
+**Data Collection Method by dataset**
+[Hybrid: Synthetic, Automatic/Sensors]
+
+**Labeling Method by dataset**
+[Hybrid: Synthetic, Automatic/Sensors]
+
+**Properties:** The training dataset includes: 1) a large-scale synthetic dataset featuring 1.4 million stereo pairs with large diversity of objects and scenes and high photorealism; 2) real dataset from Stereo4D (external)
+
+## Testing Dataset
+
+**Link:** Middlebury dataset
+
+**Data Collection Method by dataset**
+[Automatic/Sensors]
+
+**Labeling Method by dataset**
+[Automatic/Sensors]
+
+
+**Properties:** The dataset encompasses a wide range of scenarios, includes diverse three dimensional assets, captures stereo images under diversely randomized camera parameters, and achieves high fidelity in both rendering and spatial layouts.
+
+## Evaluation Dataset
+
+- We evaluated the model using public leaderboards well-known to the stereo community: <br>
+  Middlebury: https://vision.middlebury.edu/stereo/
+
+
+- This is the classic leaderboard for dense stereo matching, developed at Middlebury College. <br>
+  ETH3D: https://www.eth3d.net/
+
+
+- This is another popular leaderboard for stereo, developed at ETH. <br>
+  KITTI: https://www.cvlibs.net/datasets/kitti/eval_stereo.php
+
+**Data Collection Method by dataset**
+[Automatic/Sensors]
+
+** Labeling Method by dataset**
+[Automatic/Sensors]
+
+**Properties:**
+* The Middlebury Stereo dataset consists of high-resolution stereo sequences with complex geometry and pixel-accurate ground-truth disparity data. The ground-truth disparities were acquired using a novel technique that employs structured lighting and infrared paint. <br>
+
+* ETHD is a multi-view stereo benchmark / 3D reconstruction benchmark that covers a variety of indoor and outdoor scenes. Ground truth geometry was obtained using a high-precision laser scanner. A DSLR camera as well as a synchronized multi-camera rig with varying field-of-view was used to capture images. <br>
+* KITTI stereo dataset is a cornerstone of autonomous driving research, developed by the Karlsruhe Institute of Technology (KIT) and the Toyota Technological Institute at Chicago (TTIC). It provides real-world, high-resolution stereo imagery paired with precise ground-truth depth data collected from a moving vehicle in diverse urban environments.
+
+## Inference
+
+**Engine:** Tensor(RT)
+
+**Test Hardware :**
+* Zed Stereo Camera, 3090
+
+
+## Ethical Considerations
+
+NVIDIA believes Trustworthy AI is a shared responsibility and we have established policies and practices to enable development for a wide array of AI applications.  When downloaded or used in accordance with our terms of service, developers should work with their internal model team to ensure this model meets requirements for the relevant industry and use case and addresses unforeseen product misuse.
+
+Please report security vulnerabilities or NVIDIA AI Concerns [here](https://www.nvidia.com/en-us/support/submit-security-vulnerability/).

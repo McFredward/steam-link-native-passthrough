@@ -1,0 +1,127 @@
+{
+  "schema": "sfnp-room-pc-runtime-v1",
+  "python": "3.14",
+  "wheels": [
+    {
+      "name": "onnxruntime-gpu",
+      "version": "1.24.4",
+      "filename": "onnxruntime_gpu-1.24.4-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/5d/95/fa8c48e03790c979167d08164b34a8442c7074bca4c7253b4455497025de/onnxruntime_gpu-1.24.4-cp314-cp314-win_amd64.whl",
+      "bytes": 209597109,
+      "sha256": "4dde3d2f1039060c42b12fd446fc0da5b836cc65dceb4020ca60a04cffa1d90d"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.4",
+      "filename": "numpy-2.5.4-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/52/9a/e1e512ebc948d5b9dd33b08736760f0ebbed2848fd4eda1f553088a6dcee/numpy-2.5.4-cp314-cp314-win_amd64.whl",
+      "bytes": 12703552,
+      "sha256": "2ca144f15135b6212a5c47b1e2aeca6e412f102f95a2d5d88d8aec77eb255de3"
+    },
+    {
+      "name": "scipy",
+      "version": "1.18.1",
+      "filename": "scipy-1.18.1-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/52/94/d73da0d28f16c45bb9b0a5691b91610b0275c5ef0eb5e43c87cf2dc1bf31/scipy-1.18.1-cp314-cp314-win_amd64.whl",
+      "bytes": 37362755,
+      "sha256": "78a0d7c918e74a232394117160e7e3db503377572a45bcef8826e4ab8a35feba"
+    },
+    {
+      "name": "flatbuffers",
+      "version": "25.12.19",
+      "filename": "flatbuffers-25.12.19-py2.py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl",
+      "bytes": 26661,
+      "sha256": "7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "filename": "packaging-26.3-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl",
+      "bytes": 129956,
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+    },
+    {
+      "name": "protobuf",
+      "version": "7.36.2",
+      "filename": "protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/8a/55/b77bda4e5e5f5971fb51b07663694690e9afdb9402136c16a522bd621cad/protobuf-7.36.2-cp310-abi3-win_amd64.whl",
+      "bytes": 456514,
+      "sha256": "a300819d441e078a5608c0d3c709796bb548136058fda017ae51d425b44fd353"
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "filename": "sympy-1.14.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+      "bytes": 6299353,
+      "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "filename": "mpmath-1.3.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "bytes": 536198,
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+    },
+    {
+      "name": "nvidia-cublas-cu12",
+      "version": "12.6.4.1",
+      "filename": "nvidia_cublas_cu12-12.6.4.1-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/84/f7/985e9bdbe3e0ac9298fcc8cfa51a392862a46a0ffaccbbd56939b62a9c83/nvidia_cublas_cu12-12.6.4.1-py3-none-win_amd64.whl",
+      "bytes": 434535301,
+      "sha256": "9e4fa264f4d8a4eb0cdbd34beadc029f453b3bafae02401e999cf3d5a5af75f8"
+    },
+    {
+      "name": "nvidia-cudnn-cu12",
+      "version": "9.5.1.17",
+      "filename": "nvidia_cudnn_cu12-9.5.1.17-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/b6/b2/3f60d15f037fa5419d9d7f788b100ef33ea913ae5315c87ca6d6fa606c35/nvidia_cudnn_cu12-9.5.1.17-py3-none-win_amd64.whl",
+      "bytes": 565440743,
+      "sha256": "d7af0f8a4f3b4b9dbb3122f2ef553b45694ed9c384d5a75bab197b8eefb79ab8"
+    },
+    {
+      "name": "nvidia-cuda-runtime-cu12",
+      "version": "12.6.77",
+      "filename": "nvidia_cuda_runtime_cu12-12.6.77-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/fa/76/4c80fa138333cc975743fd0687a745fccb30d167f906f13c1c7f9a85e5ea/nvidia_cuda_runtime_cu12-12.6.77-py3-none-win_amd64.whl",
+      "bytes": 891773,
+      "sha256": "86c58044c824bf3c173c49a2dbc7a6c8b53cb4e4dca50068be0bf64e9dab3f7f"
+    },
+    {
+      "name": "nvidia-cufft-cu12",
+      "version": "11.3.0.4",
+      "filename": "nvidia_cufft_cu12-11.3.0.4-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/b4/38/36fd800cec8f6e89b7c1576edaaf8076e69ec631644cdbc1b5f2e2b5a9df/nvidia_cufft_cu12-11.3.0.4-py3-none-win_amd64.whl",
+      "bytes": 199356881,
+      "sha256": "6048ebddfb90d09d2707efb1fd78d4e3a77cb3ae4dc60e19aab6be0ece2ae464"
+    },
+    {
+      "name": "msvc-runtime",
+      "version": "14.51.36231",
+      "filename": "msvc_runtime-14.51.36231-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/57/99/0571bb13baed5596b7b941254a51ed1bb70fa81e6f8d2bac25b104a84aa3/msvc_runtime-14.51.36231-cp314-cp314-win_amd64.whl",
+      "bytes": 2110765,
+      "sha256": "55a017355394fa78f87dbab6967cf2131398671ca0a77f8c97dadfc6c6f3de38"
+    }
+  ],
+  "model": {
+    "filename": "c-fast-foundationstereo.onnx",
+    "url": "https://huggingface.co/nvidia/c-fast-foundationstereo/resolve/53a84e28a368f37e699776250215fcb450d6a109/onnx/c_fast_foundationstereo_bp2_dynbatch_dynhw.onnx",
+    "bytes": 103228473,
+    "sha256": "2c79bbb274dc0aef687a8732b987077e9e3aa26ff9dd653141cda48c57dad5d3",
+    "license": "NVIDIA Open Model License Agreement"
+  },
+  "licenses": {
+    "NVIDIA-Open-Model.txt": {
+      "bytes": 7903,
+      "sha256": "1c55b033d29ec6da97070305ec036bb6d82540e2cc7ab67fad44d8a89801e2d8"
+    },
+    "NVIDIA-Stereo-Model-Card.txt": {
+      "bytes": 7854,
+      "sha256": "5259f9f2675526f1db6bcb5823cd805ba6fbabba79dfd52ee34e51a212aa762c"
+    }
+  }
+}

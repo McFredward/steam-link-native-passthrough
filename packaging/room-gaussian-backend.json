@@ -1,0 +1,27 @@
+{
+  "schema": "sfnp-room-gaussian-backend-v1",
+  "name": "Spirula Studio",
+  "release": "v2026.10.30",
+  "source_repository": "harry7557558/spirula-studio",
+  "source_commit": "6ad73ef295f5a789aeabc7e3f827c1565b5f9db4",
+  "license": {
+    "url": "https://raw.githubusercontent.com/harry7557558/spirula-studio/6ad73ef295f5a789aeabc7e3f827c1565b5f9db4/LICENSE",
+    "bytes": 35149,
+    "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "identifier": "GPL-3.0"
+  },
+  "platforms": {
+    "windows": {
+      "url": "https://github.com/harry7557558/spirula-studio/releases/download/v2026.10.30/spirula-2026.10.30-windows-vulkan-x86_64.zip",
+      "bytes": 75446110,
+      "sha256": "dfaf1376ab78acf4bfbaaeb7a3f12b7c06ab30bf1d9eee6082100dbc1e7b71dd",
+      "binary": {"name": "spirula.exe", "bytes": 234968064, "sha256": "5ea84267b276ea92e62bc1521977c836dfa7141eb3b9e2a12637cc13a2a859f2"}
+    },
+    "linux_development": {
+      "url": "https://github.com/harry7557558/spirula-studio/releases/download/v2026.10.30/spirula-2026.10.30-ubuntu-vulkan-x86_64.zip",
+      "bytes": 79146043,
+      "sha256": "19e9fdabdfa73d26cabd7e078ea6b12f2f8b976e457d21b83d6a30e4921ad5a2",
+      "binary": {"name": "spirula", "bytes": 246295472, "sha256": "eaaff609fd1b53f55b70f6ab8a4b1186bbeb03e818a70759f6302492c375cb9c"}
+    }
+  }
+}

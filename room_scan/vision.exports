@@ -1,0 +1,4 @@
+SFNP_ROOM_VISION_1 {
+    global: sfnp_*;
+    local: *;
+};

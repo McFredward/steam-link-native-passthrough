@@ -1,0 +1,23 @@
+{
+  "repository": "isl-org/Open3D",
+  "commit": "1e7b17438687a0b0c1e5a7187321ac7044afe275",
+  "files": {
+    "LICENSE": {
+      "bytes": 1139,
+      "sha256": "e5439bd70250da5f17b3435ff9efb05e96e7f9fdc34248d3355b0026baadaa41"
+    },
+    "cpp/open3d/pipelines/integration/ScalableTSDFVolume.cpp": {
+      "bytes": 22361,
+      "sha256": "6fbc551a42a74c5f547829d80fc0fb896a9d6dc1cc1c3482418beeffdc49b252"
+    },
+    "cpp/open3d/pipelines/integration/UniformTSDFVolume.cpp": {
+      "bytes": 22024,
+      "sha256": "cb897c3b775858fdfe4375243958311f82b3a396b68fbb81fe528dbf36db93e4"
+    },
+    "cpp/open3d/pipelines/integration/MarchingCubesConst.h": {
+      "bytes": 20706,
+      "sha256": "5a50e70e2d9f8b19a40ccc7b84a076e953a8dd0ba36344993b2cdd02bbce12c4"
+    }
+  },
+  "adaptation": "Color-free projective integration and marching-cubes extraction adapted into room_scan/vision_fusion.cpp with standard containers, bounded staged updates and independent quality metadata. Revisited voxels cap effective history at 16 observations and decay past residuals so subsequent evidence can refine geometry and quality. Tables use std::array instead of Eigen; numeric tables unchanged."
+}

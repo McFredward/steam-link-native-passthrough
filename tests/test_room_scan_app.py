@@ -9,7 +9,7 @@ import tempfile
 import unittest
 
 from room_scan.app import Application, LABELS, run
-from room_scan.capture import Binding
+from room_scan.capture import Binding, Reconstruction
 from room_scan.geometry import RoomError
 from room_scan.model import Label
 from room_scan.store import RoomStore
@@ -24,7 +24,7 @@ class AppTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.store = RoomStore(self.temporary.name)
-        self.app = Application(self.store)
+        self.app = Application(self.store, reconstruction_factory=Reconstruction)
 
     def start(self):
         self.app.action("new")
@@ -93,6 +93,36 @@ class AppTests(unittest.TestCase):
         self.assertNotEqual("Stale guidance", self.app.view()["notice"])
         self.assertEqual("home", self.app.page)
 
+    def test_renderer_failure_pauses_acquisition_preserving_mesh_and_retry(self):
+        self.start()
+        self.depth()
+        before = self.app.session.reconstruction.mesh()
+        self.app.event(dict(event="renderer_unavailable", capture_epoch=0))
+        self.assertEqual(Stage.PAUSED, self.app.session.stage)
+        self.assertFalse(self.app.view()["capture_collecting"])
+        self.assertTrue(self.app.session.tracking_verified)
+        self.assertEqual(before, self.app.session.reconstruction.mesh())
+        self.assertIn("Choose Resume", self.app.view()["notice"])
+        self.app.event(dict(event="camera_resumed", binding=BINDING, tracking_valid=True))
+        self.assertEqual(Stage.SCANNING, self.app.session.stage)
+        self.assertEqual(before, self.app.session.reconstruction.mesh())
+        self.app.event(dict(event="close", capture_epoch=1))
+        self.app.action("new")
+        before = self.app.view()
+        self.app.event(dict(event="renderer_unavailable", capture_epoch=0))
+        self.assertEqual(before, self.app.view())
+
+    def test_renderer_failure_during_start_restores_prepare_without_capture(self):
+        self.app.action("new")
+        self.app.event(dict(event="camera_warming", capture_epoch=0))
+        self.app.event(dict(event="renderer_unavailable", capture_epoch=0))
+        state = self.app.view()
+        self.assertEqual("prepare", state["page"])
+        self.assertFalse(state["camera_check_pending"])
+        self.assertFalse(state["capture_active"])
+        self.assertIsNone(self.app.session)
+        self.assertIn("native room view could not start", state["notice"])
+
     def test_camera_refusal_has_a_visible_diagnostic_code(self):
         self.app.action("new")
         for reason in ["camera-count-unsupported", "camera-metadata-unavailable"]:
@@ -104,6 +134,27 @@ class AppTests(unittest.TestCase):
             self.assertFalse(view["capture_active"])
         self.assertIn("no calibrated camera stream",view["notice"])
         self.assertNotIn("not supported",view["notice"])
+
+    def test_capture_limit_preserves_visible_mesh_tracking_and_review(self):
+        self.app = Application(self.store, reconstruction_factory=lambda binding: Reconstruction(binding, max_vertices=12))
+        self.start()
+        self.depth()
+        before = self.app.session.reconstruction.mesh()
+        error_log = io.StringIO()
+        with redirect_stderr(error_log):
+            self.app.event(dict(event="depth", binding=BINDING, sequence=2, exposure_ticks=200,
+                pose=dict(position=[.3, 0., 0.], orientation_xyzw=[0., 0., 0., 1.]), width=3, height=3,
+                intrinsics=[20, 20, 1, 1], depth_m=[1]*9, confidence=[1]*9))
+        state = self.app.view()
+        self.assertEqual(Stage.PAUSED, self.app.session.stage)
+        self.assertTrue(state["room"]["world_visuals_allowed"])
+        self.assertEqual(before, self.app.session.reconstruction.mesh())
+        self.assertTrue(next(b for b in state["buttons"] if b["action"] == "review")["enabled"])
+        self.assertFalse(next(b for b in state["buttons"] if b["action"] == "resume")["enabled"])
+        self.assertIn("Your scan is preserved", state["notice"])
+        self.assertIn("capacity=vertices", error_log.getvalue())
+        self.app.action("review")
+        self.assertEqual("review", self.app.view()["page"])
 
     def test_invalid_events_log_bounded_metadata_and_keep_controller_alive(self):
         incoming=io.BytesIO(b'{"event":"unknown"}\n'*70)
