@@ -63,7 +63,7 @@ def required_sources(root=ROOT):
                   {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
                   {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
-                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h','room_scan/native_gpu.h',
+                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h','room_scan/native_dashboard.h','room_scan/native_gpu.h',
                    'tools/build_room_font.py','tools/build_room_overlay.sh','packaging/room-vulkan-headers.json'})
 
 
@@ -249,7 +249,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
         files['README.txt'] += (
             '\nEXPERIMENTAL ARCTURUS ROOM SETUP\n'
             'After the confirmed paired installation, open the Frame-local SteamVR dashboard and choose Room Setup.\n'
-            'Use the top-right X to close setup and stop capture. The dashboard entry remains available to open it again.\n'
+            'Use the top-right X to return to the SteamVR menu and stop capture. The dashboard stays open and Room Setup remains available to open again.\n'
             'Choose Scan a new room, then Start scan. Startup alone never acquires camera images.\n'
             'Use visible native colour passthrough. The tested Frame SteamVR 2.18.2 reports a camera but exposes no calibrated camera stream to this app. Live scanning is blocked on that runtime. Projection alignment and active-game coexistence are not hardware verified.\n'
             'If the camera source cannot be verified, scanning stays unavailable. This package contains no simulated room fallback.\n'

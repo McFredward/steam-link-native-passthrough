@@ -164,6 +164,38 @@ behavior. Native transport, rendering resources and game composition are unchang
 The separate manual camera API below is **not included or autostarted** by this
 installer candidate.
 
+### Candidate 6: close only Room Setup and retain the dashboard entry
+
+The wearer found that candidate 5 received the X click but the active dashboard
+panel reappeared. A diagnostic SteamVR client then exposed a separate event bug:
+the application treated every `VREvent_ProcessQuit` notification as its own quit
+request. Exiting another client could therefore remove the Room Setup entry.
+
+Candidate **0.3.16-roomscan.6** stops only for a real `VREvent_Quit` request.
+Closing Room Setup selects the existing Frame menu
+`valve.steam.gamepadui.main` through `IVROverlay::ShowDashboard`. The dashboard
+stays open; Room Setup's owned world visuals and capture stop, and its entry
+remains available. Closing the small in-world controls preserves a dashboard
+that was already hidden. Reopening waits for the room panel to become active
+again, so stale shown events cannot undo a close.
+
+The temporary headset build with SHA256
+`b308c42f5a3ef49ef0fafeab053c6997f11a887376aa8355374c369a346acb2e`
+completed close and reopen on the Frame. Actual overlay inventory showed the
+room panel hidden and SteamVR's menu visible after close, then the room panel
+visible after reopening. Other native clients exited without terminating the
+room process. SteamVR and XRService retained their process identities, installed
+files were unchanged, and the temporary test was removed. The wearer accepted
+this room-only behavior on 2026-11-02. The test restored the installed candidate 5
+after its first reopen; this explains the wearer's subsequent X click reaching
+the old implementation. This result validates the close/reopen behavior, not a
+live room scan or the candidate 6 installer transaction on a headset.
+
+Software regression checks cover menu selection with an open dashboard,
+closing controls with a hidden dashboard, unavailable menu/interface handling,
+and unrelated process-exit notifications. The installer still uses the public
+camera source; the manual native camera prototype remains outside this package.
+
 ## Camera source and remaining hardware gate
 
 The separate [manual native camera API prototype](../../probe/ROOM-CAMERA-NATIVE.md)

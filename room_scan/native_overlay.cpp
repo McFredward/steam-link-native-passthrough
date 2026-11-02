@@ -4,6 +4,7 @@
 #include "native_view.h"
 #include "native_present.h"
 #include "native_registration.h"
+#include "native_dashboard.h"
 #include "native_gpu.h"
 #include <cerrno>
 #include <cstdio>
@@ -172,6 +173,7 @@ int main(int argc,char** argv){
         signal(SIGTERM,signalStop);signal(SIGINT,signalStop);signal(SIGHUP,signalStop);signal(SIGPIPE,SIG_IGN);
         Runtime runtime;if(!runtime.initialize(library)||!runtime.create(root))throw std::runtime_error("Native dashboard setup unavailable");
         Backend backend;if(!backend.start(root,data))throw std::runtime_error("Room controller unavailable");
+        DashboardControl dashboardControl(runtime.overlay,runtime.panel);
         auto origin=std::make_shared<const std::string>(randomId());
         std::atomic<std::uint64_t> beginCapture{0},captureEpoch{0};
         std::atomic<bool> endWorker{false},invalidate{false},roomClosed{false};
@@ -212,15 +214,18 @@ int main(int argc,char** argv){
         Canvas panel(1024,800),hud(1024,240);std::array<Canvas,2> worlds{Canvas(512,512),Canvas(512,512)};MeshView mesh;
         std::array<bool,64> triggers{},seenControllers{};std::string hovered,keyboardEvent="rename";bool spatial=false,originInvalid=false;double lastPanel=0;
         std::array<Mat,64> controllerPoses{};std::array<bool,64> controllerValid{};
-        double lastRenderReport=0;unsigned renderReports=0;bool closePending=false;
+        double lastRenderReport=0;unsigned renderReports=0,reopenReports=0,processReports=0;bool closePending=false,closeHidden=false;
         const auto action=[&](const std::string& text){
             if(text=="close"){
                 if(roomClosed.exchange(true))return;
+                closeHidden=false;
                 beginCapture=0;const auto epoch=captureEpoch.fetch_add(1)+1;
                 closePending=!backend.send({{"event","close"},{"capture_epoch",epoch}});
                 runtime.overlay->HideKeyboard();
                 runtime.overlay->HideOverlay(runtime.panel);runtime.overlay->HideOverlay(runtime.hud);
                 for(auto handle:runtime.world)runtime.overlay->HideOverlay(handle);
+                if(dashboardControl.requestClose())std::fprintf(stderr,"Room dashboard: returned to SteamVR menu\n");
+                else std::fprintf(stderr,"Room dashboard: SteamVR menu unavailable\n");
                 spatial=false;hovered.clear();controllerValid.fill(false);triggers.fill(false);seenControllers.fill(false);
                 std::fprintf(stderr,"Room window closed; capture cancelled and dashboard entry retained\n");
                 return;
@@ -252,16 +257,25 @@ int main(int argc,char** argv){
             {"notice","Diagnostic code: room-graphics-unavailable"},{"buttons",Json::array()},{"room",nullptr},
             {"pending",nullptr},{"corners",Json::array()},{"world_revision",0}});
         while(!stopping&&backend.alive){
+            if(roomClosed&&!closeHidden&&!runtime.overlay->IsActiveDashboardOverlay(runtime.panel)){
+                closeHidden=true;
+                std::fprintf(stderr,"Room dashboard: room panel inactive, SteamVR dashboard visible=%d\n",int(runtime.overlay->IsDashboardVisible()));
+            }
             if(closePending&&backend.send({{"event","close"},{"capture_epoch",captureEpoch.load()}}))closePending=false;
             const double now=seconds();const auto state=runtime.graphicsAvailable?backend.latest():graphicsUnavailable;VREvent_t event{};
             for(unsigned n=0;n<64&&runtime.system->PollNextEvent(&event,sizeof(event));++n){
-                if(event.eventType==EVREventType_VREvent_Quit||event.eventType==EVREventType_VREvent_ProcessQuit)stopping=1;
+                if(roomQuitRequested(event))stopping=1;
+                if(event.eventType==EVREventType_VREvent_ProcessQuit&&processReports++<16)
+                    std::fprintf(stderr,"Room application: client exit ignored pid=%u\n",event.data.process.pid);
                 if(event.eventType==EVREventType_VREvent_ChaperoneUniverseHasChanged||event.eventType==EVREventType_VREvent_SeatedZeroPoseReset){
                     std::atomic_store(&origin,std::make_shared<const std::string>(randomId()));invalidate=true;originInvalid=true;spatial=false;}
             }
             for(unsigned n=0;n<64&&runtime.overlay->PollNextOverlayEvent(runtime.panel,&event,sizeof(event));++n){
                 if(event.eventType==EVREventType_VREvent_Quit)stopping=1;
-                if(event.eventType==EVREventType_VREvent_OverlayShown){roomClosed=false;lastPanel=0;}
+                if(event.eventType==EVREventType_VREvent_OverlayShown&&(!roomClosed||closeHidden)
+                    &&runtime.overlay->IsActiveDashboardOverlay(runtime.panel)){
+                    const bool reopened=roomClosed.exchange(false);closeHidden=false;lastPanel=0;
+                    if(reopened&&reopenReports++<32)std::fprintf(stderr,"Room dashboard: reopened after close\n");}
                 if(event.eventType==EVREventType_VREvent_MouseButtonUp&&event.data.mouse.button==EVRMouseButton_VRMouseButton_Left
                     &&hitClose(event.data.mouse.x,800-event.data.mouse.y)){action("close");continue;}
                 if(roomClosed)continue;
