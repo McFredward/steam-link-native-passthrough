@@ -91,6 +91,7 @@ class Application:
                 self.session = None
                 self.provider.close()
                 self.starting = False
+                self.pc_pending_action = None
                 self.draft = self.pending = None
                 self.page = "home"
                 self.world_revision += 1
@@ -185,6 +186,7 @@ class Application:
             self.page = "saved"
             self.world_revision += 1
         elif action == "cancel":
+            self.pc_pending_action = None
             if self.session and self.session.stage not in (Stage.CANCELLED, Stage.SAVED):
                 if self.session.room and self.session.binding:
                     self.checkpoint()
@@ -342,6 +344,7 @@ class Application:
             self.page = self.camera_request_page if self.camera_request_page in ("prepare", "alignment") else "scan"
             self.starting = False
         elif kind == "renderer_unavailable":
+            self.pc_pending_action = None
             if self.session and self.session.stage == Stage.SCANNING:
                 self.session.pause()
             self.starting = False
@@ -371,6 +374,7 @@ class Application:
                 self.notice = ""
                 self.world_revision += 1
         elif kind == "tracking_lost":
+            self.pc_pending_action = None
             if self.session and self.session.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW):
                 self.session.tracking_verified = False
                 self.session.stage = Stage.PAUSED
@@ -491,6 +495,9 @@ class Application:
                      "elements": [e.to_dict() for e in self.aligned_preview.elements]}
         if state is not None and self.page in ("home", "prepare", "alignment", "saved"):
             state = {**state, "world_visuals_allowed": False, "mesh": None}
+        if self.pc_pending_action:
+            for item in buttons:
+                item["enabled"] = False
         return {"schema": "sfnp-room-dashboard-v1", "page": self.page, "title": title, "subtitle": subtitle,
                 "notice": self.notice, "step": step, "buttons": buttons,
                 "capture_active": bool(self.session and self.session.provider_open),
