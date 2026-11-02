@@ -32,32 +32,54 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.7** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.8** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
 ```
 
-Er installiert das englischsprachige Frame-Dashboard **Room Setup** und den
-manuellen Arcturus-Kameraleser. Nach dem Update **Enable room capture** wählen.
-Die Einrichtung benötigt kurz Administratorzugriff; anschließend läuft der
-Leser ohne Root-Rechte. Nach einem Frame-Neustart bleibt dieser Zugriff aus.
-Im Installer lässt er sich erneut aktivieren oder mit **Stop room capture** beenden.
+Der Installer richtet **Room Setup** im SteamVR-Dashboard der Frame ein und
+aktiviert nach dem bestätigten gemeinsamen Update den schreibgeschützten
+Arcturus-Leser für diese Sitzung. Nach einem Frame-Neustart bleibt der Zugriff
+aus; erneutes Öffnen des geprüften aktuellen Feature-Installers aktiviert ihn
+wieder. **Stop room capture** beendet ihn sofort. Firmware, Kameratreiber und
+der native Kameradienst werden nicht ersetzt.
 
-In Room Setup **Scan a new room → Start scan** wählen. Farb-Passthrough sichtbar
-lassen, sehr langsam umsehen und kurz stillhalten, um Details aufzunehmen.
-Für zusätzliche Blickpunkte auch etwas seitlich bewegen. Echte gemessene
-Polygone entstehen; Möbel, Wände, Türen und Fenster lassen sich per Controller
-ergänzen. Das **X oben rechts** beendet die Aufnahme und kehrt zum SteamVR-Menü
-zurück. Dashboard und Eintrag bleiben erhalten; der Leser wartet anschließend
-ohne Bildzugriffe auf den nächsten ausdrücklich gestarteten Scan.
+Diese Variante berechnet den Scan auf einem **Windows-PC mit NVIDIA-GPU**.
+Der Installer bereitet eine private CUDA/ONNX-Laufzeit und das Modell NVIDIA
+C-Fast-FoundationStereo vor: beim ersten Mal etwa 1,6 GB Download, mindestens
+5 GB freier Speicherplatz. System-Python, CUDA-Toolkit und GPU-Treiber werden
+nicht geändert. Auf **PC reconstruction is running** warten und den
+**Installer während des Scans geöffnet lassen**. Mindestens 3 GB freier
+NVIDIA-Grafikspeicher werden benötigt; Auflösung und Kartengröße passen sich
+an. Dies ist ein erster Teststand, keine vermessene GPU-Kompatibilitätsliste.
 
-Die Kameraquelle hat auf der Frame echte Tiefenbilder mit zugeordneter Kopfpose
-geliefert. Diese kombinierte Testversion benötigt noch Rückmeldung zur sichtbaren
-Ausrichtung und Scanqualität. Automatische Objekterkennung und die Raumdaten-
-Anbindung an Spiele/Venture stehen noch aus. Details stehen in der
-[Raumscan-Dokumentation](docs/development/ROOM-CAPTURE.md).
+Auf der Frame **Scan a new room → Start scan** wählen und Farb-Passthrough
+sichtbar lassen. Geprüfte Stereobilder und die Kopfposen zum Aufnahmezeitpunkt
+werden über die authentifizierte SSH-Verbindung des Installers an den PC
+übertragen. Die Frame zeichnet die zurückgesendeten Gauß-Flächen lokal:
+Türkis zeigt neue Abdeckung, Bernstein fordert weitere Blickwinkel an,
+unbeobachtete Lücken bleiben offen. Erneutes Betrachten von der Seite
+verfeinert vorhandene Flächen. Die Vorschau verwendet geometrische,
+aus Tiefendaten aufgebaute Gauß-Flächen; ein fotometrisch optimiertes
+Radiance Field ist noch nicht enthalten.
+
+**Continue** erzeugt Polygone aus gemessenen Gauß-Nachbarschaften zum Prüfen
+und Speichern. **Add furniture or surfaces** bereitet dieselben Flächen zum
+Markieren von Boden, Wänden, Tischen, Türen, Fenstern und Möbeln vor.
+Buttons verwenden den nativen Menü-Laser; Raumecken werden mit den Aim-Aktionen
+der aktiven XR-Ansicht platziert. **X oben rechts** beendet die Aufnahme und
+kehrt zum SteamVR-Menü zurück; Dashboard und Eintrag bleiben erhalten.
+Schließen des Installers pausiert die PC-Berechnung und erhält die aktuelle
+Karte auf der Frame.
+
+Softwareprüfungen umfassen das echte ONNX-Modell, Aufnahmezeit-Geometrie,
+beidseitige Strahlprüfung, laufende Gauß-Verfeinerung, offene Messlücken,
+native Vulkan-Gauß-Shader und Installation/Rollback. Geschwindigkeit und
+Genauigkeit mit NVIDIA/Frame sowie die Bedienung benötigen noch den Tragetest.
+Automatische Erkennung und Spiele-/Quest-Scene-API-Adapter stehen noch aus.
+Siehe [PC-Rekonstruktion](docs/development/ROOM-PC-RECONSTRUCTION.md).
 
 ## Native Transparenz, kein Farbersatz
 

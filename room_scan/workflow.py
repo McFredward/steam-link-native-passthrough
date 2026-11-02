@@ -5,7 +5,7 @@ from dataclasses import replace
 from enum import Enum
 import uuid
 
-from .capture import ArcturusProviderUnavailable, Binding, DepthFrame, Reconstruction
+from .capture import ArcturusProviderUnavailable, Binding, CaptureCapacityError, DepthFrame, Reconstruction
 from .geometry import RoomError, require
 from .model import Element, Label, Room, text
 
@@ -22,7 +22,7 @@ class Stage(str, Enum):
 
 
 class ScanSession:
-    def __init__(self, name="My Room", *, provider=None, previous: Room | None = None):
+    def __init__(self, name="My Room", *, provider=None, previous: Room | None = None, reconstruction_factory=Reconstruction):
         text(name)
         require(previous is None or isinstance(previous, Room), "Invalid previous room")
         self.name, self.previous = name, previous
@@ -36,6 +36,8 @@ class ScanSession:
         self.conflicts = {}
         self.provider_open = False
         self.tracking_verified = False
+        self.reconstruction_factory = reconstruction_factory
+        self.capacity_reached = False
 
     def start(self):
         require(self.stage in (Stage.CHECKING, Stage.UNAVAILABLE), "Scan cannot start in this state")
@@ -67,9 +69,15 @@ class ScanSession:
         else:
             self.room = Room(str(uuid.uuid4()), self.name, 0, binding.origin_id,
                              binding.calibration_id, test_only=binding.test_only)
-        self.reconstruction = Reconstruction(binding)
-        if self.previous is not None:
-            self.reconstruction.retain_aligned_mesh(self.previous.mesh)
+        try:
+            self.reconstruction = self.reconstruction_factory(binding)
+            if self.previous is not None:
+                self.reconstruction.retain_aligned_mesh(self.previous.mesh)
+        except (RuntimeError, RoomError, OSError, AttributeError):
+            self.close()
+            self.stage = Stage.UNAVAILABLE
+            self.message = "Native room fusion is unavailable. Check for an update and try again."
+            return False
         self.tracking_verified = True
         self.stage = Stage.SCANNING
         self.message = "Look around slowly and capture surfaces from several viewpoints."
@@ -79,6 +87,11 @@ class ScanSession:
         require(self.stage == Stage.SCANNING, "Scan is not collecting observations")
         try:
             count = self.reconstruction.integrate(frame)
+        except CaptureCapacityError:
+            self.capacity_reached = True
+            self.stage = Stage.PAUSED
+            self.message = "Capture limit reached. Your scan is preserved. Choose Continue to review and save this area."
+            raise
         except RoomError as error:
             self.tracking_verified = False
             self.stage = Stage.PAUSED
@@ -93,7 +106,7 @@ class ScanSession:
         self.stage, self.message = Stage.PAUSED, "Scan paused. Existing measurements are preserved."
 
     def resume(self, binding: Binding, *, tracking_valid: bool):
-        require(self.stage == Stage.PAUSED and type(tracking_valid) is bool and tracking_valid,
+        require(self.stage == Stage.PAUSED and not self.capacity_reached and type(tracking_valid) is bool and tracking_valid,
                 "Valid tracking is required to resume")
         if (binding.origin_id != self.binding.origin_id or binding.calibration_id != self.binding.calibration_id
                 or binding.test_only != self.binding.test_only):
@@ -202,6 +215,8 @@ class ScanSession:
         if self.provider_open:
             self.provider.close()
             self.provider_open = False
+        if self.reconstruction is not None and callable(getattr(self.reconstruction, "close", None)):
+            self.reconstruction.close()
 
     def __enter__(self):
         return self
@@ -218,7 +233,8 @@ class ScanSession:
                 "origin_id": self.room.origin_id if self.room else None,
                 "test_only": self.binding.test_only if self.binding else None,
                 "can_add_element": self.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW),
-                "can_review": self.stage in (Stage.SCANNING, Stage.PAUSED) and world_visuals and bool(mesh and mesh.triangles),
+                "can_review": self.stage in (Stage.SCANNING, Stage.PAUSED) and world_visuals and bool(mesh and mesh.triangles or
+                    self.reconstruction and self.reconstruction.status().get("measured_faces", 0)),
                 "can_save": self.stage == Stage.REVIEW and world_visuals and not self.review_issues(),
                 "progress": self.reconstruction.status() if self.reconstruction else None,
                 "world_visuals_allowed": world_visuals,

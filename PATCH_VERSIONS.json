@@ -1,5 +1,5 @@
 {
   "schema": "sfnp-patch-versions-v1",
-  "pc": "0.3.11",
-  "frame": "0.3.7-roomscan.7"
+  "pc": "0.3.12-roomscan.8",
+  "frame": "0.3.8-roomscan.8"
 }

@@ -1,0 +1,27 @@
+{
+  "repository": "KhronosGroup/OpenXR-SDK",
+  "tag": "release-1.1.53",
+  "commit": "75c53b6e853dc12c7b3c771edc9c9c841b15faaa",
+  "files": {
+    "openxr/openxr.h": {
+      "bytes": 526161,
+      "sha256": "6583dbced9d84b46f493d8de4f8500723eb72b0a01a385172e1ad43e0fc4b319",
+      "source": "include/openxr/openxr.h"
+    },
+    "openxr/openxr_platform_defines.h": {
+      "bytes": 3912,
+      "sha256": "59a5369c34013beeea505aa0465768acad558ac016bab3320780e2a653a07bfb",
+      "source": "include/openxr/openxr_platform_defines.h"
+    },
+    "openxr/openxr_platform.h": {
+      "bytes": 35145,
+      "sha256": "e5576a710cbfb648419a3da2ed1395bce57adf96893b776e61e1546603d56b66",
+      "source": "include/openxr/openxr_platform.h"
+    },
+    "xr_linear.h": {
+      "bytes": 39337,
+      "sha256": "ed9772e2bbc576ee5cca40a79bd2bdf19d2ee01a7af6184498fbb1f5b2ae900f",
+      "source": "src/common/xr_linear.h"
+    }
+  }
+}

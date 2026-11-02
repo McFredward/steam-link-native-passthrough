@@ -1,13 +1,15 @@
 # Arcturus room capture
 
-Status: **candidate 7 combines the manual native scan source and dashboard X**.
+Status: **candidate 7's measurement path works, but its visible scan failed the
+wearer test. Candidate 8 is being developed; it is not yet an accepted build.**
 The source produced 19 real depth frames with 67,531 measurements in a 12-second
 Frame test. Replaying these actual observations through the room controller
 built 41,690 vertices and 8,101 triangles; close/checkpoint and a new session
-passed. This establishes a working measurement and reconstruction path. Wearer
-validation of the complete installed flow, visible alignment and room accuracy
-is still required. This is not Quest Scene API compatibility or automatic object
-recognition.
+passed. The installed wearer test subsequently produced sparse moving speckles,
+not a room-aligned surface preview. These measurements establish acquisition and
+reconstruction only. Visible stability, incremental coverage and the complete
+installed flow remain acceptance requirements. This is not Quest Scene API
+compatibility or automatic object recognition.
 
 ## Headset flow
 
@@ -15,12 +17,15 @@ The entry point is the **Frame-local SteamVR dashboard icon “Room Setup”**.
 There is no Steam Library application. The installed user service starts the
 small overlay process with SteamVR. Opening its panel never starts capture;
 “Scan a new room” followed by “Start scan” is explicit consent to acquisition.
-After installing candidate 7, separately choose **Enable room capture** in the
-installer. Temporary administrator access only duplicates existing capture
+Candidate 7 requires a separate **Enable room capture** action. The candidate 8
+installer automatically enables the checked reader after the confirmed Frame
+installation, and when reopened interactively on a verified current paired
+installation. Read-only checks and PC-only updates never arm capture or modify
+the Frame. Temporary administrator access only duplicates existing capture
 descriptors and opens passive readers. The reader drops privileges, reads no
 pixels while parked and is never configured to start at boot. Stop is available
 in the installer; reboot leaves it inactive. The Room Setup dashboard's existing
-user service is separate from this manual camera session.
+user service is separate from this temporary camera session.
 
 The design follows Meta's [Space Setup and semantic Scene Model](https://developers.meta.com/vr/documentation/unity/unity-mr-utility-kit-manage-scene-data/):
 prepare, observe the room build up, enter semantic elements during capture,
@@ -30,8 +35,9 @@ review and explicitly save. Colours and exact interactions are our own.
    Missing images/calibration produce an unavailable message, with no simulated
    scan, fabricated room, or guessed completion percentage.
 2. **Scan.** The native renderer overlays actual reconstructed triangles.
-   New vertices reveal over 250 ms. Reliable measured surfaces use turquoise;
-   uncertain surfaces use amber hatching. Holes have no invented geometry.
+   Candidate 8 reveals new measurements in cyan, then settles to a light filled
+   triangle mesh with white edges. Uncertain surfaces use subtle world-space
+   hatching. Holes have no invented geometry.
    Move slowly and translate the headset to obtain independent views.
 3. **Enter elements.** Choose Floor, Ceiling, Wall, Door, Window, Table, Couch,
    Bed, Storage or Other. Point at reliable mesh and press the trigger to mark
@@ -41,6 +47,8 @@ review and explicitly save. Colours and exact interactions are our own.
    must agree with a rectangle within 3 cm. The preview can be undone before
    confirmation. Furniture volumes extend below the measured top; adjust their
    height in 5 cm steps. Door/window entry first selects the containing wall.
+   Authored surfaces have translucent blue faces and outlines; measured corners
+   have blue and white handles.
 4. **Edit.** Rename, re-measure or remove elements, undo edits, or continue scanning.
    Lists paginate. Confirmed authored elements are retained while mesh grows.
    The dashboard holds all controls; a smaller controller-ray HUD provides the
@@ -55,12 +63,179 @@ review and explicitly save. Colours and exact interactions are our own.
    Dimensions must agree within 5 cm or 5%; gravity must agree. Save creates a
    new revision while preserving room/element IDs and the previous revision.
 
-The 3D feedback is separate from the dashboard: two eye-specific public OpenVR
-projection overlays plus a small head-relative control panel. This keeps work
-outside Valve's compositor callbacks and leaves native reprojection intact.
-Local overlay visibility was established by the earlier
-[world-reference diagnostic](WORLD-STABILITY.md); **this new projection renderer,
-controller mapping and alignment accuracy still require a headset check**.
+The 3D feedback is separate from the dashboard. Candidate 8 keeps the existing
+OpenVR dashboard, keyboard, controller input and room-only X, and starts an owned
+native OpenXR MR renderer on Start/Resume. It submits alpha-blended geometry
+with per-eye depth swapchains using the runtime's predicted views. The child
+reads no camera data and never changes or restarts native services. Closing it
+restores the SteamVR menu and preserves the Room Setup entry.
+
+The two APIs' tracking spaces are not assumed identical. The renderer reports
+both eye poses at an observed monotonic instant, paired with a bounded raw-clock
+measurement. The parent obtains the corresponding historical OpenVR head pose
+and public eye transforms. Three consistent bilateral observations establish a
+frozen space registration. Changed origins invalidate visible geometry and pause
+capture. Display prediction never replaces the historical exposure poses used
+for stereo reconstruction.
+
+### Candidate 8 renderer investigation and scoped acceptance
+
+The visual reference was checked against an actual
+[Quest 3 Scene Scan tutorial](https://www.youtube.com/watch?v=GhxQs_508Lc&t=162s):
+the light triangular coverage and remaining holes at 2:42, the compact completion
+card around 3:05, and translucent blue wall planes with corner handles around
+3:47. This informs the flow and feedback; it does not supply copied assets or
+automatic object recognition.
+
+The Frame's asymmetric raw frustums exposed a vertical raster error hidden by
+the previous symmetric tests. On the measured device, the old formula differed
+from the public native projection matrices by about 18–20% of image height.
+Correcting the raster and view transform aligned a stationary projection image,
+but its live overlay still lagged during movement. Prediction and paired
+publication reduced the residual without achieving the fixed reference's
+stability. This projection path is not the accepted production world renderer.
+
+A native OpenXR reference, derived from Arcturus' MIT-licensed Vulkan example,
+then displayed real geometry with alpha blending and per-eye depth. The wearer
+accepted normal-motion stability for the first iteration; a small residual during
+very rapid movement remains. The held comparison stopped on request, restored
+the dashboard and left native service PIDs unchanged. This accepts the native
+renderer reference only. It does not establish the complete scan's depth
+accuracy, origin interoperation, editor interactions or installer acceptance.
+
+### Stereo and fusion evaluation
+
+Two distinct stages need validation: calibrated stereo matching estimates depth
+from each actual camera pair, then reconstruction fuses exposure-aligned depth
+with the measured tracking poses. Neither stage substitutes for correct
+calibration, rolling-readout timing or tracking-space registration.
+
+Candidate 8 uses pinned OpenCV 4.13.0 StereoSGBM with confidence-aware WLS
+filtering in an owned private CPU module. Both raw directions retain uniqueness,
+speckle and left/right checks. The WLS factory disables some of those settings,
+and its reverse factory does not copy the speckle range; the implementation
+restores them explicitly. A procedural sloping plane verifies that real subpixel
+disparity gradients survive. Flat and periodic fixtures remain unobserved. WLS
+never supplies geometry without a current bilateral raw match, optical support,
+texture and bounded filter agreement. An independent optical ambiguity check
+qualifies strong evidence; other accepted matches remain uncertain.
+
+The reconstruction module adapts Open3D 0.19.0's color-free projective TSDF
+integration and marching-cubes extraction, with upstream attribution and pinned
+sources. It does not install full Open3D, NumPy or machine-learning packages on
+the headset. Updates stage changed volume blocks and the resulting mesh before
+committing an exposure. Failed identity or capacity checks preserve the accepted
+volume and mesh. The volume has at most 2,048 blocks of 16 cubed voxels, with
+100,000 vertices and 200,000 triangles. Quality retains actual confidence and
+three independently displaced viewpoints; interpolation cannot invent reliable
+view evidence. Unknown voxels cannot create a marching-cubes face.
+
+The initial live integration used 3 cm voxels and exhausted its bounded volume
+or mesh during a normal room scan. The next candidate uses 5 cm voxels for the
+room shell; authored controller measurements retain their measured coordinates.
+It caps effective per-voxel history at 16 observations, allowing later evidence
+to correct an extensively observed surface. Decaying residual evidence lets
+quality recover after consistent new observations instead of retaining a
+lifetime error maximum. A known-wall regression verifies correction of an
+initial 4 cm offset to less than 5 mm in the revisited interior, including
+recovery from weak confidence. These are deliberate adaptations of upstream
+averaging, not a claim of identical long-history Open3D output.
+
+An independent comparison against unmodified Open3D produced the same vertex
+counts on 19 recorded depth frames and a separate noisy wall fixture. The wall's
+vertices agreed within 0.02 mm. In the recorded data, 99.9% agreed within 0.02 mm;
+two uncertain vertices differed by 6.5 and 9.8 mm because scalar/SIMD projection
+rounding selected different depth pixels at a half-pixel boundary. The overall
+comparison is bounded against voxel scale, not described as byte-identical.
+Tiny vanishing faces are omitted to satisfy the room format's existing area
+bound. The recorded observations have no independent geometric ground truth.
+
+The AArch64 module was replayed on the Frame as an ordinary CPU-only client,
+without camera access, XR calls or service changes. On the private recorded pair
+it retained 3,264 samples, including 943 strong observations, at about 45 ms per
+pair on one thread. Integration and extraction for the 19 recorded depth frames
+measured about 43 ms per frame; Python mesh validation and JSON encoding add
+work separately. Peak process memory was about 250 MB. The temporary payload
+was removed. This establishes target feasibility, not successful live room-scan
+accuracy or the complete installed flow.
+
+The earlier Open3D comparison on an independently generated 2 m wall with 15 mm
+noise, missing pixels and a deliberately unobserved 40 cm hole reduced wall RMSE
+from about 20 mm in the cell prototype to about 5 mm with TSDF. The larger hole
+remained empty. Native-module fixtures separately check the known wall,
+independent viewpoints, weak confidence, geometry winding and atomic refusal.
+Real Vulkan tests execute the production room shaders and verify animated alpha,
+transparent gaps, metric depth and independent color/depth swapchain indices.
+
+### First combined scan test and follow-up
+
+The first complete native scan test established the measured OpenVR/OpenXR
+registration and displayed a growing room mesh at the native frame cadence.
+It did not pass wearer acceptance. The wearer reported a long wait for new
+coverage, erroneous geometry behind a television, and white surfaces appearing
+without the intended visible reconstruction effect. Capture reached a capacity
+limit. The previous generic error path then incorrectly hid accepted geometry
+as though tracking had failed. The test was stopped, its private draft and logs
+were secured, its temporary payload was removed, and the SteamVR dashboard and
+Room Setup entry remained available. Native services were not restarted.
+
+Capacity errors now preserve alignment and accepted geometry, pause capture
+with useful review/save guidance, and do not permit an impossible Resume.
+The transient reader's ordinary event loop no longer waits for camera trace
+data before serving each local request. A metadata-only Frame measurement
+reduced median Describe latency from about 51 ms to 0.27 ms, without pixel
+requests. The new helper retained the same unprivileged UID, seccomp and
+no-new-privileges state; Stop removed its process and session record. SteamVR
+and Room Setup service PIDs remained unchanged. This measures the API delay,
+not the complete scan response time.
+
+Replaying the same 19 stored observations with the 5 cm configuration on the
+Frame used 555 blocks, 4,567 vertices and 4,181 triangles. Median fusion/extraction
+was about 19 ms, Python mesh validation 14 ms and JSON encoding 3 ms; peak
+process memory was about 120 MB. The unchanged stereo matcher measured about
+31 ms in this run; CPU scheduling and frequency also affect that number, so it
+is not presented as a stereo algorithm speedup. No new camera images or XR
+session were used, and the owned replay payload was removed. These recorded
+measurements still have no independent physical ground truth.
+
+Geometry parsing, face history and native triangle preparation now run on the
+snapshot worker, leaving the XR frame loop to consume immutable prepared
+buffers. New face connectivity has its own reveal age, even when its corners
+were already known. Initial registration cannot consume the reveal while
+geometry is still invisible. Production GPU fixtures verify the visibility
+epoch as well as transparent unknown space and metric occlusion. A fresh
+combined wearer test is still required. Reflective-screen accuracy remains an
+open reconstruction issue; neither stereo consistency nor visual plausibility
+alone proves the location of a physical screen.
+
+### Gaussian reconstruction evaluation
+
+The maintainer asked whether Gaussian splatting could give a faster live scan,
+followed by polygon extraction. This is a valid representation pipeline.
+Arcturus explicitly documents recording on the Frame, reconstruction/training
+on a computer, and transfer of the resulting scene back to Gaussian XR:
+[vendor workflow](https://arcturus.vision/apps). Its linked
+[Spirula Studio fork](https://github.com/arcturus-vision/spirula-studio), inspected
+at `f60271a8c006c8f5c6348ad5332fe78ac3da0191`, provides video-to-splat-to-textured-mesh
+processing and a Vulkan training/meshing backend. The source is GPLv3; no code
+from that inspection is incorporated into the room binaries.
+
+The vendor's synchronized stereo, calibration and recording trajectory are
+useful reconstruction inputs. The published workflow does not establish a
+camera-module splat accelerator or real-time reconstruction performance on
+the Frame. Training and displaying an already trained scene are separate
+performance questions. Vulkan implementations mean CUDA is not a categorical
+obstacle: Spirula, [VkSplat](https://github.com/harry7557558/vksplat), and
+[Brush](https://github.com/ArthurBrussee/brush) warrant actual compatibility and
+speed evaluation rather than dismissal based on desktop CUDA references.
+
+Any comparison must measure time to first world-aligned coverage, ongoing
+updates, physical surface error, memory, and preservation of unknown space on
+the same input observations. A rendered reflection must not become trusted
+screen geometry merely because its appearance matches the images. Keep live
+measured coverage responsive while evaluating later Gaussian refinement and
+mesh extraction; no Gaussian speed or accuracy result on this Frame is yet
+claimed.
 
 ### First headset feedback and candidate 2
 
@@ -354,14 +529,18 @@ not approval to promote the feature to main.
 cmake -S . -B build/room-core -DFRAME_ROOM_SCAN_ONLY=ON
 cmake --build build/room-core
 ctest --test-dir build/room-core --output-on-failure
-bash tools/build_room_overlay.sh /path/to/openvr-header /path/to/json-single-include /path/to/DejaVuSans.ttf build/room-dashboard /path/to/vulkan-headers
+python3 -B tools/build_room_vision.py build/vision-sources build/vision-host --arch host
+python3 -B tools/build_room_vision.py build/vision-sources build/vision-arm --arch aarch64
+python3 -B tools/fetch_room_xr_headers.py build/openxr-headers
+bash tools/build_room_overlay.sh /path/to/openvr-header /path/to/json-single-include /path/to/DejaVuSans.ttf build/room-dashboard /path/to/vulkan-headers build/openxr-headers build/vision-host/libsfnp-room-vision.so build/vision-arm/libsfnp-room-vision.so
 python3 -B -m unittest discover -s tests -p 'test_room_scan*.py' -v
 python3 -B -m unittest discover -s tests -p test_stream_bridge_install.py -v
 python3 -B -m unittest discover -s tests -p test_package_stream_bridge.py -v
 ```
 
 The build script checks the exact OpenVR/JSON/font input hashes. It generates a
-font atlas locally and builds host/native tests plus the AArch64 executable with
+font atlas and validated SPIR-V shaders locally, and builds host/native tests
+plus both AArch64 executables with
 warnings as errors. SDK/header binaries are not redistributed; embedded font and
 JSON attribution ship with the app. The host `--preview state.json --output x.rgba`
 mode renders the actual dashboard without opening OpenVR; `--preview-world`

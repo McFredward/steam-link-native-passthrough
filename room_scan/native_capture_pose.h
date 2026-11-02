@@ -23,6 +23,12 @@ inline CapturePose capturePose(VR_IVRSystem_FnTable* system,std::uint64_t target
 class CapturePoseSpan {
     std::array<CapturePose,9> samples_{};
 public:
+    Json exportSamples()const{
+        Json out=Json::array();for(const auto& sample:samples_){Json matrix=Json::array();
+            for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c)matrix.push_back(sample.head.m[r][c]);
+            out.push_back({{"raw_ns",sample.targetRaw},{"head",matrix},{"query_ns",sample.queryAfterRaw-sample.queryBeforeRaw}});}
+        return out;
+    }
     float translationSpan=0,rotationSpan=0;std::uint64_t queryBudget=0;
     void read(VR_IVRSystem_FnTable* system,std::uint64_t first,std::uint64_t last){
         if(last<first||last-first>20000000u)throw std::runtime_error("Capture pose span exceeds budget");

@@ -28,7 +28,9 @@ CHECKS=frozenset(('pc_provider_build','frame_layer_build','frame_selector_build'
                  'ordinary_rgba_source','exact_frame_association','opaque_fallback',
                  'owned_coverage_gpu','installer_transaction','startup_health_logic'))
 ROOM_CHECKS=frozenset(('room_overlay_build','room_dashboard_flow','room_installer_transaction',
-                       'room_camera_build','room_camera_session','room_camera_depth'))
+                       'room_camera_build','room_camera_session','room_camera_depth',
+                       'room_renderer_build','room_scene_origin','room_vision_build','room_vision_fusion',
+                       'room_pc_neural_model','room_gaussian_live','room_pc_installer'))
 MAX_ARCHIVE=128*1024*1024
 MAX_EXPANDED=192*1024*1024
 
@@ -46,6 +48,7 @@ def required_sources(root=ROOT):
     bridge=load('sfnp_bridge_package_contract',root/'setup/stream_bridge_install.py')
     return sorted({'VERSION','PATCH_VERSIONS.json','setup/steam_link_setup.py','setup/steam_link_setup_ui.py','setup/stream_bridge_install.py',
                    'setup/steam_link_setup_textual.py','setup/steam_link_setup_vendor.py',
+                   'setup/steam_link_setup_room.py','packaging/room-pc-runtime.json',
                    'setup/steam_link_setup_auth.py','setup/steam_link_setup_askpass_client.py',
                    'setup/steam-link-askpass.sh','setup/steam_link_askpass.c','tools/build_setup_askpass.py',
                    'setup/steam_link_setup_session.py','setup/steam_link_setup_log.py',
@@ -66,17 +69,25 @@ def required_sources(root=ROOT):
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
                    'room_scan/native_camera_source.h','room_scan/native_camera_client.h','room_scan/native_capture_pose.h',
                    'room_scan/native_arcturus_source.h','room_scan/native_arcturus_geometry.h','room_scan/native_arcturus_timing.h',
+                   'room_scan/native_triangulation.h',
                    'room_scan/camera_api/read_only_policy.h','room_scan/camera_api/linux_inventory.h',
                    'room_scan/camera_api/trace_reader.h','room_scan/camera_api/passive_trace.h',
                    'room_scan/camera_api/buffer_source.h','room_scan/camera_api/capture_metadata.h',
                    'room_scan/camera_api/exposure_registers.h','room_scan/camera_api/owner_lifetime.h',
                    'room_scan/camera_api/stereo_snapshot.h','room_scan/camera_api/local_api.h','room_scan/camera_api/luma_layout.h',
                    'probe/room_camera_native.cpp','tools/build_room_camera_api.sh','room_scan/licenses/NativeCamera.txt',
-                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h','room_scan/native_dashboard.h','room_scan/native_gpu.h',
-                   'tools/build_room_font.py','tools/build_room_overlay.sh','packaging/room-vulkan-headers.json'})
+                   'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_surface.h','room_scan/native_view.h','room_scan/native_projection.h','room_scan/native_scan_view.h','room_scan/native_present.h','room_scan/native_registration.h','room_scan/native_dashboard.h','room_scan/native_gpu.h',
+                   'tools/build_room_font.py','tools/build_room_overlay.sh','packaging/room-vulkan-headers.json',
+                   'tools/build_room_scene_shaders.py','tools/fetch_room_xr_headers.py','tools/build_room_vision.py',
+                   'tools/check_room_pc_runtime.py','tools/fetch_room_gaussian_backend.py','packaging/room-gaussian-backend.json',
+                   'packaging/room-openxr-headers.json','packaging/room-open3d-kernel.json','packaging/room-vision.json'} |
+                  {'room_scan/licenses/'+name for name in bridge.ROOM_LICENSES} |
+                  {str(path.relative_to(root)) for path in (root/'room_reconstruction').glob('*.py')} |
+                  {str(path.relative_to(root)) for path in (root/'room_scan').rglob('*')
+                   if path.is_file() and path.suffix in ('.h','.cpp','.vert','.frag','.exports')})
 
 
-def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,room_overlay=None,room_camera=None):
+def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,room_overlay=None,room_camera=None,room_renderer=None,room_vision=None):
     artifacts={name:engine.read(path) for name,path in
                [('pc_provider',pc_provider),('frame_layer',frame_layer),('frame_selector',frame_selector)]}
     if mask_decoder is not None:
@@ -84,13 +95,15 @@ def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=Non
                        'A complete private mask decoder pair is required.')
         artifacts.update({name:engine.read(path) for name,path in mask_decoder.items()})
     if room_overlay is not None:
-        engine.require(room_camera is not None,'The native room dashboard requires its manually activated camera helper.')
-        for name,path in (('room_overlay',room_overlay),('room_camera',room_camera)):
+        engine.require(all(path is not None for path in (room_camera,room_renderer,room_vision)),
+                       'The room dashboard requires its camera reader, native MR renderer and private vision module.')
+        for name,path in (('room_overlay',room_overlay),('room_camera',room_camera),('room_renderer',room_renderer),('room_vision',room_vision)):
             raw=engine.read(path)
             engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and
                            struct.unpack_from('<HH',raw,16)==(3,183),'Unsupported native room component image.')
             artifacts[name]=raw
-    else:engine.require(room_camera is None,'A manual room camera helper requires the room dashboard package.')
+    else:engine.require(all(path is None for path in (room_camera,room_renderer,room_vision)),
+                        'Room components require the complete room dashboard package.')
     pc=artifacts['pc_provider'];engine.require(len(pc)>=128 and pc[:2]==b'MZ','The PC provider must be the reviewed x64 DLL.')
     offset=struct.unpack_from('<I',pc,60)[0]
     engine.require(offset<=len(pc)-26 and pc[offset:offset+4]==b'PE\0\0' and
@@ -137,7 +150,7 @@ def validation(engine,profile,profile_raw,artifacts,receipts):
 
 
 def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,openssh_zip,
-          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None,room_overlay=None,room_camera=None):
+          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None,room_overlay=None,room_camera=None,room_renderer=None,room_vision=None):
     engine=load('sfnp_bridge_package_engine',root/'setup/steam_link_setup.py')
     bridge=load('sfnp_bridge_package_install',root/'setup/stream_bridge_install.py')
     shared=load('sfnp_bridge_package_runtime',root/'tools/package_stream_link_setup.py')
@@ -148,7 +161,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
                    re.fullmatch('[0-9a-f]{40}',profile['source_revision']), 'Unknown runtime profile or source revision.')
     engine.protocol(profile['bridge_protocol'])
     sources=required_sources(root)
-    engine.require(type(profile['source_pins'])is dict and 1<=len(profile['source_pins'])<=128,
+    engine.require(type(profile['source_pins'])is dict and 1<=len(profile['source_pins'])<=256,
                    'Bounded exact source inventory required.')
     items=list(profile['source_pins'].items())
     for at in range(0,len(items),64):engine.records(dict(items[at:at+64]))
@@ -159,7 +172,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     version=bridge.patch_version(source_bytes['VERSION'].decode('ascii').strip())
     engine.require(version is not None,'An installer semantic version is required.')
     components=patch_versions(engine,bridge,source_bytes['PATCH_VERSIONS.json'])
-    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder,room_overlay,room_camera)
+    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder,room_overlay,room_camera,room_renderer,room_vision)
     engine.require(profile['artifacts']=={name:pin(raw) for name,raw in artifacts.items()},
                    'A native artifact differs from the reviewed runtime profile.')
     pc,frame=profile['pc'],profile['frame']
@@ -180,8 +193,10 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     if room_overlay is not None:
         payload['frame/room-setup/sfnp-room-overlay']=artifacts['room_overlay']
         payload[bridge.ROOM_CAMERA]=artifacts['room_camera']
+        payload[bridge.ROOM_RENDERER]=artifacts['room_renderer']
+        payload[bridge.ROOM_VISION]=artifacts['room_vision']
         payload.update({'frame/room-setup/room_scan/'+name:source_bytes['room_scan/'+name] for name in bridge.ROOM_PYTHON})
-        for name in ('DejaVu.txt','nlohmann-json.txt','NativeCamera.txt'):
+        for name in bridge.ROOM_LICENSES:
             payload['frame/room-setup/licenses/'+name]=source_bytes['room_scan/licenses/'+name]
     if channel is None:
         import subprocess
@@ -226,6 +241,14 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
            'third_party/lz4/LICENSE':source_bytes['third_party/lz4/LICENSE'],
            'third_party/zstd/LICENSE':source_bytes['third_party/zstd/LICENSE']}
     files['tools/configure_mask_codec.py']=source_bytes['tools/configure_mask_codec.py']
+    if room_overlay is not None:
+        files['setup/steam_link_setup_room.py']=source_bytes['setup/steam_link_setup_room.py']
+        files['setup/room-pc-runtime.json']=source_bytes['packaging/room-pc-runtime.json']
+        for name in ('NVIDIA-Open-Model.txt','NVIDIA-Stereo-Model-Card.txt'):
+            files['setup/room-licenses/'+name]=source_bytes['room_scan/licenses/'+name]
+        for name in source_bytes:
+            if name.startswith('room_reconstruction/') and (name.endswith('/__init__.py') or Path(name).name.startswith('live_')):
+                files['setup/'+name]=source_bytes[name]
     if mask_decoder is not None:
         for name in ('third_party/ffmpeg/README.md','third_party/ffmpeg/COPYING.LGPLv2.1','packaging/mask-ffmpeg.json','packaging/mask-ffmpeg-patches.json',
                      'third_party/ffmpeg/patches/0001-hevc-nal-slice-threading-8.1.3.patch','tools/build_mask_hevc_ffmpeg.py'):
@@ -264,7 +287,10 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
             'After the confirmed paired installation, open the Frame-local SteamVR dashboard and choose Room Setup.\n'
             'Use the top-right X to return to the SteamVR menu and stop capture. The dashboard stays open and Room Setup remains available to open again.\n'
             'Choose Scan a new room, then Start scan. Startup alone never acquires camera images.\n'
-            'Use visible native colour passthrough. The tested Frame SteamVR 2.18.2 reports a camera but exposes no calibrated camera stream to this app. Live scanning is blocked on that runtime. Projection alignment and active-game coexistence are not hardware verified.\n'
+            'The feature installer enables the checked transient camera reader after confirmed Frame installation. Reboot leaves this reader inactive; reopening a verified current interactive paired installer enables it again.\n'
+            'Keep native colour passthrough visible. Start/Resume opens the native room view; close any running VR game first. The SteamVR dashboard entry stays available.\n'
+            'Wait for PC reconstruction is running, then keep the Windows installer open throughout the scan. It prepares private CUDA/ONNX dependencies and C-Fast-FoundationStereo (about 1.6 GB download, 5 GB free disk and 3 GB free NVIDIA VRAM). No system GPU drivers or Python packages are installed.\n'
+            'The PC continuously refines geometric Gaussian surface splats. Turquoise reveals new coverage; amber needs more viewpoints. Unknown areas stay open. Continue extracts measured polygons for editing and saving. NVIDIA/headset speed and accuracy require the combined test.\n'
             'If the camera source cannot be verified, scanning stays unavailable. This package contains no simulated room fallback.\n'
             'Mark three rectangle corners with the trigger, using reliable scan surfaces or Measure at controller. Confirm the preview, then review and save.\n'
             'Tables, walls, doors/windows and furniture support manual entry. Automatic object recognition and game/Venture scene adapters are not included yet.\n'
@@ -310,12 +336,15 @@ def main(argv=None):
     parser.add_argument('--mask-util',type=Path)
     parser.add_argument('--room-overlay',type=Path)
     parser.add_argument('--room-camera',type=Path)
+    parser.add_argument('--room-renderer',type=Path)
+    parser.add_argument('--room-vision',type=Path)
     args=parser.parse_args(argv)
     if bool(args.mask_codec)!=bool(args.mask_util):parser.error('Supply both --mask-codec and --mask-util.')
-    if bool(args.room_overlay)!=bool(args.room_camera):parser.error('Supply both --room-overlay and --room-camera.')
+    room_options=(args.room_overlay,args.room_camera,args.room_renderer,args.room_vision)
+    if any(room_options) and not all(room_options):parser.error('Supply --room-overlay, --room-camera, --room-renderer and --room-vision together.')
     decoder={'mask_codec':args.mask_codec,'mask_util':args.mask_util} if args.mask_codec else None
     raw,receipt=build(args.pc_provider,args.frame_layer,args.frame_selector,args.runtime_profile,args.python_zip,args.openssh_zip,
-                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder,room_overlay=args.room_overlay,room_camera=args.room_camera)
+                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder,room_overlay=args.room_overlay,room_camera=args.room_camera,room_renderer=args.room_renderer,room_vision=args.room_vision)
     sidecar=args.output.with_suffix(args.output.suffix+'.receipt.json')
     if args.output.exists() or sidecar.exists():raise ValueError('An output or receipt already exists; it was preserved.')
     publish(args.output,raw)

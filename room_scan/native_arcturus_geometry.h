@@ -4,6 +4,7 @@
 #pragma once
 #include "native_camera.h"
 #include "native_arcturus_timing.h"
+#include "native_triangulation.h"
 
 namespace room_native {
 class ArcturusRectification {
@@ -11,9 +12,15 @@ class ArcturusRectification {
     struct Pixel {float u=-1,v=-1;};
     std::array<Lens,2> lenses_{};std::array<std::vector<Pixel>,2> maps_;
 public:
-    struct RectifiedImage {std::vector<std::uint8_t> pixels,support;};
+    struct RectifiedImage {std::vector<std::uint8_t> pixels,support;std::vector<V3> origins;};
     Mat headFromRectified;float baseline=0;Json descriptor;
     std::array<std::vector<std::uint8_t>,2> support;
+    Json exportRig()const{
+        const auto matrix=[](const Mat& m){Json out=Json::array();for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c)out.push_back(m.m[r][c]);return out;};
+        Json eyes=Json::array();for(const auto& lens:lenses_)eyes.push_back({{"intrinsics",{lens.fx,lens.fy,lens.cx,lens.cy}},
+            {"k",lens.k},{"head_from_optical",matrix(lens.optical)}});
+        return {{"eyes",eyes},{"head_from_rectified",matrix(headFromRectified)},{"baseline_m",baseline}};
+    }
     static std::array<float,2> project(const std::array<float,4>& in,const std::array<float,4>& k,V3 ray){
         if(!std::isfinite(ray.x)||!std::isfinite(ray.y)||!std::isfinite(ray.z)||ray.z<=0)return {-1,-1};
         const float r=std::hypot(ray.x,ray.y),theta=std::atan2(r,ray.z),t2=theta*theta;
@@ -79,7 +86,7 @@ public:
     template<class Poses>RectifiedImage rectifyTimed(unsigned eye,const std::vector<std::uint8_t>& input,
             const ArcturusTiming& timing,const Mat& reference,const Poses& poses)const{
         if(eye>1||input.size()!=616*616||maps_[eye].size()!=320*240)throw std::runtime_error("Arcturus source image extent invalid");
-        RectifiedImage out;out.pixels.assign(320*240,0);out.support.assign(320*240,0);std::vector<std::uint8_t> valid(320*240,0);
+        RectifiedImage out;out.pixels.assign(320*240,0);out.support.assign(320*240,0);out.origins.resize(320*240);std::vector<std::uint8_t> valid(320*240,0);
         const auto& lens=lenses_[eye];
         std::array<Mat,2464> rowPoses;for(unsigned row=0;row<rowPoses.size();++row)rowPoses[row]=poses.at(timing.atRow(float(row)));
         for(unsigned v=0;v<240;++v)for(unsigned u=0;u<320;++u){
@@ -97,6 +104,7 @@ public:
             if(uv.u<0||uv.v<0||uv.u>=615||uv.v>=615)continue;
             const unsigned x=unsigned(uv.u),y=unsigned(uv.v);const float a=uv.u-x,b=uv.v-y;const auto p=std::size_t(y)*616+x;
             out.pixels[index]=std::uint8_t(std::clamp((1-b)*((1-a)*input[p]+a*input[p+1])+b*((1-a)*input[p+616]+a*input[p+617]),0.f,255.f));valid[index]=1;
+            out.origins[index]=transform(rowPoses[unsigned(std::clamp(uv.v*4+.5f,0.f,2463.f))],position(lens.optical));
         }
         for(int v=3;v<237;++v)for(int u=3;u<317;++u){bool supported=true;
             for(int dy=-3;dy<=3&&supported;++dy)for(int dx=-3;dx<=3;++dx)if(!valid[std::size_t(v+dy)*320+u+dx]){supported=false;break;}
@@ -105,4 +113,28 @@ public:
         return out;
     }
 };
+inline StereoResult exposureAlignedDepth(const StereoResult& matched,
+        const std::array<ArcturusRectification::RectifiedImage,2>& images,const Mat& roomFromRectified,float baseline){
+    for(const auto& image:images)if(image.origins.size()!=320*240||image.support.size()!=320*240)
+        throw std::runtime_error("Exposure camera origins are unavailable");
+    StereoResult out;const Mat rectifiedFromRoom=inverse(roomFromRectified);
+    const auto ray=[&](float u,float v){const V3 p{(u-159.5f)/220,-(v-119.5f)/220,-1};
+        return transform(roomFromRectified,p)-position(roomFromRectified);};
+    for(unsigned i=0;i<matched.depth.size();++i){const float z=matched.depth[i];if(z<=0)continue;
+        const unsigned u=(i%160)*2,v=(i/160)*2;const auto leftIndex=std::size_t(v)*320+u;
+        const float rightU=float(u)-220*baseline/z;if(rightU<0||rightU>=319)continue;
+        const unsigned lo=unsigned(rightU);const auto rightIndex=std::size_t(v)*320+lo;const float t=rightU-lo;
+        if(!images[0].support[leftIndex]||!images[1].support[rightIndex]||!images[1].support[rightIndex+1])continue;
+        const V3 rightOrigin=images[1].origins[rightIndex]*(1-t)+images[1].origins[rightIndex+1]*t;
+        const auto hit=intersectStereoRays(images[0].origins[leftIndex],ray(float(u),float(v)),rightOrigin,ray(rightU,float(v)));
+        if(!hit)continue;
+        const V3 local=transform(rectifiedFromRoom,hit->point);const float depth=-local.z;if(depth<.25f||depth>6)continue;
+        const int x=int(std::lround((220*local.x/depth+159.5f)/2)),y=int(std::lround((-220*local.y/depth+119.5f)/2));
+        if(x<0||y<0||x>=160||y>=120)continue;
+        const auto target=std::size_t(y)*160+x;
+        if(out.depth[target]>0&&out.depth[target]<=depth)continue;
+        out.depth[target]=depth;out.confidence[target]=hit->separation>.002f?std::min(.6f,matched.confidence[i]):matched.confidence[i];
+    }
+    return out;
+}
 } // namespace room_native

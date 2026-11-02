@@ -31,6 +31,59 @@
   leave the experimental camera access inactive. No automatic test expiry is
   required. Keep the helper outside the normal installer until capture, stop
   and removal are validated. Do not weaken image/eye/exposure/pose proof.
+- On 2026-11-02, after candidate 7's wearer test, the maintainer requested
+  automatic room-camera activation in this feature build. Enable the checked
+  reader after the confirmed Frame installation without a second opt-in, and
+  when the interactive feature installer reopens a verified current paired
+  installation. Keep read-only checks and PC-only updates free of Frame changes.
+  This supersedes manual installer activation only; no boot/login integration,
+  firmware/driver/XRService replacement or persistent privilege grant is allowed.
+  Reboot must still leave capture inactive. A few moving pixels are a failed
+  room scan: measured surfaces must remain aligned with the actual room while
+  the wearer moves their head, with visible incremental coverage and real gaps.
+- On 2026-11-02 the maintainer accepted the native OpenXR alpha-blend/depth
+  reference for the first iteration: normal head movement is stable; a small
+  residual during very rapid movement is acceptable. The held test was stopped
+  on request, restored the SteamVR menu and preserved Room Setup and native
+  service PIDs. This accepts the renderer reference only, not the complete scan.
+  Keep the entry in the SteamVR dashboard; use a temporary native MR scene for
+  scan geometry and preserve room-only X. Validate the common tracking space
+  before displaying OpenVR-origin measurements through OpenXR. Do not resume
+  repeated colour-reference tests without a new reason.
+- On 2026-11-02 the maintainer approved OpenCV stereo and TSDF fusion for the
+  room scan. Use the pinned native CPU implementation and bounded Open3D-derived
+  fusion kernel; preserve camera identity, calibration and exposure-time pose
+  proof. Do not install system packages or full Python ML stacks on the Frame.
+  Private replay benchmarks do not establish complete installed scan acceptance.
+- The first combined candidate-8 scan test did not pass acceptance: the
+  maintainer reported slow coverage, false depth behind a TV, insufficient
+  ongoing correction and white geometry popping in. Preserve accepted geometry
+  at capacity, keep measured gaps visible, and verify the next full scan and X
+  together. Gaussian capture followed by mesh extraction is under evaluation;
+  the vendor's desktop Spirula workflow is evidence of that pipeline, not proof
+  of faster live reconstruction on the Frame or trustworthy reflective surfaces.
+- After the second combined scan test, the maintainer rejected its remaining
+  latency and physical surface errors and explicitly prioritized PC-assisted
+  Gaussian splatting, followed by polygon extraction. Target Windows and NVIDIA
+  GPUs. Their RTX 4090 is a reference machine, not a minimum requirement; scale
+  image resolution, splat count and memory to weaker NVIDIA GPUs. The Frame owns
+  capture, tracking, interaction and MR display; move reconstruction/refinement
+  work to the PC. Do not spend the next iteration primarily optimizing the
+  standalone TSDF path or claim the Gaussian workflow is complete before it is
+  actually measured. Keep camera reversibility and exact pose/image association.
+  The maintainer subsequently required the first PC-assisted version to be
+  integrated in the normal branch installer with live Gaussian coverage,
+  visible gaps, refinement guidance, corrected buttons/X and semantic editing.
+  Do not substitute a standalone benchmark handoff for that complete first
+  candidate. See docs/development/ROOM-PC-RECONSTRUCTION.md for the current
+  prototype evidence and implementation direction.
+- The second scan test exposed unusable in-room buttons and a wrong laser angle.
+  The HUD must use SteamVR's native interactive mouse overlay and mouse events.
+  World tools must resolve the runtime's controller tip rather than the tracked
+  body's -Z; a public API audit measured a 40-degree difference on both Frame
+  controllers. Do not draw a second world ray through an interactive menu, or
+  dispatch a room edit from a menu click. Native configuration/API audits and
+  software event tests do not establish wearer acceptance of the complete flow.
 - The intended input is real per-eye scene coverage, independent of scene RGB.
   Never derive mask coverage from a key colour in the explicit-mask path.
 - The maintainer explicitly authorized a PC Steam Link sender companion on

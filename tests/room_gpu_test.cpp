@@ -38,6 +38,12 @@ int main(){try{
     Canvas changed(2,2);bool refused=false;
     try{gpu.present(0,changed,[](Texture_t*){return 0;});}catch(const std::runtime_error&){refused=true;}
     check(refused,"unexpected extent cannot replace a live texture");
+    std::array<Canvas,2> pair{Canvas(512,512),Canvas(512,512)};
+    for(unsigned eye=0;eye<2;++eye){pair[eye].pixels[17]=std::uint8_t(70+eye);gpu.prepare(3+eye,pair[eye]);}
+    unsigned publications=0;
+    for(unsigned eye=0;eye<2;++eye)check(gpu.publishPrepared(3+eye,[&](Texture_t*){++publications;return 0;})==0,"both prepared eyes publish");
+    gpu.finishPresentation();
+    check(publications==2&&gpu.readback(3)==pair[0].pixels&&gpu.readback(4)==pair[1].pixels,"batched publication preserves both completed eye images");
     missingOutput=true;refused=false;
     try{OverlayGpu wrongGpu;wrongGpu.initialize(&system,&compositor);}catch(const std::runtime_error&){refused=true;}
     check(refused,"an absent runtime GPU never silently selects another device");

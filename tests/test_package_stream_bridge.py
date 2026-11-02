@@ -94,16 +94,23 @@ class Tests(unittest.TestCase):
     def test_room_dashboard_requires_its_own_software_checks_and_full_payload(self):
         room=self.base/'room-overlay';room.write_bytes(elf()+b'explicit synthetic room ELF')
         camera=self.base/'room-camera';camera.write_bytes(elf()+b'explicit synthetic camera ELF')
+        renderer=self.base/'room-renderer';renderer.write_bytes(elf()+b'explicit synthetic renderer ELF')
+        vision=self.base/'room-vision';vision.write_bytes(elf()+b'explicit synthetic vision ELF')
         self.profile['artifacts']['room_overlay']=p.pin(room.read_bytes())
-        self.profile['artifacts']['room_camera']=p.pin(camera.read_bytes());self.save_profile()
+        self.profile['artifacts']['room_camera']=p.pin(camera.read_bytes())
+        self.profile['artifacts']['room_renderer']=p.pin(renderer.read_bytes())
+        self.profile['artifacts']['room_vision']=p.pin(vision.read_bytes());self.save_profile()
         with self.assertRaises(ValueError):self.build(room_overlay=room)
         with self.assertRaises(ValueError):
             self.build(room_overlay=room,room_camera=camera,release=True,validation_receipts=[self.validation()])
-        raw,receipt=self.build(room_overlay=room,room_camera=camera,release=True,validation_receipts=[self.validation(p.CHECKS|p.ROOM_CHECKS)])
+        raw,receipt=self.build(room_overlay=room,room_camera=camera,room_renderer=renderer,room_vision=vision,
+                               release=True,validation_receipts=[self.validation(p.CHECKS|p.ROOM_CHECKS)])
         self.assertTrue(receipt['native_installable']);self.assertFalse(receipt['hardware_verified'])
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             self.assertEqual(room.read_bytes(),archive.read('frame/room-setup/sfnp-room-overlay'))
             self.assertEqual(camera.read_bytes(),archive.read('frame/room-setup/sfnp-room-camera-native'))
+            self.assertEqual(renderer.read_bytes(),archive.read('frame/room-setup/sfnp-room-renderer'))
+            self.assertEqual(vision.read_bytes(),archive.read('frame/room-setup/libsfnp-room-vision.so'))
             self.assertIn('frame/room-setup/room_scan/capture_session.py',archive.namelist())
             self.assertIn('frame/room-setup/licenses/NativeCamera.txt',archive.namelist())
             self.assertIn('frame/room-setup/room_scan/app.py',archive.namelist())

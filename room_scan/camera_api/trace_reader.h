@@ -58,9 +58,10 @@ public:
         }
         if(rings_.empty())throw std::runtime_error("No camera completion readers");
     }
-    std::vector<Completion> read(unsigned producer){
+    std::vector<Completion> read(unsigned producer,int timeoutMs=50){
+        if(timeoutMs<0||timeoutMs>50)throw std::runtime_error("Camera completion wait exceeds budget");
         std::vector<pollfd> descriptors;for(const auto& ring:rings_)descriptors.push_back({ring.fd.get(),POLLIN,0});
-        if(poll(descriptors.data(),descriptors.size(),50)<0&&errno!=EINTR)throw std::runtime_error("Camera completion poll failed");
+        if(poll(descriptors.data(),descriptors.size(),timeoutMs)<0&&errno!=EINTR)throw std::runtime_error("Camera completion poll failed");
         std::vector<Completion> out;
         for(auto& ring:rings_){
             auto* page=static_cast<perf_event_mmap_page*>(ring.memory);const auto offset=page->data_offset,size=page->data_size;

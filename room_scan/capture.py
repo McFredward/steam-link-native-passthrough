@@ -9,8 +9,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 
-from .geometry import Mesh, Pose, distance, dot, number, require
+from .geometry import Mesh, Pose, RoomError, distance, dot, number, require
 from .model import identifier
+
+
+class CaptureCapacityError(RoomError):
+    """A bounded capture is full; its accepted geometry and tracking stay valid."""
+    def __init__(self, code):
+        require(code in ("vertices", "triangles", "volume", "exposures"), "Unknown capture limit")
+        self.code = code
+        super().__init__("Capture capacity reached: "+code)
+
+
+def capacity(condition, code):
+    if not condition:
+        raise CaptureCapacityError(code)
 
 
 @dataclass(frozen=True)
@@ -99,13 +112,14 @@ class Reconstruction:
         self.cells = {}
         self.triangles = set()
         self.base_mesh = Mesh()
+        self._mesh_cache = None
         self.sequence = self.exposure_ticks = self.accepted_frames = 0
 
     def integrate(self, frame: DepthFrame):
         require(isinstance(frame, DepthFrame) and frame.binding == self.binding, "Capture origin/calibration/session changed")
         require(frame.tracking_valid, "Tracking lost; scan must pause")
         require(frame.sequence > self.sequence and frame.exposure_ticks > self.exposure_ticks, "Stale exposure")
-        require(self.accepted_frames < 60000, "Scan exposure budget reached")
+        capacity(self.accepted_frames < 60000, "exposures")
         observations, grid = {}, {}
         for i, (z, confidence) in enumerate(zip(frame.depth_m, frame.confidence)):
             if not .25 <= z <= 6. or confidence < .4:
@@ -119,7 +133,7 @@ class Reconstruction:
             # independent observations or multiple camera viewpoints.
             if key not in observations or confidence > observations[key][1]:
                 observations[key] = (point, confidence)
-        require(len(self.cells.keys() | observations.keys()) + len(self.base_mesh.vertices) <= self.max_vertices, "Scan geometry budget reached")
+        capacity(len(self.cells.keys() | observations.keys()) + len(self.base_mesh.vertices) <= self.max_vertices, "vertices")
         changes = {}
         viewpoint = frame.camera_to_room.position
         for key, (point, confidence) in observations.items():
@@ -137,7 +151,13 @@ class Reconstruction:
         for v in range(frame.height-1):
             for u in range(frame.width-1):
                 a = v*frame.width+u
-                for indices in ((a, a+frame.width, a+1), (a+1, a+frame.width, a+frame.width+1)):
+                corners = (a, a+frame.width, a+frame.width+1, a+1)
+                present = tuple(i for i in corners if i in grid)
+                # A quad with one unavailable corner can still expose its
+                # measured triangle without spanning the missing corner.
+                candidates = ((present,) if len(present) == 3 else
+                              ((a, a+frame.width, a+1), (a+1, a+frame.width, a+frame.width+1)))
+                for indices in candidates:
                     if not all(i in grid for i in indices):
                         continue
                     keys = tuple(grid[i][0] for i in indices)
@@ -159,10 +179,11 @@ class Reconstruction:
                         # Canonical cyclic rotation preserves the measured
                         # front face; sorting vertices would flip normals.
                         added.add(min(keys, keys[1:]+keys[:1], keys[2:]+keys[:2]))
-        require(len(self.triangles | added) + len(self.base_mesh.triangles) <= self.max_triangles, "Scan triangle budget reached")
+        capacity(len(self.triangles | added) + len(self.base_mesh.triangles) <= self.max_triangles, "triangles")
         # Commit only after the entire exposure passes capacity/identity checks.
         self.cells.update(changes)
         self.triangles.update(added)
+        self._mesh_cache = None
         self.sequence, self.exposure_ticks = frame.sequence, frame.exposure_ticks
         self.accepted_frames += 1
         return len(observations)
@@ -184,14 +205,18 @@ class Reconstruction:
         require(len(mesh.vertices)+len(self.cells) <= self.max_vertices
                 and len(mesh.triangles)+len(self.triangles) <= self.max_triangles, "Aligned geometry budget reached")
         self.base_mesh = mesh
+        self._mesh_cache = None
 
     def mesh(self):
+        if self._mesh_cache is not None:
+            return self._mesh_cache
         keys = sorted(self.cells)
         indices = {k: i for i, k in enumerate(keys)}
         base = self.base_mesh
-        return Mesh(base.vertices + tuple(self.cells[k].point for k in keys),
+        self._mesh_cache = Mesh(base.vertices + tuple(self.cells[k].point for k in keys),
                     base.triangles + tuple(tuple(indices[k]+len(base.vertices) for k in t) for t in sorted(self.triangles)),
                     base.quality + tuple(self.cells[k].quality for k in keys))
+        return self._mesh_cache
 
     def status(self):
         qualities = list(self.base_mesh.quality) + [cell.quality for cell in self.cells.values()]

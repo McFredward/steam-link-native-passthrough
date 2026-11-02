@@ -20,6 +20,7 @@ class OverlayGpu {
     void* loader_=nullptr;VkInstance instance_=VK_NULL_HANDLE;VkPhysicalDevice physical_=VK_NULL_HANDLE;
     VkDevice device_=VK_NULL_HANDLE;VkQueue queue_=VK_NULL_HANDLE;unsigned family_=0;
     VkCommandPool pool_=VK_NULL_HANDLE;VkCommandBuffer command_=VK_NULL_HANDLE;VkFence fence_=VK_NULL_HANDLE;
+    bool presentationPending_=false;
     std::array<Slot,5> slots_{};VkPhysicalDeviceMemoryProperties memory_{};
     PFN_vkGetInstanceProcAddr get_=nullptr;PFN_vkGetDeviceProcAddr getDevice_=nullptr;
 #define ROOM_GPU_FUNCTIONS(X) \
@@ -135,7 +136,8 @@ public:
         checked(AllocateCommandBuffers_(device_,&command,&command_),"allocate commands");VkFenceCreateInfo fence{};fence.sType=VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         checked(CreateFence_(device_,&fence,nullptr,&fence_),"create fence");
     }
-    template<class Submit>int present(unsigned index,const Canvas& canvas,Submit consumer){
+    void prepare(unsigned index,const Canvas& canvas){
+        finishPresentation();
         if(!device_||canvas.width<=0||canvas.height<=0||canvas.width>1024||canvas.height>1024
             ||canvas.pixels.size()!=std::size_t(canvas.width)*canvas.height*4)throw std::runtime_error("Room GPU image extent invalid");
         auto& slot=slots_.at(index);if(!slot.image)create(slot,unsigned(canvas.width),unsigned(canvas.height));
@@ -147,11 +149,19 @@ public:
         CmdCopyBufferToImage_(command_,slot.staging,slot.image,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,1,&copy);
         barrier(slot,VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,VK_ACCESS_TRANSFER_WRITE_BIT,VK_ACCESS_TRANSFER_READ_BIT);
         submit(true);slot.initialized=true;
+    }
+    template<class Submit>int publishPrepared(unsigned index,Submit consumer){
+        auto& slot=slots_.at(index);if(!slot.initialized)throw std::runtime_error("Room GPU image is not prepared");
         Texture_t texture{&slot.description,ETextureType_TextureType_Vulkan,EColorSpace_ColorSpace_Gamma};
-        const int error=int(consumer(&texture));submit(false);return error;
+        presentationPending_=true;return int(consumer(&texture));
+    }
+    void finishPresentation(){if(presentationPending_){submit(false);presentationPending_=false;}}
+    template<class Submit>int present(unsigned index,const Canvas& canvas,Submit consumer){
+        prepare(index,canvas);const int error=publishPrepared(index,consumer);finishPresentation();return error;
     }
     // Read back the real GPU image for offscreen transfer/alpha/stride tests.
     std::vector<std::uint8_t> readback(unsigned index){
+        finishPresentation();
         auto& slot=slots_.at(index);if(!slot.initialized)throw std::runtime_error("Room GPU image unavailable");begin();
         VkBufferImageCopy copy{};copy.imageSubresource={VK_IMAGE_ASPECT_COLOR_BIT,0,0,1};copy.imageExtent={slot.width,slot.height,1};
         CmdCopyImageToBuffer_(command_,slot.image,VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,slot.staging,1,&copy);

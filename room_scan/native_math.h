@@ -41,7 +41,7 @@ inline Mat pose(V3 p,const std::array<float,4>& q){const auto [x,y,z,w]=q;Mat m;
 struct Frustum {float left=-1,right=1,top=-1,bottom=1;};
 inline bool project(V3 p,const Frustum& f,int width,int height,float& x,float& y){
     if(-p.z<.08f||!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z))return false;
-    x=(p.x/-p.z-f.left)/(f.right-f.left)*width;y=(-p.y/-p.z-f.top)/(f.bottom-f.top)*height;
+    x=(p.x/-p.z-f.left)/(f.right-f.left)*width;y=(f.bottom-p.y/-p.z)/(f.bottom-f.top)*height;
     return std::isfinite(x)&&std::isfinite(y)&&std::abs(x)<width*16&&std::abs(y)<height*16;
 }
 } // namespace room_native

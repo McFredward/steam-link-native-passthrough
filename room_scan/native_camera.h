@@ -90,15 +90,20 @@ inline StereoResult matchStereo(const std::vector<std::uint8_t>& left,const std:
     for(int y=4;y<H-4;y+=2)for(int x=D+4;x<W-4;x+=2){
         const int texture=__builtin_popcount(census[0][std::size_t(y)*W+x]);if(texture<4||texture>20)continue;
         std::array<int,D+1> costs{};int best=10000,second=10000,disparity=0;
-        for(int d=1;d<D;++d){costs[unsigned(d)]=cost(x,y,d);if(costs[unsigned(d)]<best){second=best;best=costs[unsigned(d)];disparity=d;}
-            else if(costs[unsigned(d)]<second)second=costs[unsigned(d)];}
+        for(int d=1;d<D;++d){costs[unsigned(d)]=cost(x,y,d);if(costs[unsigned(d)]<best){best=costs[unsigned(d)];disparity=d;}}
+        // Adjacent samples belong to the same subpixel minimum. Compare with
+        // another match, rather than rejecting a well-localized broad minimum.
+        for(int d=1;d<D;++d)if(std::abs(d-disparity)>1)second=std::min(second,costs[unsigned(d)]);
         if(disparity<2||disparity>=D-1||best>70||second-best<6)continue;
         const float curvature=float(costs[unsigned(disparity-1)]+costs[unsigned(disparity+1)]-2*best);
         const float offset=curvature>0?std::clamp(float(costs[unsigned(disparity-1)]-costs[unsigned(disparity+1)])/(2*curvature),-.5f,.5f):0;
         // Independent reverse search rejects ambiguous foreground/background joins.
-        const int rx=x-disparity;int reverse=0,reverseCost=10000;
-        for(int d=1;d<D&&rx+d<W-3;++d){const int c=cost(rx+d,y,d);if(c<reverseCost){reverseCost=c;reverse=d;}}
-        if(std::abs(reverse-disparity)>1)continue;
+        const int rx=x-disparity;int reverse=0,reverseCost=10000,reverseSecond=10000;
+        std::array<int,D+1> reverseCosts{};reverseCosts.fill(10000);
+        for(int d=1;d<D&&rx+d<W-3;++d){const int c=cost(rx+d,y,d);reverseCosts[unsigned(d)]=c;
+            if(c<reverseCost){reverseCost=c;reverse=d;}}
+        for(int d=1;d<D;++d)if(std::abs(d-reverse)>1)reverseSecond=std::min(reverseSecond,reverseCosts[unsigned(d)]);
+        if(std::abs(reverse-disparity)>1||reverseSecond-reverseCost<6)continue;
         const float z=focal*baseline/(disparity+offset);if(z<.25f||z>6)continue;
         const std::size_t index=std::size_t(y/2)*160+x/2;out.depth[index]=z;
         out.confidence[index]=disparity>=4&&second-best>=12?.9f:.55f;
@@ -110,6 +115,8 @@ public:
     VR_IVRSystem_FnTable* system=nullptr;VR_IVRTrackedCamera_FnTable* api=nullptr;
     TrackedCameraHandle_t handle=0;Json binding,diagnostics;std::string status="not-started";
     std::function<std::array<Mat,2>()> factoryGeometry=arcturusFactoryGeometry;
+    std::function<StereoResult(const std::vector<std::uint8_t>&,const std::vector<std::uint8_t>&,float,float,
+        const std::array<std::vector<std::uint8_t>,2>&)> stereoMatcher;
     ~StereoCamera(){stop();}
     bool start(const std::string& session,const std::string& origin){
         stop();status="public-camera-api-unavailable";
@@ -251,7 +258,8 @@ public:
         std::array<std::vector<std::uint8_t>,2> images{std::vector<std::uint8_t>(320*240),std::vector<std::uint8_t>(320*240)};
         for(unsigned eye=0;eye<2;++eye)for(unsigned i=0;i<320*240;++i){const auto offset=maps[eye][i];if(offset==UINT32_MAX)continue;
             const auto* p=pixels.data()+offset;images[eye][i]=std::uint8_t((299u*p[0]+587u*p[1]+114u*p[2])/1000);}
-        const auto stereo=matchStereo(images[0],images[1],220,baseline,&support);
+        if(!stereoMatcher)throw std::runtime_error("room-vision-unavailable");
+        const auto stereo=stereoMatcher(images[0],images[1],220,baseline,support);
         const Mat pose=multiply(multiply(standingFromTracking,trackedHead),rectifiedHead);
         lastSequence=header.nFrameSequence;lastExposure=header.ulFrameExposureTime;
         return {{"event","depth"},{"binding",binding},{"sequence",lastSequence},{"exposure_ticks",lastExposure},
