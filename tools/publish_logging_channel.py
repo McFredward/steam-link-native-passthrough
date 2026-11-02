@@ -52,6 +52,11 @@ def retarget(raw,channel):
     if camera in files:
         if room not in files:raise ValueError('Manual room camera has no dashboard')
         native['room_camera']=camera
+    scene={'room_renderer':'frame/room-setup/sfnp-room-renderer','room_vision':'frame/room-setup/libsfnp-room-vision.so'}
+    if any(name in files for name in scene.values()):
+        if room not in files or camera not in files or not all(name in files for name in scene.values()):
+            raise ValueError('Incomplete native room reconstruction group')
+        native.update(scene)
     if source['native_artifacts']!={role:pin(files[name]) for role,name in native.items()}:raise ValueError('Native artifact provenance differs')
     if bundle['logging']==logging:return raw,False
     before=dict(files)

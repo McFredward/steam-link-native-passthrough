@@ -38,7 +38,7 @@ class Tests(unittest.TestCase):
         new=members(quiet);self.assertEqual(set(old),set(new))
         for n in p.DEFAULTS:self.assertEqual(new[n],b'Important\n')
         for n in old:
-            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n or n.endswith(('/sfnp-room-overlay','/sfnp-room-camera-native')):self.assertEqual(old[n],new[n],n)
+            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n or n.endswith(('/sfnp-room-overlay','/sfnp-room-camera-native','/sfnp-room-renderer')):self.assertEqual(old[n],new[n],n)
         self.assertEqual(json.loads(new['stream-bridge-bundle.json'])['logging'],{'channel':'main','level':'Important'})
         same,changed=p.retarget(quiet,'main');self.assertFalse(changed);self.assertEqual(same,quiet)
         verbose,changed=p.retarget(quiet,'dev');self.assertTrue(changed)
