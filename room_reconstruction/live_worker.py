@@ -19,7 +19,11 @@ def main():
     sys.path.insert(0, str(args.runtime/"vendor"))
     dll_directories = []
     if os.name == "nt":
-        for path in sorted({dll.parent for dll in (args.runtime/"vendor").rglob("*.dll")}):
+        paths = sorted({dll.parent for dll in (args.runtime/"vendor").rglob("*.dll")})
+        # cuDNN's runtime engines use their own LoadLibrary calls. Keep this
+        # search path private to the owned GPU process; never edit system PATH.
+        os.environ["PATH"] = os.pathsep.join([*(str(path) for path in paths), os.environ.get("PATH", "")])
+        for path in paths:
             dll_directories.append(os.add_dll_directory(str(path)))
     from .live_inference import StereoInference
     from .live_geometry import rectify, triangulate

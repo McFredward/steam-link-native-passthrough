@@ -76,7 +76,7 @@ under the existing 128 KiB SSH reply limit. Binding, capture epoch, map ID,
 monotonic sequence and whole-transfer SHA256 are checked. X invalidates pending
 transfers. Worker loss pauses acquisition and retains the Frame map; a replacement
 worker can seed from its retained Gaussians. Dependencies install privately
-without pip, system CUDA or driver changes. The first download is about 1.6 GB;
+without pip, system CUDA or driver changes. The first download is about 1.7 GB;
 3 GB free NVIDIA VRAM and 5 GB free disk are required. Profiles use 320x256,
 512x384 or 640x480 stereo and bounded 25k/50k/60k Gaussian maps.
 

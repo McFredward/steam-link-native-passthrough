@@ -168,6 +168,27 @@ for raw in sys.stdin:
 
 @unittest.skipUnless(importlib.util.find_spec("numpy") and importlib.util.find_spec("scipy"), "PC numerical dependencies required")
 class GeometryTests(unittest.TestCase):
+    def test_raw_stereo_rectification_keeps_row_exposure_origins(self):
+        import numpy as np
+        from room_reconstruction.live_geometry import rectify
+        eye = lambda x: np.column_stack((np.eye(3), (x, 0, 0))).ravel().tolist()
+        first, last = 1000000000, 1000000000+2463*4360
+        poses = [{"raw_ns": first+(last-first)*i//8, "query_ns": 100, "head": eye(i*.001)} for i in range(9)]
+        rectified = np.column_stack((np.diag((1, -1, -1)), (-.03, 0, 0))).ravel().tolist()
+        image = base64.b64encode(bytes([116])*(616*616)).decode()
+        timing = {"first_row_ns": first, "line_ns": 4360, "integration_ns": 1000000}
+        observation = {"schema": "sfnp-room-stereo-v1", "encoding": "gray8-point-step4", "width": 616, "height": 616,
+            "reference_head": eye(.004), "images": [image, image], "poses": poses, "timing": [timing, timing],
+            "rig": {"baseline_m": .06, "head_from_rectified": rectified, "eyes": [
+                {"intrinsics": [1000, 1000, 1232, 1232], "k": [0, 0, 0, 0], "head_from_optical": eye(x)} for x in (-.03, .03)]}}
+        images, masks, origins, rays, room, intrinsics = rectify(observation, 320, 256)
+        self.assertGreater(int(masks[0].sum()), 70000)
+        self.assertEqual(int(images[0][128, 160]), 116)
+        self.assertAlmostEqual(float(origins[1][128, 160, 0]-origins[0][128, 160, 0]), .06, places=8)
+        self.assertGreater(float(origins[0][230, 160, 0]-origins[0][25, 160, 0]), .001)
+        self.assertAlmostEqual(float(room[0, 3]), -.026, places=8)
+        self.assertTrue(np.isfinite(rays).all())
+
     def test_metric_stereo_rays_and_real_holes(self):
         import numpy as np
         from room_reconstruction.live_geometry import triangulate
