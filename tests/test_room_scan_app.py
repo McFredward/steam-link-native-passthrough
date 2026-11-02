@@ -1,6 +1,7 @@
 """Owned native-pipe/controller-flow fixtures, not a camera or headset test."""
 from dataclasses import replace
 from contextlib import redirect_stderr
+from unittest.mock import patch
 import io
 import json
 from pathlib import Path
@@ -164,6 +165,46 @@ class AppTests(unittest.TestCase):
         states = [json.loads(line) for line in outgoing.getvalue().splitlines()]
         self.assertEqual(["home", "prepare", "prepare"], [s["page"] for s in states])
         self.assertTrue(all(not s["capture_active"] for s in states))
+
+    def test_close_during_scan_preserves_draft_and_releases_capture(self):
+        self.start()
+        self.depth()
+        self.app.event(dict(event="close", capture_epoch=1))
+        state = self.app.view()
+        self.assertEqual("home", state["page"])
+        self.assertFalse(state["capture_active"])
+        self.assertFalse(state["camera_check_pending"])
+        self.assertIsNone(self.app.provider.binding)
+        self.assertIsNone(state["room"])
+        self.assertTrue(json.loads(next(self.store.root.glob("draft.*.json")).read_text())["room"]["mesh"]["triangles"])
+        self.assertFalse(list(self.store.root.glob("*.head")))
+
+    def test_close_while_starting_rejects_late_completion_after_reopen(self):
+        self.app.action("new")
+        self.app.event(dict(event="camera_warming", capture_epoch=0))
+        self.app.event(dict(event="close", capture_epoch=1))
+        self.app.action("new")
+        self.app.event(dict(event="camera_ready", capture_epoch=0, binding=BINDING))
+        self.app.event(dict(event="camera_unavailable", capture_epoch=0, reason="camera-metadata-unavailable"))
+        self.assertEqual("prepare", self.app.page)
+        self.assertFalse(self.app.view()["capture_active"])
+        self.assertEqual("", self.app.notice)
+        self.app.event(dict(event="camera_warming", capture_epoch=1))
+        self.app.event(dict(event="camera_ready", capture_epoch=1, binding=BINDING))
+        self.assertTrue(self.app.view()["capture_active"])
+
+    def test_failed_draft_write_still_closes_capture_and_allows_reopen(self):
+        self.start()
+        self.depth()
+        with patch.object(self.store, "save_draft", side_effect=OSError("fixture disk failure")):
+            with self.assertRaises(OSError):
+                self.app.event(dict(event="close", capture_epoch=1))
+        self.assertIsNone(self.app.provider.binding)
+        self.assertFalse(self.app.view()["capture_active"])
+        self.assertEqual("home", self.app.page)
+        self.app.event(dict(event="close", capture_epoch=2))
+        self.app.action("new")
+        self.assertEqual("prepare", self.app.page)
 
 
 if __name__ == "__main__":

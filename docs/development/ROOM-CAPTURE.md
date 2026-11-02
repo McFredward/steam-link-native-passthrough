@@ -117,7 +117,7 @@ queue, fixed staging buffers and image allocations. Images are handed to OpenVR
 in `TRANSFER_SRC_OPTIMAL`; a bounded fence retires OpenVR's queued copy before
 reusing the bytes. OpenVR shuts down before destroying the graphics resources.
 If GPU startup fails, one immutable raw diagnostic and icon remain available with
-all actions disabled; this fallback never animates or acquires the camera.
+capture actions disabled; this fallback never animates or acquires the camera.
 Hover highlighting and mesh reveal animations remain enabled. Local offscreen
 GPU readback tests exercise 150 changing frames with exact RGBA and fixed image
 handles. These tests do not establish headset import or visual stability.
@@ -143,7 +143,33 @@ factory geometry, pixel layout and exact exposure/pose association before a real
 scan can work. This candidate fixes the renderer path and misleading diagnosis;
 it does **not** fix live camera access or claim a successful room scan.
 
+### Candidate 5: close and reopen Room Setup
+
+Candidate **0.3.16-roomscan.5** adds a top-right X to the dashboard and the small
+in-world control panel. Closing hides only this application's panel, keyboard
+and world overlays. The existing dashboard entry and user service remain
+available, so selecting Room Setup opens it again without restarting SteamVR.
+Close also works from the immutable graphics-failure diagnostic.
+
+The camera worker releases its owned capture handle independently of draft
+writing. The controller attempts to preserve measured geometry as a draft and
+returns to the room list. Draft-write failure still releases capture. Each close
+advances a capture epoch, so an old camera-check completion cannot start a scan
+after closing and reopening. A new scan requires another explicit Start.
+
+Software checks exercise close during capture, close during camera startup,
+late camera responses after reopening, draft-write failure and native close hit
+bounds. They do not replace a wearer test of the SteamVR dashboard hide/reopen
+behavior. Native transport, rendering resources and game composition are unchanged.
+The separate manual camera API below is **not included or autostarted** by this
+installer candidate.
+
 ## Camera source and remaining hardware gate
+
+The separate [manual native camera API prototype](../../probe/ROOM-CAMERA-NATIVE.md)
+has now delivered actual Arcturus images outside `IVRTrackedCamera`. It has no
+boot/autostart integration and is excluded from the normal installer. Its
+calibration and exposure-pose gates remain closed pending independent validation.
 
 `native_camera.h` uses public `IVRTrackedCamera_006`, without root, capabilities,
 DMA-BUF interception, private hooks or RGB streaming to the PC. Admission requires:

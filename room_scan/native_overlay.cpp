@@ -138,12 +138,14 @@ std::string hudAction(const Json& state,const Mat& head,const Mat& controller){
     if(std::abs(direction.z)<1e-6f)return {};
     const float t=-source.z/direction.z;if(t<=0)return {};
     const V3 point=source+direction*t;const float x=(point.x+.5f)*1024,y=(.5f-point.y/(240.f/1024))*240;
+    if(hitClose(x,y))return "close";
     if(y<145||y>215)return {};
     for(std::size_t i=0;i<std::min<std::size_t>(3,state["buttons"].size());++i){const auto& b=state["buttons"][i];
         if(b.value("enabled",false)&&x>=20+i*334&&x<=334+i*334)return b.value("action","");}return {};
 }
 void miniPanel(Canvas& image,const Json& state){image.clear();image.rect(0,0,1024,240,{12,24,30,235},22);
-    image.text(24,14,state.value("title","Room Scan"),30,Ink);image.text(24,65,state.value("subtitle",""),19,Muted,970);
+    image.text(24,14,state.value("title","Room Scan"),30,Ink,880);image.text(24,85,state.value("subtitle",""),19,Muted,970);
+    closeButton(image);
     for(std::size_t i=0;i<std::min<std::size_t>(3,state["buttons"].size());++i){const auto& b=state["buttons"][i];const bool enabled=b.value("enabled",false);
         image.rect(20+int(i)*334,145,314,70,enabled?Color{29,79,82}:Color{25,40,45},12);
         image.text(35+int(i)*334,162,b.value("label",""),21,enabled?Ink:Muted,285,1);}}
@@ -171,20 +173,26 @@ int main(int argc,char** argv){
         Runtime runtime;if(!runtime.initialize(library)||!runtime.create(root))throw std::runtime_error("Native dashboard setup unavailable");
         Backend backend;if(!backend.start(root,data))throw std::runtime_error("Room controller unavailable");
         auto origin=std::make_shared<const std::string>(randomId());
-        std::atomic<int> beginCapture{0};std::atomic<bool> endWorker{false},invalidate{false};
+        std::atomic<std::uint64_t> beginCapture{0},captureEpoch{0};
+        std::atomic<bool> endWorker{false},invalidate{false},roomClosed{false};
         std::thread cameraWorker([&]{StereoCamera camera;camera.system=runtime.system;camera.api=runtime.camera;
-            bool awaiting=false;double started=0,lastFrame=0;
+            bool awaiting=false;double started=0,lastFrame=0;std::uint64_t activeEpoch=0;
             while(!endWorker&&!stopping&&backend.alive){
+                if(activeEpoch!=captureEpoch.load()){camera.stop();awaiting=false;activeEpoch=captureEpoch.load();}
+                if(roomClosed){camera.stop();awaiting=false;std::this_thread::sleep_for(std::chrono::milliseconds(30));continue;}
                 if(invalidate.exchange(false)){camera.stop();backend.send({{"event","tracking_lost"}});awaiting=false;}
-                if(const int request=beginCapture.exchange(0)){
+                if(const auto token=beginCapture.exchange(0)){
+                    const auto epoch=token>>2;const unsigned request=unsigned(token&3);
+                    if(roomClosed||epoch!=captureEpoch.load())continue;
                     TrackedDevicePose_t pose{};runtime.system->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding,0,&pose,1);
                     const bool validTracking=tracked(pose);
                     if(validTracking&&camera.start(randomId(),*std::atomic_load(&origin))){
                         std::fprintf(stderr,"Room camera: %s\n",camera.diagnostics.dump().c_str());
-                        awaiting=true;started=lastFrame=seconds();backend.send({{"event",request==2?"camera_resumed":"camera_ready"},{"binding",camera.binding},{"tracking_valid",true}});}
+                        if(roomClosed||epoch!=captureEpoch.load()){camera.stop();continue;}
+                        awaiting=true;started=lastFrame=seconds();backend.send({{"event",request==2?"camera_resumed":"camera_ready"},{"capture_epoch",epoch},{"binding",camera.binding},{"tracking_valid",true}});}
                     else {const std::string reason=validTracking?camera.status:"head-tracking-unavailable";
                         const Json diagnostic=validTracking?camera.diagnostics:Json{{"check","head-tracking"},{"reason",reason}};
-                        std::fprintf(stderr,"Room camera: %s\n",diagnostic.dump().c_str());backend.send({{"event","camera_unavailable"},{"reason",reason}});}
+                        std::fprintf(stderr,"Room camera: %s\n",diagnostic.dump().c_str());backend.send({{"event","camera_unavailable"},{"capture_epoch",epoch},{"reason",reason}});}
                 }
                 const auto state=backend.latest();
                 if(state&&camera.handle){
@@ -204,17 +212,31 @@ int main(int argc,char** argv){
         Canvas panel(1024,800),hud(1024,240);std::array<Canvas,2> worlds{Canvas(512,512),Canvas(512,512)};MeshView mesh;
         std::array<bool,64> triggers{},seenControllers{};std::string hovered,keyboardEvent="rename";bool spatial=false,originInvalid=false;double lastPanel=0;
         std::array<Mat,64> controllerPoses{};std::array<bool,64> controllerValid{};
-        double lastRenderReport=0;unsigned renderReports=0;
+        double lastRenderReport=0;unsigned renderReports=0;bool closePending=false;
         const auto action=[&](const std::string& text){
+            if(text=="close"){
+                if(roomClosed.exchange(true))return;
+                beginCapture=0;const auto epoch=captureEpoch.fetch_add(1)+1;
+                closePending=!backend.send({{"event","close"},{"capture_epoch",epoch}});
+                runtime.overlay->HideKeyboard();
+                runtime.overlay->HideOverlay(runtime.panel);runtime.overlay->HideOverlay(runtime.hud);
+                for(auto handle:runtime.world)runtime.overlay->HideOverlay(handle);
+                spatial=false;hovered.clear();controllerValid.fill(false);triggers.fill(false);seenControllers.fill(false);
+                std::fprintf(stderr,"Room window closed; capture cancelled and dashboard entry retained\n");
+                return;
+            }
+            if(roomClosed)return;
             if(text.empty()||!runtime.graphicsAvailable)return;
             const auto state=backend.latest();if(!state)return;
+            if(closePending||state->value("capture_epoch",std::uint64_t(0))!=captureEpoch.load())return;
             bool enabled=false;for(const auto& button:state->at("buttons"))
                 if(button.value("action","")==text&&button.value("enabled",false))enabled=true;
             if(!enabled)return;
             if(text=="start"||text=="resume"||text=="align_start"){
                 if(state->value("camera_check_pending",false)||beginCapture.load()!=0)return;
                 if((text=="start"&&state->value("page","")=="prepare")||text=="resume"||text=="align_start"){
-                    backend.send({{"event","camera_warming"}});beginCapture=text=="resume"?2:1;}
+                    const auto epoch=captureEpoch.load();
+                    backend.send({{"event","camera_warming"},{"capture_epoch",epoch}});beginCapture=(epoch<<2)|(text=="resume"?2u:1u);}
                 return;}
             if(text=="rename"||text=="rename_element"){
                 keyboardEvent=text;
@@ -230,6 +252,7 @@ int main(int argc,char** argv){
             {"notice","Diagnostic code: room-graphics-unavailable"},{"buttons",Json::array()},{"room",nullptr},
             {"pending",nullptr},{"corners",Json::array()},{"world_revision",0}});
         while(!stopping&&backend.alive){
+            if(closePending&&backend.send({{"event","close"},{"capture_epoch",captureEpoch.load()}}))closePending=false;
             const double now=seconds();const auto state=runtime.graphicsAvailable?backend.latest():graphicsUnavailable;VREvent_t event{};
             for(unsigned n=0;n<64&&runtime.system->PollNextEvent(&event,sizeof(event));++n){
                 if(event.eventType==EVREventType_VREvent_Quit||event.eventType==EVREventType_VREvent_ProcessQuit)stopping=1;
@@ -238,6 +261,10 @@ int main(int argc,char** argv){
             }
             for(unsigned n=0;n<64&&runtime.overlay->PollNextOverlayEvent(runtime.panel,&event,sizeof(event));++n){
                 if(event.eventType==EVREventType_VREvent_Quit)stopping=1;
+                if(event.eventType==EVREventType_VREvent_OverlayShown){roomClosed=false;lastPanel=0;}
+                if(event.eventType==EVREventType_VREvent_MouseButtonUp&&event.data.mouse.button==EVRMouseButton_VRMouseButton_Left
+                    &&hitClose(event.data.mouse.x,800-event.data.mouse.y)){action("close");continue;}
+                if(roomClosed)continue;
                 if(!state)continue;
                 const auto displayed=runtime.visibleUi[0];
                 if(!displayed||!sameControls(*displayed,*state))continue;
@@ -251,6 +278,8 @@ int main(int argc,char** argv){
                     if(event.eventType==EVREventType_VREvent_Quit)stopping=1;
                 }
             if(stopping)break;
+            if(roomClosed||closePending||(state&&state->value("capture_epoch",captureEpoch.load())!=captureEpoch.load())){
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));continue;}
             if(now-lastRenderReport>=10&&renderReports<120){
                 std::fprintf(stderr,"Room renderer: panel_submissions=%llu panel_rate_skips=%llu world_submissions=%llu\n",
                     static_cast<unsigned long long>(runtime.images[0].submissions()),

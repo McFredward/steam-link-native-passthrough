@@ -5,6 +5,7 @@ on:
     paths:
       - 'room_scan/**'
       - 'probe/room_camera*'
+      - 'probe/start_room_camera_api.py'
       - 'tests/*room*'
       - 'cmake/RoomScan.cmake'
       - 'setup/stream_bridge_install.py'
@@ -14,6 +15,8 @@ on:
   pull_request:
     paths:
       - 'room_scan/**'
+      - 'probe/room_camera*'
+      - 'probe/start_room_camera_api.py'
       - 'tests/*room*'
       - 'cmake/RoomScan.cmake'
       - 'setup/stream_bridge_install.py'
@@ -24,6 +27,24 @@ on:
 permissions:
   contents: read
 jobs:
+  manual-camera-prototype:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare the isolated camera prototype toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq g++-aarch64-linux-gnu
+          python3 - <<'PY'
+          import hashlib,urllib.request
+          from pathlib import Path
+          raw=urllib.request.urlopen('https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp',timeout=30).read(2*1024*1024)
+          assert hashlib.sha256(raw).hexdigest()=='aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63'
+          path=Path('build/manual-camera-json/nlohmann/json.hpp');path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+          PY
+      - name: Exercise real kernel guards, local API packets and diagnostic decoding
+        run: bash tools/build_room_camera_api.sh build/manual-camera-json build/manual-camera-api
   core-and-installation:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
