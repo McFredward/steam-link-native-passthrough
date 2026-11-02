@@ -48,6 +48,10 @@ def retarget(raw,channel):
         native.update(decoder)
     room='frame/room-setup/sfnp-room-overlay'
     if room in files:native['room_overlay']=room
+    camera='frame/room-setup/sfnp-room-camera-native'
+    if camera in files:
+        if room not in files:raise ValueError('Manual room camera has no dashboard')
+        native['room_camera']=camera
     if source['native_artifacts']!={role:pin(files[name]) for role,name in native.items()}:raise ValueError('Native artifact provenance differs')
     if bundle['logging']==logging:return raw,False
     before=dict(files)
