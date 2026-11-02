@@ -1,8 +1,8 @@
 {
   "baseline_receipt": {
     "archive": {
-      "bytes": 21336647,
-      "sha256": "6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b"
+      "bytes": 23116533,
+      "sha256": "82fb44b13edcf5d4367654ebdf71a6be5694ce78bcbe2252c25df180d12b0f70"
     },
     "artifacts": {
       "frame_layer": {
@@ -27,16 +27,24 @@
       },
       "room_camera": {
         "bytes": 1575456,
-        "sha256": "e3c1c2c5baa93947156d2806123ad5f0bf33cffbbfecdf829d7d6208d95865a7"
+        "sha256": "226b3422cb100a5817ded4b384e22fd84eeba1fa6c392969557c03dce913022c"
       },
       "room_overlay": {
-        "bytes": 2034168,
-        "sha256": "69448b0d70308735a46b57aa2fb3b992382d400d07d6241633c7c85816e5ed4f"
+        "bytes": 2099704,
+        "sha256": "c41834b84562c61e80d435a13aeaf95161f9f79cfb3b0b36364f1a6372463cac"
+      },
+      "room_renderer": {
+        "bytes": 1640976,
+        "sha256": "c48683ccb7021b5c794ad62724d3cd365baf8b0eef001d1d1d8b2ed90ab07510"
+      },
+      "room_vision": {
+        "bytes": 2822872,
+        "sha256": "1b2413d13af0022689a5d86b5cecd308b3d54e19bf2ade635cf37ac042063de6"
       }
     },
     "component_versions": {
-      "frame": "0.3.7-roomscan.7",
-      "pc": "0.3.11"
+      "frame": "0.3.8-roomscan.8",
+      "pc": "0.3.12-roomscan.8"
     },
     "device_actions": false,
     "hardware_verified": false,
@@ -45,8 +53,8 @@
     "readiness": "release",
     "result": "PASS",
     "runtime_profile": {
-      "bytes": 18576,
-      "sha256": "6ff1fdf8dd988716bf26bb7a5d3ecf478d65fdcfa33786dfc7a738dcfbe98c2c"
+      "bytes": 27314,
+      "sha256": "dcb81baa58389834727ab7b0ad538e51799b99ce81c2e0a477d75e603a6ebab1"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -55,12 +63,12 @@
         "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
       },
       "PATCH_VERSIONS.json": {
-        "bytes": 90,
-        "sha256": "e9181f18cfeca6b941a839a9b57f3b9b427ecea35431fc824b535efa76ebcb30"
+        "bytes": 101,
+        "sha256": "036e5e2019ae07e90c138e490f4552f926560b93ebcd228d3a0215b508acb1ca"
       },
       "VERSION": {
         "bytes": 18,
-        "sha256": "53704afac62920e28d613e2f6232056d34c1a46a806346cbb40d3a8919748d1c"
+        "sha256": "1e4622e620f10469fda19a931979c6a833c8767a97086000d769d21d14644bca"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -69,6 +77,26 @@
       "packaging/mask-ffmpeg.json": {
         "bytes": 452,
         "sha256": "7279c53e7353130676821a68a44ed454f44d65440b8eebd1a314e2de51d877bb"
+      },
+      "packaging/room-gaussian-backend.json": {
+        "bytes": 1340,
+        "sha256": "3c51e293799419ef402c27fafd9bc5a89385623a055d279809e5bb5692109c38"
+      },
+      "packaging/room-open3d-kernel.json": {
+        "bytes": 1178,
+        "sha256": "13039a49bbb205dc9f76e52c4f1429074b3e27e0067805565f2bfcf74a0d5ae9"
+      },
+      "packaging/room-openxr-headers.json": {
+        "bytes": 913,
+        "sha256": "5964b7e27682be2448e9540743fc52f86d67c8a2af941b6f3dd2060d13a86665"
+      },
+      "packaging/room-pc-runtime.json": {
+        "bytes": 6963,
+        "sha256": "025f918cb2dd355c25feef8c605ce6b7d2d1cd41a0dd1b7eb62c172367df7472"
+      },
+      "packaging/room-vision.json": {
+        "bytes": 833,
+        "sha256": "e784b1ffc60779090c590061d0fd1a365154ddca2c03fb6c40984e75b572c177"
       },
       "packaging/room-vulkan-headers.json": {
         "bytes": 1519,
@@ -91,8 +119,40 @@
         "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
       },
       "probe/room_camera_native.cpp": {
-        "bytes": 3903,
-        "sha256": "dbbe8c0c46c9e780ec331cda26e6785c499af4b1d0de59889effcd5750f43df4"
+        "bytes": 3933,
+        "sha256": "0b521048713ae1e7e6b873327e23e7042302e4d381cae69651ec5f32325d8632"
+      },
+      "room_reconstruction/__init__.py": {
+        "bytes": 82,
+        "sha256": "64732c5f21fcb1df1708c158a424bb629cd0747fc14c72f384ed5aa22597b281"
+      },
+      "room_reconstruction/__main__.py": {
+        "bytes": 3510,
+        "sha256": "b4b92d2bbaf59553a0b66a16abb431d2be98b17529b629edfcef3661ce24c6c6"
+      },
+      "room_reconstruction/backend.py": {
+        "bytes": 16445,
+        "sha256": "688833e70f88dc3f30475c8a811aa1e8b0b144914a99e554fd73cffdc68d69ab"
+      },
+      "room_reconstruction/fixture.py": {
+        "bytes": 3937,
+        "sha256": "a69348e10bb0c202f6b9d4b7e39c04d3f25f38251beac4956c85e58ea1735984"
+      },
+      "room_reconstruction/live_geometry.py": {
+        "bytes": 7050,
+        "sha256": "9f7d4560bd0f068d27b3ffe8be4e171086412bde91e13464cfb852cc429a3eb2"
+      },
+      "room_reconstruction/live_inference.py": {
+        "bytes": 3315,
+        "sha256": "d511ff4cc7e59b469bf322e363737706875425b022d6d861c2fb5e6f0c2d4790"
+      },
+      "room_reconstruction/live_map.py": {
+        "bytes": 11018,
+        "sha256": "66a511a38add47784b6d45e16682fb319b1fd3850311954f643d69d6a2fb5593"
+      },
+      "room_reconstruction/live_worker.py": {
+        "bytes": 4817,
+        "sha256": "05638dfea35063bd346197302d650a901ccfa1ae4235f2e70996215fdf5ef88d"
       },
       "room_scan/__init__.py": {
         "bytes": 250,
@@ -103,8 +163,8 @@
         "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
       },
       "room_scan/app.py": {
-        "bytes": 26776,
-        "sha256": "04cacc91e6fb04910a8fc6a997846b93440183f7b1e73ecc26ffd15edfcb6146"
+        "bytes": 34721,
+        "sha256": "67b1b53eb41d163459de465acbe834da5c80e1aa68bfbb140c45227cbb045f8f"
       },
       "room_scan/camera_api/buffer_source.h": {
         "bytes": 15452,
@@ -123,8 +183,8 @@
         "sha256": "08c7d59ef39a2104e807fa363731bf2f7d259327d49b629a455c366963e66692"
       },
       "room_scan/camera_api/local_api.h": {
-        "bytes": 4971,
-        "sha256": "9a87624413a425e27f8060195e8db420ba0d9206602b878f44cc9a24b5e6097c"
+        "bytes": 5610,
+        "sha256": "5430954cc5b9035d8c459c1b7239408b5901ab2ab93981b3ef73b8e65e1a6d01"
       },
       "room_scan/camera_api/luma_layout.h": {
         "bytes": 1715,
@@ -147,12 +207,12 @@
         "sha256": "ef807ada3404f932334a9564d896b38f0856e51ce78b7e1d8baec02e39398fe7"
       },
       "room_scan/camera_api/trace_reader.h": {
-        "bytes": 8412,
-        "sha256": "7d851c234e923fe5dbe68c9c1235aa4b7bb5a347c49c76b53f84e5ca2f52c7ac"
+        "bytes": 8540,
+        "sha256": "3d9f5b07b00adcf7c2c68b2e1659952d0d6d4c97f94258e8c4fe31f2d3165ce8"
       },
       "room_scan/capture.py": {
-        "bytes": 10562,
-        "sha256": "7b08c50b5aa8a7fb9eb81947ef2f023fb3b6d2e02e3c14899f0f8a62fdf507c2"
+        "bytes": 11558,
+        "sha256": "a0a93db9b51d1c31f9af338594ebeee0597826695fba7e1384c367a5e6dd8e8c"
       },
       "room_scan/capture_session.py": {
         "bytes": 14194,
@@ -162,17 +222,45 @@
         "bytes": 5529,
         "sha256": "3ed9e81dd1b2f3e0bda9d9133bbd60668758795759eed360446c239387e1119c"
       },
+      "room_scan/fusion.py": {
+        "bytes": 7849,
+        "sha256": "ee781ce9ea52da7eb3a458ac1e8862c0e5936ad06050ab951ad72c88c865f727"
+      },
       "room_scan/geometry.py": {
         "bytes": 6095,
         "sha256": "937c6705f2a543a93fdc789297c59567693995467e1889922f6bf13be8891b05"
+      },
+      "room_scan/licenses/ArcturusOpenXR.txt": {
+        "bytes": 1076,
+        "sha256": "1cfc5350cae6f20a5c2b4bdb5e44303fc9b0ccd6d54416256fe3479d28e70a0f"
       },
       "room_scan/licenses/DejaVu.txt": {
         "bytes": 3857,
         "sha256": "e81d9dced49fea2a7d576cbea283873de58563c5d488f954deb282843c3ea79c"
       },
+      "room_scan/licenses/NVIDIA-Open-Model.txt": {
+        "bytes": 7903,
+        "sha256": "1c55b033d29ec6da97070305ec036bb6d82540e2cc7ab67fad44d8a89801e2d8"
+      },
+      "room_scan/licenses/NVIDIA-Stereo-Model-Card.txt": {
+        "bytes": 7854,
+        "sha256": "5259f9f2675526f1db6bcb5823cd805ba6fbabba79dfd52ee34e51a212aa762c"
+      },
       "room_scan/licenses/NativeCamera.txt": {
         "bytes": 1099,
         "sha256": "5647110783cef827953a9599b7b1051f50f9a18fc953fa8367a2702c235183e4"
+      },
+      "room_scan/licenses/Open3D.txt": {
+        "bytes": 1139,
+        "sha256": "e5439bd70250da5f17b3435ff9efb05e96e7f9fdc34248d3355b0026baadaa41"
+      },
+      "room_scan/licenses/OpenCV.txt": {
+        "bytes": 259250,
+        "sha256": "f0b6cfeb5f66be0761a980db4d4e5c54952b3c3b455d64e7695ba27688e9b96d"
+      },
+      "room_scan/licenses/OpenXR.txt": {
+        "bytes": 11358,
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
       },
       "room_scan/licenses/nlohmann-json.txt": {
         "bytes": 1075,
@@ -183,48 +271,64 @@
         "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
       },
       "room_scan/native_arcturus_geometry.h": {
-        "bytes": 7991,
-        "sha256": "28d1e52e41f61fa96d0eb38f38ac448f82bc01e7857ac9c0afdad44ccf76c1e2"
+        "bytes": 10616,
+        "sha256": "7e98e0282260ba550266d8c4ef7874930a0b12deced7f769e7c021f88f6f5304"
       },
       "room_scan/native_arcturus_source.h": {
-        "bytes": 7510,
-        "sha256": "d7c08c364fd013bafaf87b9000173c79226be3f741436344ac3d3d7e5f5a0799"
+        "bytes": 10561,
+        "sha256": "9a2b86e29b40c814b49375440463128a998cfe14846d1862d7ef5c6fd7c0802b"
       },
       "room_scan/native_arcturus_timing.h": {
         "bytes": 3192,
         "sha256": "29a3afdef662e1bc9e75172c3406204f15b084b0e1873995a102e3db72cdc32b"
       },
       "room_scan/native_camera.h": {
-        "bytes": 22440,
-        "sha256": "3ac54e1f75a86d211ea67e1553e5f7e896997c361aa0a5af423e1d4578c47479"
+        "bytes": 23151,
+        "sha256": "f20de9eeec4d59fea2f1f17925c06e7d3c2d653af83a3538d90ed1561aa30909"
       },
       "room_scan/native_camera_client.h": {
         "bytes": 4950,
         "sha256": "7db12ad3e4eec30cca6296b569d9ad34a929045e71ea532da7d1b7a4477a98c3"
       },
       "room_scan/native_camera_source.h": {
-        "bytes": 1109,
-        "sha256": "9b4f8f1f528d1cf7b51f8aa88f65ba0e3b763360b2da4ed49c39f45dbff8defa"
+        "bytes": 1705,
+        "sha256": "1d1a099058bf486d0f172cda161736d23e2c0c6d4b38f9f826d13b396ccf43e3"
       },
       "room_scan/native_capture_pose.h": {
-        "bytes": 3629,
-        "sha256": "36108a1d0e18c6788dc56cb3c1a8b486c252ea69cb490e2caf10c23543d672e0"
+        "bytes": 4009,
+        "sha256": "47a10397f19ebb3daae2e8c9eca77728649c795e5e3dd28b7d3d9143f3fd0b47"
+      },
+      "room_scan/native_capture_stats.h": {
+        "bytes": 1992,
+        "sha256": "2461de0ea3b7ffbc606a9663d15813d5daf9b5ae3fc145ba5b3f56c7d226b6b7"
+      },
+      "room_scan/native_controller_aim.h": {
+        "bytes": 3294,
+        "sha256": "87e71f57b8caa0afd019a300219779554a67c23e80b38c6cabbcbbd00a533392"
       },
       "room_scan/native_dashboard.h": {
         "bytes": 947,
         "sha256": "14f05b502eaa8c6ed69d5268f3569063600d9c4aebd3cb89591d91bdad004168"
       },
+      "room_scan/native_gaussian.h": {
+        "bytes": 3135,
+        "sha256": "b3294fc0170b3f96aad7e8e181c9573971b19372db9138089a82903b492aa597"
+      },
       "room_scan/native_gpu.h": {
-        "bytes": 15578,
-        "sha256": "661d5ccd81233d8b70ebb6191e7b1fc1136992c0a842003166106b6a9e5a3f3e"
+        "bytes": 16140,
+        "sha256": "9656ced0b38ce01d5da4690a70f9a362e9f416930231d20d4fe9226c28793fab"
+      },
+      "room_scan/native_hud_input.h": {
+        "bytes": 2822,
+        "sha256": "0b51fb371b49c262e69a2a649e641cb138a4f6f8748afe1adf39b8ebfc6dde8a"
       },
       "room_scan/native_math.h": {
-        "bytes": 3489,
-        "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
+        "bytes": 3491,
+        "sha256": "5d8b4bd5503dfdf65afd3443e06c941997b41a54036101b0ad13b28366288229"
       },
       "room_scan/native_overlay.cpp": {
-        "bytes": 29516,
-        "sha256": "ceb9bf020def4d0e7fda5ef6ce1bfb5ecbc6c911eb84f796a046632135bd0c9f"
+        "bytes": 33258,
+        "sha256": "a0ba7c279642f3f1c65c6c18f41f57a23e508fb7e1ebef1316b3db03f995b091"
       },
       "room_scan/native_pipe.h": {
         "bytes": 4337,
@@ -234,25 +338,129 @@
         "bytes": 1976,
         "sha256": "e3494778a65d490d05599ca0d1a56d0cdf516799798212dfb7d8b0f5ba647952"
       },
+      "room_scan/native_projection.h": {
+        "bytes": 3631,
+        "sha256": "4c71154d89fbc7407d66d2c85e37de24402972d4f889eb5359cb079b006f4ca0"
+      },
       "room_scan/native_raster.h": {
         "bytes": 4984,
         "sha256": "b1b98fd7f31440054db1f5dc3d8e52600ba099e5ef54c9edfbd964cd274f9e62"
       },
       "room_scan/native_registration.h": {
-        "bytes": 1635,
-        "sha256": "f11bbfa3146d1314fe795445217b6f23a25a0a41929bd0c813b63c65bd5cd3ed"
+        "bytes": 1891,
+        "sha256": "1ffe307cac581f7077a9d8f17c39bd783f6ae1a3ff5b48ccdd92d35748a858ec"
+      },
+      "room_scan/native_scan_view.h": {
+        "bytes": 3609,
+        "sha256": "d1aaeb1c5c47c02a857506d2770c57dcbbe28ae628f45e0feb13bb19892b6d07"
+      },
+      "room_scan/native_scene_client.h": {
+        "bytes": 6038,
+        "sha256": "59a9ea566f8df9f3b65387a3abbf493217f02ad2c54b71ad0ed806087da84672"
+      },
+      "room_scan/native_scene_driver.h": {
+        "bytes": 7318,
+        "sha256": "6a592c0cbd2a4adcb2f511688236e576eccf4b3f352ba7e342d7c2a6d7e5e7aa"
+      },
+      "room_scan/native_scene_mesh.h": {
+        "bytes": 3373,
+        "sha256": "ea03765961172fb7586472e94cd3e1f8349f2943549764a9543e56c9f18f6454"
+      },
+      "room_scan/native_scene_protocol.h": {
+        "bytes": 4206,
+        "sha256": "cecdbee812ad88b7be258985327e85f0ad1d7c42b3c1eff13ff2099b26e4b350"
+      },
+      "room_scan/native_scene_snapshots.h": {
+        "bytes": 3974,
+        "sha256": "2488e7cb891f1a8bafcb9331e670198dc4fb94876185b9498ebea8f809797905"
+      },
+      "room_scan/native_surface.h": {
+        "bytes": 2950,
+        "sha256": "b956d7ff225589c14a7d2706a3d65e6026341cacbcee35ca27a26f3ce3beafd5"
+      },
+      "room_scan/native_triangulation.h": {
+        "bytes": 801,
+        "sha256": "174af7e690b99004d33d5b10560755b52b0e9f48c51ee71912cff981b03a08af"
       },
       "room_scan/native_view.h": {
-        "bytes": 9653,
-        "sha256": "32e84bb7c73a4b85e19ce5c6bad8ee0b4dadad8e94687c1e66be7ef7fd64f5c4"
+        "bytes": 14161,
+        "sha256": "7637a3ff776e6e4debb1c333cf7b93ba40b86c02f29d1c1e0b1814b88aa8f04d"
+      },
+      "room_scan/native_vision.h": {
+        "bytes": 3315,
+        "sha256": "df2e505753a00832225e38279187531497706ac6deb932dd2e546f0502d4cbff"
+      },
+      "room_scan/native_xr_api.cpp": {
+        "bytes": 3191,
+        "sha256": "fb7e196662a832b3358b602da309e57af71f802ad416638d2aca4b7f8c43d811"
+      },
+      "room_scan/native_xr_api.h": {
+        "bytes": 3443,
+        "sha256": "dc170918155dd6d71eabe3e32383d8ca7246985d4d2e9066ad409caa399c3ac2"
+      },
+      "room_scan/native_xr_graphics.cpp": {
+        "bytes": 30510,
+        "sha256": "d21c6d1e89362db4c4fc898dc072ddeebeebfc2be358ba3184cc2124ae3e5fb6"
+      },
+      "room_scan/native_xr_graphics.h": {
+        "bytes": 1236,
+        "sha256": "dbc6d4b3b094ffe322c0f41d208b7362b54c25a6a47d30bdd1789d5b4864ad2c"
+      },
+      "room_scan/native_xr_input.h": {
+        "bytes": 5473,
+        "sha256": "1ad4cdb4c0724f80fc295aecccbc60c42768f53ea8cecace83a2fb0d953c3196"
+      },
+      "room_scan/native_xr_renderer.cpp": {
+        "bytes": 16802,
+        "sha256": "1b53c78a62569cd36341d510c5dc10dd6cc5d0e067951ce0d7a00dd49a54a3db"
+      },
+      "room_scan/pc_reconstruction.py": {
+        "bytes": 3437,
+        "sha256": "ee1c2ac6bc6a48a60c3c66a8572813866bf547bc7fe95deaa8bbd4f83f53be5a"
+      },
+      "room_scan/pc_relay.py": {
+        "bytes": 8514,
+        "sha256": "b1457bd599b0be94376f8d4b32a21614cf6eb96b6683f71813954c07e3c2a9dd"
+      },
+      "room_scan/scene.frag": {
+        "bytes": 1845,
+        "sha256": "65e395b3aeb74192df77789a89fb6b0f49a83c038f51b938f499322a86b861b2"
+      },
+      "room_scan/scene.vert": {
+        "bytes": 680,
+        "sha256": "3d2d6e4362e322bf37b0ed78abc7d13288ee5e2f8e091da357c57e2d0329a299"
       },
       "room_scan/store.py": {
         "bytes": 6838,
         "sha256": "f573ebac56f5e49a86853d8c2711f150587c362b295e320c109341cdc201d49a"
       },
+      "room_scan/vendor/open3d/MarchingCubesConst.h": {
+        "bytes": 20482,
+        "sha256": "77c7361e96bf6676821fdf15e3db6865e91de4aa119a4e644aae29797b499554"
+      },
+      "room_scan/vision.exports": {
+        "bytes": 58,
+        "sha256": "d11e5a7d7dc2229d35b624e40e325752de3ef1b37649c89d2945afca28bc9ac5"
+      },
+      "room_scan/vision_api.h": {
+        "bytes": 1870,
+        "sha256": "300aaf3f2613743cb4d1c8b72df160826cacbf1b0bafafa6be3a06e4ed0521bf"
+      },
+      "room_scan/vision_common.h": {
+        "bytes": 547,
+        "sha256": "7ae3ccddd7f7bd10962f43377a32f84aa5dca2213c03ec33250ad25fc3e340bf"
+      },
+      "room_scan/vision_fusion.cpp": {
+        "bytes": 17899,
+        "sha256": "69f9becbf857c47b82167743b200543d3c729f369e2ecd3a6004401e78690b7c"
+      },
+      "room_scan/vision_stereo.cpp": {
+        "bytes": 6292,
+        "sha256": "215633c0f3ae29e2c6b152882344efa43906b1d6fa8adcad436d1bfbd2695491"
+      },
       "room_scan/workflow.py": {
-        "bytes": 10943,
-        "sha256": "a948b404735e6e1496b30f1cb3e587bb4934f84960490d7ca433b496ff3d0543"
+        "bytes": 11929,
+        "sha256": "6066b13fb6663686c0fb080d3b2b9b0a68cd068d7ad9410b7eb5e50de15f4cb1"
       },
       "setup/patch-steam-link.cmd": {
         "bytes": 1266,
@@ -302,6 +510,10 @@
         "bytes": 23932,
         "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
       },
+      "setup/steam_link_setup_room.py": {
+        "bytes": 16519,
+        "sha256": "d0563b726466e4489e2a6cabba05df87208841cffe955aab7a58dda4ae0598cf"
+      },
       "setup/steam_link_setup_session.py": {
         "bytes": 18278,
         "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
@@ -311,8 +523,8 @@
         "sha256": "46847eaa053128da1c92682cc7b2c86c91094f45d0ac397b1cdbb368766826ac"
       },
       "setup/steam_link_setup_ui.py": {
-        "bytes": 84449,
-        "sha256": "64b616eb405a018741934871d1bf3cc5290484e7abca0c9d734d2a2191b4e829"
+        "bytes": 85811,
+        "sha256": "1236bae36e4c5005695c26854abd5da5fb93339d403d391bb95f14682914361d"
       },
       "setup/steam_link_setup_vendor.py": {
         "bytes": 2108,
@@ -323,8 +535,8 @@
         "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
       },
       "setup/stream_bridge_install.py": {
-        "bytes": 184426,
-        "sha256": "d708363a72a7e9be8522424c042a163a616e9ee1824d8b9723917266fa0a7d4c"
+        "bytes": 187164,
+        "sha256": "d713b9bbb203e78b041c1f7765cc7491fcfb0da621ca15c8ecf9ef0a6066e773"
       },
       "third_party/ffmpeg/COPYING.LGPLv2.1": {
         "bytes": 26517,
@@ -363,12 +575,24 @@
         "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
       },
       "tools/build_room_overlay.sh": {
-        "bytes": 3595,
-        "sha256": "8fb389e76c1a5da5788f995a2fe00fc8d255607456880c91762408847db7182c"
+        "bytes": 6580,
+        "sha256": "5f2481cc73958b81f21ff75c4211b540c456578241aa37f1f863f2b210fb1f36"
+      },
+      "tools/build_room_scene_shaders.py": {
+        "bytes": 1658,
+        "sha256": "dbdf312d282819baa5be8710de9dc1a99ddb751ab078268514dfe5f95411c598"
+      },
+      "tools/build_room_vision.py": {
+        "bytes": 9662,
+        "sha256": "587ce242892222290bda754f99d228605beafdb269131b6efff1ae1ae6baa49a"
       },
       "tools/build_setup_askpass.py": {
         "bytes": 6373,
         "sha256": "89c789e09d30b8ed6a7b836208a3b1bad9d1d48d6d98ca34f8e052e0f9cf6913"
+      },
+      "tools/check_room_pc_runtime.py": {
+        "bytes": 2290,
+        "sha256": "27191c61bd8548b6b589c285d2b3ffdd275a1b5ac3878f25249567ae5f2d8d68"
       },
       "tools/compositor_startup_health.py": {
         "bytes": 89190,
@@ -377,6 +601,14 @@
       "tools/configure_mask_codec.py": {
         "bytes": 2791,
         "sha256": "25c36853b9e912d7edf253c96ea7fe3636d5168ed05b9be4dfa81cd6ac7f8add"
+      },
+      "tools/fetch_room_gaussian_backend.py": {
+        "bytes": 3315,
+        "sha256": "1ea4836df9afdd744ef2577267ff0e61f5b4cbd1b233867e77693a7de7c1f082"
+      },
+      "tools/fetch_room_xr_headers.py": {
+        "bytes": 1190,
+        "sha256": "bb3f0c0c873743073035e30a1e55f6d5388fa02564fbfd464a4995b7eafc53a7"
       },
       "tools/native_fragment_count1_interface.py": {
         "bytes": 2874,
@@ -407,8 +639,8 @@
         "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
       },
       "tools/package_stream_bridge.py": {
-        "bytes": 25580,
-        "sha256": "7287c5c66e8d46c63967d355be8ea4bb223874f0d222db46283761c0286cdcd5"
+        "bytes": 28796,
+        "sha256": "0ff48d56b2ea3a0bac20ea0375867b47d7220e1760bb16351372615b926ac59e"
       },
       "tools/package_stream_link_setup.py": {
         "bytes": 7826,
@@ -423,7 +655,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
+    "source_revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -440,37 +672,42 @@
           "room_camera_depth",
           "room_camera_session",
           "room_dashboard_flow",
+          "room_gaussian_live",
           "room_installer_transaction",
           "room_overlay_build",
+          "room_pc_installer",
+          "room_pc_neural_model",
+          "room_renderer_build",
+          "room_scene_origin",
+          "room_vision_build",
+          "room_vision_fusion",
           "startup_health_logic"
         ],
         "hardware_verified": false,
         "pin": {
-          "bytes": 15812,
-          "sha256": "287e9e16d6ba5b99ba90bb468cd5bf6e88fcbe6ffbe212740be38c8df61083fe"
+          "bytes": 24774,
+          "sha256": "a5726e06acc4d519abba83730797ce6a00a45a7f24315705dc0fb8e4ccf073c2"
         }
       }
     ],
-    "version": "0.3.16-roomscan.7"
+    "version": "0.3.16-roomscan.8"
   },
   "change_scope": "Windows/NVIDIA PC companion through authenticated SSH, checked capture-time raw stereo, rolling-aware rectification, bilateral C-Fast-FoundationStereo, continuously refined Gaussian surfels, locally predicted native MR preview, measured polygon extraction, focused XR world actions and native SteamVR menu input. Installer-managed private dependencies and transient read-only camera access; no boot integration or native service replacement.",
   "ci": {
     "room": {
       "result": "success",
-      "revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
-      "run": 41545087556
+      "revision": "d3f94b45aad240e83c8f5afcf9c543dab306e54c",
+      "run": 41546556172,
+      "scope": "The current source differs only in the logging publication tool and its test; all packaged source pins are identical."
     },
-    "setup": {
+    "setup_baseline": {
       "result": "success",
       "revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
       "run": 41545086095
     }
   },
+  "close_during_polygon_extraction_regression": "PASS: cancels the pending operation, refuses late results and returns to a fresh scan state.",
   "current_software_checks": {
-    "actual-bootstrap-candidate-final.log": {
-      "bytes": 145,
-      "sha256": "58878a7fc6d9517184b6bfcb12f12afa82a7537fc8000e0806bfe403584ec955"
-    },
     "camera-fast-build.log": {
       "bytes": 858,
       "sha256": "9158fc94f9adb1bd86bb8b704f617e65889e6ba240fae74fd36c5c32a56ec531"
@@ -478,6 +715,10 @@
     "ci-windows-pc-pass.log": {
       "bytes": 16532,
       "sha256": "8ab46a6e9fd820037acbd85f6aaa0a38e46858da12524ed4f5ae51aa4d00a41e"
+    },
+    "logging-final.log": {
+      "bytes": 105,
+      "sha256": "67fe6ea7899a77fbd7b3374586288da88a905ebca1f0c0d14cb9d6b444836a94"
     },
     "native-pc-build-final.log": {
       "bytes": 2357,
@@ -493,7 +734,7 @@
     },
     "pc-live-tests-final.log": {
       "bytes": 107,
-      "sha256": "6a21f23a0b0ac2d9ab225753bc4e611baff59c5e7fe3f63b21a82587cc4fd7bf"
+      "sha256": "d8c0c8f0c33982aabc991ff9416e645bcbe448028a150071b0185bf21ce1cc63"
     },
     "pc-only-tests-final.log": {
       "bytes": 7018,
@@ -503,9 +744,13 @@
       "bytes": 117,
       "sha256": "1d5fa0202425764d1b7fb6dc17b5ae979912a17c25cf59691bdf04b0b80945d7"
     },
+    "pc-pipe-close-final.log": {
+      "bytes": 206,
+      "sha256": "12ca5942ef1958c3292a8e8f2f017b0e655151e32bab683fa7309b6502d594d0"
+    },
     "pc-room-python-final.log": {
       "bytes": 141,
-      "sha256": "a578d6cf7c003f9ae81ba54425f372acd2f4258b3226293f38cc621b99e53acf"
+      "sha256": "e2feab7c3969c3664049aba990beee4f3b9bae0747214ce6000fba4eb50c4c42"
     },
     "pc-session-tests-final.log": {
       "bytes": 104,
@@ -544,8 +789,8 @@
     "schema": "sfnp-room-pc-model-evaluation-v1"
   },
   "prior_artifact_provenance": {
-    "bytes": 33771,
-    "sha256": "06cfda07190c5cb9ad79075d0a359fbae85d21ebee4b53b2a456eb331101deeb"
+    "bytes": 22309,
+    "sha256": "ed499c95f53bc4dc32fe165e8d88d46933de57dc3cbb3b2288bd486e3290cf68"
   },
   "private_runtime": {
     "manifest": {
@@ -564,7 +809,7 @@
     "native_service_restarts": 0,
     "unprivileged_transient_reader": true
   },
-  "source_revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
+  "source_revision": "c964dec16c8949337666e3bd73ff13d96a9945a5",
   "unchanged_compiled_source_paths": [
     "layer",
     "receiver",
