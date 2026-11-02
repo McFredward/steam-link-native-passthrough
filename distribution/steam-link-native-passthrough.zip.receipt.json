@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20802338,
-    "sha256": "24168b29f4a6183b9bb67365374c12a589c63e04d8253b521150a5256106c605"
+    "bytes": 21336647,
+    "sha256": "6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b"
   },
   "artifacts": {
     "frame_layer": {
@@ -24,13 +24,17 @@
       "bytes": 2094080,
       "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
     },
+    "room_camera": {
+      "bytes": 1575456,
+      "sha256": "e3c1c2c5baa93947156d2806123ad5f0bf33cffbbfecdf829d7d6208d95865a7"
+    },
     "room_overlay": {
-      "bytes": 1903072,
-      "sha256": "b308c42f5a3ef49ef0fafeab053c6997f11a887376aa8355374c369a346acb2e"
+      "bytes": 2034168,
+      "sha256": "69448b0d70308735a46b57aa2fb3b992382d400d07d6241633c7c85816e5ed4f"
     }
   },
   "component_versions": {
-    "frame": "0.3.6-roomscan.6",
+    "frame": "0.3.7-roomscan.7",
     "pc": "0.3.11"
   },
   "device_actions": false,
@@ -40,8 +44,8 @@
   "readiness": "release",
   "result": "PASS",
   "runtime_profile": {
-    "bytes": 15172,
-    "sha256": "a26fde3f4b5535e12d85edf8a19a162df342cd0eb8cac11234c5627e4666ad82"
+    "bytes": 18576,
+    "sha256": "6ff1fdf8dd988716bf26bb7a5d3ecf478d65fdcfa33786dfc7a738dcfbe98c2c"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -51,11 +55,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 90,
-      "sha256": "8763f4838e156c0cd75f0d841bb044ccf66881e90b9155a45fa0bb85250ba894"
+      "sha256": "e9181f18cfeca6b941a839a9b57f3b9b427ecea35431fc824b535efa76ebcb30"
     },
     "VERSION": {
       "bytes": 18,
-      "sha256": "925ee29ef4e98a279328968790fa90c21c1fdc7c7d88c6ec864d18046cbcbc59"
+      "sha256": "53704afac62920e28d613e2f6232056d34c1a46a806346cbb40d3a8919748d1c"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -85,6 +89,10 @@
       "bytes": 138,
       "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
     },
+    "probe/room_camera_native.cpp": {
+      "bytes": 3903,
+      "sha256": "dbbe8c0c46c9e780ec331cda26e6785c499af4b1d0de59889effcd5750f43df4"
+    },
     "room_scan/__init__.py": {
       "bytes": 250,
       "sha256": "06916ad8fab4dbd6ffc79faebc79543403407116262df234ea94c00661bc66b6"
@@ -94,12 +102,60 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 25870,
-      "sha256": "36c14d56cbff3e108447f8c80809313ccb4d29bf549b50d4fbae676394e76861"
+      "bytes": 26776,
+      "sha256": "04cacc91e6fb04910a8fc6a997846b93440183f7b1e73ecc26ffd15edfcb6146"
+    },
+    "room_scan/camera_api/buffer_source.h": {
+      "bytes": 15452,
+      "sha256": "e97fb4252fdd8f651264199d2d2f25e813550eb75d22d9891306e2cbeb08adfa"
+    },
+    "room_scan/camera_api/capture_metadata.h": {
+      "bytes": 2264,
+      "sha256": "dbf7c262d98cd712f00fc199c7bb8640652dbb1f375e6c3ff9a06d5bb16a7f60"
+    },
+    "room_scan/camera_api/exposure_registers.h": {
+      "bytes": 5241,
+      "sha256": "08101c30b36118fc39c0f9950006b7918aad02f74086c6dec267eb2ca15865ca"
+    },
+    "room_scan/camera_api/linux_inventory.h": {
+      "bytes": 13692,
+      "sha256": "08c7d59ef39a2104e807fa363731bf2f7d259327d49b629a455c366963e66692"
+    },
+    "room_scan/camera_api/local_api.h": {
+      "bytes": 4971,
+      "sha256": "9a87624413a425e27f8060195e8db420ba0d9206602b878f44cc9a24b5e6097c"
+    },
+    "room_scan/camera_api/luma_layout.h": {
+      "bytes": 1715,
+      "sha256": "db39e94ca75a2f0c0bd51019840d57e69c9623091ecbdc2a6073c0e9373e4b5c"
+    },
+    "room_scan/camera_api/owner_lifetime.h": {
+      "bytes": 1954,
+      "sha256": "b213cabbd8971d4d3db1c72e7bb254ebf00b71fe105aabd9eb9261f0260f82f9"
+    },
+    "room_scan/camera_api/passive_trace.h": {
+      "bytes": 7804,
+      "sha256": "2b3a45c543dff9eedd38e40386d3c799ff028bd33726a7c7ca2ebac2c957e0fd"
+    },
+    "room_scan/camera_api/read_only_policy.h": {
+      "bytes": 6845,
+      "sha256": "b9de0810ef3f26393edb562a97ad3df5a9c9b195f24908f212e7bef63d15cc7f"
+    },
+    "room_scan/camera_api/stereo_snapshot.h": {
+      "bytes": 3740,
+      "sha256": "ef807ada3404f932334a9564d896b38f0856e51ce78b7e1d8baec02e39398fe7"
+    },
+    "room_scan/camera_api/trace_reader.h": {
+      "bytes": 8412,
+      "sha256": "7d851c234e923fe5dbe68c9c1235aa4b7bb5a347c49c76b53f84e5ca2f52c7ac"
     },
     "room_scan/capture.py": {
       "bytes": 10562,
       "sha256": "7b08c50b5aa8a7fb9eb81947ef2f023fb3b6d2e02e3c14899f0f8a62fdf507c2"
+    },
+    "room_scan/capture_session.py": {
+      "bytes": 14194,
+      "sha256": "ec59a1b207111f7054c330e29a04c36673e11af50772e19f01a60972d6976d98"
     },
     "room_scan/editor.py": {
       "bytes": 5529,
@@ -113,6 +169,10 @@
       "bytes": 3857,
       "sha256": "e81d9dced49fea2a7d576cbea283873de58563c5d488f954deb282843c3ea79c"
     },
+    "room_scan/licenses/NativeCamera.txt": {
+      "bytes": 1099,
+      "sha256": "5647110783cef827953a9599b7b1051f50f9a18fc953fa8367a2702c235183e4"
+    },
     "room_scan/licenses/nlohmann-json.txt": {
       "bytes": 1075,
       "sha256": "c0d068392ea65358b798b8c165103560f06e9e3b38c4ab4e2d8810a7b931af86"
@@ -121,9 +181,33 @@
       "bytes": 9339,
       "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
     },
+    "room_scan/native_arcturus_geometry.h": {
+      "bytes": 7991,
+      "sha256": "28d1e52e41f61fa96d0eb38f38ac448f82bc01e7857ac9c0afdad44ccf76c1e2"
+    },
+    "room_scan/native_arcturus_source.h": {
+      "bytes": 7510,
+      "sha256": "d7c08c364fd013bafaf87b9000173c79226be3f741436344ac3d3d7e5f5a0799"
+    },
+    "room_scan/native_arcturus_timing.h": {
+      "bytes": 3192,
+      "sha256": "29a3afdef662e1bc9e75172c3406204f15b084b0e1873995a102e3db72cdc32b"
+    },
     "room_scan/native_camera.h": {
-      "bytes": 22371,
-      "sha256": "80b1f10f499b3674db60e8be407eb67e82bb411f332d2e792c10aceae342b07f"
+      "bytes": 22440,
+      "sha256": "3ac54e1f75a86d211ea67e1553e5f7e896997c361aa0a5af423e1d4578c47479"
+    },
+    "room_scan/native_camera_client.h": {
+      "bytes": 4950,
+      "sha256": "7db12ad3e4eec30cca6296b569d9ad34a929045e71ea532da7d1b7a4477a98c3"
+    },
+    "room_scan/native_camera_source.h": {
+      "bytes": 1109,
+      "sha256": "9b4f8f1f528d1cf7b51f8aa88f65ba0e3b763360b2da4ed49c39f45dbff8defa"
+    },
+    "room_scan/native_capture_pose.h": {
+      "bytes": 3629,
+      "sha256": "36108a1d0e18c6788dc56cb3c1a8b486c252ea69cb490e2caf10c23543d672e0"
     },
     "room_scan/native_dashboard.h": {
       "bytes": 947,
@@ -138,8 +222,8 @@
       "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
     },
     "room_scan/native_overlay.cpp": {
-      "bytes": 29231,
-      "sha256": "cf0c1c72d4941ee5973c6afeaa157e0d1f7759109ee503e7870e9280a5d00946"
+      "bytes": 29516,
+      "sha256": "ceb9bf020def4d0e7fda5ef6ce1bfb5ecbc6c911eb84f796a046632135bd0c9f"
     },
     "room_scan/native_pipe.h": {
       "bytes": 4337,
@@ -186,8 +270,8 @@
       "sha256": "a4974678c286dbf95aa609698ef9569c877baec353d18eda90ce118453f4e919"
     },
     "setup/steam_link_setup.py": {
-      "bytes": 70844,
-      "sha256": "cd8e21d0ce7bb05a0cd262d0a5aa8a0171e70cf033460e97a08a64be8f0024e8"
+      "bytes": 70879,
+      "sha256": "44af133583fb5ce297013b809b0c4aada5c1bcbc7257c28f826ab5fc24c67f3d"
     },
     "setup/steam_link_setup_askpass_client.py": {
       "bytes": 3466,
@@ -222,12 +306,12 @@
       "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
     },
     "setup/steam_link_setup_textual.py": {
-      "bytes": 59855,
-      "sha256": "3298d94454b63f1067a6add2496ed8754135751dd19d6e5c8f4ebbcab409173d"
+      "bytes": 60079,
+      "sha256": "46847eaa053128da1c92682cc7b2c86c91094f45d0ac397b1cdbb368766826ac"
     },
     "setup/steam_link_setup_ui.py": {
-      "bytes": 82008,
-      "sha256": "bfe583d14f3b517d217df9b8e52d32b68dd8c4b73a0f47d3e4192db3bb829b55"
+      "bytes": 84449,
+      "sha256": "64b616eb405a018741934871d1bf3cc5290484e7abca0c9d734d2a2191b4e829"
     },
     "setup/steam_link_setup_vendor.py": {
       "bytes": 2108,
@@ -238,8 +322,8 @@
       "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 177750,
-      "sha256": "89260405c258b60c157511b1f190b047d00fce2161c631400e213c3f595fa782"
+      "bytes": 184426,
+      "sha256": "d708363a72a7e9be8522424c042a163a616e9ee1824d8b9723917266fa0a7d4c"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -269,13 +353,17 @@
       "bytes": 7970,
       "sha256": "2a7bc3b34b280f8d0b314f67dd70b7750920493a408653b364a9589b8990f66f"
     },
+    "tools/build_room_camera_api.sh": {
+      "bytes": 2326,
+      "sha256": "71bbbf7be73dea023e795c173bfcbe36eade365b7d87a9be6e63615d6f9b9982"
+    },
     "tools/build_room_font.py": {
       "bytes": 1706,
       "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
     },
     "tools/build_room_overlay.sh": {
-      "bytes": 3227,
-      "sha256": "903824f4b87799b9a2f923b753b2e5d31b150460b4aae75860b1f06d55bc4eef"
+      "bytes": 3595,
+      "sha256": "8fb389e76c1a5da5788f995a2fe00fc8d255607456880c91762408847db7182c"
     },
     "tools/build_setup_askpass.py": {
       "bytes": 6373,
@@ -318,8 +406,8 @@
       "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
     },
     "tools/package_stream_bridge.py": {
-      "bytes": 23935,
-      "sha256": "627e3477c9932ce3be0bdbc968a1cca8a5ad24264cd04fe478ef8e2ec9d5b9ee"
+      "bytes": 25580,
+      "sha256": "7287c5c66e8d46c63967d355be8ea4bb223874f0d222db46283761c0286cdcd5"
     },
     "tools/package_stream_link_setup.py": {
       "bytes": 7826,
@@ -334,7 +422,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "0aae571f0576bcada09d4590af6cbf7b56cac0b1",
+  "source_revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -347,6 +435,9 @@
         "ordinary_rgba_source",
         "owned_coverage_gpu",
         "pc_provider_build",
+        "room_camera_build",
+        "room_camera_depth",
+        "room_camera_session",
         "room_dashboard_flow",
         "room_installer_transaction",
         "room_overlay_build",
@@ -354,10 +445,10 @@
       ],
       "hardware_verified": false,
       "pin": {
-        "bytes": 12313,
-        "sha256": "759ee447e65f4eea98075fc1a0bdd268586f6473378bc44eef29d12486637adb"
+        "bytes": 15812,
+        "sha256": "287e9e16d6ba5b99ba90bb468cd5bf6e88fcbe6ffbe212740be38c8df61083fe"
       }
     }
   ],
-  "version": "0.3.16-roomscan.6"
+  "version": "0.3.16-roomscan.7"
 }
