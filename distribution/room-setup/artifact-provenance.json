@@ -1,8 +1,8 @@
 {
   "baseline_receipt": {
     "archive": {
-      "bytes": 20796909,
-      "sha256": "2e0a52ce484a5cbb0d41f95dfb14f3acfe172dd792f3423aca58159963990086"
+      "bytes": 20798789,
+      "sha256": "3df91a6ca2f478192582505fb97e595be8134189a89281ed48c8801196d3d2a8"
     },
     "artifacts": {
       "frame_layer": {
@@ -26,12 +26,12 @@
         "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
       },
       "room_overlay": {
-        "bytes": 1903072,
-        "sha256": "f2d080bd964f5169ee81fea60125649a680e48417900bf6b50dc36dc99030516"
+        "bytes": 1837536,
+        "sha256": "2606c31bc823e2a8ab1e568ab76c921ec59cc4738301260e9720250ba90b13d6"
       }
     },
     "component_versions": {
-      "frame": "0.3.6-roomscan.4",
+      "frame": "0.3.6-roomscan.5",
       "pc": "0.3.11"
     },
     "device_actions": false,
@@ -42,7 +42,7 @@
     "result": "PASS",
     "runtime_profile": {
       "bytes": 15024,
-      "sha256": "c3d7865ebf2110c216894c54a26bd07015c3aab40586fa6726bf67d0fe0df656"
+      "sha256": "2de625b16ba258d30bfb73b3407cacec26d2b86336b29aa9598254aad23f8494"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -52,11 +52,11 @@
       },
       "PATCH_VERSIONS.json": {
         "bytes": 90,
-        "sha256": "39202b7efe5d916908ba919155a41e4663ca03b5ca758c6c98cc5fe869eab56e"
+        "sha256": "f1ffed7e2f425acb25c5191939d10f8e443d5074532aa0105465f29fb77f080d"
       },
       "VERSION": {
         "bytes": 18,
-        "sha256": "231489f7fdc79723045716f9dbf9b74d108bb4682a570943be05c89238c00e3c"
+        "sha256": "1a81bb6a2e73dd38e9f1a2702042e4df537f73439f58b8e87013f8ae3a526723"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -95,8 +95,8 @@
         "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
       },
       "room_scan/app.py": {
-        "bytes": 24808,
-        "sha256": "0225db3110a125bd70b6fd5e6fe984f400ab21d8f52b8d8d879d752cb00792d2"
+        "bytes": 25870,
+        "sha256": "36c14d56cbff3e108447f8c80809313ccb4d29bf549b50d4fbae676394e76861"
       },
       "room_scan/capture.py": {
         "bytes": 10562,
@@ -135,8 +135,8 @@
         "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
       },
       "room_scan/native_overlay.cpp": {
-        "bytes": 25695,
-        "sha256": "5711cb5973f55a019feda7a17c7063612c00cd39c3728b810e8c035acf32b6a6"
+        "bytes": 28108,
+        "sha256": "a0ad5ac5a3ae2c5e09626011bbd1858ad6f31c37026690e615acf6f0b5386549"
       },
       "room_scan/native_pipe.h": {
         "bytes": 4337,
@@ -155,8 +155,8 @@
         "sha256": "a790fd5b76a10952b07312b12761ecc12431c073b56d217ad02f974162d7ce81"
       },
       "room_scan/native_view.h": {
-        "bytes": 9285,
-        "sha256": "8229717022f6effbdfc20048ce12feb600c4d068c32a9410a1201fe7c24b94b7"
+        "bytes": 9653,
+        "sha256": "32e84bb7c73a4b85e19ce5c6bad8ee0b4dadad8e94687c1e66be7ef7fd64f5c4"
       },
       "room_scan/store.py": {
         "bytes": 6838,
@@ -315,8 +315,8 @@
         "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
       },
       "tools/package_stream_bridge.py": {
-        "bytes": 23747,
-        "sha256": "0844892b887440a95a5aad563fe90a89a6cbd147220df4617bcb4d350c112b51"
+        "bytes": 23872,
+        "sha256": "d6326f9d6c0b5f604e3e829cd04607fcd4b0ea235722c0e6beca7321c49b021b"
       },
       "tools/package_stream_link_setup.py": {
         "bytes": 7826,
@@ -331,7 +331,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "abe56407e38160f2938c7338fb94a313a6812da9",
+    "source_revision": "933855ca49cc7472765df0058b16b97b7417f33f",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -352,11 +352,11 @@
         "hardware_verified": false,
         "pin": {
           "bytes": 12165,
-          "sha256": "7aaf89dc3e6098d6768b955f5a0cd263337b03f16c65cec4af22b608bc40c3ff"
+          "sha256": "7f0c3669bb18842732a10421a109602e967aac97775f3a264f8c5570d0349a02"
         }
       }
     ],
-    "version": "0.3.16-roomscan.4"
+    "version": "0.3.16-roomscan.5"
   },
   "build_inputs": {
     "atlas": {
@@ -365,7 +365,7 @@
     },
     "compiler": "aarch64-linux-gnu-g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
     "device_actions": false,
-    "dynamic": "\nDynamic section at offset 0x1bed90 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x17e40\n 0x000000000000000d (FINI)               0x1474cc\n 0x0000000000000019 (INIT_ARRAY)         0x1c6930\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x1c6990\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1178\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1712 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x1cefa0\n 0x0000000000000002 (PLTRELSZ)           3480 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x170a8\n 0x0000000000000007 (RELA)               0x1a30\n 0x0000000000000008 (RELASZ)             87672 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x1960\n 0x000000006fffffff (VERNEEDNUM)         3\n 0x000000006ffffff0 (VERSYM)             0x1828\n 0x000000006ffffff9 (RELACOUNT)          3572\n 0x0000000000000000 (NULL)               0x0\n",
+    "dynamic": "\nDynamic section at offset 0x1ced90 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x17e40\n 0x000000000000000d (FINI)               0x14b73c\n 0x0000000000000019 (INIT_ARRAY)         0x1c6930\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x1c6990\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1178\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1712 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x1cefa0\n 0x0000000000000002 (PLTRELSZ)           3480 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x170a8\n 0x0000000000000007 (RELA)               0x1a30\n 0x0000000000000008 (RELASZ)             87672 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x1960\n 0x000000006fffffff (VERNEEDNUM)         3\n 0x000000006ffffff0 (VERSYM)             0x1828\n 0x000000006ffffff9 (RELACOUNT)          3572\n 0x0000000000000000 (NULL)               0x0\n",
     "font": {
       "bytes": 759720,
       "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
@@ -423,61 +423,76 @@
       "source": "Khronos Vulkan headers 1.3.275, Ubuntu libvulkan-dev 1.3.275.0-1"
     }
   },
-  "change_scope": "Add a top-right close control to the dashboard and in-world controls; stop owned capture, checkpoint drafts and retain the dashboard entry. Capture epochs reject late camera-check replies after close/reopen. Include no experimental native camera helper in this package.",
-  "close_tests": "Close active capture and preserve measured draft triangles; close during startup and reject old replies after reopening; release capture even when draft writing fails; close hit bounds independent of page controls. Real native/Python pipe checks pass. Dashboard hide/reopen behavior still requires a wearer test.",
+  "change_scope": "Close only Room Setup by selecting the existing Frame SteamVR menu. Keep the dashboard open and the Room Setup entry available. Ignore other clients ProcessQuit notifications while honoring actual Quit requests. The camera source and all transport/GPU binaries are unchanged.",
+  "close_tests": "Public overlay callback tests cover menu selection, a dashboard already hidden, unavailable menu/interfaces and a self-target. ProcessQuit notifications do not end the application. Draft/capture lifecycle, actual native/Python pipe and dashboard startup checks pass.",
   "current_software_checks": {
     "bootstrap.log": {
       "bytes": 99,
-      "sha256": "990fb982a0a17e6d85c379cffee22327d03aec33d149a911e9d680935ace83c4"
+      "sha256": "e49e7aad742fc829c7644daf9803986be615e9de961a7e5e4749ab1d6798f801"
     },
     "ctest.log": {
       "bytes": 475,
-      "sha256": "f07356adb0b7f5bb86a110a29a10e29bfc799bff773bf255eca6d20003b0e4a7"
+      "sha256": "f6c87df801460c43207fa033510abd916b1b57ea11fb0d1ef942fbd25db1f579"
+    },
+    "dashboard-sanitizers.log": {
+      "bytes": 76,
+      "sha256": "f5dda81b60afb204ea0262ada6293862828b1414b6c4b460b8923731ff354f18"
     },
     "installer.log": {
       "bytes": 396,
-      "sha256": "094fc8139bd4c55921409fa997ca952876586edf4d8fe9fd208034d8c6d777b9"
+      "sha256": "e5aca887577d6565fba5f7fa73677aef220b33b8f892f07842c019464388c3bd"
     },
     "logging.log": {
       "bytes": 97,
-      "sha256": "94b88fd04ab6837fed26813995ee1a4cb8b544fa2838f4770184f6f3c2768493"
+      "sha256": "10976729f9c9f2cc89bdbd2de939e5a8f39f688caaab7936a0cae9eb01773fd5"
     },
     "native-build.log": {
-      "bytes": 649,
-      "sha256": "5388dd7d20d3597f84c5e7b307e082e1bcff72b5ff3e3b7db98afb72275b1b96"
-    },
-    "native-sanitizers.log": {
-      "bytes": 61,
-      "sha256": "c0d4e8fbe9e245cb2b38d6394655e8242a2f57296e8177df3615e5a9b44266e8"
+      "bytes": 725,
+      "sha256": "1ecba8474dd6b721f098343e84125f04b88369cc5043152a90a6b6908f3af591"
     },
     "package.log": {
       "bytes": 98,
-      "sha256": "1e4b9fb175380777ae80dc5468a9bfbfacadf7a573483860aa45e366ba842597"
+      "sha256": "22c3cb973af6223434b19d35868ab1b8096be41257d8f905e42eab6e53eb780c"
     },
     "pc-only.log": {
       "bytes": 596,
-      "sha256": "1759d923c1fe8967652af80b7896f1c18c97db938ca851ce0749ef463c219d8f"
+      "sha256": "db4fb1c24198ae42f761cc791c4cee86427d444ed39e33738b571908f458e5db"
+    },
+    "registration-sanitizers.log": {
+      "bytes": 86,
+      "sha256": "3b7c8bc19628ab3e013121135a63376a454a63d8cbc659587dd4c64a8275801a"
     },
     "room-flow.log": {
       "bytes": 98,
-      "sha256": "ab59e4258fc33aaebb0331b3083c2b0ed3f69a78eb954602d21b4a6c7d2fba14"
+      "sha256": "7e2acc7f93ffb68d99c8b0dd77aecb6748cd5d5c8a63e01c581a9b2d0bcf132d"
     }
   },
   "device_actions": false,
   "hardware_verified": false,
-  "limits": [
-    "The X control and reopening require a wearer check on Frame.",
-    "Installed live scanning still uses the public camera API and remains unavailable on the tested Frame SteamVR 2.18.2.",
-    "The native camera prototype has no boot/autostart integration and is not included in this candidate.",
-    "No claim of complete room scanning, automatic scene detection or game/Venture room adapters."
-  ],
-  "manual_camera_api": "Source-only manual prototype is excluded from this archive. Independent headset tests established actual Arcturus image access and explicit stop/cleanup; they do not establish exposure-associated world poses or working reconstruction.",
-  "prior_artifact_provenance": {
-    "bytes": 25996,
-    "sha256": "caa9895226176181a888943a9f62e2e34541557b39aa6a6399a4044526256013"
+  "headset_close_validation": {
+    "boot_changes": false,
+    "close_reopen_cycles": 1,
+    "dashboard_still_open": true,
+    "entry_reopens_same_process": true,
+    "installed_files_changed": false,
+    "native_binary_sha256": "b308c42f5a3ef49ef0fafeab053c6997f11a887376aa8355374c369a346acb2e",
+    "other_client_exit_ignored": true,
+    "room_panel_hidden_and_steam_menu_visible": true,
+    "scope": "Wearer accepted the room-only close behavior. SteamVR and XRService were not restarted. This validates the UI behavior only, not the complete installer or room scan.",
+    "temporary_payload_removed": true,
+    "verified": true
   },
-  "renderer_tests": "Unchanged persistent GPU renderer. Actual offscreen Vulkan tests upload and read back 150 changing frames byte-exactly with stable image handles. No new headset-import or visual-stability claim.",
-  "source_revision": "933855ca49cc7472765df0058b16b97b7417f33f",
+  "limits": [
+    "The installed public camera source still cannot obtain a calibrated stream on the tested Frame SteamVR 2.18.2.",
+    "The manual native camera API remains outside this installer; exposure/world-pose validation and reconstruction integration are pending.",
+    "The close/reopen headset result does not establish a successful full room scan or a headset installer transaction for candidate 6."
+  ],
+  "prior_artifact_provenance": {
+    "bytes": 25317,
+    "sha256": "ac3f0b8f7740c5806f02bb397fdad78b3295e56e333c08151df73e07e3e30c05"
+  },
+  "renderer_tests": "The existing persistent GPU renderer still passes actual offscreen Vulkan upload/readback for 150 changing frames with stable images and exact RGBA.",
+  "source_revision": "0aae571f0576bcada09d4590af6cbf7b56cac0b1",
   "unchanged_compiled_source_paths": [
     "layer",
     "receiver",
@@ -494,5 +509,5 @@
     "mask_codec",
     "mask_util"
   ],
-  "validation_basis": "Inherit exact unchanged transport binaries with unchanged compiled source closure. Run current room flow/native/camera/pipe/GPU, close lifecycle, installer, package, PC-only, logging, real PowerShell bootstrap and native sanitizer checks. Software evidence remains separate from wearer evidence."
+  "validation_basis": "Reuse exact unchanged transport binaries with unchanged compiled source closure. Run affected dashboard/startup, native camera/pipe/GPU, sanitizer, room flow, installer, package, PC-only, logging and real PowerShell bootstrap checks. Keep the scoped wearer result separate from full-package validation."
 }
