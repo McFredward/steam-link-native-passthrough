@@ -1,8 +1,8 @@
 {
   "baseline_receipt": {
     "archive": {
-      "bytes": 20802338,
-      "sha256": "24168b29f4a6183b9bb67365374c12a589c63e04d8253b521150a5256106c605"
+      "bytes": 21336647,
+      "sha256": "6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b"
     },
     "artifacts": {
       "frame_layer": {
@@ -25,13 +25,17 @@
         "bytes": 2094080,
         "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
       },
+      "room_camera": {
+        "bytes": 1575456,
+        "sha256": "e3c1c2c5baa93947156d2806123ad5f0bf33cffbbfecdf829d7d6208d95865a7"
+      },
       "room_overlay": {
-        "bytes": 1903072,
-        "sha256": "b308c42f5a3ef49ef0fafeab053c6997f11a887376aa8355374c369a346acb2e"
+        "bytes": 2034168,
+        "sha256": "69448b0d70308735a46b57aa2fb3b992382d400d07d6241633c7c85816e5ed4f"
       }
     },
     "component_versions": {
-      "frame": "0.3.6-roomscan.6",
+      "frame": "0.3.7-roomscan.7",
       "pc": "0.3.11"
     },
     "device_actions": false,
@@ -41,8 +45,8 @@
     "readiness": "release",
     "result": "PASS",
     "runtime_profile": {
-      "bytes": 15172,
-      "sha256": "a26fde3f4b5535e12d85edf8a19a162df342cd0eb8cac11234c5627e4666ad82"
+      "bytes": 18576,
+      "sha256": "6ff1fdf8dd988716bf26bb7a5d3ecf478d65fdcfa33786dfc7a738dcfbe98c2c"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -52,11 +56,11 @@
       },
       "PATCH_VERSIONS.json": {
         "bytes": 90,
-        "sha256": "8763f4838e156c0cd75f0d841bb044ccf66881e90b9155a45fa0bb85250ba894"
+        "sha256": "e9181f18cfeca6b941a839a9b57f3b9b427ecea35431fc824b535efa76ebcb30"
       },
       "VERSION": {
         "bytes": 18,
-        "sha256": "925ee29ef4e98a279328968790fa90c21c1fdc7c7d88c6ec864d18046cbcbc59"
+        "sha256": "53704afac62920e28d613e2f6232056d34c1a46a806346cbb40d3a8919748d1c"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -86,6 +90,10 @@
         "bytes": 138,
         "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
       },
+      "probe/room_camera_native.cpp": {
+        "bytes": 3903,
+        "sha256": "dbbe8c0c46c9e780ec331cda26e6785c499af4b1d0de59889effcd5750f43df4"
+      },
       "room_scan/__init__.py": {
         "bytes": 250,
         "sha256": "06916ad8fab4dbd6ffc79faebc79543403407116262df234ea94c00661bc66b6"
@@ -95,12 +103,60 @@
         "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
       },
       "room_scan/app.py": {
-        "bytes": 25870,
-        "sha256": "36c14d56cbff3e108447f8c80809313ccb4d29bf549b50d4fbae676394e76861"
+        "bytes": 26776,
+        "sha256": "04cacc91e6fb04910a8fc6a997846b93440183f7b1e73ecc26ffd15edfcb6146"
+      },
+      "room_scan/camera_api/buffer_source.h": {
+        "bytes": 15452,
+        "sha256": "e97fb4252fdd8f651264199d2d2f25e813550eb75d22d9891306e2cbeb08adfa"
+      },
+      "room_scan/camera_api/capture_metadata.h": {
+        "bytes": 2264,
+        "sha256": "dbf7c262d98cd712f00fc199c7bb8640652dbb1f375e6c3ff9a06d5bb16a7f60"
+      },
+      "room_scan/camera_api/exposure_registers.h": {
+        "bytes": 5241,
+        "sha256": "08101c30b36118fc39c0f9950006b7918aad02f74086c6dec267eb2ca15865ca"
+      },
+      "room_scan/camera_api/linux_inventory.h": {
+        "bytes": 13692,
+        "sha256": "08c7d59ef39a2104e807fa363731bf2f7d259327d49b629a455c366963e66692"
+      },
+      "room_scan/camera_api/local_api.h": {
+        "bytes": 4971,
+        "sha256": "9a87624413a425e27f8060195e8db420ba0d9206602b878f44cc9a24b5e6097c"
+      },
+      "room_scan/camera_api/luma_layout.h": {
+        "bytes": 1715,
+        "sha256": "db39e94ca75a2f0c0bd51019840d57e69c9623091ecbdc2a6073c0e9373e4b5c"
+      },
+      "room_scan/camera_api/owner_lifetime.h": {
+        "bytes": 1954,
+        "sha256": "b213cabbd8971d4d3db1c72e7bb254ebf00b71fe105aabd9eb9261f0260f82f9"
+      },
+      "room_scan/camera_api/passive_trace.h": {
+        "bytes": 7804,
+        "sha256": "2b3a45c543dff9eedd38e40386d3c799ff028bd33726a7c7ca2ebac2c957e0fd"
+      },
+      "room_scan/camera_api/read_only_policy.h": {
+        "bytes": 6845,
+        "sha256": "b9de0810ef3f26393edb562a97ad3df5a9c9b195f24908f212e7bef63d15cc7f"
+      },
+      "room_scan/camera_api/stereo_snapshot.h": {
+        "bytes": 3740,
+        "sha256": "ef807ada3404f932334a9564d896b38f0856e51ce78b7e1d8baec02e39398fe7"
+      },
+      "room_scan/camera_api/trace_reader.h": {
+        "bytes": 8412,
+        "sha256": "7d851c234e923fe5dbe68c9c1235aa4b7bb5a347c49c76b53f84e5ca2f52c7ac"
       },
       "room_scan/capture.py": {
         "bytes": 10562,
         "sha256": "7b08c50b5aa8a7fb9eb81947ef2f023fb3b6d2e02e3c14899f0f8a62fdf507c2"
+      },
+      "room_scan/capture_session.py": {
+        "bytes": 14194,
+        "sha256": "ec59a1b207111f7054c330e29a04c36673e11af50772e19f01a60972d6976d98"
       },
       "room_scan/editor.py": {
         "bytes": 5529,
@@ -114,6 +170,10 @@
         "bytes": 3857,
         "sha256": "e81d9dced49fea2a7d576cbea283873de58563c5d488f954deb282843c3ea79c"
       },
+      "room_scan/licenses/NativeCamera.txt": {
+        "bytes": 1099,
+        "sha256": "5647110783cef827953a9599b7b1051f50f9a18fc953fa8367a2702c235183e4"
+      },
       "room_scan/licenses/nlohmann-json.txt": {
         "bytes": 1075,
         "sha256": "c0d068392ea65358b798b8c165103560f06e9e3b38c4ab4e2d8810a7b931af86"
@@ -122,9 +182,33 @@
         "bytes": 9339,
         "sha256": "2d68abb3e8909bf70ec754fcd3c1fcc84f180848bb42c92d4f0bdb336d7f35f7"
       },
+      "room_scan/native_arcturus_geometry.h": {
+        "bytes": 7991,
+        "sha256": "28d1e52e41f61fa96d0eb38f38ac448f82bc01e7857ac9c0afdad44ccf76c1e2"
+      },
+      "room_scan/native_arcturus_source.h": {
+        "bytes": 7510,
+        "sha256": "d7c08c364fd013bafaf87b9000173c79226be3f741436344ac3d3d7e5f5a0799"
+      },
+      "room_scan/native_arcturus_timing.h": {
+        "bytes": 3192,
+        "sha256": "29a3afdef662e1bc9e75172c3406204f15b084b0e1873995a102e3db72cdc32b"
+      },
       "room_scan/native_camera.h": {
-        "bytes": 22371,
-        "sha256": "80b1f10f499b3674db60e8be407eb67e82bb411f332d2e792c10aceae342b07f"
+        "bytes": 22440,
+        "sha256": "3ac54e1f75a86d211ea67e1553e5f7e896997c361aa0a5af423e1d4578c47479"
+      },
+      "room_scan/native_camera_client.h": {
+        "bytes": 4950,
+        "sha256": "7db12ad3e4eec30cca6296b569d9ad34a929045e71ea532da7d1b7a4477a98c3"
+      },
+      "room_scan/native_camera_source.h": {
+        "bytes": 1109,
+        "sha256": "9b4f8f1f528d1cf7b51f8aa88f65ba0e3b763360b2da4ed49c39f45dbff8defa"
+      },
+      "room_scan/native_capture_pose.h": {
+        "bytes": 3629,
+        "sha256": "36108a1d0e18c6788dc56cb3c1a8b486c252ea69cb490e2caf10c23543d672e0"
       },
       "room_scan/native_dashboard.h": {
         "bytes": 947,
@@ -139,8 +223,8 @@
         "sha256": "bbb8e399031351bbecaaaef302ae216dd40f7024dc8e669df17a2cc03bb6d8f2"
       },
       "room_scan/native_overlay.cpp": {
-        "bytes": 29231,
-        "sha256": "cf0c1c72d4941ee5973c6afeaa157e0d1f7759109ee503e7870e9280a5d00946"
+        "bytes": 29516,
+        "sha256": "ceb9bf020def4d0e7fda5ef6ce1bfb5ecbc6c911eb84f796a046632135bd0c9f"
       },
       "room_scan/native_pipe.h": {
         "bytes": 4337,
@@ -187,8 +271,8 @@
         "sha256": "a4974678c286dbf95aa609698ef9569c877baec353d18eda90ce118453f4e919"
       },
       "setup/steam_link_setup.py": {
-        "bytes": 70844,
-        "sha256": "cd8e21d0ce7bb05a0cd262d0a5aa8a0171e70cf033460e97a08a64be8f0024e8"
+        "bytes": 70879,
+        "sha256": "44af133583fb5ce297013b809b0c4aada5c1bcbc7257c28f826ab5fc24c67f3d"
       },
       "setup/steam_link_setup_askpass_client.py": {
         "bytes": 3466,
@@ -223,12 +307,12 @@
         "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
       },
       "setup/steam_link_setup_textual.py": {
-        "bytes": 59855,
-        "sha256": "3298d94454b63f1067a6add2496ed8754135751dd19d6e5c8f4ebbcab409173d"
+        "bytes": 60079,
+        "sha256": "46847eaa053128da1c92682cc7b2c86c91094f45d0ac397b1cdbb368766826ac"
       },
       "setup/steam_link_setup_ui.py": {
-        "bytes": 82008,
-        "sha256": "bfe583d14f3b517d217df9b8e52d32b68dd8c4b73a0f47d3e4192db3bb829b55"
+        "bytes": 84449,
+        "sha256": "64b616eb405a018741934871d1bf3cc5290484e7abca0c9d734d2a2191b4e829"
       },
       "setup/steam_link_setup_vendor.py": {
         "bytes": 2108,
@@ -239,8 +323,8 @@
         "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
       },
       "setup/stream_bridge_install.py": {
-        "bytes": 177750,
-        "sha256": "89260405c258b60c157511b1f190b047d00fce2161c631400e213c3f595fa782"
+        "bytes": 184426,
+        "sha256": "d708363a72a7e9be8522424c042a163a616e9ee1824d8b9723917266fa0a7d4c"
       },
       "third_party/ffmpeg/COPYING.LGPLv2.1": {
         "bytes": 26517,
@@ -270,13 +354,17 @@
         "bytes": 7970,
         "sha256": "2a7bc3b34b280f8d0b314f67dd70b7750920493a408653b364a9589b8990f66f"
       },
+      "tools/build_room_camera_api.sh": {
+        "bytes": 2326,
+        "sha256": "71bbbf7be73dea023e795c173bfcbe36eade365b7d87a9be6e63615d6f9b9982"
+      },
       "tools/build_room_font.py": {
         "bytes": 1706,
         "sha256": "b0fc8992796768655bc35e5138a14120a994a8bb7fb80009e089fc6fb2a81945"
       },
       "tools/build_room_overlay.sh": {
-        "bytes": 3227,
-        "sha256": "903824f4b87799b9a2f923b753b2e5d31b150460b4aae75860b1f06d55bc4eef"
+        "bytes": 3595,
+        "sha256": "8fb389e76c1a5da5788f995a2fe00fc8d255607456880c91762408847db7182c"
       },
       "tools/build_setup_askpass.py": {
         "bytes": 6373,
@@ -319,8 +407,8 @@
         "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
       },
       "tools/package_stream_bridge.py": {
-        "bytes": 23935,
-        "sha256": "627e3477c9932ce3be0bdbc968a1cca8a5ad24264cd04fe478ef8e2ec9d5b9ee"
+        "bytes": 25580,
+        "sha256": "7287c5c66e8d46c63967d355be8ea4bb223874f0d222db46283761c0286cdcd5"
       },
       "tools/package_stream_link_setup.py": {
         "bytes": 7826,
@@ -335,7 +423,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "0aae571f0576bcada09d4590af6cbf7b56cac0b1",
+    "source_revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -348,6 +436,9 @@
           "ordinary_rgba_source",
           "owned_coverage_gpu",
           "pc_provider_build",
+          "room_camera_build",
+          "room_camera_depth",
+          "room_camera_session",
           "room_dashboard_flow",
           "room_installer_transaction",
           "room_overlay_build",
@@ -355,198 +446,125 @@
         ],
         "hardware_verified": false,
         "pin": {
-          "bytes": 12313,
-          "sha256": "759ee447e65f4eea98075fc1a0bdd268586f6473378bc44eef29d12486637adb"
+          "bytes": 15812,
+          "sha256": "287e9e16d6ba5b99ba90bb468cd5bf6e88fcbe6ffbe212740be38c8df61083fe"
         }
       }
     ],
-    "version": "0.3.16-roomscan.6"
+    "version": "0.3.16-roomscan.7"
   },
-  "build_inputs": {
-    "atlas": {
-      "bytes": 179052,
-      "sha256": "cf8b64038906112a73fe15d55662bd8c2ffc40c3a34e44f7b50ad8cc7e885812"
+  "change_scope": "Windows/NVIDIA PC companion through authenticated SSH, checked capture-time raw stereo, rolling-aware rectification, bilateral C-Fast-FoundationStereo, continuously refined Gaussian surfels, locally predicted native MR preview, measured polygon extraction, focused XR world actions and native SteamVR menu input. Installer-managed private dependencies and transient read-only camera access; no boot integration or native service replacement.",
+  "ci": {
+    "room": {
+      "result": "success",
+      "revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
+      "run": 41545087556
     },
-    "binaries": {
-      "sfnp-room-camera-native": {
-        "dynamic": "\nDynamic section at offset 0x17ee70 contains 28 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x14aa0\n 0x000000000000000d (FINI)               0x12a2c4\n 0x0000000000000019 (INIT_ARRAY)         0x187e30\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x187e90\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1160\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1636 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x18f070\n 0x0000000000000002 (PLTRELSZ)           3432 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x13d38\n 0x0000000000000007 (RELA)               0x19a8\n 0x0000000000000008 (RELASZ)             74640 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x18f8\n 0x000000006fffffff (VERNEEDNUM)         2\n 0x000000006ffffff0 (VERSYM)             0x17c4\n 0x000000006ffffff9 (RELACOUNT)          3030\n 0x0000000000000000 (NULL)               0x0\n",
-        "pin": {
-          "bytes": 1575456,
-          "sha256": "e3c1c2c5baa93947156d2806123ad5f0bf33cffbbfecdf829d7d6208d95865a7"
-        },
-        "versions": "\nVersion symbols section '.gnu.version' contains 154 entries:\n Addr: 0x00000000000017c4  Offset: 0x000017c4  Link: 5 (.dynsym)\n  000:   0 (*local*)       0 (*local*)       0 (*local*)       1 (*global*)   \n  004:   1 (*global*)      2 (GLIBC_2.17)    3 (GLIBC_2.36)    2 (GLIBC_2.17) \n  008:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    4 (GLIBC_2.34) \n  00c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  010:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  014:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  018:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    5 (GLIBC_2.33)    2 (GLIBC_2.17) \n  01c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  020:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)      2 (GLIBC_2.17) \n  024:   6 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  028:   7 (GLIBC_2.32)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    4 (GLIBC_2.34) \n  02c:   8 (GLIBC_2.35)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  030:   1 (*global*)      1 (*global*)      1 (*global*)      2 (GLIBC_2.17) \n  034:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  038:   1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  03c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    9 (GLIBC_2.25)    2 (GLIBC_2.17) \n  040:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  044:   9 (GLIBC_2.25)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  048:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  04c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  050:   2 (GLIBC_2.17)    5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  054:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  058:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  05c:   2 (GLIBC_2.17)    a (GLIBC_2.38)    2 (GLIBC_2.17)    a (GLIBC_2.38) \n  060:   1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  064:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  068:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  06c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  070:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  074:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  078:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  07c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  080:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  084:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  088:   2 (GLIBC_2.17)    a (GLIBC_2.38)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  08c:   2 (GLIBC_2.17)    4 (GLIBC_2.34)    2 (GLIBC_2.17)    5 (GLIBC_2.33) \n  090:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  094:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  098:   2 (GLIBC_2.17)    2 (GLIBC_2.17) \n\nVersion needs section '.gnu.version_r' contains 2 entries:\n Addr: 0x00000000000018f8  Offset: 0x000018f8  Link: 6 (.dynstr)\n  000000: Version: 1  File: ld-linux-aarch64.so.1  Cnt: 1\n  0x0010:   Name: GLIBC_2.17  Flags: none  Version: 6\n  0x0020: Version: 1  File: libc.so.6  Cnt: 8\n  0x0030:   Name: GLIBC_2.38  Flags: none  Version: 10\n  0x0040:   Name: GLIBC_2.25  Flags: none  Version: 9\n  0x0050:   Name: GLIBC_2.35  Flags: none  Version: 8\n  0x0060:   Name: GLIBC_2.32  Flags: none  Version: 7\n  0x0070:   Name: GLIBC_2.33  Flags: none  Version: 5\n  0x0080:   Name: GLIBC_2.34  Flags: none  Version: 4\n  0x0090:   Name: GLIBC_2.36  Flags: none  Version: 3\n  0x00a0:   Name: GLIBC_2.17  Flags: none  Version: 2\n"
-      },
-      "sfnp-room-overlay": {
-        "dynamic": "\nDynamic section at offset 0x1eed40 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libm.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]\n 0x000000000000000c (INIT)               0x18190\n 0x000000000000000d (FINI)               0x165b6c\n 0x0000000000000019 (INIT_ARRAY)         0x1e68b0\n 0x000000000000001b (INIT_ARRAYSZ)       96 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x1e6910\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2d0\n 0x0000000000000005 (STRTAB)             0x1280\n 0x0000000000000006 (SYMTAB)             0x2f0\n 0x000000000000000a (STRSZ)              1801 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000015 (DEBUG)              0x0\n 0x0000000000000003 (PLTGOT)             0x1eef50\n 0x0000000000000002 (PLTRELSZ)           3744 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x172f0\n 0x0000000000000007 (RELA)               0x1bb8\n 0x0000000000000008 (RELASZ)             87864 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW PIE\n 0x000000006ffffffe (VERNEED)            0x1ad8\n 0x000000006fffffff (VERNEEDNUM)         3\n 0x000000006ffffff0 (VERSYM)             0x198a\n 0x000000006ffffff9 (RELACOUNT)          3580\n 0x0000000000000000 (NULL)               0x0\n",
-        "pin": {
-          "bytes": 2034168,
-          "sha256": "69448b0d70308735a46b57aa2fb3b992382d400d07d6241633c7c85816e5ed4f"
-        },
-        "versions": "\nVersion symbols section '.gnu.version' contains 166 entries:\n Addr: 0x000000000000198a  Offset: 0x0000198a  Link: 5 (.dynsym)\n  000:   0 (*local*)       0 (*local*)       0 (*local*)       1 (*global*)   \n  004:   1 (*global*)      2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  008:   4 (GLIBC_2.36)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  00c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    3 (GLIBC_2.34) \n  010:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  014:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  018:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  01c:   5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  020:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  024:   2 (GLIBC_2.17)    6 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  028:   7 (GLIBC_2.32)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34) \n  02c:   2 (GLIBC_2.17)    8 (GLIBC_2.35)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  030:   2 (GLIBC_2.17)    1 (*global*)      1 (*global*)      1 (*global*)   \n  034:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34) \n  038:   9 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  03c:   1 (*global*)      2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  040:   2 (GLIBC_2.17)    a (GLIBC_2.25)    9 (GLIBC_2.17)    2 (GLIBC_2.17) \n  044:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  048:   a (GLIBC_2.25)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    1 (*global*)   \n  04c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  050:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    5 (GLIBC_2.33) \n  054:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  058:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    9 (GLIBC_2.17) \n  05c:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  060:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    b (GLIBC_2.38) \n  064:   2 (GLIBC_2.17)    b (GLIBC_2.38)    1 (*global*)      2 (GLIBC_2.17) \n  068:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  06c:   9 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  070:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  074:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  078:   3 (GLIBC_2.34)    9 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  07c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  080:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  084:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  088:   3 (GLIBC_2.34)    2 (GLIBC_2.17)    c (GLIBC_2.35)    1 (*global*)   \n  08c:   5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  090:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    b (GLIBC_2.38)    2 (GLIBC_2.17) \n  094:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    3 (GLIBC_2.34)    2 (GLIBC_2.17) \n  098:   2 (GLIBC_2.17)    5 (GLIBC_2.33)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  09c:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  0a0:   2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17)    2 (GLIBC_2.17) \n  0a4:   2 (GLIBC_2.17)    3 (GLIBC_2.34) \n\nVersion needs section '.gnu.version_r' contains 3 entries:\n Addr: 0x0000000000001ad8  Offset: 0x00001ad8  Link: 6 (.dynstr)\n  000000: Version: 1  File: libm.so.6  Cnt: 2\n  0x0010:   Name: GLIBC_2.35  Flags: none  Version: 12\n  0x0020:   Name: GLIBC_2.17  Flags: none  Version: 9\n  0x0030: Version: 1  File: ld-linux-aarch64.so.1  Cnt: 1\n  0x0040:   Name: GLIBC_2.17  Flags: none  Version: 6\n  0x0050: Version: 1  File: libc.so.6  Cnt: 8\n  0x0060:   Name: GLIBC_2.38  Flags: none  Version: 11\n  0x0070:   Name: GLIBC_2.25  Flags: none  Version: 10\n  0x0080:   Name: GLIBC_2.35  Flags: none  Version: 8\n  0x0090:   Name: GLIBC_2.32  Flags: none  Version: 7\n  0x00a0:   Name: GLIBC_2.33  Flags: none  Version: 5\n  0x00b0:   Name: GLIBC_2.36  Flags: none  Version: 4\n  0x00c0:   Name: GLIBC_2.34  Flags: none  Version: 3\n  0x00d0:   Name: GLIBC_2.17  Flags: none  Version: 2\n"
-      }
-    },
-    "compiler": "aarch64-linux-gnu-g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-    "device_actions": false,
-    "font": {
-      "bytes": 759720,
-      "sha256": "ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280"
-    },
-    "hardware_verified": false,
-    "json": {
-      "bytes": 953436,
-      "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63"
-    },
-    "pillow": "12.2.0",
-    "sdk": {
-      "bytes": 180293,
-      "sha256": "3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7"
-    },
-    "vulkan_headers": {
-      "files": {
-        "vk_video/vulkan_video_codec_h264std.h": {
-          "bytes": 13853,
-          "sha256": "072ee6eac80e73d93bb4bfe0059f99e581fc8b55b1437236185bb4ff377914b1"
-        },
-        "vk_video/vulkan_video_codec_h264std_decode.h": {
-          "bytes": 2722,
-          "sha256": "e1708b3996a740eeedb79f51d0f0e379f9bcae13566538375acaf73301023b58"
-        },
-        "vk_video/vulkan_video_codec_h264std_encode.h": {
-          "bytes": 6878,
-          "sha256": "052a6e357be8d88bf4be0db1b3da5a9cc1a6011cf4b3533759ff588e1e26f9f1"
-        },
-        "vk_video/vulkan_video_codec_h265std.h": {
-          "bytes": 23416,
-          "sha256": "0cbdfd6c45ee8ca902e9c961cd7e49a4d601d443ea0ef2a60a8496b127ed397c"
-        },
-        "vk_video/vulkan_video_codec_h265std_decode.h": {
-          "bytes": 2428,
-          "sha256": "800946aa19d83d305d504e2e4141bc938f989e0cf8872cef97480238eefef1ea"
-        },
-        "vk_video/vulkan_video_codec_h265std_encode.h": {
-          "bytes": 7462,
-          "sha256": "7239f9f4e811546639111e562a8be1ec73ad5bef1c23d5fad80889f35e125e9c"
-        },
-        "vk_video/vulkan_video_codecs_common.h": {
-          "bytes": 660,
-          "sha256": "78cf3c99d3d57afa7ab1782ec6018b4bcdbe273f2843d76e3375282db875b71e"
-        },
-        "vulkan/vk_platform.h": {
-          "bytes": 2828,
-          "sha256": "c4cabbcf699c90cde344095ae54da9435d117951aad114ba3a540c5997d7906f"
-        },
-        "vulkan/vulkan_core.h": {
-          "bytes": 986840,
-          "sha256": "3dba3ef8adaff8f24e9080e74d365fc64b5fe53ec8bda607c29c103e15888fcf"
-        }
-      },
-      "source": "Khronos Vulkan headers 1.3.275, Ubuntu libvulkan-dev 1.3.275.0-1"
+    "setup": {
+      "result": "success",
+      "revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
+      "run": 41545086095
     }
   },
-  "change_scope": "Combine real manually armed Arcturus depth acquisition with the existing room-only dashboard close behavior. Add successful native exposure observation, exact metadata/pair identity, calibrated rolling-row rectification, historical standing poses and a privilege-dropped local reader. The installer owns both ARM executables and offers explicit per-session Enable/Stop actions without camera boot integration.",
   "current_software_checks": {
-    "bootstrap.log": {
-      "bytes": 138,
-      "sha256": "af3031ce98d634a09ced84cd838101266be641d25d9529e91287d6b58bc130e0"
+    "actual-bootstrap-candidate-final.log": {
+      "bytes": 145,
+      "sha256": "58878a7fc6d9517184b6bfcb12f12afa82a7537fc8000e0806bfe403584ec955"
     },
-    "camera-build.log": {
-      "bytes": 846,
-      "sha256": "f2018c839fed3318b03ffa6ccd629788916342aab6510bf43c9aeb5be8d29481"
+    "camera-fast-build.log": {
+      "bytes": 858,
+      "sha256": "9158fc94f9adb1bd86bb8b704f617e65889e6ba240fae74fd36c5c32a56ec531"
     },
-    "ctest.log": {
-      "bytes": 475,
-      "sha256": "8c0f96675354faad2ae87c59e5c15cac443f910f39296ec70c76b5a3e26466f2"
+    "ci-windows-pc-pass.log": {
+      "bytes": 16532,
+      "sha256": "8ab46a6e9fd820037acbd85f6aaa0a38e46858da12524ed4f5ae51aa4d00a41e"
     },
-    "installer.log": {
-      "bytes": 396,
-      "sha256": "d9ce11df9240632f1c070448e4b45c145187b457bec931b20644113a4a7ec2a3"
+    "native-pc-build-final.log": {
+      "bytes": 2357,
+      "sha256": "18ea9b90c2dd118eab2a2108165413c4575b4d6885417b266f2cde471bd98d75"
     },
-    "logging.log": {
-      "bytes": 97,
-      "sha256": "d409af1512cfc88ff7eadc12b658514c31320640e3ea84c509bf308a2552718a"
+    "pc-batch-tests-final.log": {
+      "bytes": 106,
+      "sha256": "3432a73038cc385370a50e32e22984cb61d78f62eb3b7c6b7cfdcc7908977ee7"
     },
-    "native-build.log": {
-      "bytes": 876,
-      "sha256": "8b1dc4c644d2d7a3017ed3907e69229de1c5787985542c1bea5bf33716198f1b"
+    "pc-installer-tests-final.log": {
+      "bytes": 6798,
+      "sha256": "95fd83051aee5899fe93e07d5932b6792a7e704a668c6913ed6c5ad4dba3a038"
     },
-    "package.log": {
-      "bytes": 98,
-      "sha256": "b7153663ec700b5438ad23b48f0e0f15587fce680e62652f5054b9e72dbb7050"
+    "pc-live-tests-final.log": {
+      "bytes": 107,
+      "sha256": "6a21f23a0b0ac2d9ab225753bc4e611baff59c5e7fe3f63b21a82587cc4fd7bf"
     },
-    "pc-only.log": {
-      "bytes": 596,
-      "sha256": "2ce937f4c4d87e5ccf1c4e3925cb13ce6ce6fcdf885704e3725bbb18a0784a2e"
+    "pc-only-tests-final.log": {
+      "bytes": 7018,
+      "sha256": "953af8d0e153f7f9aeabbbe5022d126e6c7cd2595175a5e84dc8619784536100"
     },
-    "room-flow.log": {
-      "bytes": 142,
-      "sha256": "cffdbea5d5b2ccc4ecc4c290de09d34aac463dced21cbe28dcbfe5e787c43041"
+    "pc-package-tests-final.log": {
+      "bytes": 117,
+      "sha256": "1d5fa0202425764d1b7fb6dc17b5ae979912a17c25cf59691bdf04b0b80945d7"
     },
-    "setup-ui.log": {
-      "bytes": 98,
-      "sha256": "beb6e68c097da5e2af587449e0920b0029be3797263607b57bfc158b140903f6"
+    "pc-room-python-final.log": {
+      "bytes": 141,
+      "sha256": "a578d6cf7c003f9ae81ba54425f372acd2f4258b3226293f38cc621b99e53acf"
     },
-    "textual-fixed.log": {
-      "bytes": 99,
-      "sha256": "10cbb306a7811497bab34f506951a28aa49c4a7e7e3eebe3412e32f135d7da0c"
+    "pc-session-tests-final.log": {
+      "bytes": 104,
+      "sha256": "8750d4b5acdce1e4d680a3a27eb5d68370ed8b7d37b619aa32e9e0049f881dae"
     }
   },
   "device_actions": false,
   "hardware_verified": false,
-  "headset_close_validation": {
-    "close_implementation_unchanged": true,
-    "dashboard_still_open": true,
-    "entry_reopens_same_process": true,
-    "native_binary_sha256": "b308c42f5a3ef49ef0fafeab053c6997f11a887376aa8355374c369a346acb2e",
-    "other_client_exit_ignored": true,
-    "scope": "Previously accepted room-only close implementation is unchanged. The combined candidate adds capture-epoch rejection and source cleanup; software tests cover these changes. The new complete binary awaits wearer validation.",
-    "verified_on_prior_overlay": true,
-    "wearer_accepted": true
-  },
   "limits": [
-    "The complete installed candidate still needs wearer checks for projection/controller alignment and scan accuracy.",
-    "Capture requires visible colour passthrough, settled exposure, very slow movement with pauses and independent translated viewpoints.",
-    "Uncertain distant surfaces remain marked as requiring more views; unseen space has no invented geometry or completion percentage.",
-    "Manual element authoring is available; automatic recognition, Quest Scene API and game/Venture room adapters remain pending.",
-    "Experimental camera access is never enabled by boot/login/dashboard startup. Enable is a separate explicit installer session action."
+    "Complete NVIDIA/headset latency, physical surface accuracy and controller usability require the combined installed wearer test.",
+    "The Gaussian preview is geometric surfel splatting, not a photometrically optimized radiance field.",
+    "Reflective/transparent/textureless surfaces are not guaranteed; uncertain surfaces and unknown gaps remain visible.",
+    "Keep the interactive Windows installer open throughout reconstruction; closing it stops its worker and pauses capture.",
+    "Profiles bound resolution, preview and memory; the 4090 is a reference machine, not an established minimum.",
+    "Automatic semantic recognition and game/Quest scene adapters remain pending."
   ],
-  "manual_session_headset_validation": {
-    "boot_changes": false,
-    "descriptor_and_temporary_payloads_removed": true,
-    "helper_sha256": "e3c1c2c5baa93947156d2806123ad5f0bf33cffbbfecdf829d7d6208d95865a7",
-    "idle_pixel_reads": false,
-    "owner_crash_ends_reader": true,
-    "owner_source_sha256": "ec59a1b207111f7054c330e29a04c36673e11af50772e19f01a60972d6976d98",
-    "rearm_and_explicit_stop": true,
-    "starter_exit_preserves_session": true,
-    "steamvr_xrservice_and_room_ui_processes_unchanged": true,
-    "unprivileged_reader": true
+  "model_evaluation": {
+    "bilateral_supported_pixels": 65338,
+    "development_only": true,
+    "disparity_percentiles": [
+      5.235013961791992,
+      7.009395122528076,
+      24.823183059692383
+    ],
+    "finite_output": true,
+    "headset_accuracy_verified": false,
+    "inference_seconds": 3.461026263423264,
+    "input_extent": [
+      320,
+      256
+    ],
+    "model_sha256": "2c79bbb274dc0aef687a8732b987077e9e3aa26ff9dd653141cda48c57dad5d3",
+    "nvidia_performance_verified": false,
+    "provider": "CPUExecutionProvider",
+    "recorded_rectified_pair": true,
+    "schema": "sfnp-room-pc-model-evaluation-v1"
   },
   "prior_artifact_provenance": {
-    "bytes": 25762,
-    "sha256": "d952cde912ca6bfbd4b3075eb7291330d3c70fe0dc36f044a7a696400c5ec94d"
+    "bytes": 33771,
+    "sha256": "06cfda07190c5cb9ad79075d0a359fbae85d21ebee4b53b2a456eb331101deeb"
   },
-  "renderer_tests": "Actual offscreen Vulkan upload/readback for 150 changing frames with stable image allocations and exact RGBA.",
-  "source_headset_validation": {
-    "median_processing_ms": 53.426041,
-    "positive_depth_samples": 67531,
-    "public_historical_pose": true,
-    "real_depth_frames": 19,
-    "scope": "Production native source header exercised in a temporary diagnostic consumer. This establishes real observations and their software reconstruction, not visual alignment of the complete installed dashboard or full-room accuracy.",
-    "software_replay_of_actual_observations": {
-      "close_checkpoint_and_reopen": true,
-      "coverage": {
-        "accepted_frames": 19,
-        "building_cells": 21149,
-        "observed_cells": 41690,
-        "reliable_cells": 4,
-        "uncertain_cells": 20537,
-        "whole_room_percentage": null
-      },
-      "triangles": 8101,
-      "vertices": 41690
-    }
+  "private_runtime": {
+    "manifest": {
+      "bytes": 6963,
+      "sha256": "025f918cb2dd355c25feef8c605ce6b7d2d1cd41a0dd1b7eb62c172367df7472"
+    },
+    "nvidia_gpu_performance_verified": false,
+    "pinned_download_and_extraction": true,
+    "windows_actual_model_cpu_inference": true,
+    "windows_cuda_dll_load": true
   },
-  "source_revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
+  "reader_stop_and_metadata_validation": {
+    "camera_boot_integration": false,
+    "explicit_stop_removes_endpoint": true,
+    "helper_sha256": "226b3422cb100a5817ded4b384e22fd84eeba1fa6c392969557c03dce913022c",
+    "native_service_restarts": 0,
+    "unprivileged_transient_reader": true
+  },
+  "source_revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
   "unchanged_compiled_source_paths": [
     "layer",
     "receiver",
@@ -554,7 +572,8 @@
     "bridge",
     "third_party",
     "CMakeLists.txt",
-    "cmake"
+    "cmake",
+    "setup/steam_link_askpass.c"
   ],
   "unchanged_native_artifacts": [
     "pc_provider",
@@ -562,6 +581,5 @@
     "frame_selector",
     "mask_codec",
     "mask_util"
-  ],
-  "validation_basis": "Exact unchanged transport artifacts retain the previous checked source closure. Current source/artifact pins bind the new dashboard, helper and installer. Native kernel/API/geometry/timing/pose checks, room lifecycle, installer transactions, PC-only behavior, real Textual UI and real PowerShell extraction pass. Scoped headset source/session/close observations are separate from whole-package validation."
+  ]
 }
