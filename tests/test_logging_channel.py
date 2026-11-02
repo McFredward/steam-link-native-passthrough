@@ -38,7 +38,7 @@ class Tests(unittest.TestCase):
         new=members(quiet);self.assertEqual(set(old),set(new))
         for n in p.DEFAULTS:self.assertEqual(new[n],b'Important\n')
         for n in old:
-            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n or n.endswith('/sfnp-room-overlay'):self.assertEqual(old[n],new[n],n)
+            if n.endswith(('.dll','.so','.exe','.py','.sh')) or '.so.' in n or n.endswith(('/sfnp-room-overlay','/sfnp-room-camera-native')):self.assertEqual(old[n],new[n],n)
         self.assertEqual(json.loads(new['stream-bridge-bundle.json'])['logging'],{'channel':'main','level':'Important'})
         same,changed=p.retarget(quiet,'main');self.assertFalse(changed);self.assertEqual(same,quiet)
         verbose,changed=p.retarget(quiet,'dev');self.assertTrue(changed)
@@ -70,6 +70,18 @@ class Tests(unittest.TestCase):
         raw=members(self.fixture());raw.pop('bootstrap-package.json');raw['frame/libVkLayer_steam_link_bridge.so']=b'changed'
         for channel in ('dev','main'):
             with self.assertRaises(ValueError):p.retarget(archive(raw),channel)
+    def test_manual_camera_and_dashboard_remain_exact_and_provenance_bound(self):
+        files=members(self.fixture());files.pop('bootstrap-package.json')
+        bundle=json.loads(files['stream-bridge-bundle.json']);source=json.loads(files['stream-bridge-package-source.json'])
+        for role,name in {'room_overlay':'frame/room-setup/sfnp-room-overlay',
+                          'room_camera':'frame/room-setup/sfnp-room-camera-native'}.items():
+            files[name]=(role+'-fixture').encode();bundle['files'][name]=p.pin(files[name]);source['native_artifacts'][role]=p.pin(files[name])
+        files['stream-bridge-bundle.json']=p.encoded(bundle);files['stream-bridge-package-source.json']=p.encoded(source)
+        self.check_roundtrip(archive(files))
+        camera='frame/room-setup/sfnp-room-camera-native'
+        files[camera]=b'changed manual camera';bundle['files'][camera]=p.pin(files[camera])
+        files['stream-bridge-bundle.json']=p.encoded(bundle)
+        with self.assertRaisesRegex(ValueError,'Native artifact provenance'):p.retarget(archive(files),'dev')
     def test_actual_published_package_when_logging_capable(self):
         raw=(ROOT/p.ARCHIVE).read_bytes();logging=json.loads(members(raw)['stream-bridge-bundle.json']).get('logging')
         if logging is None:self.skipTest('Prior package; source candidate has not been packaged yet')
