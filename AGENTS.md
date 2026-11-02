@@ -25,6 +25,10 @@
   The maintainer's 2026-11-01 room-setup preference requires all program UI,
   notices and dashboard names in English, including on a German headset locale.
   Continue communicating with the maintainer in German.
+- The maintainer's 2026-11-02 Room Setup close ruling requires X to return to
+  the SteamVR menu while preserving the open dashboard and Room Setup entry.
+  `VREvent_ProcessQuit` notifies clients that a process exited; it must not be
+  treated as this application's quit request. Honor `VREvent_Quit` instead.
 - On 2026-11-02 the maintainer requested an alternative Arcturus camera API
   and requires a reversible prototype: manual start only, no boot/autostart
   integration, no firmware, driver or XRService replacement. A reboot must
