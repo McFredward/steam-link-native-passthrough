@@ -1,4 +1,9 @@
 {
+  "actual_remote_archive_verified": {
+    "bytes": 23116568,
+    "result": "PASS",
+    "sha256": "99630f67c4cafc8940e8f631e57457f4a26ed0fe2899bafa8a94d465b18c9042"
+  },
   "baseline_receipt": {
     "archive": {
       "bytes": 23116533,
@@ -694,6 +699,17 @@
   },
   "change_scope": "Windows/NVIDIA PC companion through authenticated SSH, checked capture-time raw stereo, rolling-aware rectification, bilateral C-Fast-FoundationStereo, continuously refined Gaussian surfels, locally predicted native MR preview, measured polygon extraction, focused XR world actions and native SteamVR menu input. Installer-managed private dependencies and transient read-only camera access; no boot integration or native service replacement.",
   "ci": {
+    "final_delivery": {
+      "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+      "jobs": [
+        "linux",
+        "linux-python-baseline",
+        "windows-bootstrap"
+      ],
+      "result": "success",
+      "revision": "ecfaadbc32f45ec58058ef048203c58e692035f6",
+      "run": 41547813806
+    },
     "room": {
       "result": "success",
       "revision": "d3f94b45aad240e83c8f5afcf9c543dab306e54c",
