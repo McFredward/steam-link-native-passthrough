@@ -113,6 +113,16 @@ class RelayTests(unittest.TestCase):
         app.event({"event": "pc_model", "binding": self.binding, "capture_epoch": 0, "sequence": 10,
                    "gaussians": base64.b64encode(record).decode(), "face_count": 1})
         self.assertIsNone(app.session)
+        app.event({"event": "camera_ready", "binding": self.binding, "capture_epoch": 1})
+        app.event({"event": "pc_model", "binding": self.binding, "capture_epoch": 1, "sequence": 1,
+                   "gaussians": base64.b64encode(record).decode(), "face_count": 1})
+        app.action("review")
+        self.assertEqual(app.pc_pending_action, "review")
+        self.assertTrue(all(not button["enabled"] for button in app.view()["buttons"]))
+        app.event({"event": "close", "capture_epoch": 2})
+        self.assertIsNone(app.pc_pending_action)
+        self.assertFalse(app.view()["capture_collecting"])
+        self.assertEqual(app.page, "home")
 
     def test_owned_pc_companion_transfers_chunks_and_stops_its_worker(self):
         import subprocess
