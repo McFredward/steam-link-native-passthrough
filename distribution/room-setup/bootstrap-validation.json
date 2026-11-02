@@ -1,4 +1,8 @@
 {
+  "archive": {
+    "bytes": 21336647,
+    "sha256": "6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b"
+  },
   "bootstrap_checks": 39,
   "bootstrap_source_sha256": "d9d4a45257f3b07d2695180843ac192f7942a9744f99c436a45a619fc8e8e702",
   "bootstrap_tests_log": {
@@ -6,15 +10,41 @@
     "sha256": "1664e039310f9e40a0b12bd417fe11c1ea9778946de38d6e3e64eff2955e06e4"
   },
   "branch": "arcturus-room-setup",
+  "ci": {
+    "room": {
+      "result": "success",
+      "revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
+      "run": 41457328575
+    },
+    "setup": {
+      "jobs": [
+        "windows-bootstrap",
+        "linux-python-baseline",
+        "linux"
+      ],
+      "result": "success",
+      "revision": "67d9fb2660d88affe71b657eb5f8ba0778c72769",
+      "run": 41458571727
+    }
+  },
   "dashboard_payload_verified": true,
   "device_actions": false,
   "digest": "sha256:6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b",
   "hardware_verified": false,
   "manual_camera_payload_verified": true,
+  "post_package_logging_checks": {
+    "count": 7,
+    "log": {
+      "bytes": 97,
+      "sha256": "120f1de5d99cf4ddfa2416fb7a1b0c9af1de776accdb18577576b098747220ef"
+    },
+    "result": "PASS"
+  },
   "powershell_version": "7.6.9",
   "result": "PASS",
   "runtime": "setup/runtime/python/python.exe",
   "scope": "ActualPowerShellFunctions_RealCandidateArchive_NoWindowsACL_NoDevice",
+  "source_revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
   "url": "https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/99188623718441c43dcf93f884d54490a16a3d42/distribution/steam-link-native-passthrough.zip",
   "version": "0.3.16-roomscan.7"
 }
