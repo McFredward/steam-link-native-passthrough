@@ -1,50 +1,32 @@
 {
+  "actual_powershell_candidate_extraction": "PASS",
+  "actual_windows_candidate_check": "PENDING_FINAL_CI",
   "archive": {
-    "bytes": 21336647,
-    "sha256": "6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b"
+    "bytes": 23116533,
+    "sha256": "82fb44b13edcf5d4367654ebdf71a6be5694ce78bcbe2252c25df180d12b0f70"
   },
-  "bootstrap_checks": 39,
-  "bootstrap_source_sha256": "d9d4a45257f3b07d2695180843ac192f7942a9744f99c436a45a619fc8e8e702",
-  "bootstrap_tests_log": {
-    "bytes": 138,
-    "sha256": "1664e039310f9e40a0b12bd417fe11c1ea9778946de38d6e3e64eff2955e06e4"
-  },
+  "archive_commit": "01346daba4b8995035b6471483b27f80864596f7",
+  "bootstrap_source_sha256": "1b7e2788f735e329047a54261f5fdfe0f95e8eb8b379aa3e7cb57cb9fd86ef8b",
   "branch": "arcturus-room-setup",
-  "ci": {
+  "core_commit": "f7b4890b756ff3c130d2810cba14b4b456a359bd",
+  "device_actions": false,
+  "headset_test": false,
+  "limits": "Complete NVIDIA/headset performance, geometry accuracy and input usability require the combined installed wearer test.",
+  "linux_bootstrap_sha256": "42fc35da0912f49c25f2ceb4578b34eb399688a1a2896296b4877497ec56f82c",
+  "nvidia_gpu_performance_verified": false,
+  "schema": "sfnp-room-installer-delivery-v1",
+  "source_ci": {
     "room": {
       "result": "success",
-      "revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
-      "run": 41457328575
+      "run": 41545087556
     },
     "setup": {
-      "jobs": [
-        "windows-bootstrap",
-        "linux-python-baseline",
-        "linux"
-      ],
       "result": "success",
-      "revision": "67d9fb2660d88affe71b657eb5f8ba0778c72769",
-      "run": 41458571727
+      "run": 41545086095
     }
   },
-  "dashboard_payload_verified": true,
-  "device_actions": false,
-  "digest": "sha256:6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b",
-  "hardware_verified": false,
-  "manual_camera_payload_verified": true,
-  "post_package_logging_checks": {
-    "count": 7,
-    "log": {
-      "bytes": 97,
-      "sha256": "120f1de5d99cf4ddfa2416fb7a1b0c9af1de776accdb18577576b098747220ef"
-    },
-    "result": "PASS"
-  },
-  "powershell_version": "7.6.9",
-  "result": "PASS",
-  "runtime": "setup/runtime/python/python.exe",
-  "scope": "ActualPowerShellFunctions_RealCandidateArchive_NoWindowsACL_NoDevice",
-  "source_revision": "6ce50563fc64732e4ebe253fca0e889917810bd6",
-  "url": "https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/99188623718441c43dcf93f884d54490a16a3d42/distribution/steam-link-native-passthrough.zip",
-  "version": "0.3.16-roomscan.7"
+  "source_revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
+  "version": "0.3.16-roomscan.8",
+  "windows_actual_model_cpu_inference": true,
+  "windows_private_cuda_dll_load": true
 }
