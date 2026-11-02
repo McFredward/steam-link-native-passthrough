@@ -82,8 +82,8 @@ def required_sources(root=ROOT):
                    'tools/check_room_pc_runtime.py','tools/fetch_room_gaussian_backend.py','packaging/room-gaussian-backend.json',
                    'packaging/room-openxr-headers.json','packaging/room-open3d-kernel.json','packaging/room-vision.json'} |
                   {'room_scan/licenses/'+name for name in bridge.ROOM_LICENSES} |
-                  {str(path.relative_to(root)) for path in (root/'room_reconstruction').glob('*.py')} |
-                  {str(path.relative_to(root)) for path in (root/'room_scan').rglob('*')
+                  {path.relative_to(root).as_posix() for path in (root/'room_reconstruction').glob('*.py')} |
+                  {path.relative_to(root).as_posix() for path in (root/'room_scan').rglob('*')
                    if path.is_file() and path.suffix in ('.h','.cpp','.vert','.frag','.exports')})
 
 
