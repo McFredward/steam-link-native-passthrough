@@ -256,7 +256,8 @@ class Tests(unittest.TestCase):
 
     def add_room_dashboard_fixture(self):
         for name in b.ROOM_FILES:
-            raw = (self.bundle.files['frame/'+b.LIBRARY] if name.endswith('sfnp-room-overlay')
+            raw = (self.bundle.files['frame/'+b.LIBRARY] if name.endswith(('sfnp-room-overlay','sfnp-room-camera-native'))
+                   else (ROOT/'room_scan/capture_session.py').read_bytes() if name==b.ROOM_SESSION
                    else b'# owned room fixture, never executed\n')
             s.put(self.bundle_root/name,raw)
             self.manifest['files'][name]={'bytes':len(raw),'sha256':s.sha(raw)}
@@ -294,6 +295,62 @@ class Tests(unittest.TestCase):
         del self.manifest['files'][name];self.manifest['frame']['files'].remove(name)
         s.put(self.bundle_root/'stream-bridge-bundle.json',s.encoded(self.manifest),s.read(self.bundle_root/'stream-bridge-bundle.json'))
         with self.assertRaises(s.SetupError):b.Bundle(self.bundle_root,s)
+
+    def test_room_capture_rpc_requires_committed_owned_files_and_never_restarts_services(self):
+        self.add_room_dashboard_fixture()
+        with self.fake_generation():
+            self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,live=True)
+        secret='fixture-only camera sign-in'
+        module=mock.Mock()
+        module.start_session.return_value={'state':'armed'}
+        before_commands=list(self.commands)
+        with mock.patch.object(self.unit,'room_camera_module',return_value=module):
+            with self.assertRaises(s.SetupError):
+                b.remote_request(s,b.request(self.bundle,'bridge-room-capture-enable',session_password=secret),unit=self.unit)
+        module.start_session.assert_not_called()
+        self.unit.tx.commit();before=s.read(self.unit.tx.path)
+        incoming=b.request(self.bundle,'bridge-room-capture-enable',session_password=secret)
+        with mock.patch.object(self.unit,'room_camera_module',return_value=module):
+            result=b.remote_request(s,incoming,unit=self.unit)
+        self.assertEqual('armed',result['state'])
+        self.assertNotIn('session_password',incoming)
+        module.start_session.assert_called_once_with(self.froot/'room-setup/sfnp-room-camera-native',
+            self.manifest['files'][b.ROOM_CAMERA]['sha256'],secret,self.bundle.files[b.ROOM_SESSION])
+        self.assertEqual(before,s.read(self.unit.tx.path))
+        self.assertNotIn(secret.encode(),before)
+        self.assertEqual(before_commands,self.commands)
+
+    def test_room_capture_refuses_changed_helper_without_recovery_or_native_restart(self):
+        self.add_room_dashboard_fixture()
+        with self.fake_generation():
+            self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,live=True)
+        self.unit.tx.commit();before=s.read(self.unit.tx.path);commands=list(self.commands)
+        helper=self.froot/'room-setup/sfnp-room-camera-native'
+        s.put(helper,b'changed helper, never executed',s.read(helper))
+        with mock.patch.object(self.unit,'room_camera_module') as load:
+            with self.assertRaises(s.SetupError):
+                b.remote_request(s,b.request(self.bundle,'bridge-room-capture-enable',session_password='fixture-only'),unit=self.unit)
+        load.assert_not_called();self.assertEqual(before,s.read(self.unit.tx.path));self.assertEqual(commands,self.commands)
+
+    def test_manual_room_action_reuses_private_sign_in_and_stop_needs_no_password(self):
+        self.add_room_dashboard_fixture()
+        from types import SimpleNamespace
+        secret='fixture-only private sign-in'
+        ui=mock.Mock();peer=mock.Mock(needs_terminal=False,address='frame.local',login='steamos')
+        peer.call.return_value={'state':'armed'}
+        context={'ssh_auth':SimpleNamespace(_values={('frame.local','steamos'):secret})}
+        self.assertTrue(b.manage_room_capture(s,self.bundle,peer,ui,context,address='FRAME.local',login='steamos'))
+        ui.ssh_prompt.assert_not_called()
+        request=peer.call.call_args.args[0]
+        self.assertEqual('bridge-room-capture-enable',request['command'])
+        self.assertEqual(secret,request['session_password'])
+        self.assertIn('room_capture_source',request)
+        peer.call.return_value={'state':'inactive'}
+        self.assertTrue(b.manage_room_capture(s,self.bundle,peer,ui,context,address='frame.local',login='steamos',stop=True))
+        self.assertNotIn('session_password',peer.call.call_args.args[0])
+        peer.call.side_effect=s.SetupError('fixture activation refusal')
+        self.assertFalse(b.manage_room_capture(s,self.bundle,peer,ui,context,address='frame.local',login='steamos'))
+        self.assertEqual(mock.call('bridge_room_capture_failed'),ui.say.call_args)
 
     def test_existing_installation_adds_room_dashboard_and_checkpoint_restores_old_files(self):
         with self.fake_generation():

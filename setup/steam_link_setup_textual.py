@@ -620,7 +620,7 @@ class TextualPresenter:
                            lambda value: self.app.resolve_prompt(value, expected=prompt)), "")
 
     def choose_action(self, actions, recommended=None):
-        known = ("install", "update", "repair", "uninstall", "check", "exit", "retry", "verify", "back", "rollback", "continue", "manual")
+        known = ("install", "update", "repair", "uninstall", "check", "exit", "retry", "verify", "back", "rollback", "continue", "manual", "room_capture", "room_capture_stop")
         if (type(actions) not in (list, tuple) or len(actions) > len(known)
                 or any(type(a) is not str or a not in known for a in actions)
                 or len(set(actions)) != len(actions)):
@@ -1003,8 +1003,10 @@ class SetupApp(App[int]):
             text.append(description, style="not bold #93adbf")
             choices.add_option(Option(text, id=action))
         choices.highlighted = actions.index(recommended) if recommended in actions else 0
-        choices.focus()
-        choices.scroll_visible()
+        # Focus and the new option heights settle in separate refreshes. Avoid
+        # a second animated parent scroll that can hide the version cards.
+        choices.focus(scroll_visible=False)
+        choices.scroll_visible(animate=False)
 
     @on(OptionList.OptionSelected, "#actions")
     def action_selected(self, event: OptionList.OptionSelected):

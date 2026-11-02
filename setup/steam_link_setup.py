@@ -1071,7 +1071,7 @@ def main(argv=None, *, local=None, remote_factory=Remote, input_fn=input, discov
     parser.add_argument('--inspect', action='store_true', help='Check PC/Frame setup only; no installation, pairing or restart.')
     parser.add_argument('--check', action='store_true', help='Read-only JSON inventory; no credential or log writes.')
     parser.add_argument('--dry-run', action='store_true', help='Display the plan without staging, pairing or installing.')
-    parser.add_argument('--action', choices=('install','update','repair','uninstall'))
+    parser.add_argument('--action', choices=('install','update','repair','uninstall','room_capture','room_capture_stop'))
     parser.add_argument('--bundle', type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument('--frame', help='Frame IP or DNS name. Credentials are handled only by OpenSSH.')
     parser.add_argument('--user', default='steamos')

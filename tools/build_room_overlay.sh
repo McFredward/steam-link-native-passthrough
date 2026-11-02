@@ -32,6 +32,10 @@ g++ "${room_build_flags[@]}" "$room_build_root/tests/room_native_test.cpp" -o "$
 "$room_build_output/room-native-test"
 g++ "${room_build_flags[@]}" "$room_build_root/tests/room_camera_source_test.cpp" -o "$room_build_output/room-camera-source-test"
 "$room_build_output/room-camera-source-test"
+g++ "${room_build_flags[@]}" "$room_build_root/tests/room_arcturus_geometry_test.cpp" -o "$room_build_output/room-arcturus-geometry-test"
+"$room_build_output/room-arcturus-geometry-test"
+g++ "${room_build_flags[@]}" "$room_build_root/tests/room_arcturus_timing_test.cpp" -o "$room_build_output/room-arcturus-timing-test"
+"$room_build_output/room-arcturus-timing-test"
 g++ "${room_build_flags[@]}" "$room_build_root/tests/room_registration_test.cpp" -o "$room_build_output/room-registration-test"
 "$room_build_output/room-registration-test"
 g++ "${room_build_flags[@]}" "$room_build_root/tests/room_dashboard_test.cpp" -o "$room_build_output/room-dashboard-test" -pthread

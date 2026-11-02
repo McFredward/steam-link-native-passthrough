@@ -6,6 +6,7 @@
 #include "native_registration.h"
 #include "native_dashboard.h"
 #include "native_gpu.h"
+#include "native_camera_source.h"
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -177,7 +178,7 @@ int main(int argc,char** argv){
         auto origin=std::make_shared<const std::string>(randomId());
         std::atomic<std::uint64_t> beginCapture{0},captureEpoch{0};
         std::atomic<bool> endWorker{false},invalidate{false},roomClosed{false};
-        std::thread cameraWorker([&]{StereoCamera camera;camera.system=runtime.system;camera.api=runtime.camera;
+        std::thread cameraWorker([&]{RoomStereoCamera camera;camera.system=runtime.system;camera.api=runtime.camera;
             bool awaiting=false;double started=0,lastFrame=0;std::uint64_t activeEpoch=0;
             while(!endWorker&&!stopping&&backend.alive){
                 if(activeEpoch!=captureEpoch.load()){camera.stop();awaiting=false;activeEpoch=captureEpoch.load();}
@@ -197,16 +198,19 @@ int main(int argc,char** argv){
                         std::fprintf(stderr,"Room camera: %s\n",diagnostic.dump().c_str());backend.send({{"event","camera_unavailable"},{"capture_epoch",epoch},{"reason",reason}});}
                 }
                 const auto state=backend.latest();
-                if(state&&camera.handle){
+                if(state&&camera.active()){
                     if(state->value("capture_active",false))awaiting=false;
                     if((!awaiting&&!state->value("capture_active",false))||(awaiting&&seconds()-started>5))camera.stop();
                     else if(state->value("capture_collecting",false)){
-                        try{auto frame=camera.next();if(!frame.empty()){lastFrame=seconds();backend.send(frame,true);}
+                        try{auto frame=camera.next();if(!frame.empty()){
+                                if(roomClosed||activeEpoch!=captureEpoch.load()){camera.stop();continue;}
+                                frame["capture_epoch"]=activeEpoch;lastFrame=seconds();backend.send(frame,true);}
                             else if(seconds()-lastFrame>5)throw std::runtime_error("Camera observation timed out");}
                         catch(const std::exception& e){std::fprintf(stderr,"Room camera: %s\n",e.what());camera.stop();backend.send({{"event","tracking_lost"}});}
                     }
+                    else if(!awaiting)camera.stop();
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(std::chrono::milliseconds(camera.active()?20:30));
             }
             camera.stop();
         });

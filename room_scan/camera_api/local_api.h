@@ -8,7 +8,8 @@
 
 namespace room_camera_api {
 class LocalApi {
-    Fd listener_;std::vector<Fd> clients_;std::string address_;bool stopping_=false;
+    struct Client {Fd fd;bool frames=false,controlOnly=false;};
+    Fd listener_;std::vector<Client> clients_;std::string address_;bool stopping_=false;
     static std::vector<std::uint8_t> packet(const Json& metadata,const std::vector<std::uint8_t>& pixels){
         const auto text=metadata.dump();if(text.size()>16384||pixels.size()>384000)throw std::runtime_error("Camera API packet exceeds budget");
         std::vector<std::uint8_t> out(8+text.size()+pixels.size());
@@ -28,29 +29,37 @@ public:
     }
     const std::string& address()const{return address_;}
     bool stopping()const{return stopping_;}
-    template<class Describe,class Frame>void poll(Describe describe,Frame frame){
+    bool framesRequested()const{for(const auto& client:clients_)if(client.frames)return true;return false;}
+    template<class Describe,class Frame,class Pair>void poll(Describe describe,Frame frame,Pair pair){
+        // Release disconnected slots before admitting a new control client.
+        for(auto it=clients_.begin();it!=clients_.end();){char byte=0;const auto count=recv(it->fd.get(),&byte,1,MSG_PEEK|MSG_DONTWAIT);
+            if(count==0||(count<0&&errno!=EAGAIN&&errno!=EWOULDBLOCK))it=clients_.erase(it);else ++it;}
         for(unsigned i=0;i<4;++i){
             Fd accepted(accept4(listener_.get(),nullptr,nullptr,SOCK_CLOEXEC|SOCK_NONBLOCK));if(accepted.get()<0)break;
             ucred peer{};socklen_t size=sizeof(peer);
-            if(getsockopt(accepted.get(),SOL_SOCKET,SO_PEERCRED,&peer,&size)||size!=sizeof(peer)||peer.uid!=getuid()||clients_.size()>=2)continue;
+            if(getsockopt(accepted.get(),SOL_SOCKET,SO_PEERCRED,&peer,&size)||size!=sizeof(peer)||peer.uid!=getuid()||clients_.size()>=3)continue;
             const int bytes=1024*1024;if(setsockopt(accepted.get(),SOL_SOCKET,SO_SNDBUF,&bytes,sizeof(bytes)))continue;
-            clients_.push_back(std::move(accepted));
+            clients_.push_back({std::move(accepted),false,clients_.size()>=2});
         }
         for(auto it=clients_.begin();it!=clients_.end();){
-            std::array<char,513> input{};const auto count=recv(it->get(),input.data(),input.size(),MSG_DONTWAIT|MSG_TRUNC);
+            std::array<char,513> input{};const auto count=recv(it->fd.get(),input.data(),input.size(),MSG_DONTWAIT|MSG_TRUNC);
             if(count<0&&(errno==EAGAIN||errno==EWOULDBLOCK)){++it;continue;}
             if(count<=0||count>512){it=clients_.erase(it);continue;}
             std::vector<std::uint8_t> output;
             try{
                 const auto request=Json::parse(input.data(),input.data()+count);const auto command=request.at("command").get<std::string>();
                 if(command=="describe")output=packet(describe(),{});
+                else if((command=="pair"||command=="latest")&&it->controlOnly)output=packet({{"status","control-only-connection"}},{});
+                else if(command=="pair"){it->frames=true;output=packet(pair(),{});}
                 else if(command=="latest"){
-                    const auto image=frame(request.at("sensor").get<std::string>());
+                    it->frames=true;
+                    const auto image=frame(request);
                     output=image?packet(image->metadata,image->pixels):packet({{"status","no-fresh-frame"},{"room_scan_ready",false}},{});
-                }else if(command=="stop"){stopping_=true;output=packet({{"status","stopping"}},{});}
+                }else if(command=="park"){it->frames=false;output=packet({{"status","parked"}},{});}
+                else if(command=="stop"){stopping_=true;output=packet({{"status","stopping"}},{});}
                 else output=packet({{"status","unknown-command"}},{});
             }catch(const std::exception&){output=packet({{"status","invalid-request"}},{});}
-            const auto sent=send(it->get(),output.data(),output.size(),MSG_DONTWAIT|MSG_NOSIGNAL);
+            const auto sent=send(it->fd.get(),output.data(),output.size(),MSG_DONTWAIT|MSG_NOSIGNAL);
             if(sent!=ssize_t(output.size()))it=clients_.erase(it);else ++it;
         }
     }

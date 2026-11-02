@@ -85,8 +85,11 @@ PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
 ROOM_PYTHON = ('__init__.py', 'app.py', 'capture.py', 'editor.py', 'geometry.py',
-               'model.py', 'store.py', 'workflow.py', '__main__.py')
+               'model.py', 'store.py', 'workflow.py', '__main__.py', 'capture_session.py')
+ROOM_CAMERA = 'frame/room-setup/sfnp-room-camera-native'
+ROOM_SESSION = 'frame/room-setup/room_scan/capture_session.py'
 ROOM_FILES = frozenset({'frame/room-setup/sfnp-room-overlay',
+                       ROOM_CAMERA, 'frame/room-setup/licenses/NativeCamera.txt',
                        'frame/room-setup/licenses/DejaVu.txt', 'frame/room-setup/licenses/nlohmann-json.txt'} |
                       {'frame/room-setup/room_scan/'+name for name in ROOM_PYTHON})
 ROOM_UNIT = 'sfnp-room-setup.service'
@@ -256,9 +259,10 @@ class Bundle:
         room_files = set(self.files) & ROOM_FILES
         engine.require(not room_files or room_files == ROOM_FILES, 'The room setup dashboard package is incomplete.')
         if room_files:
-            binary = self.files['frame/room-setup/sfnp-room-overlay']
-            engine.require(len(binary) >= 64 and binary[:7] == b'\x7fELF\x02\x01\x01'
-                           and binary[18:20] == b'\xb7\x00', 'Unsupported native room dashboard architecture.')
+            for name in ('frame/room-setup/sfnp-room-overlay', ROOM_CAMERA):
+                binary = self.files[name]
+                engine.require(len(binary) >= 64 and binary[:7] == b'\x7fELF\x02\x01\x01'
+                               and binary[18:20] == b'\xb7\x00', 'Unsupported native room component architecture.')
         engine.require(type(self.pc)is dict and set(self.pc)-{'version'}=={'reviewed','platform','files','runtime_files'} and
                        self.pc['platform']=='windows-x86_64' and type(self.pc['reviewed'])is bool and
                        type(self.pc['files'])is list and set(self.pc['files'])==pc_files,
@@ -1082,12 +1086,18 @@ class FrameInstall:
                 provider_current=saved==expected or type(saved)is dict and saved.get('interface')=='FnTable:IVRSettings_003' and saved.get('path')==expected['path']
                 configuration_current=bool(observed['format_valid'] and provider_current)
             except (ValueError,TypeError,AttributeError):configuration_current=False
+        room_available=bool(intact and component_files_current and ROOM_FILES<=set(bundle.value['files']))
+        room_state='inactive'
+        if room_available and os.name=='posix' and self.home==Path.home() and type(getattr(self,'_room_camera_source',None))is bytes:
+            try:room_state=self.room_camera_module().status()['state']
+            except (OSError,ValueError):room_state='unavailable'
         return {**version_status(state,bundle.frame),**activation_status(admitted,state),'runtime_snapshot':snapshot,
                 'architecture':self.machine(),'runtime_compatible':compatible,
                 'runtime_versions':self.e.runtime_versions(self.steamvr),
                 'installed':state is not None,'files_current':current,
                 'patch_payload_current':patch_current,'owned_files_current':intact,
                 'component_files_current':component_files_current,
+                'room_capture_available':room_available,'room_capture_state':room_state,
                 'runtime_configuration_current':configuration_current,
                 'recovery_pending':(self.root/'setup-restore.json').exists() or (self.root/'lifecycle.json').exists(),
                 'legacy_installed':(self.home/'.config/SteamFrameNativePassthrough/install.json').exists(),
@@ -1152,6 +1162,38 @@ class FrameInstall:
         config=str(self.root/'launch.conf')
         return ('[Service]\nEnvironment='+self.systemd('LD_PRELOAD='+preload)+'\nEnvironment='+
                 self.systemd('SFNP_STREAM_BRIDGE_CONFIG='+config)+'\n').encode()
+
+    def room_camera_module(self):
+        source=getattr(self,'_room_camera_source',None)
+        self.e.require(type(source)is bytes,'Stop manual room capture with its installer or reboot before changing its installation.')
+        return load_module(source,'sfnp_room_capture_session')
+
+    def stop_room_capture(self):
+        # No camera session exists on ordinary installations. This must not
+        # touch native services, including during an unrelated PC-only update.
+        if self.home!=Path.home() or not hasattr(os,'getuid') or not (Path('/run/user')/str(os.getuid())/'sfnp-room-camera/session.json').exists():
+            return {'state':'inactive'}
+        return self.room_camera_module().stop_session()
+
+    def room_capture(self,view,*,password=None,stop=False):
+        e=self.e
+        if stop:return self.stop_room_capture()
+        state=self.tx.state()
+        e.require(state is not None and state['phase']=='installed' and not (self.root/'setup-restore.json').exists()
+                  and not (self.root/'lifecycle.json').exists(),'Finish the Frame installation or recovery before enabling room capture.')
+        e.require(ROOM_FILES<=set(view.value['files']),'This package does not include manual room capture.')
+        for name in (ROOM_CAMERA,ROOM_SESSION):
+            path=self.root/Path(name).relative_to('frame');pin=view.value['files'][name]
+            owned=next((op['after'] for op in state['operations'] if op['path']==str(path)),None)
+            e.require(owned is not None and owned['kind']=='file','The manual room components are not owned by this installation.')
+            recorded=base64.b64decode(owned['bytes'],validate=True)
+            e.require(len(recorded)==pin['bytes'] and e.sha(recorded)==pin['sha256'],
+                      'Update or repair the owned room components before enabling capture.')
+            raw=e.read(path,pin['bytes'],private=True)
+            e.require(len(raw)==pin['bytes'] and e.sha(raw)==pin['sha256'],'Update or repair the Frame room components before enabling capture.')
+        e.require(type(password)is str,'A Frame sign-in answer is required for this manual camera session.')
+        return self.room_camera_module().start_session(self.root/Path(ROOM_CAMERA).relative_to('frame'),
+            view.value['files'][ROOM_CAMERA]['sha256'],password,self._room_camera_source)
 
     def room_dashboard_files(self, bundle, snapshot):
         """Payload and user-service lifecycle share the existing owned transaction."""
@@ -1590,6 +1632,8 @@ class FrameInstall:
         runtime_active=runtime_admission(e,bundle,'frame',snapshot,runtime_consent)
         e.require(not blocked_version_update(bundle.frame.get('version'),current.get('version') if current else None),
                   'The installed Frame patch is newer or the package is unversioned; downgrade was not applied.')
+        self._room_camera_source=bundle.files.get(ROOM_SESSION,getattr(self,'_room_camera_source',None))
+        self.stop_room_capture()
         if current:
             e.require(current['phase']=='installed' and current['pair']==pair['pair_id'],
                       'Repair or remove the previous Frame transaction before replacing it.')
@@ -1749,6 +1793,7 @@ class FrameInstall:
                 'manual_restart_required':True,'coverage_operational':False}
 
     def undo(self,*,backup=False,live=False,purge_legacy=False,target=None):
+        self.stop_room_capture()
         state=self.tx.state();legacy=None;legacy_helper=None;checkpoint=self.checkpoint();pending=checkpoint.value()
         if state is None and purge_legacy and pending:
             for operation in pending['operations']:
@@ -1888,6 +1933,17 @@ def remote_request(engine,request,*,unit=None):
     e.require(len(source)==pin['bytes'] and e.sha(source)==pin['sha256'],
               'The camera cleanup helper differs from the checked package.')
     unit._camera_source=source
+    if ROOM_SESSION in view.value['files']:
+        encoded_room=request.get('room_capture_source');pin_room=view.value['files'][ROOM_SESSION]
+        e.require(type(encoded_room)is str,'The verified manual room-camera helper is missing.')
+        source_room=base64.b64decode(encoded_room,validate=True)
+        e.require(len(source_room)==pin_room['bytes'] and e.sha(source_room)==pin_room['sha256'],
+                  'The manual room-camera helper differs from the checked package.')
+        unit._room_camera_source=source_room
+    if command in ('bridge-room-capture-enable','bridge-room-capture-stop'):
+        password=request.pop('session_password',None)
+        try:return unit.room_capture(view,password=password,stop=command=='bridge-room-capture-stop')
+        finally:password=None
     if command in ('bridge-inventory','bridge-health-baseline','bridge-health','bridge-runtime-restart'):
         view=ReadOnlyView(e,request['manifest'])
         if command=='bridge-inventory':return unit.inventory(view)
@@ -1921,6 +1977,7 @@ def remote_request(engine,request,*,unit=None):
         if raw is not None and len(raw)==provider['bytes'] and e.sha(raw)==provider['sha256']:
             unit._camera_payload=(source,{'path':str(path),'bytes':provider['bytes'],'sha256':provider['sha256']})
     if command=='bridge-restore':
+        unit.stop_room_capture()
         continuation=request.get('continuation',False)
         removing=request.get('removing',False)
         e.require(type(continuation)is bool and (not continuation or request.get('automated') is True),
@@ -2048,6 +2105,7 @@ def request(bundle,command,**values):
         result['files']={name:{**bundle.value['files'][name],
             'data':base64.b64encode(raw).decode()} for name,raw in bundle.files.items()}
     result['camera_source']=base64.b64encode(bundle.files['frame/'+CAMERA_TOOL]).decode()
+    if ROOM_SESSION in bundle.files:result['room_capture_source']=base64.b64encode(bundle.files[ROOM_SESSION]).decode()
     if command in ('bridge-health-baseline','bridge-health','bridge-runtime-restart'):
         result['health_source']=base64.b64encode(bundle.files['frame/tools/compositor_startup_health.py']).decode()
     return result
@@ -2057,6 +2115,34 @@ def terminal_scope(engine,ui,remote):
     # An established OpenSSH session needs no terminal. Keeping normal RPCs in
     # the app preserves its progress/health/recovery display during long work.
     return ui.suspend() if ui and getattr(remote,'needs_terminal',True) else engine.nullcontext()
+
+
+def manage_room_capture(engine,bundle,remote,ui,context,*,address,login,stop=False):
+    """An explicit session action; never part of boot, repair or native restart."""
+    command='bridge-room-capture-stop' if stop else 'bridge-room-capture-enable'
+    password=None
+    try:
+        if not stop:
+            ui.say('bridge_room_capture_plan')
+            credentials=context.get('ssh_auth')
+            identity=(getattr(remote,'address',address),getattr(remote,'login',login))
+            password=credentials._values.get(identity) if credentials is not None else None
+            if password is None:
+                engine.require(hasattr(ui,'ssh_prompt'),'A private Frame password prompt is required to enable camera access.')
+                password=ui.ssh_prompt('Frame password for temporary room camera access: ',secret=True,confirm=False)
+            if password is None:return False
+        values={} if stop else {'session_password':password}
+        with terminal_scope(engine,ui,remote):result=remote.call(request(bundle,command,**values))
+        engine.require(result.get('state')==('inactive' if stop else 'armed'),'The manual camera session did not confirm its requested state.')
+        ui.say('bridge_room_capture_stopped' if stop else 'bridge_room_capture_enabled')
+        return True
+    except (OSError,ValueError):
+        # Optional activation happens after the completed installation. Its
+        # failure must not restore files or restart an otherwise healthy Frame.
+        ui.say('bridge_room_capture_failed')
+        return False
+    finally:
+        password=None
 
 
 PC_ONLY_SCOPE='sfnp-pc-only-update-v1'
@@ -2567,6 +2653,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
             current_pc=local.inventory()
             with terminal_scope(e,ui,remote):current_frame=remote.call(request(bundle,'bridge-inventory'))
             display_inventory(current_pc,current_frame)
+            return current_frame
         except (OSError,ValueError):ui.say('bridge_inventory_refresh_failed')
     if ui:
         if frame is not None:ui.status('receiver_ready' if frame.get('runtime_compatible') else 'receiver_changed','info')
@@ -2591,6 +2678,8 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
             item['activation_mode']=='active' for item in (report['pc'],frame)):
         recommended='check'
     if pc_finishing:actions=['retry','check','exit'];recommended='retry'
+    elif not pending and frame is not None and frame.get('room_capture_available') is True:
+        actions.insert(0,'room_capture_stop' if frame.get('room_capture_state')=='armed' else 'room_capture')
     resumed=context.pop('confirmed_apply',None)
     if resumed is not None:
         e.require(type(resumed)is dict and set(resumed)=={'bundle','intent'} and resumed['bundle']==bundle.pin and
@@ -2609,6 +2698,9 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         if action=='check' and ui:ui.say('check_finish')
         return 0
     e.require(interactive and action in actions,'That action is not available for this checked package.')
+    if action in ('room_capture','room_capture_stop'):
+        manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user,stop=action=='room_capture_stop')
+        return 0
     if pc_finishing:
         if action!='retry':return 0
         context['operation_action']='pc-finalize'
@@ -2646,7 +2738,10 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
     flow=load_helper(e,'steam_link_setup_workflow').Workflow(ports,ui)
     def completed(result):
         if result==0:
-            refresh_inventory()
+            ready=refresh_inventory()
+            if not pc_plan and action in ('install','update','repair') and ROOM_FILES<=set(bundle.files) and ready is not None:
+                if ready.get('room_capture_available') is True and ready.get('room_capture_state')!='armed' and ui.confirm('bridge_room_capture_offer'):
+                    manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user)
         return result
     if pending and action in ('install','update','repair','uninstall') and not (pc_scope is not None and not pc_plan):
         result=flow.run(action,reconcile=True)

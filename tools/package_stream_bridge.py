@@ -27,7 +27,8 @@ BOOTSTRAP='sfnp-bootstrap-stream-bridge-v1'
 CHECKS=frozenset(('pc_provider_build','frame_layer_build','frame_selector_build',
                  'ordinary_rgba_source','exact_frame_association','opaque_fallback',
                  'owned_coverage_gpu','installer_transaction','startup_health_logic'))
-ROOM_CHECKS=frozenset(('room_overlay_build','room_dashboard_flow','room_installer_transaction'))
+ROOM_CHECKS=frozenset(('room_overlay_build','room_dashboard_flow','room_installer_transaction',
+                       'room_camera_build','room_camera_session','room_camera_depth'))
 MAX_ARCHIVE=128*1024*1024
 MAX_EXPANDED=192*1024*1024
 
@@ -63,11 +64,19 @@ def required_sources(root=ROOT):
                   {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
                   {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
+                   'room_scan/native_camera_source.h','room_scan/native_camera_client.h','room_scan/native_capture_pose.h',
+                   'room_scan/native_arcturus_source.h','room_scan/native_arcturus_geometry.h','room_scan/native_arcturus_timing.h',
+                   'room_scan/camera_api/read_only_policy.h','room_scan/camera_api/linux_inventory.h',
+                   'room_scan/camera_api/trace_reader.h','room_scan/camera_api/passive_trace.h',
+                   'room_scan/camera_api/buffer_source.h','room_scan/camera_api/capture_metadata.h',
+                   'room_scan/camera_api/exposure_registers.h','room_scan/camera_api/owner_lifetime.h',
+                   'room_scan/camera_api/stereo_snapshot.h','room_scan/camera_api/local_api.h','room_scan/camera_api/luma_layout.h',
+                   'probe/room_camera_native.cpp','tools/build_room_camera_api.sh','room_scan/licenses/NativeCamera.txt',
                    'room_scan/native_pipe.h','room_scan/native_raster.h','room_scan/native_view.h','room_scan/native_present.h','room_scan/native_registration.h','room_scan/native_dashboard.h','room_scan/native_gpu.h',
                    'tools/build_room_font.py','tools/build_room_overlay.sh','packaging/room-vulkan-headers.json'})
 
 
-def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,room_overlay=None):
+def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,room_overlay=None,room_camera=None):
     artifacts={name:engine.read(path) for name,path in
                [('pc_provider',pc_provider),('frame_layer',frame_layer),('frame_selector',frame_selector)]}
     if mask_decoder is not None:
@@ -75,10 +84,13 @@ def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=Non
                        'A complete private mask decoder pair is required.')
         artifacts.update({name:engine.read(path) for name,path in mask_decoder.items()})
     if room_overlay is not None:
-        raw=engine.read(room_overlay)
-        engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and
-                       struct.unpack_from('<HH',raw,16)==(3,183),'Unsupported native room dashboard image.')
-        artifacts['room_overlay']=raw
+        engine.require(room_camera is not None,'The native room dashboard requires its manually activated camera helper.')
+        for name,path in (('room_overlay',room_overlay),('room_camera',room_camera)):
+            raw=engine.read(path)
+            engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and
+                           struct.unpack_from('<HH',raw,16)==(3,183),'Unsupported native room component image.')
+            artifacts[name]=raw
+    else:engine.require(room_camera is None,'A manual room camera helper requires the room dashboard package.')
     pc=artifacts['pc_provider'];engine.require(len(pc)>=128 and pc[:2]==b'MZ','The PC provider must be the reviewed x64 DLL.')
     offset=struct.unpack_from('<I',pc,60)[0]
     engine.require(offset<=len(pc)-26 and pc[offset:offset+4]==b'PE\0\0' and
@@ -125,7 +137,7 @@ def validation(engine,profile,profile_raw,artifacts,receipts):
 
 
 def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,openssh_zip,
-          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None,room_overlay=None):
+          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None,room_overlay=None,room_camera=None):
     engine=load('sfnp_bridge_package_engine',root/'setup/steam_link_setup.py')
     bridge=load('sfnp_bridge_package_install',root/'setup/stream_bridge_install.py')
     shared=load('sfnp_bridge_package_runtime',root/'tools/package_stream_link_setup.py')
@@ -147,7 +159,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     version=bridge.patch_version(source_bytes['VERSION'].decode('ascii').strip())
     engine.require(version is not None,'An installer semantic version is required.')
     components=patch_versions(engine,bridge,source_bytes['PATCH_VERSIONS.json'])
-    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder,room_overlay)
+    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder,room_overlay,room_camera)
     engine.require(profile['artifacts']=={name:pin(raw) for name,raw in artifacts.items()},
                    'A native artifact differs from the reviewed runtime profile.')
     pc,frame=profile['pc'],profile['frame']
@@ -167,8 +179,9 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     payload.update({name:source_bytes[name.removeprefix('frame/')] for name in bridge.TOOLS|bridge.PROFILES})
     if room_overlay is not None:
         payload['frame/room-setup/sfnp-room-overlay']=artifacts['room_overlay']
+        payload[bridge.ROOM_CAMERA]=artifacts['room_camera']
         payload.update({'frame/room-setup/room_scan/'+name:source_bytes['room_scan/'+name] for name in bridge.ROOM_PYTHON})
-        for name in ('DejaVu.txt','nlohmann-json.txt'):
+        for name in ('DejaVu.txt','nlohmann-json.txt','NativeCamera.txt'):
             payload['frame/room-setup/licenses/'+name]=source_bytes['room_scan/licenses/'+name]
     if channel is None:
         import subprocess
@@ -296,11 +309,13 @@ def main(argv=None):
     parser.add_argument('--mask-codec',type=Path)
     parser.add_argument('--mask-util',type=Path)
     parser.add_argument('--room-overlay',type=Path)
+    parser.add_argument('--room-camera',type=Path)
     args=parser.parse_args(argv)
     if bool(args.mask_codec)!=bool(args.mask_util):parser.error('Supply both --mask-codec and --mask-util.')
+    if bool(args.room_overlay)!=bool(args.room_camera):parser.error('Supply both --room-overlay and --room-camera.')
     decoder={'mask_codec':args.mask_codec,'mask_util':args.mask_util} if args.mask_codec else None
     raw,receipt=build(args.pc_provider,args.frame_layer,args.frame_selector,args.runtime_profile,args.python_zip,args.openssh_zip,
-                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder,room_overlay=args.room_overlay)
+                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder,room_overlay=args.room_overlay,room_camera=args.room_camera)
     sidecar=args.output.with_suffix(args.output.suffix+'.receipt.json')
     if args.output.exists() or sidecar.exists():raise ValueError('An output or receipt already exists; it was preserved.')
     publish(args.output,raw)

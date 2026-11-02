@@ -1,5 +1,6 @@
 // Synthetic public function tables: no hardware, files or real image capture.
 #include "room_scan/native_camera.h"
+#include "room_scan/native_arcturus_source.h"
 #include <cstdio>
 using namespace room_native;
 namespace {
@@ -37,6 +38,8 @@ EVRTrackedCameraError buffer(TrackedCameraHandle_t,EVRTrackedCameraFrameType,voi
 ETrackingUniverseOrigin space(){return ETrackingUniverseOrigin_TrackingUniverseStanding;}
 }
 int main(){try{
+    NativeArcturusSource manual;
+    check(!manual.start("session","origin")&&manual.status=="head-tracking-unavailable","manual capture cannot open without a public tracking interface");
     VR_IVRSystem_FnTable system{};system.GetInt32TrackedDeviceProperty=property;system.GetArrayTrackedDeviceProperty=array;
     VR_IVRTrackedCamera_FnTable api{};api.HasCamera=has;api.GetCameraFrameSize=frameSize;api.GetCameraIntrinsics=intrinsics;
     api.AcquireVideoStreamingService=acquire;api.ReleaseVideoStreamingService=release;api.GetVideoStreamFrameBuffer=buffer;api.GetCameraTrackingSpace=space;

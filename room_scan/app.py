@@ -229,7 +229,7 @@ class Application:
     def event(self, event):
         require(type(event) is dict and type(event.get("event")) is str, "Invalid native event")
         kind = event["event"]
-        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable"):
+        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable", "capture_hint", "depth"):
             # A completion queued before closing must not reopen capture, even
             # if the user has already opened the window again.
             if event.get("capture_epoch", self.capture_epoch) != self.capture_epoch:
@@ -278,11 +278,20 @@ class Application:
                 "camera-metadata-unavailable": "SteamVR exposes no calibrated camera stream to this app. Live room scanning is unavailable.",
                 "camera-count-unsupported": "SteamVR exposes a camera configuration this scanner cannot read yet. Scanning has not started.",
                 "camera-layout-unsupported": "The camera image has no verified stereo layout. Scanning has not started.",
+                "room-capture-not-armed": "Enable room capture for this session in the installer, then try again. Capture stays off after a reboot.",
+                "room-camera-no-live-pair": "No fresh stereo images. Keep colour passthrough visible and try again.",
+                "room-capture-session-unavailable": "The camera session is unavailable. Enable room capture again in the installer.",
+                "room-camera-eye-unverified": "The connected camera's left and right sensors could not be verified.",
             }.get(reason, "The stereo camera could not be verified. Scanning has not started.")
             if type(reason) is str and 0 < len(reason) <= 64 and all(c in "abcdefghijklmnopqrstuvwxyz0123456789-" for c in reason):
                 self.notice += " Diagnostic code: "+reason
             self.page = self.camera_request_page if self.camera_request_page in ("prepare", "alignment") else "scan"
             self.starting = False
+        elif kind == "capture_hint":
+            if self.session and self.session.stage == Stage.SCANNING:
+                message = event["message"]
+                require(type(message) is str and len(message) <= 160 and all(c.isprintable() for c in message), "Invalid capture guidance")
+                self.notice = message
         elif kind == "depth":
             if self.session and self.session.stage == Stage.SCANNING:
                 b = event["binding"]
@@ -290,6 +299,7 @@ class Application:
                 frame = DepthFrame(binding, event["sequence"], event["exposure_ticks"], Pose.from_dict(event["pose"]),
                                    event["width"], event["height"], *event["intrinsics"], event["depth_m"], event["confidence"])
                 self.session.ingest(frame)
+                self.notice = ""
                 self.world_revision += 1
         elif kind == "tracking_lost":
             if self.session and self.session.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW):
