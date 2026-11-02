@@ -227,6 +227,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
            'setup/steam_link_setup_ui.py':source_bytes['setup/steam_link_setup_ui.py'],
            'setup/steam_link_setup_textual.py':source_bytes['setup/steam_link_setup_textual.py'],
            'setup/steam_link_setup_vendor.py':source_bytes['setup/steam_link_setup_vendor.py'],
+           'setup/steam_link_setup_room.py':source_bytes['setup/steam_link_setup_room.py'],
            'setup/stream_bridge_install.py':source_bytes['setup/stream_bridge_install.py'],
            'setup/steam_link_setup_session.py':source_bytes['setup/steam_link_setup_session.py'],
            'setup/steam_link_setup_log.py':source_bytes['setup/steam_link_setup_log.py'],
@@ -242,7 +243,6 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
            'third_party/zstd/LICENSE':source_bytes['third_party/zstd/LICENSE']}
     files['tools/configure_mask_codec.py']=source_bytes['tools/configure_mask_codec.py']
     if room_overlay is not None:
-        files['setup/steam_link_setup_room.py']=source_bytes['setup/steam_link_setup_room.py']
         files['setup/room-pc-runtime.json']=source_bytes['packaging/room-pc-runtime.json']
         for name in ('NVIDIA-Open-Model.txt','NVIDIA-Stereo-Model-Card.txt'):
             files['setup/room-licenses/'+name]=source_bytes['room_scan/licenses/'+name]
