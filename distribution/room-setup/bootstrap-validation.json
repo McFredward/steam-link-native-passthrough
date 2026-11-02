@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PENDING_FINAL_CI",
+  "actual_windows_candidate_check": "PASS",
   "archive": {
     "bytes": 23116568,
     "sha256": "99630f67c4cafc8940e8f631e57457f4a26ed0fe2899bafa8a94d465b18c9042"
@@ -10,10 +10,26 @@
   "branch": "arcturus-room-setup",
   "core_commit": "09b995b1e1fed0a51da05eab73d86c1d7dfb3115",
   "device_actions": false,
+  "final_delivery_ci": {
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "ecfaadbc32f45ec58058ef048203c58e692035f6",
+    "run": 41547813806
+  },
   "headset_test": false,
   "limits": "Complete NVIDIA/headset performance, geometry accuracy and input usability require the combined installed wearer test.",
   "linux_bootstrap_sha256": "340cd188e862b50a12952164e1701c40cc1d6de9745b8675b10765d7aaad6563",
   "nvidia_gpu_performance_verified": false,
+  "remote_archive_download": {
+    "bytes": 23116568,
+    "result": "PASS",
+    "sha256": "99630f67c4cafc8940e8f631e57457f4a26ed0fe2899bafa8a94d465b18c9042"
+  },
   "schema": "sfnp-room-installer-delivery-v1",
   "source_ci": {
     "room": {
