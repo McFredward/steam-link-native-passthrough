@@ -31,13 +31,13 @@ def main():
         (notices/name).write_bytes((root/"room_scan/licenses"/name).read_bytes())
     runtime = setup.prepare_runtime(inputs/"room-pc-runtime.json", args.cache)
     directories = [os.add_dll_directory(str(path)) for path in sorted({dll.parent for dll in (runtime/"vendor").rglob("*.dll")})]
-    provider = runtime/"vendor/onnxruntime/capi/onnxruntime_providers_cuda.dll"
-    loaded = ctypes.WinDLL(str(provider))
     sys.path.insert(0, str(root))
     sys.path.insert(0, str(runtime/"vendor"))
     from room_reconstruction.live_inference import StereoInference
     engine = StereoInference(runtime, 320, 256, cpu_development=True)
     engine.warmup()
+    provider = runtime/"vendor/onnxruntime/capi/onnxruntime_providers_cuda.dll"
+    loaded = ctypes.WinDLL(str(provider))
     print(json.dumps({"result": "PASS", "cuda_dll_loaded": bool(loaded), "private_dll_directories": len(directories),
                       "actual_onnx_inference": True, "provider": engine.provider,
                       "nvidia_gpu_performance_verified": False, "headset_test": False}))
