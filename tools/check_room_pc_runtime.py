@@ -30,7 +30,9 @@ def main():
     for name in json.loads((inputs/"room-pc-runtime.json").read_text())["licenses"]:
         (notices/name).write_bytes((root/"room_scan/licenses"/name).read_bytes())
     runtime = setup.prepare_runtime(inputs/"room-pc-runtime.json", args.cache)
-    directories = [os.add_dll_directory(str(path)) for path in sorted({dll.parent for dll in (runtime/"vendor").rglob("*.dll")})]
+    paths = sorted({dll.parent for dll in (runtime/"vendor").rglob("*.dll")})
+    os.environ["PATH"] = os.pathsep.join([*(str(path) for path in paths), os.environ.get("PATH", "")])
+    directories = [os.add_dll_directory(str(path)) for path in paths]
     sys.path.insert(0, str(root))
     sys.path.insert(0, str(runtime/"vendor"))
     from room_reconstruction.live_inference import StereoInference

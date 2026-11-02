@@ -48,7 +48,7 @@ der native Kameradienst werden nicht ersetzt.
 
 Diese Variante berechnet den Scan auf einem **Windows-PC mit NVIDIA-GPU**.
 Der Installer bereitet eine private CUDA/ONNX-Laufzeit und das Modell NVIDIA
-C-Fast-FoundationStereo vor: beim ersten Mal etwa 1,6 GB Download, mindestens
+C-Fast-FoundationStereo vor: beim ersten Mal etwa 1,7 GB Download, mindestens
 5 GB freier Speicherplatz. System-Python, CUDA-Toolkit und GPU-Treiber werden
 nicht geändert. Auf **PC reconstruction is running** warten und den
 **Installer während des Scans geöffnet lassen**. Mindestens 3 GB freier

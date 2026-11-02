@@ -47,7 +47,7 @@ No firmware, camera driver or native camera service is replaced.
 
 This candidate reconstructs on a **Windows PC with an NVIDIA GPU**. The installer
 prepares a private CUDA/ONNX Runtime and NVIDIA C-Fast-FoundationStereo model
-(about 1.6 GB on first use, 5 GB free disk space required). It changes no system
+(about 1.7 GB on first use, 5 GB free disk space required). It changes no system
 Python, CUDA toolkit or GPU driver. Wait for **PC reconstruction is running** and
 **keep the installer open** throughout the scan. At least 3 GB free NVIDIA VRAM
 is required; resolution and map size scale with available memory. This is a

@@ -105,6 +105,22 @@
       "url": "https://files.pythonhosted.org/packages/57/99/0571bb13baed5596b7b941254a51ed1bb70fa81e6f8d2bac25b104a84aa3/msvc_runtime-14.51.36231-cp314-cp314-win_amd64.whl",
       "bytes": 2110765,
       "sha256": "55a017355394fa78f87dbab6967cf2131398671ca0a77f8c97dadfc6c6f3de38"
+    },
+    {
+      "name": "nvidia-cuda-nvrtc-cu12",
+      "version": "12.6.77",
+      "filename": "nvidia_cuda_nvrtc_cu12-12.6.77-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/f5/46/d3a1cdda8bb113c80f43a0a6f3a853356d487b830f3483f92d49ce87fa55/nvidia_cuda_nvrtc_cu12-12.6.77-py3-none-win_amd64.whl",
+      "bytes": 39026742,
+      "sha256": "f7007dbd914c56bd80ea31bc43e8e149da38f68158f423ba845fc3292684e45a"
+    },
+    {
+      "name": "nvidia-curand-cu12",
+      "version": "10.3.7.77",
+      "filename": "nvidia_curand_cu12-10.3.7.77-py3-none-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/a9/a8/0cd0cec757bd4b4b4ef150fca62ec064db7d08a291dced835a0be7d2c147/nvidia_curand_cu12-10.3.7.77-py3-none-win_amd64.whl",
+      "bytes": 55783873,
+      "sha256": "6d6d935ffba0f3d439b7cd968192ff068fafd9018dbf1b85b37261b13cfc9905"
     }
   ],
   "model": {
