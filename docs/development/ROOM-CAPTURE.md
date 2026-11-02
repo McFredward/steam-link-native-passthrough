@@ -1,14 +1,13 @@
 # Arcturus room capture
 
-Status: **installable room-editor experiment; live scanning blocked on tested Frame SteamVR 2.18.2**.
-The native dashboard, controller editor, bounded stereo reconstruction and owned
-installer integration are implemented. Candidate 3 restores the dashboard, but
-its headset test still found hover-triggered flicker and refused camera access.
-Read-only logs prove `HasCamera=true`, a successful camera-count property query
-and count `0`. The legacy API has not established usable Arcturus frames.
-An attached colour module and visible compositor passthrough do not give an
-application access to the pixels. This is not yet a working live room scanner
-or Quest Scene API compatibility.
+Status: **candidate 7 combines the manual native scan source and dashboard X**.
+The source produced 19 real depth frames with 67,531 measurements in a 12-second
+Frame test. Replaying these actual observations through the room controller
+built 41,690 vertices and 8,101 triangles; close/checkpoint and a new session
+passed. This establishes a working measurement and reconstruction path. Wearer
+validation of the complete installed flow, visible alignment and room accuracy
+is still required. This is not Quest Scene API compatibility or automatic object
+recognition.
 
 ## Headset flow
 
@@ -16,6 +15,12 @@ The entry point is the **Frame-local SteamVR dashboard icon “Room Setup”**.
 There is no Steam Library application. The installed user service starts the
 small overlay process with SteamVR. Opening its panel never starts capture;
 “Scan a new room” followed by “Start scan” is explicit consent to acquisition.
+After installing candidate 7, separately choose **Enable room capture** in the
+installer. Temporary administrator access only duplicates existing capture
+descriptors and opens passive readers. The reader drops privileges, reads no
+pixels while parked and is never configured to start at boot. Stop is available
+in the installer; reboot leaves it inactive. The Room Setup dashboard's existing
+user service is separate from this manual camera session.
 
 The design follows Meta's [Space Setup and semantic Scene Model](https://developers.meta.com/vr/documentation/unity/unity-mr-utility-kit-manage-scene-data/):
 prepare, observe the room build up, enter semantic elements during capture,
@@ -196,12 +201,54 @@ closing controls with a hidden dashboard, unavailable menu/interface handling,
 and unrelated process-exit notifications. The installer still uses the public
 camera source; the manual native camera prototype remains outside this package.
 
-## Camera source and remaining hardware gate
+### Candidate 7: real native stereo and manual session activation
 
-The separate [manual native camera API prototype](../../probe/ROOM-CAMERA-NATIVE.md)
-has now delivered actual Arcturus images outside `IVRTrackedCamera`. It has no
-boot/autostart integration and is excluded from the normal installer. Its
-calibration and exposure-pose gates remain closed pending independent validation.
+The installer now includes `sfnp-room-camera-native` and its checked session
+owner. It offers activation only after the installation has completed, or as a
+separate **Enable room capture** action. There is no boot/login hook, service,
+file capability or firmware/driver replacement for the reader. Passwords use
+private in-memory input. The exact executable is sealed in RAM before execution;
+the reader installs its kernel guards before discovery and drops privileges
+before exposing the same-user API. A pidfd also binds it to its ordinary session
+owner, so an owner crash ends access even if sudo used an intermediate monitor.
+
+An actual Frame test established activation surviving the starter's exit, UID
+1000 with zero permitted/effective/inheritable capabilities, active seccomp,
+no idle pixel reads, endpoint removal after owner SIGKILL, reactivation, explicit
+Stop, descriptor removal and full temporary-payload cleanup. SteamVR, XRService
+and Room Setup retained their process identities. A reserved control connection
+keeps Stop available while two image clients are connected.
+
+The consumer matches immutable stereo snapshots by source lifetime, verified
+device-tree eye roles and actual hardware SOF. Factory KB geometry rectifies the
+active luma images without applying the EEPROM crop twice. The supported NV12
+mode uses EOF-anchored rolling-readout timing with a 4.36 microsecond native row
+period. Coarse integration comes from completed native I2C transfers. Only
+settings unchanged over two complete earlier frames and through the current EOF
+are admitted; newly changing settings remain unknown. There is no sensor write,
+guessed constant clock offset, dequeue-time pose or current-head-pose fallback.
+
+For each source row, the worker samples and interpolates the public standing
+pose history at its exposure center and corrects rotation during rectification.
+Excessive movement, long pose queries, unsupported modes or insufficient timing
+produce capture guidance instead of invented depth. Distant low-disparity samples
+remain uncertain. Current conservative motion limits require very slow looking
+and brief pauses; additional translated viewpoints improve measured coverage.
+
+The 12-second native-consumer test produced the real observations above. Median
+per-observation processing was 53.4 ms, maximum 62.1 ms on the Frame. The scoped
+camera tests and the earlier accepted X behavior do not replace a wearer check
+of their complete installed combination. Furniture entry remains controller
+authored, and game-facing adapters remain separate work.
+
+## Camera sources
+
+The [manual native camera API](../../probe/ROOM-CAMERA-NATIVE.md) supplies the new
+Frame route outside `IVRTrackedCamera`. Its raw API does not itself grant a world
+pose; the unprivileged consumer separately verifies geometry, timing and tracking.
+The older public camera route below remains a fallback where the runtime actually
+provides its full contract. It still returns no usable frames on the tested Frame
+SteamVR 2.18.2.
 
 `native_camera.h` uses public `IVRTrackedCamera_006`, without root, capabilities,
 DMA-BUF interception, private hooks or RGB streaming to the PC. Admission requires:

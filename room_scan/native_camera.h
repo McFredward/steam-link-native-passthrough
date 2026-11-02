@@ -33,7 +33,7 @@ inline Mat factoryPose(const Json& value,float scale){
     if(!rigid(out))throw std::runtime_error("Invalid calibration transform");
     return out;
 }
-inline std::array<Mat,2> arcturusFactoryGeometry(){
+inline Json arcturusFactoryRig(){
     const std::string path="/sys/devices/platform/soc@0/ac15000.cci/i2c-0/0-0050/eeprom";
     std::ifstream file(path,std::ios::binary);if(!file)throw std::runtime_error("Arcturus calibration unavailable");
     std::string raw(131073,'\0');file.read(raw.data(),std::streamsize(raw.size()));raw.resize(std::size_t(file.gcount()));
@@ -44,7 +44,10 @@ inline std::array<Mat,2> arcturusFactoryGeometry(){
     for(;end<raw.size();++end){const char c=raw[end];if(quoted){if(escaped)escaped=false;else if(c=='\\')escaped=true;else if(c=='\"')quoted=false;}
         else if(c=='\"')quoted=true;else if(c=='{')++depth;else if(c=='}'&&!--depth){++end;break;}}
     if(depth||end>raw.size())throw std::runtime_error("Incomplete Arcturus calibration");
-    const auto rig=Json::parse(raw.substr(begin,end-begin));const auto device=boundedJson("/persist/device_config.json");
+    return Json::parse(raw.substr(begin,end-begin));
+}
+inline std::array<Mat,2> arcturusFactoryGeometry(){
+    const auto rig=arcturusFactoryRig();const auto device=boundedJson("/persist/device_config.json");
     const Mat headFromCad=inverse(factoryPose(device.at("head"),1));
     std::array<Mat,2> out;std::array<bool,2> found{};
     const auto& cameras=rig.at("cameras");if(!cameras.is_array()||cameras.size()>8)throw std::runtime_error("Unsupported Arcturus cameras");

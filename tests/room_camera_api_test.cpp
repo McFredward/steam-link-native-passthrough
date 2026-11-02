@@ -1,6 +1,7 @@
 // Real local socket/packet/stop test with a clearly synthetic provider.
 #include "room_scan/camera_api/read_only_policy.h"
 #include "room_scan/camera_api/local_api.h"
+#include "room_scan/native_camera_client.h"
 #include <cstdio>
 #include <optional>
 #include <sys/wait.h>
@@ -33,8 +34,9 @@ int main(){try{
         for(std::size_t i=0;i<image.pixels.size();++i)image.pixels[i]=std::uint8_t(i*13);
         const auto announcement=api.address()+"\n";check(write(1,announcement.data(),announcement.size())==ssize_t(announcement.size()),"owned announcement");
         while(!api.stopping()){
-            api.poll([](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true}};},
-                [&](const std::string& sensor){return sensor=="fixture"?&image:nullptr;});
+            api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()}};},
+                [&](const Json& request){return request.at("sensor")=="fixture"?&image:nullptr;},
+                [](){return Json{{"status","no-fresh-pair"}};});
             usleep(1000);
         }
         _exit(0);
@@ -45,11 +47,19 @@ int main(){try{
     check(address.rfind("sfnp.room.camera.",0)==0&&address.size()<100,"unpredictable abstract session endpoint");
     auto socket=connectTo(address);check(socket.get()>=0,"same-user API connection");
     auto result=request(socket.get(),R"({"command":"describe"})");check(!result.first.at("room_scan_ready").get<bool>()&&result.second.empty(),"capability handshake cannot invent scan readiness");
+    check(!result.first.at("pixel_reads_active").get<bool>(),"opening and describing a session never requests pixels");
     result=request(socket.get(),R"({"command":"latest","sensor":"fixture"})");check(result.second.size()==616*616,"real socket carries the largest diagnostic image");
     for(std::size_t i=0;i<result.second.size();++i)check(result.second[i]==std::uint8_t(i*13),"exact pixel bytes survive transport");
+    check(request(socket.get(),R"({"command":"describe"})").first.at("pixel_reads_active").get<bool>(),"explicit image request enables only owned reader copies");
+    check(request(socket.get(),R"({"command":"park"})").first.at("status")=="parked","consumer can park its own read interest");
+    check(!request(socket.get(),R"({"command":"describe"})").first.at("pixel_reads_active").get<bool>(),"parking the last consumer stops pixel reads");
     check(request(socket.get(),R"({"command":"latest","sensor":"missing"})").first.at("status")=="no-fresh-frame","unavailable frame stays unavailable");
     check(request(socket.get(),R"({"command":"set-camera-format"})").first.at("status")=="unknown-command","API has no camera-setting command");
     check(request(socket.get(),"{").first.at("status")=="invalid-request","malformed input remains bounded");
+    {room_native::CameraClient native;native.connect(address);
+        const auto frame=native.request({{"command","latest"},{"sensor","fixture"}});
+        check(frame.pixels.size()==616*616&&frame.pixels.back()==std::uint8_t((616*616-1)*13),"production native client receives exact largest image packet");
+        check(native.pair()[0].pixels.empty(),"production native client cannot invent an unavailable pair");}
     const auto python=fork();check(python>=0,"Python client test process");
     if(!python){
         execlp("python3","python3","-B","-c",
@@ -57,7 +67,11 @@ int main(){try{
             address.c_str(),static_cast<char*>(nullptr));_exit(1);
     }
     int pythonStatus=0;check(waitpid(python,&pythonStatus,0)==python&&WIFEXITED(pythonStatus)&&!WEXITSTATUS(pythonStatus),"actual Python client validates a real image packet");
-    check(request(socket.get(),R"({"command":"stop"})").first.at("status")=="stopping","stop addresses only this helper");
+    auto second=connectTo(address);check(second.get()>=0,"second image consumer");
+    check(request(second.get(),R"({"command":"latest","sensor":"fixture"})").second.size()==616*616,"second image consumer receives its frame");
+    auto control=connectTo(address);check(control.get()>=0,"reserved control slot");
+    check(request(control.get(),R"({"command":"latest","sensor":"fixture"})").first.at("status")=="control-only-connection","reserved slot cannot start another image consumer");
+    check(request(control.get(),R"({"command":"stop"})").first.at("status")=="stopping","Stop remains available with both image consumers connected");
     int status=0;check(waitpid(child,&status,0)==child&&WIFEXITED(status)&&!WEXITSTATUS(status),"manual helper stops cleanly");
     owned.pid=-1;
     check(connectTo(address).get()<0,"API endpoint disappears when its process exits, with no filesystem cleanup");

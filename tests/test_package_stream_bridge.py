@@ -93,13 +93,19 @@ class Tests(unittest.TestCase):
 
     def test_room_dashboard_requires_its_own_software_checks_and_full_payload(self):
         room=self.base/'room-overlay';room.write_bytes(elf()+b'explicit synthetic room ELF')
-        self.profile['artifacts']['room_overlay']=p.pin(room.read_bytes());self.save_profile()
+        camera=self.base/'room-camera';camera.write_bytes(elf()+b'explicit synthetic camera ELF')
+        self.profile['artifacts']['room_overlay']=p.pin(room.read_bytes())
+        self.profile['artifacts']['room_camera']=p.pin(camera.read_bytes());self.save_profile()
+        with self.assertRaises(ValueError):self.build(room_overlay=room)
         with self.assertRaises(ValueError):
-            self.build(room_overlay=room,release=True,validation_receipts=[self.validation()])
-        raw,receipt=self.build(room_overlay=room,release=True,validation_receipts=[self.validation(p.CHECKS|p.ROOM_CHECKS)])
+            self.build(room_overlay=room,room_camera=camera,release=True,validation_receipts=[self.validation()])
+        raw,receipt=self.build(room_overlay=room,room_camera=camera,release=True,validation_receipts=[self.validation(p.CHECKS|p.ROOM_CHECKS)])
         self.assertTrue(receipt['native_installable']);self.assertFalse(receipt['hardware_verified'])
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             self.assertEqual(room.read_bytes(),archive.read('frame/room-setup/sfnp-room-overlay'))
+            self.assertEqual(camera.read_bytes(),archive.read('frame/room-setup/sfnp-room-camera-native'))
+            self.assertIn('frame/room-setup/room_scan/capture_session.py',archive.namelist())
+            self.assertIn('frame/room-setup/licenses/NativeCamera.txt',archive.namelist())
             self.assertIn('frame/room-setup/room_scan/app.py',archive.namelist())
             self.assertIn('frame/room-setup/licenses/DejaVu.txt',archive.namelist())
 

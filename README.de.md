@@ -32,26 +32,32 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.6** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.7** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
 ```
 
-Er installiert das englischsprachige Frame-Dashboard **Room Setup** mit.
-**Live-Scans sind mit dem getesteten Frame-SteamVR 2.18.2 noch blockiert:** Die
-öffentliche Kamera-API meldet eine Kamera, liefert aber keinen kalibrierten
-Stereo-Stream. Ausrichtung und gleichzeitiger Passthrough-Betrieb müssen noch
-auf der Brille geprüft werden. Automatische Objekterkennung und die Raumdaten-Anbindung an
-Spiele/Venture stehen noch aus. Ablauf und Grenzen stehen in der
+Er installiert das englischsprachige Frame-Dashboard **Room Setup** und den
+manuellen Arcturus-Kameraleser. Nach dem Update **Enable room capture** wählen.
+Die Einrichtung benötigt kurz Administratorzugriff; anschließend läuft der
+Leser ohne Root-Rechte. Nach einem Frame-Neustart bleibt dieser Zugriff aus.
+Im Installer lässt er sich erneut aktivieren oder mit **Stop room capture** beenden.
+
+In Room Setup **Scan a new room → Start scan** wählen. Farb-Passthrough sichtbar
+lassen, sehr langsam umsehen und kurz stillhalten, um Details aufzunehmen.
+Für zusätzliche Blickpunkte auch etwas seitlich bewegen. Echte gemessene
+Polygone entstehen; Möbel, Wände, Türen und Fenster lassen sich per Controller
+ergänzen. Das **X oben rechts** beendet die Aufnahme und kehrt zum SteamVR-Menü
+zurück. Dashboard und Eintrag bleiben erhalten; der Leser wartet anschließend
+ohne Bildzugriffe auf den nächsten ausdrücklich gestarteten Scan.
+
+Die Kameraquelle hat auf der Frame echte Tiefenbilder mit zugeordneter Kopfpose
+geliefert. Diese kombinierte Testversion benötigt noch Rückmeldung zur sichtbaren
+Ausrichtung und Scanqualität. Automatische Objekterkennung und die Raumdaten-
+Anbindung an Spiele/Venture stehen noch aus. Details stehen in der
 [Raumscan-Dokumentation](docs/development/ROOM-CAPTURE.md).
-Das **X oben rechts** kehrt zum SteamVR-Menü zurück und beendet die Aufnahme;
-das Dashboard bleibt offen und der Eintrag erhalten. Das Ende anderer
-SteamVR-Programme entfernt den Eintrag nicht mehr. Ein separater, manuell gestarteter
-Kamera-API-Prototyp liefert inzwischen beide Arcturus-Bilder. Er bleibt bis zur
-Prüfung der Aufnahmezeit und Kopfpose außerhalb des Installers und startet
-auch nach einem Neustart nicht automatisch.
 
 ## Native Transparenz, kein Farbersatz
 

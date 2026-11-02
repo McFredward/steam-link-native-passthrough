@@ -40,6 +40,9 @@ jobs:
           raw=urllib.request.urlopen('https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_capi.h',timeout=30).read(1024*1024)
           assert hashlib.sha256(raw).hexdigest()=='3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7'
           path=Path('build/dashboard-sdk/openvr_capi.h');path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+          raw=urllib.request.urlopen('https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp',timeout=30).read(2*1024*1024)
+          assert hashlib.sha256(raw).hexdigest()=='aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63'
+          path=Path('build/native-room-json/nlohmann/json.hpp');path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
           PY
       - name: Exercise panel-only close, preserved dashboard and process-exit isolation
         run: |
@@ -47,6 +50,12 @@ jobs:
           build/room-dashboard-test
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I . -isystem build/dashboard-sdk tests/room_registration_test.cpp -o build/room-registration-test
           build/room-registration-test
+      - name: Verify native source admission, exposure timing and pose-history bounds
+        run: |
+          for test in room_camera_source_test room_arcturus_geometry_test room_arcturus_timing_test; do
+            g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I . -isystem build/dashboard-sdk -isystem build/native-room-json tests/$test.cpp -o build/$test -pthread
+            build/$test
+          done
   manual-camera-prototype:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -77,6 +86,7 @@ jobs:
           ctest --test-dir build/room-core --output-on-failure
       - name: Verify installer transactions and optional dashboard package
         run: |
+          python3 -B -m unittest discover -s tests -p test_room_capture_session.py -q
           python3 -B -m unittest discover -s tests -p test_stream_bridge_install.py -q
           python3 -B -m unittest discover -s tests -p test_package_stream_bridge.py -q
           python3 -B -m unittest discover -s tests -p test_pc_only_setup.py -q

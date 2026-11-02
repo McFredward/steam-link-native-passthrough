@@ -37,6 +37,15 @@ MAX_NEIGHBORS = 64
 VIRTUAL = re.compile(r'(?i)(vpn|wireguard|tailscale|zerotier|virtual|vmware|vbox|hyper-v|docker|podman|loopback|^lo$|^wsl|^tun\d*|^tap\d*|^veth|^virbr|^br-)')
 TEXT = {
     'en': {
+        'bridge_room_capture_plan': 'Enabling read-only camera access for this session using temporary administrator access. SteamVR stays running. Capture turns off after a Frame reboot.',
+        'bridge_room_capture_offer': 'Room Setup is installed. Enable read-only room capture for this session? This uses temporary administrator access and stays off after a Frame reboot.',
+        'bridge_room_capture_enabled': 'Room capture is enabled for this session. Open Room Setup in the SteamVR dashboard, then choose Scan a new room and Start scan.',
+        'bridge_room_capture_stopped': 'Room capture is off. SteamVR and native passthrough stay running.',
+        'bridge_room_capture_failed': 'Room camera access could not be confirmed. The installed patch is preserved. Run setup again to retry or stop capture; a Frame reboot also turns it off.',
+        'action_room_capture': 'Enable room capture',
+        'action_room_capture_description': 'Read-only room scanning until Stop or a Frame reboot. No native service restart.',
+        'action_room_capture_stop': 'Stop room capture',
+        'action_room_capture_stop_description': 'Release this manual camera session and leave SteamVR running.',
         'bridge_pc_only_stopping': 'Closing SteamVR on this PC; the Frame stays unchanged',
         'bridge_pc_only_plan': 'Only the PC patch needs changes. Setup closes SteamVR on this PC and updates its files while preserving the existing pairing. The Frame patch, settings and services stay unchanged; no Frame restart or picture check is needed.',
         'bridge_pc_only_installed': 'PC update complete. The Frame patch, settings and services were left unchanged; no Frame restart was performed.',
@@ -186,6 +195,15 @@ TEXT = {
         'cancelled': 'Setup stopped. Any recovery details are shown below.',
     },
     'de': {
+        'bridge_room_capture_plan': 'Enabling read-only camera access for this session using temporary administrator access. SteamVR stays running. Capture turns off after a Frame reboot.',
+        'bridge_room_capture_offer': 'Room Setup is installed. Enable read-only room capture for this session? This uses temporary administrator access and stays off after a Frame reboot.',
+        'bridge_room_capture_enabled': 'Room capture is enabled for this session. Open Room Setup in the SteamVR dashboard, then choose Scan a new room and Start scan.',
+        'bridge_room_capture_stopped': 'Room capture is off. SteamVR and native passthrough stay running.',
+        'bridge_room_capture_failed': 'Room camera access could not be confirmed. The installed patch is preserved. Run setup again to retry or stop capture; a Frame reboot also turns it off.',
+        'action_room_capture': 'Enable room capture',
+        'action_room_capture_description': 'Read-only room scanning until Stop or a Frame reboot. No native service restart.',
+        'action_room_capture_stop': 'Stop room capture',
+        'action_room_capture_stop_description': 'Release this manual camera session and leave SteamVR running.',
         'bridge_pc_only_stopping': 'SteamVR auf diesem PC wird beendet; die Frame bleibt unverändert',
         'bridge_pc_only_plan': 'Nur der PC-Patch benötigt Änderungen. Die Einrichtung beendet SteamVR auf diesem PC und aktualisiert seine Dateien unter Beibehaltung der vorhandenen Kopplung. Patch, Einstellungen und Dienste auf der Frame bleiben unverändert; dort sind kein Neustart und keine Bildprüfung nötig.',
         'bridge_pc_only_installed': 'PC-Aktualisierung abgeschlossen. Patch, Einstellungen und Dienste auf der Frame blieben unverändert; die Frame wurde nicht neu gestartet.',
@@ -831,7 +849,7 @@ class Presenter:
         This selects an action; the engine still owns its plan and permissions.
         """
         known = ('install', 'update', 'repair', 'uninstall', 'check', 'exit',
-                 'retry', 'verify', 'back', 'rollback', 'continue', 'manual')
+                 'retry', 'verify', 'back', 'rollback', 'continue', 'manual','room_capture','room_capture_stop')
         if (type(actions) not in (list, tuple) or len(actions) > len(known) or
                 any(type(action) is not str or action not in known for action in actions) or
                 len(set(actions)) != len(actions)):

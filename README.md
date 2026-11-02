@@ -32,24 +32,30 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.6**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.7**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
 ```
 
-It also installs the Frame-local **Room Setup** dashboard. **Live scanning is
-blocked on the tested Frame SteamVR 2.18.2:** its public camera API reports a
-camera but exposes no calibrated stereo stream. Projection alignment and
-passthrough coexistence still require headset validation;
-automatic object recognition and game/Venture room adapters are pending.
-See [room capture](docs/development/ROOM-CAPTURE.md) for the test flow and limits.
-The top-right **X** returns to the SteamVR menu and stops capture while preserving
-the open dashboard and Room Setup entry. Other SteamVR clients exiting no longer
-remove that entry. A separately tested manual native camera API prototype delivers both
-Arcturus images; it has no autostart and is outside this installer while exposure
-timing and world-pose association are being verified.
+It installs the Frame-local **Room Setup** dashboard and the manual Arcturus
+camera reader. After updating, select **Enable room capture** when offered.
+This uses temporary administrator access for setup; the reader then drops its
+privileges. It has no boot integration. A Frame reboot turns this access off;
+run the installer again to enable it for another session or choose **Stop room capture**.
+
+In Room Setup, choose **Scan a new room → Start scan**. Keep colour passthrough
+visible, look very slowly and pause briefly to capture detail. Move a little
+sideways for additional viewpoints. Real measured triangles build up; furniture,
+walls, doors and windows can be added with the controllers. The top-right **X**
+returns to the SteamVR menu, stops capture and preserves the open dashboard and
+Room Setup entry. The reader stays parked until another explicit scan request.
+
+The source has produced real head-pose-associated depth on the tested Frame.
+This is an experimental combined test version: visual alignment and scan quality
+still need wearer feedback. Automatic object recognition and game/Venture room
+adapters are pending. See [room capture](docs/development/ROOM-CAPTURE.md).
 
 ## Native transparency, no colour replacement
 

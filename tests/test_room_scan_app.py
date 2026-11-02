@@ -80,6 +80,19 @@ class AppTests(unittest.TestCase):
             self.app.event(dict(event="point", origin_id=IDS[4], sample_ns=1, controller_position=[0, 0, 0]))
         self.assertFalse(self.app.draft.points)
 
+    def test_live_capture_guidance_never_creates_geometry_and_clears_on_depth(self):
+        self.start()
+        self.app.event(dict(event="capture_hint", message="Move more slowly.", capture_epoch=0))
+        self.assertEqual("Move more slowly.", self.app.view()["notice"])
+        self.assertEqual(0, self.app.session.reconstruction.accepted_frames)
+        self.depth()
+        self.assertEqual("", self.app.view()["notice"])
+        self.assertEqual(1, self.app.session.reconstruction.accepted_frames)
+        self.app.event(dict(event="close", capture_epoch=1))
+        self.app.event(dict(event="capture_hint", message="Stale guidance", capture_epoch=0))
+        self.assertNotEqual("Stale guidance", self.app.view()["notice"])
+        self.assertEqual("home", self.app.page)
+
     def test_camera_refusal_has_a_visible_diagnostic_code(self):
         self.app.action("new")
         for reason in ["camera-count-unsupported", "camera-metadata-unavailable"]:
