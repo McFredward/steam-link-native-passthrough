@@ -1,19 +1,20 @@
 {
   "bootstrap_checks": 39,
-  "bootstrap_source_sha256": "d43b08cbf8368f1fe7a9be8f3c9c6768806dd98f27fcb335b57cd18d1a8e02ab",
+  "bootstrap_source_sha256": "d9d4a45257f3b07d2695180843ac192f7942a9744f99c436a45a619fc8e8e702",
   "bootstrap_tests_log": {
-    "bytes": 99,
-    "sha256": "e3fcf261e3eb5a8d4ef2a585367d388842e34fc5419bfce2bd8ba50ef195f2b6"
+    "bytes": 138,
+    "sha256": "1664e039310f9e40a0b12bd417fe11c1ea9778946de38d6e3e64eff2955e06e4"
   },
   "branch": "arcturus-room-setup",
   "dashboard_payload_verified": true,
   "device_actions": false,
-  "digest": "sha256:2e0a52ce484a5cbb0d41f95dfb14f3acfe172dd792f3423aca58159963990086",
+  "digest": "sha256:6503ad7188caf92fd9301f972add0c8e6549891ec7f6b21ad575c571778fba5b",
   "hardware_verified": false,
+  "manual_camera_payload_verified": true,
   "powershell_version": "7.6.9",
   "result": "PASS",
   "runtime": "setup/runtime/python/python.exe",
   "scope": "ActualPowerShellFunctions_RealCandidateArchive_NoWindowsACL_NoDevice",
-  "url": "https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/345159a9c7585ca3e4bd53a10abb4a17e6046d0d/distribution/steam-link-native-passthrough.zip",
-  "version": "0.3.16-roomscan.4"
+  "url": "https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/99188623718441c43dcf93f884d54490a16a3d42/distribution/steam-link-native-passthrough.zip",
+  "version": "0.3.16-roomscan.7"
 }
