@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 import struct
 import tempfile
+import time
 import unittest
+from unittest import mock
 
 from room_scan.pc_relay import PcRelay, CHUNK
 from room_scan.pc_reconstruction import PcReconstruction
@@ -111,6 +113,57 @@ class RelayTests(unittest.TestCase):
         app.event({"event": "pc_model", "binding": self.binding, "capture_epoch": 0, "sequence": 10,
                    "gaussians": base64.b64encode(record).decode(), "face_count": 1})
         self.assertIsNone(app.session)
+
+    def test_owned_pc_companion_transfers_chunks_and_stops_its_worker(self):
+        import subprocess
+        import sys
+        script = Path(self.temporary.name)/"fixture_gpu.py"
+        script.write_text('''import sys,json,base64,struct
+print(json.dumps({'event':'ready','provider':'CUDAExecutionProvider','protocol':1}),flush=True)
+for raw in sys.stdin:
+ m=json.loads(raw);o=m['observation']
+ record=struct.pack('<I11f',0,0,0,-2,.02,0,0,0,.02,0,.6,1)
+ print(json.dumps({'event':'pc_model','binding':o['binding'],'capture_epoch':o['capture_epoch'],
+  'sequence':1,'gaussians':base64.b64encode(record).decode(),'face_count':0}),flush=True)
+''')
+        original_popen = subprocess.Popen
+        children, ui_events = [], []
+        class UI:
+            def say(self, value):
+                ui_events.append(value)
+        def child(command, **kwargs):
+            self.assertIn("runpy.run_module", command[3])
+            kwargs["cwd"] = self.temporary.name
+            process = original_popen([sys.executable, "-B", str(script)], **kwargs)
+            children.append(process)
+            return process
+        relay = self.relay
+        relay.set_scan(self.binding, 3, "scan", "room-a")
+        with (mock.patch.object(sys, "platform", "win32"),
+              mock.patch.object(helper.subprocess, "CREATE_NO_WINDOW", 0, create=True),
+              mock.patch.object(helper.subprocess, "run", return_value=type("Gpu", (), {"stdout": "20000\n"})()),
+              mock.patch.object(helper.subprocess, "Popen", side_effect=child),
+              mock.patch.object(helper, "prepare_runtime", return_value=Path(self.temporary.name))):
+            companion = helper.Companion(relay._dispatch, ROOT/"setup", Path(self.temporary.name), UI())
+            try:
+                deadline = time.monotonic()+5
+                while not relay.ready and time.monotonic() < deadline:
+                    time.sleep(.01)
+                self.assertTrue(relay.ready)
+                relay.offer({"binding": self.binding, "capture_epoch": 3, "pixels": "x"*200000, "sequence": 1})
+                while relay.events.empty() and time.monotonic() < deadline:
+                    time.sleep(.01)
+                self.assertFalse(relay.events.empty())
+                result = relay.events.get_nowait()
+                self.assertEqual(result["event"], "pc_model")
+                self.assertEqual(result["binding"], self.binding)
+            finally:
+                companion.close()
+        self.assertEqual(len(children), 1)
+        self.assertIsNotNone(children[0].poll())
+        self.assertFalse(relay.ready)
+        self.assertIn("bridge_room_pc_ready", ui_events)
+        self.assertNotIn("bridge_room_pc_failed", ui_events)
 
 
 @unittest.skipUnless(importlib.util.find_spec("numpy") and importlib.util.find_spec("scipy"), "PC numerical dependencies required")
