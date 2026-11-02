@@ -6,6 +6,11 @@
 #include <optional>
 
 namespace room_native {
+inline bool hitClose(float x,float y){return x>=936&&x<=992&&y>=24&&y<=80;}
+inline void closeButton(Canvas& image,const std::string& hovered=""){
+    image.rect(936,24,56,56,hovered=="close"?Color{73,54,62}:Color{28,48,57},12);
+    image.line(954,42,974,62,Ink,3);image.line(974,42,954,62,Ink,3);
+}
 inline void dashboard(Canvas& image,const Json& state,double seconds,const std::string& hovered=""){
     image.clear();image.rect(0,0,image.width,image.height,{12,24,30},24);
     image.rect(0,0,image.width,8,{52,224,204},0);
@@ -25,12 +30,14 @@ inline void dashboard(Canvas& image,const Json& state,double seconds,const std::
             !enabled?Color{87,107,113}:primary?Color{9,32,35}:Ink,w-36,1);
     }
     if(state.value("capture_collecting",false)){
-        const int alpha=140+int(90*(.5+.5*std::sin(seconds*3)));image.rect(858,38,14,14,{52,224,204,alpha},7);
-        image.text(884,30,"LIVE",18,Teal,100);
+        const int alpha=140+int(90*(.5+.5*std::sin(seconds*3)));image.rect(790,38,14,14,{52,224,204,alpha},7);
+        image.text(816,30,"LIVE",18,Teal,100);
     }
+    closeButton(image,hovered);
     image.text(60,766,"Steam Link Native Passthrough",15,Muted);
 }
 inline std::string hitButton(const Json& state,float x,float y){
+    if(hitClose(x,y))return "close";
     if(!state.contains("buttons"))return {};
     for(const auto& b:state["buttons"]){const float bx=b.at("x"),by=b.at("y"),w=b.at("w"),h=b.at("h");
         if(b.value("enabled",false)&&x>=bx&&x<=bx+w&&y>=by&&y<=by+h)return b.value("action","");}

@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.4** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.5** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -46,6 +46,11 @@ Stereo-Stream. Ausrichtung und gleichzeitiger Passthrough-Betrieb müssen noch
 auf der Brille geprüft werden. Automatische Objekterkennung und die Raumdaten-Anbindung an
 Spiele/Venture stehen noch aus. Ablauf und Grenzen stehen in der
 [Raumscan-Dokumentation](docs/development/ROOM-CAPTURE.md).
+Das **X oben rechts** schließt die Einrichtung und beendet die Aufnahme; der
+Dashboard-Eintrag bleibt erhalten. Ein separater, manuell gestarteter
+Kamera-API-Prototyp liefert inzwischen beide Arcturus-Bilder. Er bleibt bis zur
+Prüfung der Aufnahmezeit und Kopfpose außerhalb des Installers und startet
+auch nach einem Neustart nicht automatisch.
 
 ## Native Transparenz, kein Farbersatz
 

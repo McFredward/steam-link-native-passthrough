@@ -50,6 +50,7 @@ class Application:
         self.selected = None
         self.world_revision = 0
         self.starting = False
+        self.capture_epoch = 0
         self.list_page = 0
         self.camera_request_page = "prepare"
         self.alignment_room = self.alignment_anchor = self.aligned_preview = None
@@ -68,7 +69,17 @@ class Application:
 
     def action(self, action):
         self.notice = ""
-        if action == "new":
+        if action == "close":
+            try:
+                self.close()
+            finally:
+                self.session = None
+                self.provider.close()
+                self.starting = False
+                self.draft = self.pending = None
+                self.page = "home"
+                self.world_revision += 1
+        elif action == "new":
             self.page = "prepare"
         elif action == "back":
             if self.page in ("alignment", "prepare", "saved"):
@@ -218,7 +229,17 @@ class Application:
     def event(self, event):
         require(type(event) is dict and type(event.get("event")) is str, "Invalid native event")
         kind = event["event"]
-        if kind == "action":
+        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable"):
+            # A completion queued before closing must not reopen capture, even
+            # if the user has already opened the window again.
+            if event.get("capture_epoch", self.capture_epoch) != self.capture_epoch:
+                return
+        if kind == "close":
+            epoch = event["capture_epoch"]
+            require(type(epoch) is int and self.capture_epoch < epoch < 2**62, "Invalid close epoch")
+            self.capture_epoch = epoch
+            self.action("close")
+        elif kind == "action":
             self.action(event["action"])
         elif kind == "camera_warming":
             self.starting = True
@@ -395,6 +416,7 @@ class Application:
                 "capture_active": bool(self.session and self.session.provider_open),
                 "capture_collecting": bool(self.session and self.session.stage == Stage.SCANNING),
                 "camera_check_pending": self.starting,
+                "capture_epoch": self.capture_epoch,
                 "world_revision": self.world_revision, "room": state,
                 "pending": self.pending.to_dict() if self.pending else None,
                 "corners": list(self.draft.points) if self.draft else [],
@@ -408,9 +430,11 @@ class Application:
 
     def close(self):
         if self.session:
-            if self.session.room and self.session.binding and self.session.stage not in (Stage.SAVED, Stage.CANCELLED):
-                self.checkpoint()
-            self.session.close()
+            try:
+                if self.session.room and self.session.binding and self.session.stage not in (Stage.SAVED, Stage.CANCELLED):
+                    self.checkpoint()
+            finally:
+                self.session.close()
 
 
 def run(root, incoming, outgoing):

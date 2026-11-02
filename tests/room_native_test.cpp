@@ -37,6 +37,8 @@ int main(){try{
     check(project({0,0,-1},Frustum{},128,128,x,y)&&x==64&&y==64,"projection centre");
     Json state={{"buttons",{{{"x",10},{"y",10},{"w",50},{"h",40},{"enabled",true},{"action","test"}}}}};
     check(hitButton(state,20,20)=="test"&&hitButton(state,70,70).empty(),"controller panel hit bounds");
+    check(hitButton(state,964,52)=="close"&&hitButton(Json::object(),964,52)=="close","top-right close works independently of page controls and camera availability");
+    check(!hitClose(935,52)&&!hitClose(993,52)&&!hitClose(964,23)&&!hitClose(964,81),"close does not consume neighboring title or status clicks");
     Json visual={{"world_revision",1},{"pending",nullptr},{"corners",Json::array()},
         {"room",{{"world_visuals_allowed",true},{"elements",Json::array()},
             {"mesh",{{"vertices",{{-.5f,-.5f,-2.f},{.5f,-.5f,-2.f},{0.f,.5f,-2.f}}},

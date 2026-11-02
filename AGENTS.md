@@ -25,6 +25,12 @@
   The maintainer's 2026-11-01 room-setup preference requires all program UI,
   notices and dashboard names in English, including on a German headset locale.
   Continue communicating with the maintainer in German.
+- On 2026-11-02 the maintainer requested an alternative Arcturus camera API
+  and requires a reversible prototype: manual start only, no boot/autostart
+  integration, no firmware, driver or XRService replacement. A reboot must
+  leave the experimental camera access inactive. No automatic test expiry is
+  required. Keep the helper outside the normal installer until capture, stop
+  and removal are validated. Do not weaken image/eye/exposure/pose proof.
 - The intended input is real per-eye scene coverage, independent of scene RGB.
   Never derive mask coverage from a key colour in the explicit-mask path.
 - The maintainer explicitly authorized a PC Steam Link sender companion on

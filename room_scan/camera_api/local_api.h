@@ -1,0 +1,58 @@
+// Local, manually started diagnostic API. An abstract Unix socket leaves no
+// endpoint file, service or boot dependency. Every accepted peer has our UID.
+#pragma once
+#include "linux_inventory.h"
+#include <sys/random.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+
+namespace room_camera_api {
+class LocalApi {
+    Fd listener_;std::vector<Fd> clients_;std::string address_;bool stopping_=false;
+    static std::vector<std::uint8_t> packet(const Json& metadata,const std::vector<std::uint8_t>& pixels){
+        const auto text=metadata.dump();if(text.size()>16384||pixels.size()>384000)throw std::runtime_error("Camera API packet exceeds budget");
+        std::vector<std::uint8_t> out(8+text.size()+pixels.size());
+        for(unsigned i=0;i<4;++i){out[i]=std::uint8_t(text.size()>>(8*i));out[4+i]=std::uint8_t(pixels.size()>>(8*i));}
+        std::memcpy(out.data()+8,text.data(),text.size());if(!pixels.empty())std::memcpy(out.data()+8+text.size(),pixels.data(),pixels.size());return out;
+    }
+public:
+    LocalApi(){
+        std::array<unsigned char,16> random{};if(getrandom(random.data(),random.size(),0)!=ssize_t(random.size()))throw std::runtime_error("Camera API session randomness unavailable");
+        address_="sfnp.room.camera."+std::to_string(getuid())+".";constexpr char hex[]="0123456789abcdef";
+        for(auto byte:random){address_+=hex[byte>>4];address_+=hex[byte&15];}
+        listener_=Fd(socket(AF_UNIX,SOCK_SEQPACKET|SOCK_CLOEXEC|SOCK_NONBLOCK,0));if(listener_.get()<0)throw std::runtime_error("Camera API socket unavailable");
+        sockaddr_un name{};name.sun_family=AF_UNIX;if(address_.size()+1>sizeof(name.sun_path))throw std::runtime_error("Camera API address exceeds budget");
+        std::memcpy(name.sun_path+1,address_.data(),address_.size());
+        if(bind(listener_.get(),reinterpret_cast<sockaddr*>(&name),socklen_t(offsetof(sockaddr_un,sun_path)+1+address_.size()))||listen(listener_.get(),2))
+            throw std::runtime_error("Camera API endpoint unavailable");
+    }
+    const std::string& address()const{return address_;}
+    bool stopping()const{return stopping_;}
+    template<class Describe,class Frame>void poll(Describe describe,Frame frame){
+        for(unsigned i=0;i<4;++i){
+            Fd accepted(accept4(listener_.get(),nullptr,nullptr,SOCK_CLOEXEC|SOCK_NONBLOCK));if(accepted.get()<0)break;
+            ucred peer{};socklen_t size=sizeof(peer);
+            if(getsockopt(accepted.get(),SOL_SOCKET,SO_PEERCRED,&peer,&size)||size!=sizeof(peer)||peer.uid!=getuid()||clients_.size()>=2)continue;
+            const int bytes=1024*1024;if(setsockopt(accepted.get(),SOL_SOCKET,SO_SNDBUF,&bytes,sizeof(bytes)))continue;
+            clients_.push_back(std::move(accepted));
+        }
+        for(auto it=clients_.begin();it!=clients_.end();){
+            std::array<char,513> input{};const auto count=recv(it->get(),input.data(),input.size(),MSG_DONTWAIT|MSG_TRUNC);
+            if(count<0&&(errno==EAGAIN||errno==EWOULDBLOCK)){++it;continue;}
+            if(count<=0||count>512){it=clients_.erase(it);continue;}
+            std::vector<std::uint8_t> output;
+            try{
+                const auto request=Json::parse(input.data(),input.data()+count);const auto command=request.at("command").get<std::string>();
+                if(command=="describe")output=packet(describe(),{});
+                else if(command=="latest"){
+                    const auto image=frame(request.at("sensor").get<std::string>());
+                    output=image?packet(image->metadata,image->pixels):packet({{"status","no-fresh-frame"},{"room_scan_ready",false}},{});
+                }else if(command=="stop"){stopping_=true;output=packet({{"status","stopping"}},{});}
+                else output=packet({{"status","unknown-command"}},{});
+            }catch(const std::exception&){output=packet({{"status","invalid-request"}},{});}
+            const auto sent=send(it->get(),output.data(),output.size(),MSG_DONTWAIT|MSG_NOSIGNAL);
+            if(sent!=ssize_t(output.size()))it=clients_.erase(it);else ++it;
+        }
+    }
+};
+} // namespace room_camera_api
