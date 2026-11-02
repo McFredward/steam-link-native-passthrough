@@ -27,6 +27,26 @@ on:
 permissions:
   contents: read
 jobs:
+  dashboard-controls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare the exact public OpenVR header
+        run: |
+          python3 - <<'PY'
+          import hashlib,urllib.request
+          from pathlib import Path
+          raw=urllib.request.urlopen('https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_capi.h',timeout=30).read(1024*1024)
+          assert hashlib.sha256(raw).hexdigest()=='3d32d8eb5bcbe2e250610123aee8142c68f0e7d4da823f87513b6a2a333078d7'
+          path=Path('build/dashboard-sdk/openvr_capi.h');path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(raw)
+          PY
+      - name: Exercise panel-only close, preserved dashboard and process-exit isolation
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I . -isystem build/dashboard-sdk tests/room_dashboard_test.cpp -pthread -o build/room-dashboard-test
+          build/room-dashboard-test
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -I . -isystem build/dashboard-sdk tests/room_registration_test.cpp -o build/room-registration-test
+          build/room-registration-test
   manual-camera-prototype:
     runs-on: ubuntu-24.04
     timeout-minutes: 10

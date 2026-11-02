@@ -34,6 +34,8 @@ g++ "${room_build_flags[@]}" "$room_build_root/tests/room_camera_source_test.cpp
 "$room_build_output/room-camera-source-test"
 g++ "${room_build_flags[@]}" "$room_build_root/tests/room_registration_test.cpp" -o "$room_build_output/room-registration-test"
 "$room_build_output/room-registration-test"
+g++ "${room_build_flags[@]}" "$room_build_root/tests/room_dashboard_test.cpp" -o "$room_build_output/room-dashboard-test" -pthread
+"$room_build_output/room-dashboard-test"
 g++ "${room_build_flags[@]}" "$room_build_root/tests/room_pipe_test.cpp" -o "$room_build_output/room-pipe-test" -pthread
 "$room_build_output/room-pipe-test" "$room_build_root"
 g++ "${room_build_flags[@]}" "$room_build_root/tests/room_gpu_test.cpp" -o "$room_build_output/room-gpu-test" -ldl

@@ -6,6 +6,10 @@
 #include <string>
 
 namespace room_native {
+inline bool roomQuitRequested(const VREvent_t& event){
+    // ProcessQuit announces another client's exit; it is not our quit request.
+    return event.eventType==EVREventType_VREvent_Quit;
+}
 struct DashboardRegistration {
     bool manifestAdded=false,installed=false;
     int manifestError=-1,identityError=-1;

@@ -15,6 +15,10 @@ EVROverlayError create(char* key,char* name,VROverlayHandle_t* panel,VROverlayHa
 }
 }
 int main(){try{
+    VREvent_t event{};event.eventType=EVREventType_VREvent_ProcessQuit;event.data.process.pid=1234;
+    check(!roomQuitRequested(event),"another client's ProcessQuit cannot remove the dashboard entry");
+    event.eventType=EVREventType_VREvent_Quit;
+    check(roomQuitRequested(event),"an actual runtime quit request still stops this application");
     VR_IVRApplications_FnTable applications{};applications.AddApplicationManifest=add;applications.IsApplicationInstalled=has;applications.IdentifyApplication=identify;
     VR_IVROverlay_FnTable overlay{};overlay.CreateDashboardOverlay=create;
     VROverlayHandle_t panel=0,thumbnail=0;
