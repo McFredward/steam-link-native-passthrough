@@ -75,6 +75,21 @@ def rectify(observation, width, height):
         timing = observation["timing"][index]
         if timing["line_ns"] != 4360 or not 0 < timing["integration_ns"] < 40000000:
             raise ValueError("Unsupported row timing")
+        uncertainty=timing.get('uncertainty_ns',0)
+        if (type(uncertainty)is not int or not 0<=uncertainty<=250000
+                or max(p['query_ns'] for p in observation['poses'])+uncertainty>750000):
+            raise ValueError('Exposure timing uncertainty exceeds budget')
+        if uncertainty:
+            minimum,maximum=timing['integration_min_ns'],timing['integration_max_ns']
+            if not 0<minimum<=timing['integration_ns']<=maximum<40000000 or (maximum-minimum+1)//2!=uncertainty:
+                raise ValueError('Unverified exposure interval')
+            history=np.stack([matrix(p['head']) for p in observation['poses']])
+            dt=np.diff(np.asarray([p['raw_ns'] for p in observation['poses']],dtype=np.int64))*1e-9
+            if len(dt)!=8 or np.any(dt<=0):raise ValueError('Unqualified exposure pose history')
+            rotation=Rotation.from_matrix(history[:,:,:3])
+            if (np.max(np.linalg.norm(np.diff(history[:,:,3],axis=0),axis=1)/dt)*uncertainty*1e-9>.0005
+                    or np.max((rotation[:-1].inv()*rotation[1:]).magnitude()/dt)*uncertainty*1e-9>.0005):
+                raise ValueError('Exposure interval has too much spatial uncertainty')
         rotations, translations = row_poses(observation["poses"], timing["first_row_ns"]+np.arange(2464, dtype=np.int64)*4360)
         for _ in range(2):
             rows = np.clip((uv[..., 1]*4+.5).astype(np.int32), 0, 2463)

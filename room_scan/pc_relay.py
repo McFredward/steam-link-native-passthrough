@@ -12,11 +12,22 @@ import socket
 import struct
 import threading
 import time
+import zlib
 
 from .geometry import require
 
 CHUNK = 60000
 MAX_MODEL = 12 * 1024 * 1024
+PROTOCOL = 2
+
+
+def unpack(raw, expanded, limit):
+    require(type(expanded) is int and 0 < expanded <= limit, "Invalid expanded room packet size")
+    decoder = zlib.decompressobj()
+    value = decoder.decompress(raw, expanded+1)
+    require(len(value) == expanded and decoder.eof and not decoder.unused_data
+            and not decoder.unconsumed_tail, "Compressed room packet exceeds its checked extent")
+    return value
 
 
 class PcRelay:
@@ -86,7 +97,7 @@ class PcRelay:
             if (self.ready and self.intent == "scan" and observation["binding"] == self.binding
                     and observation["capture_epoch"] == self.epoch):
                 self.counter += 1
-                self.pending = self.counter, raw
+                self.pending = self.counter, zlib.compress(raw,1), len(raw)
 
     def _dispatch(self, request):
         with self.lock:
@@ -96,7 +107,7 @@ class PcRelay:
                 self.pending = self.lease = self.upload = None
                 return {"ok": True}
             if command == "ready":
-                require(request.get("protocol") == 1 and request.get("provider") == "CUDAExecutionProvider",
+                require(request.get("protocol") == PROTOCOL and request.get("provider") == "CUDAExecutionProvider",
                         "A warmed CUDA worker is required")
                 self.ready_until = time.monotonic() + 15
                 return {"ok": True}
@@ -108,7 +119,9 @@ class PcRelay:
                 if request.get("seed"):
                     self.seed = self.model_path.read_bytes() if self.model_path else None
                 return {**state, "id": self.lease[0] if self.lease else None,
-                        "bytes": len(self.lease[1]) if self.lease else 0, "seed_bytes": len(self.seed) if self.seed else 0}
+                        "bytes": len(self.lease[1]) if self.lease else 0,
+                        "encoding":"zlib", "expanded_bytes":self.lease[2] if self.lease else 0,
+                        "seed_bytes": len(self.seed) if self.seed else 0}
             if command == "seed_chunk":
                 offset = request["offset"]
                 require(self.seed and type(offset) is int and 0 <= offset < len(self.seed), "Invalid Gaussian seed chunk")
@@ -124,7 +137,9 @@ class PcRelay:
                 size, digest = request["bytes"], request["sha256"]
                 require(type(size) is int and 0 < size <= MAX_MODEL and type(digest) is str and len(digest) == 64,
                         "Invalid model transfer")
-                self.upload = (size, digest, bytearray())
+                require(request.get("encoding") == "zlib" and type(request.get("expanded_bytes")) is int
+                        and 0 < request['expanded_bytes'] <= MAX_MODEL, "Invalid room packet encoding")
+                self.upload = (size, digest, bytearray(), request['expanded_bytes'])
                 return {"ok": True}
             if command == "put":
                 require(self.upload and request["offset"] == len(self.upload[2]), "Model transfer is out of order")
@@ -134,10 +149,10 @@ class PcRelay:
                 return {"ok": True}
             if command == "commit":
                 require(self.upload, "No model transfer")
-                size, digest, raw = self.upload
+                size, digest, raw, expanded = self.upload
                 self.upload = None
                 require(len(raw) == size and hashlib.sha256(raw).hexdigest() == digest, "Model transfer changed")
-                value = json.loads(raw)
+                value = json.loads(unpack(raw,expanded,MAX_MODEL))
                 require(value["binding"] == self.binding and value["capture_epoch"] == self.epoch
                         and self.intent != "idle", "Late result refused")
                 if self.events.full():

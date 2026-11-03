@@ -27,5 +27,17 @@ int main(){try{
     check(!arcturusTiming(frame),"another sensor readout mode is refused");
     frame=fixture();frame["observed_exposure_registers"]["coarse_integration_lines"]=10000;
     check(!arcturusTiming(frame),"long-exposure mode is outside this capture contract");
+    frame=fixture();auto& e=frame["observed_exposure_registers"];
+    e["unchanged_through_eof"]=false;e["envelope_verified"]=true;e["envelope_anchor_raw_ns"]=950000000ULL;
+    e["envelope_min_coarse"]=1194;e["envelope_max_coarse"]=1200;
+    const auto bounded=arcturusTiming(frame);
+    check(bounded&&bounded->uncertainty==13080&&bounded->minimumIntegration==1194*4360ULL
+        &&bounded->maximumIntegration==1200*4360ULL,"verified small exposure changes retain a conservative time interval");
+    check(std::abs(double(t->center)-double(bounded->center))<=double(bounded->uncertainty),"old true exposure center lies inside the interval");
+    e["envelope_max_coarse"]=1500;check(!arcturusTiming(frame),"large exposure interval stays unqualified");
+    e["envelope_max_coarse"]=1200;e["envelope_anchor_raw_ns"]=1000000001ULL;
+    check(!arcturusTiming(frame),"future anchor cannot grant exposure authority");
+    e["envelope_anchor_raw_ns"]=950000000ULL;e["group_release_raw_ns"]=940000000ULL;
+    check(!arcturusTiming(frame),"stale transfer cannot reuse an otherwise valid envelope");
     std::puts("PASS EOF-anchored row exposure timing, settled groups and unsupported-mode refusal");return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}}

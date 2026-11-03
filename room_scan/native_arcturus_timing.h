@@ -5,7 +5,7 @@
 #include <optional>
 namespace room_native {
 struct ArcturusTiming {
-    std::uint64_t firstRowCenter=0,lastRowCenter=0,center=0,integration=0,line=4360;
+    std::uint64_t firstRowCenter=0,lastRowCenter=0,center=0,integration=0,line=4360,uncertainty=0,minimumIntegration=0,maximumIntegration=0;
     std::uint64_t atRow(float row)const{
         if(!std::isfinite(row)||row<0||row>2463)throw std::runtime_error("Invalid exposure row");
         return firstRowCenter+std::uint64_t(std::llround(double(row)*line));
@@ -19,7 +19,7 @@ inline std::optional<ArcturusTiming> arcturusTiming(const Json& frame){
         ||!frame.contains("observed_exposure_registers")||!frame["observed_exposure_registers"].is_object())return std::nullopt;
     const auto& capture=frame.at("capture_metadata");const auto& exposure=frame.at("observed_exposure_registers");
     if(capture.value("capture_clock","")!="CLOCK_MONOTONIC_RAW"||!capture.value("v4l_timestamp_matches",false)
-        ||!exposure.value("successful_i2c_result",false)||!exposure.value("unchanged_through_eof",false))return std::nullopt;
+        ||!exposure.value("successful_i2c_result",false))return std::nullopt;
     const auto sof=capture.at("sof_raw_ns").get<std::uint64_t>(),eof=capture.at("eof_raw_ns").get<std::uint64_t>();
     const auto previous=capture.at("previous_sof_raw_ns").get<std::uint64_t>();
     const auto stable=exposure.at("same_value_since_raw_ns").get<std::uint64_t>(),release=exposure.at("group_release_raw_ns").get<std::uint64_t>();
@@ -27,8 +27,9 @@ inline std::optional<ArcturusTiming> arcturusTiming(const Json& frame){
     const auto period=sof-previous;
     // Two complete earlier frames must have the same successful setting, and
     // the latest complete group must precede this SOF and still be fresh.
-    if(stable>=sof||sof-stable<2*period||release>=sof||sof-release>2*period
-        ||exposure.value("same_value_group_count",0)<3)return std::nullopt;
+    const bool exact=exposure.value("unchanged_through_eof",false)&&stable<sof&&sof-stable>=2*period
+        &&release<sof&&sof-release<=2*period&&exposure.value("same_value_group_count",0)>=3;
+    if(!exact&&!exposure.value("envelope_verified",false))return std::nullopt;
     ArcturusTiming out;constexpr std::uint64_t height=2464;
     // This mode has a 4.36 us native row period. SOF includes embedded/blanking
     // lines; EOF anchors the active rolling readout. Refuse another mode.
@@ -37,7 +38,20 @@ inline std::optional<ArcturusTiming> arcturusTiming(const Json& frame){
     const auto coarse=exposure.at("coarse_integration_lines").get<unsigned>();
     if(!coarse||coarse>65535)return std::nullopt;
     out.integration=std::uint64_t(coarse)*out.line;
-    if(out.integration+2*out.line>=period||eof<readout+out.integration)return std::nullopt;
+    out.minimumIntegration=out.maximumIntegration=out.integration;
+    if(!exact){
+        const auto anchor=exposure.at("envelope_anchor_raw_ns").get<std::uint64_t>();
+        const auto minimum=exposure.at("envelope_min_coarse").get<unsigned>(),maximum=exposure.at("envelope_max_coarse").get<unsigned>();
+        if(!anchor||anchor>=sof||anchor>release||release>=sof||sof-release>2*period
+            ||!minimum||maximum<minimum||maximum>65535||coarse<minimum||coarse>maximum)return std::nullopt;
+        out.minimumIntegration=std::uint64_t(minimum)*out.line;out.maximumIntegration=std::uint64_t(maximum)*out.line;
+        out.integration=out.minimumIntegration+(out.maximumIntegration-out.minimumIntegration)/2;
+        // Use the larger integration uncertainty as a conservative timestamp
+        // bound. Exposure-center uncertainty itself is only half as large.
+        out.uncertainty=(out.maximumIntegration-out.minimumIntegration+1)/2;
+        if(out.uncertainty>250000u)return std::nullopt;
+    }
+    if(out.maximumIntegration+2*out.line>=period||eof<readout+out.maximumIntegration)return std::nullopt;
     out.firstRowCenter=eof-readout-out.integration/2;
     out.lastRowCenter=out.firstRowCenter+(height-1)*out.line;
     out.center=out.firstRowCenter+(height-1)*out.line/2;

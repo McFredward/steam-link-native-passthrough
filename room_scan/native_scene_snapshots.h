@@ -2,6 +2,7 @@
 #pragma once
 #include "native_scene_mesh.h"
 #include "native_gaussian.h"
+#include "native_surface_preview.h"
 #include <nlohmann/json.hpp>
 #include <array>
 #include <atomic>
@@ -23,7 +24,7 @@ class SceneSnapshots {
     std::chrono::steady_clock::time_point start_;
     void readLoop(){
         std::string pending;std::array<char,16384> bytes{};
-        MeshView mesh;GaussianScene gaussians;std::shared_ptr<const std::vector<SceneVertex>> vertices;
+        MeshView mesh;GaussianScene gaussians;SurfaceScene surfaces;std::shared_ptr<const std::vector<SceneVertex>> vertices;
         try{while(!stop_){
             pollfd descriptor{STDIN_FILENO,POLLIN,0};const auto ready=poll(&descriptor,1,50);
             if(ready<0&&errno==EINTR)continue;
@@ -48,7 +49,9 @@ class SceneSnapshots {
                 mesh.update(*value,std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count());
                 if(!vertices||revision!=mesh.revision||allowed!=mesh.allowed){
                     SceneMeshBuilder builder;builder.update(mesh);
-                    if(mesh.allowed)gaussians.append(builder,*value,std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count());
+                    if(mesh.allowed){const auto time=std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count();
+                        if(value->contains("surface_file")&&!value->at("surface_file").is_null())surfaces.append(builder,*value,time);
+                        else gaussians.append(builder,*value,time);}
                     vertices=std::make_shared<const std::vector<SceneVertex>>(std::move(builder.vertices));}
                 std::shared_ptr<const PreparedScene> prepared=std::make_shared<const PreparedScene>(PreparedScene{std::move(value),vertices,mesh.allowed});
                 std::atomic_store(&latest_,std::move(prepared));pending.erase(0,end+1);

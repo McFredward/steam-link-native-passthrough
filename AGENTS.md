@@ -95,6 +95,14 @@
   models and camera ages beyond the 80 ms direct pose-query window. Keep actual
   timestamped tracking history for delayed frames; never substitute a current
   pose or weaken stereo/exposure/calibration proof. Preserve real unknown gaps.
+- The maintainer's next 2026-11-03 test rejected large circular scan marks,
+  stagnant coverage despite large unknown regions, and repeated lighting blame.
+  Keep the PC Gaussian map, but show its measured connected surfaces with a
+  restrained animated reveal. Separate map capacity from the preview budget,
+  recycle retired points and preserve spatial coverage when reducing density.
+  Never fill unknown holes with a room hull. Qualify small auto-exposure changes
+  only through verified bounded timing and spatial error; missing timing proof
+  is synchronization, not evidence of a dark room. No stationary capture step.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

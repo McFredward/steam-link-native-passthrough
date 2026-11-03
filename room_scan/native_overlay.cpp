@@ -172,7 +172,7 @@ int main(int argc,char** argv){
         std::thread cameraWorker([&]{RoomStereoCamera camera;camera.system=runtime.system;camera.api=runtime.camera;
             camera.visionLibrary=root+"/libsfnp-room-vision.so";
             camera.pcMode=true;
-            bool awaiting=false,collecting=false;double started=0,lastFrame=0,lastHint=0;std::string previousHint;std::uint64_t activeEpoch=0,activeAttempt=0;
+            bool awaiting=false,collecting=false;double started=0,lastFrame=0,lastHint=0,lastAccepted=0;std::string previousHint;std::uint64_t activeEpoch=0,activeAttempt=0;
             while(!endWorker&&!stopping&&backend.alive){
                 if(activeEpoch!=captureEpoch.load()||activeAttempt!=captureAttempt.load()){camera.stop();awaiting=collecting=false;activeEpoch=captureEpoch.load();activeAttempt=captureAttempt.load();}
                 if(roomClosed){camera.stop();awaiting=false;std::this_thread::sleep_for(std::chrono::milliseconds(30));continue;}
@@ -186,7 +186,7 @@ int main(int argc,char** argv){
                     if(validTracking&&camera.start(randomId(),*std::atomic_load(&origin))){
                         std::fprintf(stderr,"Room camera: %s\n",camera.diagnostics.dump().c_str());
                         if(roomClosed||epoch!=captureEpoch.load()||attempt!=captureAttempt.load()||rendererFailed){camera.stop();continue;}
-                        awaiting=true;started=lastFrame=seconds();backend.send({{"event",kind==2?"camera_resumed":"camera_ready"},{"capture_epoch",epoch},{"binding",camera.binding},{"tracking_valid",true}});}
+                        awaiting=true;started=lastFrame=lastAccepted=seconds();backend.send({{"event",kind==2?"camera_resumed":"camera_ready"},{"capture_epoch",epoch},{"binding",camera.binding},{"tracking_valid",true}});}
                     else {const std::string reason=!validTracking?"head-tracking-unavailable":camera.status;
                         const Json diagnostic=validTracking?camera.diagnostics:Json{{"check","head-tracking"},{"reason",reason}};
                         std::fprintf(stderr,"Room camera: %s\n",diagnostic.dump().c_str());backend.send({{"event","camera_unavailable"},{"capture_epoch",epoch},{"reason",reason}});
@@ -205,8 +205,8 @@ int main(int argc,char** argv){
                                 frame["capture_epoch"]=activeEpoch;lastFrame=seconds();
                                 if(frame.value("event","")=="capture_hint"){
                                     const auto hint=frame.value("message","");const auto interval=hint==previousHint?1.:.5;
-                                    if(seconds()-lastHint>=interval){backend.send(frame,true);lastHint=seconds();previousHint=hint;}
-                                }else {backend.send(frame,true);previousHint.clear();}}
+                                    if(seconds()-lastAccepted>2&&seconds()-lastHint>=interval){backend.send(frame,true);lastHint=seconds();previousHint=hint;}
+                                }else {backend.send(frame,true);lastAccepted=seconds();previousHint.clear();}}
                             else if(seconds()-lastFrame>5)throw std::runtime_error("Camera observation timed out");}
                         catch(const std::exception& e){std::fprintf(stderr,"Room camera: %s\n",e.what());camera.stop();backend.send({{"event","tracking_lost"}});}
                     }

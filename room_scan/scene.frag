@@ -6,6 +6,16 @@ layout(location=3) in float age;
 layout(location=4) flat in float surfaceStyle;
 layout(location=0) out vec4 outputColor;
 void main(){
+    if(surfaceStyle>5.5){
+        vec3 pixels=edge/max(fwidth(edge),vec3(.000001));
+        float wire=1-smoothstep(.55,1.35,min(pixels.x,min(pixels.y,pixels.z)));
+        float reveal=smoothstep(0,.5,age),settled=smoothstep(.25,1.3,age);
+        bool reliable=surfaceStyle>6.5;
+        vec3 fill=mix(vec3(.08,.91,.77),vec3(.25,.64,.73),settled);
+        vec3 outline=mix(vec3(.12,.98,.81),reliable?vec3(.70,.94,.93):vec3(.47,.79,.88),settled);
+        float front=1-smoothstep(.03,.16,abs(age-.34));
+        outputColor=vec4(mix(fill,outline,wire),mix(reliable?.20:.13,.64,wire)*reveal+front*.10*reveal);return;
+    }
     if(surfaceStyle>4.5){
         float weight=exp(-.5*dot(edge.xy,edge.xy));
         if(weight<.055)discard;

@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.11** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.12** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -53,13 +53,16 @@ und Verbindung zur Frame meldet der Installer **Room scanning is ready**.
 Fehler lassen sich mit Try again wiederholen; die bestätigte native
 Installation bleibt dabei erhalten.
 
-Installer 11 behebt Rundungsfehler, durch die gültige kleine Gauß-Flächen
-abgelehnt wurden. Der Scan fragt neue Bilder zügig ab und hält einen begrenzten
-Verlauf tatsächlich gemessener Kopfposen im Speicher. So bleiben auch verspätete
-Kamerabilder beim langsamen Umsehen ihrem Aufnahmezeitpunkt zugeordnet. Neue
-Blickwinkel erweitern und verbessern denselben Scan; unbekannte Bereiche bleiben
-offen. Es gibt keinen Stillhalte-Schritt. Die Prüfungen für Kamerazuordnung,
-Kalibrierung, Belichtung und Tracking bleiben erhalten.
+Installer 12 ersetzt die großen Kreise durch verbundene gemessene Flächen,
+feine Kanten und eine türkise Einblendanimation. Die Gauß-Raumkarte auf dem PC
+hat den vierfachen Platz der Vorschau, verwendet freigegebene Plätze erneut und
+nimmt auch an der Kapazitätsgrenze neue beobachtete Bereiche auf. Unbekannte
+Lücken bleiben offen; erneutes Hinsehen verbessert denselben Scan weiter.
+Komprimierte Übertragung und 512×384-Stereo im großen GPU-Profil sollen die
+Verzögerung verringern. Kleine automatische Belichtungsänderungen werden mit
+einer geprüften Zeitgrenze verarbeitet. Fehlender Zeitnachweis wird als
+Synchronisierung gemeldet, statt pauschal die Raumbeleuchtung zu bemängeln.
+Kamerazuordnung, Kalibrierung, Belichtung und Tracking bleiben geprüft.
 
 Die korrigierte Größe der Wiederherstellungsdaten und die dauerhaft sichtbaren
 Fehlermeldungen aus Installer 10 bleiben enthalten.
