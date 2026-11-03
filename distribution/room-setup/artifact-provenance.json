@@ -699,6 +699,12 @@
   },
   "change_scope": "Required room-camera activation, private PC runtime preparation and GPU/Frame handshake before reporting readiness. Remove optional Enable and show a ready menu that retains the companion. Targeted retries preserve the committed native install. Reject stale helper builds and recheck the actual reader after model download/warmup.",
   "ci": {
+    "final_delivery": {
+      "actual_windows_candidate_archive": "PASS",
+      "result": "success",
+      "revision": "252ff422f368e1db4a1a8d98fb2e0ff4f9c3ba96",
+      "run": 41602800181
+    },
     "room": {
       "result": "success",
       "revision": "293cf212507c1391c4d5862d61c342c979915de5",
