@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "pending",
+  "actual_windows_candidate_check": "PASS",
   "archive": {
     "bytes": 23126307,
     "sha256": "9159dc914d22c7f84a4c75445554adeddb04a25b8ed56861664dbd121895552a"
@@ -34,6 +34,7 @@
     "unobserved_gap_remains_open": true
   },
   "core_commit": "35983516cad0b581d2f882ea813b31aa1287da98",
+  "current_source_matches_all_149_packaged_source_pins": true,
   "device_actions": false,
   "failure_analysis": {
     "accepted_captures": 14,
@@ -45,6 +46,17 @@
     "rendered_vertices": 0,
     "scene_origin_verified": true
   },
+  "final_delivery_ci": {
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux-python-baseline",
+      "windows-bootstrap",
+      "linux"
+    ],
+    "result": "success",
+    "revision": "36642c9a6fe6e6c05fcfc13f3fa0ec8e60d27210",
+    "run": 41647091692
+  },
   "headset_test": false,
   "limits": "Continuous motion, result interchange, native rendering/input/X and recovery are software-verified. Installed headset coverage speed and physical surface accuracy require the next wearer test.",
   "linux_bootstrap_sha256": "c07029346940e3837fd74947b440b6c56a377ae6770c1c563da00b8e493e4131",
@@ -54,6 +66,14 @@
     "room_renderer"
   ],
   "recovery_checkpoint_bound_bytes": 201326592,
+  "remote_archive_download": {
+    "all_archive_members_verified": true,
+    "bytes": 23126307,
+    "device_actions": false,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "9159dc914d22c7f84a4c75445554adeddb04a25b8ed56861664dbd121895552a"
+  },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
   "schema": "sfnp-room-installer-delivery-v1",
