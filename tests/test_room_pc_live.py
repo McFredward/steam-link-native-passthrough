@@ -160,6 +160,7 @@ for raw in sys.stdin:
                 while not relay.ready and time.monotonic() < deadline:
                     time.sleep(.01)
                 self.assertTrue(relay.ready)
+                self.assertTrue(companion.wait_ready())
                 relay.offer({"binding": self.binding, "capture_epoch": 3, "pixels": "x"*200000, "sequence": 1})
                 while relay.events.empty() and time.monotonic() < deadline:
                     time.sleep(.01)

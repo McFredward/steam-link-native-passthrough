@@ -336,11 +336,11 @@ class Tests(unittest.TestCase):
         self.assertEqual(0,result);capture.assert_called_once()
         self.assertNotIn('bridge_room_capture_offer',ui.questions)
 
-    def test_automatic_room_arming_failure_preserves_the_completed_installation(self):
+    def test_required_room_arming_failure_reports_incomplete_and_preserves_committed_patch(self):
         self.add_room_dashboard_fixture();self.mock_shader_pin()
         with self.fake_generation(),mock.patch.object(b,'manage_room_capture',return_value=False):
             result,ui=self.wizard()
-        self.assertEqual(0,result)
+        self.assertEqual(2,result)
         self.assertEqual('installed',self.unit.tx.state()['phase'])
         self.assertFalse((self.froot/'setup-restore.json').exists())
 
@@ -352,6 +352,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(0,result);capture.assert_called_once()
         self.assertEqual('check',ui.choices[0][1]['recommended'])
         self.assertIn('room_capture_stop',ui.choices[0][0])
+        self.assertNotIn('room_capture',ui.choices[0][0])
         self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
 
     def test_read_only_room_checks_never_arm_capture(self):
@@ -406,6 +407,62 @@ class Tests(unittest.TestCase):
         self.assertFalse(b.manage_room_capture(s,self.bundle,peer,ui,context,address='frame.local',login='steamos'))
         self.assertEqual(mock.call('bridge_room_capture_failed'),ui.say.call_args)
 
+    def test_required_room_setup_waits_for_pc_and_checks_actual_camera_after_warmup(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        before=self.unit.tx.path.read_bytes();commands=list(self.commands)
+        frame={'room_capture_available':True,'room_capture_state':'inactive'}
+        peer=mock.Mock();peer.call.return_value={**frame,'room_capture_state':'armed'}
+        worker=mock.Mock();worker.wait_ready.return_value=True
+        context={};ui=mock.Mock(cancelled=lambda:False)
+        with mock.patch.object(b,'manage_room_capture',return_value=True) as activate,mock.patch.object(b,'start_room_companion',return_value=worker) as start:
+            result=b.prepare_required_room_setup(s,self.bundle,peer,ui,context,self.local,frame,address='frame.local',login='steamos')
+        activate.assert_called_once();start.assert_called_once();worker.wait_ready.assert_called_once()
+        self.assertEqual(result['room_capture_state'],'armed');self.assertTrue(context['room_setup_ready'])
+        self.assertNotIn('room_setup_pending',context)
+        self.assertEqual(peer.call.call_args.args[0]['command'],'bridge-inventory')
+        self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
+
+    def test_required_camera_failure_prevents_pc_start_and_does_not_rollback(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        before=self.unit.tx.path.read_bytes();commands=list(self.commands);context={}
+        with mock.patch.object(b,'manage_room_capture',return_value=False),mock.patch.object(b,'start_room_companion') as start:
+            with self.assertRaisesRegex(s.SetupError,'camera activation failed'):
+                b.prepare_required_room_setup(s,self.bundle,mock.Mock(),mock.Mock(cancelled=lambda:False),context,self.local,
+                    {'room_capture_available':True,'room_capture_state':'inactive'},address='frame.local',login='steamos')
+        start.assert_not_called();self.assertTrue(context['room_setup_pending'])
+        self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
+
+    def test_required_pc_failure_keeps_room_setup_incomplete_without_restarting_frame(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        before=self.unit.tx.path.read_bytes();commands=list(self.commands);context={}
+        worker=mock.Mock();worker.wait_ready.return_value=False
+        with mock.patch.object(b,'start_room_companion',return_value=worker),mock.patch.object(b,'manage_room_capture') as activate:
+            with self.assertRaisesRegex(s.SetupError,'PC reconstruction is not ready'):
+                b.prepare_required_room_setup(s,self.bundle,mock.Mock(),mock.Mock(),context,self.local,
+                    {'room_capture_available':True,'room_capture_state':'armed'},address='frame.local',login='steamos')
+        activate.assert_not_called();self.assertTrue(context['room_setup_pending'])
+        self.assertEqual(before,self.unit.tx.path.read_bytes());self.assertEqual(commands,self.commands)
+
+    def test_required_room_setup_rearms_if_frame_reboots_during_model_download(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        frame={'room_capture_available':True,'room_capture_state':'armed'}
+        peer=mock.Mock();peer.call.side_effect=[{**frame,'room_capture_state':'inactive'},frame]
+        worker=mock.Mock();worker.wait_ready.return_value=True
+        with mock.patch.object(b,'start_room_companion',return_value=worker),mock.patch.object(b,'manage_room_capture',return_value=True) as activate:
+            result=b.prepare_required_room_setup(s,self.bundle,peer,mock.Mock(),{},self.local,frame,address='frame.local',login='steamos')
+        activate.assert_called_once();self.assertEqual(result['room_capture_state'],'armed')
+
+    def test_failed_pc_companion_is_replaced_for_targeted_retry(self):
+        entry=self.base/'private-setup/steam_link_setup.py';entry.parent.mkdir();entry.write_text('# source fixture\n')
+        (entry.parent/'room-pc-runtime.json').write_text('{}\n')
+        old=mock.Mock();old.finished.is_set.return_value=True
+        new=mock.Mock();helper=mock.Mock();helper.Companion.return_value=new
+        context={'room_companion':old}
+        with mock.patch.object(s,'__file__',str(entry)),mock.patch.object(b,'load_helper',return_value=helper):
+            result=b.start_room_companion(s,mock.Mock(),mock.Mock(),context,self.local)
+        old.close.assert_called_once();helper.Companion.assert_called_once()
+        self.assertIs(result,new);self.assertIs(context['room_companion'],new)
+
     def test_existing_installation_adds_room_dashboard_and_checkpoint_restores_old_files(self):
         with self.fake_generation():
             b.remote_request(s,b.request(self.bundle,'bridge-prepare',pairing={**self.pair,'role':'receiver'},
@@ -443,6 +500,13 @@ class Tests(unittest.TestCase):
     def wizard(self,*,untested=True,change_after_confirm=None,action='install',check=False,dry_run=False):
         import types,contextlib
         owner=self
+        camera_armed=False
+        capture=b.manage_room_capture
+        def capture_session(*args,**kwargs):
+            nonlocal camera_armed
+            result=capture(*args,**kwargs)
+            if result:camera_armed=not kwargs.get('stop',False)
+            return result
         class UI:
             messages=[];questions=[];warnings=[];choices=[];inventories=[]
             def banner(inner,**kw):pass
@@ -472,12 +536,15 @@ class Tests(unittest.TestCase):
                 if request['command']=='bridge-health-baseline':return {'baseline':'synthetic','checkpoint':'synthetic'}
                 if request['command']=='bridge-health':return {'software_ready':True,'status':'ready'}
                 if request['command'].startswith('bridge-runtime-'):return {'running':True}
-                return b.remote_request(s,request,unit=owner.unit)
+                result=b.remote_request(s,request,unit=owner.unit)
+                if request['command']=='bridge-inventory' and camera_armed:result={**result,'room_capture_state':'armed'}
+                return result
             def close(inner):pass
         real=b.load_helper
+        worker=types.SimpleNamespace(wait_ready=lambda:True)
         def helper(engine,name):return types.SimpleNamespace(Lifecycle=Runtime) if name=='steam_link_setup_pc' else real(engine,name)
         args=types.SimpleNamespace(bundle=self.bundle_root,check=check,dry_run=dry_run,lang='en',frame='192.168.1.25',user='steamos',action=action)
-        with mock.patch.object(s.sys.stdin,'isatty',return_value=True),mock.patch.object(s,'load_presentation',return_value=types.SimpleNamespace(Presenter=lambda **kw:ui)),mock.patch.object(b,'local_address',return_value='192.168.1.4'),mock.patch.object(b,'load_helper',side_effect=helper):
+        with mock.patch.object(s.sys.stdin,'isatty',return_value=True),mock.patch.object(s,'load_presentation',return_value=types.SimpleNamespace(Presenter=lambda **kw:ui)),mock.patch.object(b,'local_address',return_value='192.168.1.4'),mock.patch.object(b,'load_helper',side_effect=helper),mock.patch.object(b,'start_room_companion',return_value=worker),mock.patch.object(b,'manage_room_capture',side_effect=capture_session):
             result=b.run(args,s,self.local,remote_factory=lambda *a,**kw:Peer())
         return result,ui
 

@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.8** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.9** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -45,6 +45,18 @@ Arcturus-Leser für diese Sitzung. Nach einem Frame-Neustart bleibt der Zugriff
 aus; erneutes Öffnen des geprüften aktuellen Feature-Installers aktiviert ihn
 wieder. **Stop room capture** beendet ihn sofort. Firmware, Kameratreiber und
 der native Kameradienst werden nicht ersetzt.
+
+Der Raumscan ist in diesem Branch Pflichtbestandteil. Das empfohlene
+Install/Update anwenden; eine zusätzliche Enable-Option gibt es nicht.
+Erst nach geprüftem Kamera-Zugriff, Einrichtung der PC-Laufzeit, Modell-Warmup
+und Verbindung zur Frame meldet der Installer **Room scanning is ready**.
+Fehler lassen sich mit Try again wiederholen; die bestätigte native
+Installation bleibt dabei erhalten.
+
+PC-Dateien liegen unter `%LOCALAPPDATA%\steam-link-native-passthrough`, Modell
+und Rechenlaufzeit im Unterordner `room-pc-runtime`. Auf der Frame liegen die
+Programmdateien unter `~/.local/share/SteamLinkNativePassthrough/stream-bridge/room-setup`
+und Räume unter `~/.local/share/SteamLinkNativePassthrough/rooms`.
 
 Diese Variante berechnet den Scan auf einem **Windows-PC mit NVIDIA-GPU**.
 Der Installer bereitet eine private CUDA/ONNX-Laufzeit und das Modell NVIDIA

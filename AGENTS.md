@@ -81,6 +81,14 @@
   Do not substitute a standalone benchmark handoff for that complete first
   candidate. See docs/development/ROOM-PC-RECONSTRUCTION.md for the current
   prototype evidence and implementation direction.
+- On 2026-11-03 the maintainer reiterated that room scanning is mandatory in
+  this branch and must be installed and activated by the normal installer.
+  Remove the optional Enable action. Required camera/PC preparation must finish
+  before readiness is reported; failure offers targeted Retry without rolling
+  back or restarting an otherwise healthy native installation. Preserve read-only
+  checks, PC-only isolation, explicit Stop and camera-off-after-reboot behaviour.
+  A read-only audit found the maintainer's Frame still on candidate 7 with no
+  active camera reader; do not describe that as a completed candidate-8 install.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked
