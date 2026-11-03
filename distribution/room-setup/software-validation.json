@@ -63,7 +63,7 @@
   },
   "hardware_verified": false,
   "result": "PASS",
-  "runtime_profile_sha256": "203fa80352f01a95cfb60ed9de237d41cb8794fc5ef992ba31c1df8feff5cf93",
+  "runtime_profile_sha256": "28b51834d8ac7b77c52f79b9d211b4a825f2468c7fee05f1eb7102dca662aeb2",
   "schema": "sfnp-stream-bridge-release-validation-v1",
   "source_pins": {
     "LICENSE": {
@@ -75,8 +75,8 @@
       "sha256": "036e5e2019ae07e90c138e490f4552f926560b93ebcd228d3a0215b508acb1ca"
     },
     "VERSION": {
-      "bytes": 18,
-      "sha256": "5aa8d73bf53decadc84f64cb0e115de5b4d791bc1e2704a0c2fc8047e5994879"
+      "bytes": 19,
+      "sha256": "b8d6774c3a4cd927a9dc4f2d04373ccb7b164d0eeb167866946b85676a55780c"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -499,8 +499,8 @@
       "sha256": "fa497fcb37f7647ba129b3ed8ed59ce016f0a86edcd8432e715e43ffc8c22db6"
     },
     "setup/steam_link_setup_checkpoint.py": {
-      "bytes": 19846,
-      "sha256": "320b3e958c52b16cb1b1c610e267869584dce277c73a1ae8dd91c8e5ccdd1a2e"
+      "bytes": 20148,
+      "sha256": "7bb86e77953823f6c7a6cb2a25100cf66a18d20ab67440c260d9bb85e04e8bab"
     },
     "setup/steam_link_setup_frame.py": {
       "bytes": 21103,
@@ -527,24 +527,24 @@
       "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
     },
     "setup/steam_link_setup_textual.py": {
-      "bytes": 60076,
-      "sha256": "fe2ee02e7fafc99a669892256ba0599d120d67a69c58383e76dea9a7a887f34c"
+      "bytes": 63170,
+      "sha256": "8e200f3270518fe45414ca52d41ac4d63c1bbc61a5fc0ce4cdc7ca4caa432373"
     },
     "setup/steam_link_setup_ui.py": {
-      "bytes": 86198,
-      "sha256": "0c6d8cb5a188cc3b4ab919c256ee58a1525ee7c1bc8a337216ca6ed9ef454987"
+      "bytes": 87971,
+      "sha256": "fffa7027c13f3f3bd709f100ef79e2d8e875db6f8380e55224321649772ba004"
     },
     "setup/steam_link_setup_vendor.py": {
       "bytes": 2108,
       "sha256": "00208745e459d4d0303dbcde8c2bc9c3e1c20072eeeb48a025396c7bdb4d62a1"
     },
     "setup/steam_link_setup_workflow.py": {
-      "bytes": 11433,
-      "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
+      "bytes": 11592,
+      "sha256": "1371e8b7b20fe344df58ed6dd22db8e89012a7f5f7a9816fe41b369a28721786"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 189748,
-      "sha256": "632b9be6ec9784e46e05a89f30c33809d138cf5354e22c4e5c1a757cf40a0ffe"
+      "bytes": 192325,
+      "sha256": "96c377001d59f00ff535bcf1ac18cd022158c6ffbe5727d3d7a83653618f50a3"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -663,5 +663,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "293cf212507c1391c4d5862d61c342c979915de5"
+  "source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc"
 }
