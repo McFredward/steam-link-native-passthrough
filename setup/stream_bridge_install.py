@@ -1093,7 +1093,10 @@ class FrameInstall:
         room_available=bool(intact and component_files_current and ROOM_FILES<=set(bundle.value['files']))
         room_state='inactive'
         if room_available and os.name=='posix' and self.home==Path.home() and type(getattr(self,'_room_camera_source',None))is bytes:
-            try:room_state=self.room_camera_module().status()['state']
+            try:
+                session=self.room_camera_module().status();room_state=session['state']
+                if room_state=='armed' and session.get('helper_sha256')!=bundle.value['files'][ROOM_CAMERA]['sha256']:
+                    room_state='stale'
             except (OSError,ValueError):room_state='unavailable'
         return {**version_status(state,bundle.frame),**activation_status(admitted,state),'runtime_snapshot':snapshot,
                 'architecture':self.machine(),'runtime_compatible':compatible,

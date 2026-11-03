@@ -177,6 +177,12 @@ class Menus(unittest.TestCase):
             self.assertIn('action_' + action, ui.TEXT['en'])
             self.assertIn('action_' + action + '_description', ui.TEXT['de'])
 
+    def test_required_room_ready_menu_has_no_optional_enable(self):
+        presenter, stream = self.make(['1'])
+        self.assertEqual(presenter.choose_action(['room_scan','room_capture_stop','exit'],recommended='room_scan'),'room_scan')
+        self.assertNotIn('Enable room capture',stream.getvalue())
+        with self.assertRaises(ValueError):presenter.choose_action(['room_capture'])
+
     def test_confirmation_is_explicit_default_no_and_never_echoes_input(self):
         for answer, expected in [('', False), ('yes', True), ('JA', True), ('no', False), ('PASSWORD', False)]:
             presenter, stream = self.make([answer])

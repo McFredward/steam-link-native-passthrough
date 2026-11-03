@@ -45,7 +45,7 @@ TEXT = {
         'bridge_room_pc_preparing': 'Preparing private PC reconstruction dependencies (about 1.7 GB on first use). No system Python, CUDA toolkit or GPU driver is changed.',
         'bridge_room_pc_warming': 'Warming up Fast-FoundationStereo on your NVIDIA GPU. Room Setup will become ready after warmup.',
         'bridge_room_pc_ready': 'PC reconstruction is running. Keep this installer window open while using Room Setup on your Frame. Closing it pauses reconstruction and preserves your scan.',
-        'bridge_room_pc_failed': 'PC reconstruction could not start or stopped. Room measurements are preserved. Check NVIDIA GPU availability and reopen this installer to retry.',
+        'bridge_room_pc_failed': 'Required PC reconstruction could not start or stopped. Room measurements are preserved. Choose Try again to finish Room Setup.',
         'bridge_room_capture_plan': 'Enabling read-only camera access for this session using temporary administrator access. SteamVR stays running. Capture turns off after a Frame reboot.',
         'bridge_room_capture_enabled': 'Read-only room capture is active for this session. Preparing the required PC reconstruction next.',
         'bridge_room_capture_stopped': 'Room capture is off. SteamVR and native passthrough stay running.',
@@ -209,7 +209,7 @@ TEXT = {
         'bridge_room_pc_preparing': 'Preparing private PC reconstruction dependencies (about 1.7 GB on first use). No system Python, CUDA toolkit or GPU driver is changed.',
         'bridge_room_pc_warming': 'Warming up Fast-FoundationStereo on your NVIDIA GPU. Room Setup will become ready after warmup.',
         'bridge_room_pc_ready': 'PC reconstruction is running. Keep this installer window open while using Room Setup on your Frame. Closing it pauses reconstruction and preserves your scan.',
-        'bridge_room_pc_failed': 'PC reconstruction could not start or stopped. Room measurements are preserved. Check NVIDIA GPU availability and reopen this installer to retry.',
+        'bridge_room_pc_failed': 'Required PC reconstruction could not start or stopped. Room measurements are preserved. Choose Try again to finish Room Setup.',
         'bridge_room_capture_plan': 'Enabling read-only camera access for this session using temporary administrator access. SteamVR stays running. Capture turns off after a Frame reboot.',
         'bridge_room_capture_enabled': 'Read-only room capture is active for this session. Preparing the required PC reconstruction next.',
         'bridge_room_capture_stopped': 'Room capture is off. SteamVR and native passthrough stay running.',
@@ -861,7 +861,7 @@ class Presenter:
         This selects an action; the engine still owns its plan and permissions.
         """
         known = ('install', 'update', 'repair', 'uninstall', 'check', 'exit',
-                 'retry', 'verify', 'back', 'rollback', 'continue', 'manual','room_capture','room_capture_stop')
+                 'retry', 'verify', 'back', 'rollback', 'continue', 'manual','room_scan','room_capture_stop')
         if (type(actions) not in (list, tuple) or len(actions) > len(known) or
                 any(type(action) is not str or action not in known for action in actions) or
                 len(set(actions)) != len(actions)):

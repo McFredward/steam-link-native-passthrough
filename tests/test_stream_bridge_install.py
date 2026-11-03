@@ -463,6 +463,15 @@ class Tests(unittest.TestCase):
         old.close.assert_called_once();helper.Companion.assert_called_once()
         self.assertIs(result,new);self.assertIs(context['room_companion'],new)
 
+    @unittest.skipIf(os.name=='nt','Frame reader uses the native POSIX user identity')
+    def test_current_room_files_do_not_trust_a_reader_from_an_older_build(self):
+        self.add_room_dashboard_fixture();self.install_component_fixture()
+        self.unit._room_camera_source=self.bundle.files[b.ROOM_SESSION]
+        module=mock.Mock();module.status.return_value={'state':'armed','helper_sha256':'0'*64}
+        with mock.patch.object(Path,'home',return_value=self.fhome),mock.patch.object(self.unit,'room_camera_module',return_value=module):
+            report=self.unit.inventory(self.bundle)
+        self.assertTrue(report['room_capture_available']);self.assertEqual(report['room_capture_state'],'stale')
+
     def test_existing_installation_adds_room_dashboard_and_checkpoint_restores_old_files(self):
         with self.fake_generation():
             b.remote_request(s,b.request(self.bundle,'bridge-prepare',pairing={**self.pair,'role':'receiver'},

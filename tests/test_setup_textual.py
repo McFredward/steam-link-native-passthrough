@@ -774,6 +774,20 @@ class TextualSetupTests(unittest.IsolatedAsyncioTestCase):
         app.backend.join()
         self.assertIsNone(UI.active_presenter())
 
+    async def test_required_room_ready_menu_accepts_ready_action_without_enable(self):
+        observed = []
+        def backend():
+            observed.append(UI.active_presenter().choose_action(['room_scan','room_capture_stop','exit'],recommended='room_scan'))
+            return 0
+        app = UI.SetupApp(backend, 'en')
+        async with app.run_test(size=(100, 36)) as pilot:
+            await until(pilot, lambda: app.prompt is not None)
+            self.assertEqual(app.query_one(OptionList).highlighted, 0)
+            await pilot.press('enter')
+            await until(pilot, lambda: app.backend_finished)
+            self.assertEqual(observed, ['room_scan'])
+        app.backend.join()
+
     async def test_explicit_accept_and_destructive_default_cancel(self):
         observed = []
 
