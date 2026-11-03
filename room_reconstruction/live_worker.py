@@ -28,18 +28,19 @@ def main():
     from .live_inference import StereoInference
     from .live_geometry import rectify, triangulate
     from .live_map import GaussianMap
+    import pyfqmr  # Required and verified before advertising readiness.
     def emit(value):
         sys.stdout.write(json.dumps(value, separators=(",", ":"), allow_nan=False)+"\n")
         sys.stdout.flush()
     try:
         engine = StereoInference(args.runtime, args.width, args.height)
         engine.warmup()
-        emit({"event": "ready", "provider": engine.provider, "protocol": 2,
+        emit({"event": "ready", "provider": engine.provider, "protocol": 3,
               "width": args.width, "height": args.height})
         model = GaussianMap(args.limit)
         map_id, binding, epoch, observation_sequence, exposure, serial = None, None, None, 0, 0, 0
         for raw in sys.stdin:
-            if len(raw) > 5200000:
+            if len(raw) > 6500000:
                 raise ValueError("PC worker input exceeds budget")
             message = json.loads(raw)
             if message["map_id"] != map_id:
@@ -47,8 +48,12 @@ def main():
                 binding = None
             serial = max(serial, message.get("minimum_sequence", 0))
             if message["op"] == "seed":
-                model.restore(message["gaussians"])
+                if 'surface' in message:
+                    import base64
+                    model.restore_surface(base64.b64decode(message['surface'],validate=True))
+                else:model.restore(message["gaussians"])
                 binding, epoch = message["binding"], message["epoch"]
+                observation_sequence=exposure=0
                 emit({"event": "seeded"})
                 continue
             if message["op"] == "finish":
@@ -70,15 +75,23 @@ def main():
             observation_sequence, exposure = observation["sequence"], observation["exposure_ticks"]
             started = time.perf_counter()
             images, masks, origins, rays, room, intrinsics = rectify(observation, args.width, args.height)
+            rectified_at=time.perf_counter()
             disparities = engine.disparity(images)
+            stereo_at=time.perf_counter()
             points, normals, valid, depth = triangulate(disparities, masks, origins, rays, room, intrinsics)
+            geometry_at=time.perf_counter()
             model.integrate(points, normals, valid, depth, room[:, 3], intrinsics[0], room)
+            fused_at=time.perf_counter()
             serial += 1
             if not model.active.any():
                 emit({"event": "pc_hint", "binding": binding, "capture_epoch": epoch, "sequence": serial})
                 continue
+            snapshot=model.snapshot();previewed_at=time.perf_counter()
+            phases=dict(zip(("rectify","stereo","geometry","fusion","preview"),
+                [round((b-a)*1000,2) for a,b in zip((started,rectified_at,stereo_at,geometry_at,fused_at),
+                                                               (rectified_at,stereo_at,geometry_at,fused_at,previewed_at))]))
             emit({"event": "pc_model", "binding": binding, "capture_epoch": epoch, "sequence": serial,
-                  **model.snapshot(), "at_capacity": model.capacity_limited,
+                  **snapshot, "phase_ms":phases, "at_capacity": model.capacity_limited,
                   "compute_ms": round((time.perf_counter()-started)*1000, 2), "accepted_pixels": int(valid.sum())})
     except Exception as error:
         print("PC room reconstruction: "+type(error).__name__+": "+str(error)[:240], file=sys.stderr)

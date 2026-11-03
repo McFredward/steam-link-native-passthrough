@@ -265,6 +265,71 @@ class Tests(unittest.TestCase):
         s.put(self.bundle_root/'stream-bridge-bundle.json',s.encoded(self.manifest),s.read(self.bundle_root/'stream-bridge-bundle.json'))
         self.bundle=b.Bundle(self.bundle_root,s)
 
+    def room_update_fixture(self):
+        self.add_room_dashboard_fixture()
+        with self.fake_generation():self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,live=True)
+        self.unit.tx.commit();self.unit.checkpoint().finish()
+        frame=module('sfnp_room_lifecycle_fixture',ROOT/'setup/steam_link_setup_frame.py')
+        import test_setup_frame
+        system=test_setup_frame.System();system.units[frame.ROOM_UNIT]=system.value(frame.ROOM_UNIT,40)
+        original=self.unit.run
+        def runner(args,**options):
+            if '--no-pager' in args or frame.ROOM_UNIT in args:
+                result=system(args,stdin=__import__('subprocess').DEVNULL,
+                    stdout=__import__('subprocess').PIPE if args[2]=='show' else __import__('subprocess').DEVNULL,
+                    stderr=__import__('subprocess').DEVNULL,timeout=5,check=False,shell=False)
+                return result.returncode,result.stdout or b''
+            return original(args,**options)
+        self.unit.run=runner
+        name='frame/room-setup/room_scan/app.py';raw=self.bundle.files[name]+b'new room source'
+        s.put(self.bundle_root/name,raw,self.bundle.files[name]);self.manifest['files'][name]={'bytes':len(raw),'sha256':s.sha(raw)}
+        self.version_bundle(frame='0.2.1')
+        return system,frame
+
+    def test_room_only_update_and_exact_undo_leave_steam_and_steamvr_running(self):
+        system,frame=self.room_update_fixture();before=json.loads(json.dumps({u:system.units[u] for u in frame.UNITS}))
+        writes=len(self.camera_native_calls)
+        with self.fake_generation():self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
+        self.unit.tx.commit();self.unit.attest_room_update()
+        self.assertEqual(writes,len(self.camera_native_calls))
+        self.assertTrue(self.unit.lifecycle().restart()['runtime_preserved'])
+        self.unit.checkpoint().restore();self.unit.attest_room_update()
+        self.unit.lifecycle().restart(restoring=True)
+        self.assertEqual(system.actions,[('restart',frame.ROOM_UNIT)]*2)
+        self.assertEqual(before,{u:system.units[u] for u in frame.UNITS})
+        self.unit.lifecycle().restored(health_ok=True);self.unit.checkpoint().finish(restored=True)
+
+    def test_room_update_attestation_refuses_any_changed_native_payload(self):
+        system,frame=self.room_update_fixture()
+        with self.fake_generation():self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
+        self.unit.tx.commit();path=self.froot/b.LIBRARY;original=path.read_bytes();s.put(path,original+b'foreign',original)
+        with self.assertRaisesRegex(s.SetupError,'native runtime files changed'):self.unit.attest_room_update()
+        self.assertEqual(system.actions,[])
+
+    def test_preserved_runtime_health_requires_the_same_live_native_processes_and_ui(self):
+        health=module('room_health_fixture',ROOT/'tools/compositor_startup_health.py')
+        unit={'InvocationID':'a1'*16,'MainPID':'1','ControlGroup':'/fixture',
+              'ExecMainStartTimestampMonotonic':'123','ActiveState':'active','SubState':'running'}
+        processes=[{'pid':i+10,'start_ticks':i+100,'state':'S','exe':exe,'kind':kind,'libcef':libcef}
+                   for i,(exe,kind,libcef) in enumerate(((health.SERVER,'server',False),(health.COMPOSITOR,'compositor',False),
+                       (health.WEBHELPER,'browser',True),(health.WEBHELPER,'renderer',True)))]
+        before={'unit':dict(unit),'processes':copy.deepcopy(processes),'errors':[],'isolation_descriptor':None}
+        sample={'unit':dict(unit),'processes':copy.deepcopy(processes),'errors':[],'isolation':None}
+        source=mock.Mock();source.sample.return_value=sample
+        with mock.patch.object(health,'NativeEvidenceSource',return_value=source):
+            monitor=b.StartupHealth(health,self.fhome)
+            result=monitor.check_preserved({'baseline':before,'checkpoint':{}})
+            self.assertTrue(result['software_ready']);self.assertFalse(result['fresh_compositor'])
+            for kind in ('reused-pid','missing-compositor','missing-ui','unit-changed','unreadable'):
+                changed=copy.deepcopy(sample)
+                if kind=='reused-pid':changed['processes'][1]['start_ticks']+=1
+                elif kind=='missing-compositor':del changed['processes'][1]
+                elif kind=='missing-ui':changed['processes'][-1]['libcef']=False
+                elif kind=='unit-changed':changed['unit']['InvocationID']='b2'*16
+                else:changed['errors']=[{'pid':10,'reason':'unreadable'}]
+                source.sample.return_value=changed
+                self.assertFalse(monitor.check_preserved({'baseline':before,'checkpoint':{}})['software_ready'],kind)
+
     def test_room_dashboard_installs_and_undo_preserves_user_rooms(self):
         self.add_room_dashboard_fixture()
         data=self.froot.parent/'rooms'/'user-room.json';s.put(data,b'private room stays here\n')

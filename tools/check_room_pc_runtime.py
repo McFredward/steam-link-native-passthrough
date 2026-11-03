@@ -38,10 +38,16 @@ def main():
     from room_reconstruction.live_inference import StereoInference
     engine = StereoInference(runtime, 320, 256, cpu_development=True)
     engine.warmup()
+    import pyfqmr
+    import numpy as np
+    reducer=pyfqmr.Simplify()
+    reducer.setMesh(np.array(((0.,0.,0.),(1.,0.,0.),(0.,1.,0.))),np.array(((0,1,2),)))
+    reducer.simplify_mesh(target_count=1,preserve_border=True,verbose=False)
+    assert len(reducer.getMesh()[1])==1
     provider = runtime/"vendor/onnxruntime/capi/onnxruntime_providers_cuda.dll"
     loaded = ctypes.WinDLL(str(provider))
     print(json.dumps({"result": "PASS", "cuda_dll_loaded": bool(loaded), "private_dll_directories": len(directories),
-                      "actual_onnx_inference": True, "provider": engine.provider,
+                      "actual_onnx_inference": True, "native_mesh_simplifier": True, "provider": engine.provider,
                       "nvidia_gpu_performance_verified": False, "headset_test": False}))
 
 

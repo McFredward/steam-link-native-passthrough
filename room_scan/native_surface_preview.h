@@ -11,11 +11,16 @@ static_assert(sizeof(SurfaceVertex)==20);
 class SurfaceScene {
     struct Seen {double first;V3 center;};
     std::unordered_map<std::uint64_t,Seen> seen_;std::string path_;
+    std::unordered_map<std::uint64_t,double> covered_;
+    static std::uint64_t cell(V3 p){
+        const auto index=[](float v){return std::uint64_t(int(std::floor(v/.2f))+8192);};
+        return (index(p.x)<<28)|(index(p.y)<<14)|index(p.z);
+    }
 public:
     void append(SceneMeshBuilder& builder,const nlohmann::json& state,double now){
         const auto path=state.at("surface_file").get<std::string>();
         if(path.size()>4096||path.find("/.pc-surfaces-")==std::string::npos)throw std::runtime_error("Invalid room surface path");
-        if(path!=path_){seen_.clear();path_=path;}
+        if(path!=path_){seen_.clear();covered_.clear();path_=path;}
         const int fd=open(path.c_str(),O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
         struct File{int fd;~File(){if(fd>=0)close(fd);}} file{fd};
         if(fd<0&&errno==ENOENT)return;
@@ -42,7 +47,12 @@ public:
             if(length(cross(q-p,r-p))<=1e-7f)throw std::runtime_error("Degenerate room surface triangle");
             std::array<std::uint32_t,3> keyIds{a.id,b.id,c.id};std::sort(keyIds.begin(),keyIds.end());
             const std::uint64_t key=(std::uint64_t(keyIds[0])<<40)|(std::uint64_t(keyIds[1])<<20)|keyIds[2];
-            const auto old=seen_.find(key);const double first=old==seen_.end()||length(old->second.center-center)>.04f?now:old->second.first;
+            const auto old=seen_.find(key);double first=old==seen_.end()||length(old->second.center-center)>.04f?now:old->second.first;
+            // Retriangulating an already observed area is refinement, not a
+            // reason to repeatedly erase it and replay its initial reveal.
+            const auto spatial=cell(center);const auto covered=covered_.find(spatial);
+            if(covered!=covered_.end()){first=std::min(first,covered->second);covered->second=first;}
+            else if(covered_.size()<200000)covered_.emplace(spatial,first);
             current.emplace(key,Seen{first,center});builder.measuredSurface(p,q,r,a.quality==2&&b.quality==2&&c.quality==2,float(first));
         }
         seen_=std::move(current);

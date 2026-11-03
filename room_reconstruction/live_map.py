@@ -8,7 +8,7 @@ from __future__ import annotations
 import base64
 import numpy as np
 from scipy.spatial import cKDTree
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, minimum_filter
 
 
 class GaussianMap:
@@ -19,6 +19,7 @@ class GaussianMap:
         self.capacity = min(320000, limit*4)
         self.recycled = self.coarsenings = 0
         self.capacity_limited = False
+        self.coarsening_refused_at = -1000
         self.positions = np.empty((0, 3), np.float32)
         self.normals = np.empty((0, 3), np.float32)
         self.sigma = np.empty(0, np.float32)
@@ -30,18 +31,29 @@ class GaussianMap:
         self.occluded = np.empty(0, np.uint8)
         self.faces = set()
         self.frames = 0
+        self.seeded_orientation = False
 
     def integrate(self, points, normals, valid, depth, camera, focal, room=None):
+        self.capacity_limited = False
+        if self.seeded_orientation:
+            flip=np.sum(self.normals*(camera-self.positions),axis=1)<0
+            self.normals[flip]*=-1
+            self.seeded_orientation=False
         if room is not None and len(self.positions):
-            local = (self.positions-room[:, 3]) @ room[:, :3]
+            observed=np.flatnonzero(self.active)
+            local = (self.positions[observed]-room[:, 3]) @ room[:, :3]
             old_depth = -local[:, 2]
             height, width = depth.shape
             px = np.rint(local[:, 0]*focal/np.maximum(old_depth, .01)+(width-1)/2).astype(int)
             py = np.rint(-local[:, 1]*focal/np.maximum(old_depth, .01)+(height-1)/2).astype(int)
             inside = (old_depth > .25) & (px >= 0) & (px < width) & (py >= 0) & (py < height)
-            selected = np.flatnonzero(inside)
-            x, y = px[selected], py[selected]
-            contradicted = valid[y, x] & (old_depth[selected] > depth[y, x]+.12)
+            projected = np.flatnonzero(inside)
+            selected=observed[projected]
+            x, y = px[projected], py[projected]
+            # A nearer observation occludes a valid wall; it does not disprove
+            # that wall. Retire only repeatable measured free-space conflicts.
+            near = minimum_filter(np.where(valid, depth, 0), size=3, mode='constant')
+            contradicted = valid[y, x] & (old_depth[projected]+.12 < near[y, x])
             target = selected[contradicted]
             self.occluded[target] = np.minimum(self.occluded[target].astype(int)+1, 255)
             self.occluded[selected[~contradicted]] = 0
@@ -60,33 +72,42 @@ class GaussianMap:
         support_radius = distance_transform_edt(valid)[::step, ::step].ravel()[flat]
         sigma = np.maximum(.001, np.minimum(sigma, z.ravel()[flat]/focal*support_radius/3))
         match = np.full(len(flat), -1, np.int32)
-        if len(self.positions):
-            active_ids = np.flatnonzero(self.active)
-            if not len(active_ids):
-                active_ids = np.arange(len(self.positions))
-            distance, index = cKDTree(self.positions[active_ids]).query(measured, distance_upper_bound=.045)
+        active_ids = np.flatnonzero(self.active)
+        if len(active_ids):
+            distance, index = cKDTree(self.positions[active_ids]).query(measured, k=min(4,len(active_ids)), distance_upper_bound=.07)
+            if distance.ndim==1:distance,index=distance[:,None],index[:,None]
             index = active_ids[np.minimum(index, len(active_ids)-1)]
-            compatible = (distance < .045) & (np.sum(self.normals[index]*measured_n, axis=1) > .90)
-            compatible &= np.abs(np.sum((self.positions[index]-measured)*measured_n, axis=1)) < .035
-            match[compatible] = index[compatible]
-            # One update per surfel per observation; a dense patch is not many independent views.
-            _, first = np.unique(match[compatible], return_index=True)
-            selected = np.flatnonzero(compatible)[first]
-            target = match[selected]
-            error = np.linalg.norm(self.positions[target]-measured[selected], axis=1)
-            weight = np.minimum(self.weights[target], 15)
-            alpha = 1/(weight+1)
-            self.positions[target] += (measured[selected]-self.positions[target])*alpha[:, None]
-            combined = self.normals[target]*(1-alpha[:, None])+measured_n[selected]*alpha[:, None]
-            self.normals[target] = combined/np.maximum(np.linalg.norm(combined, axis=1)[:, None], 1e-12)
-            self.sigma[target] += (sigma[selected]-self.sigma[target])*alpha
-            self.weights[target] = weight+1
-            self.active[target] = True
-            self.occluded[target] = 0
-            self.residuals[target] = self.residuals[target]*.85+error*.15
-            different = np.linalg.norm(self.viewpoints[target]-camera, axis=1) >= .025
-            self.views[target[different]] = np.minimum(self.views[target[different]].astype(int)+1, 255)
-            self.viewpoints[target[different]] = camera
+            delta = measured[:,None]-self.positions[index]
+            plane = np.sum(delta*self.normals[index],axis=-1)
+            tangent = np.sqrt(np.maximum(0,np.sum(delta*delta,axis=-1)-plane*plane))
+            compatible = (distance < .07) & (np.sum(self.normals[index]*measured_n[:,None], axis=-1) > .75)
+            compatible &= (np.abs(plane)<.035)&(tangent<np.maximum(.022,self.sigma[index]*1.5))
+            score=np.where(compatible,distance+np.abs(plane),np.inf)
+            best=np.argmin(score,axis=1);chosen=np.arange(len(measured));usable=np.isfinite(score[chosen,best])
+            match[usable]=index[chosen[usable],best[usable]]
+            # Aggregate all pixels assigned to a cell, once per observation.
+            # Taking the first pixel biases each revisit toward an image edge
+            # and gradually drags the map away from its original coverage.
+            selected=np.flatnonzero(usable);target,inverse=np.unique(match[selected],return_inverse=True)
+            counts=np.bincount(inverse)
+            average=lambda values:np.column_stack([np.bincount(inverse,weights=values[:,i])/counts for i in range(values.shape[1])])
+            mean,mean_n=average(measured[selected]),average(measured_n[selected])
+            mean_n/=np.maximum(np.linalg.norm(mean_n,axis=1)[:,None],1e-12)
+            error=np.abs(np.sum((mean-self.positions[target])*self.normals[target],axis=1))
+            weight=np.minimum(self.weights[target],15);alpha=1/(weight+1)
+            # Keep tangential coverage stable; refine depth along its measured
+            # normal instead of collapsing neighbouring cells onto one another.
+            shift=np.sum((mean-self.positions[target])*self.normals[target],axis=1)
+            self.positions[target]+=self.normals[target]*(shift*alpha)[:,None]
+            combined=self.normals[target]*(1-alpha[:,None])+mean_n*alpha[:,None]
+            self.normals[target]=combined/np.maximum(np.linalg.norm(combined,axis=1)[:,None],1e-12)
+            footprint=np.bincount(inverse,weights=sigma[selected])/counts
+            self.sigma[target]=np.maximum(self.sigma[target],footprint)
+            self.weights[target]=weight+1;self.active[target]=True;self.occluded[target]=0
+            self.residuals[target]=self.residuals[target]*.85+error*.15
+            different=np.linalg.norm(self.viewpoints[target]-camera,axis=1)>=.015
+            self.views[target[different]]=np.minimum(self.views[target[different]].astype(int)+1,255)
+            self.viewpoints[target[different]]=camera
         new = np.flatnonzero(match < 0)
         # Consolidate newly observed overlapping samples before allocating stable IDs.
         if len(new):
@@ -97,11 +118,11 @@ class GaussianMap:
             new = representatives
             free = np.flatnonzero(~self.active)
             if len(new) > len(free)+self.capacity-len(self.positions):
-                self._coarsen()
+                coarsened = self._coarsen()
                 # Compaction can change the representatives matched above.
                 # These assignments belong to the pre-compaction observation;
                 # discard their faces, rather than joining unrelated surfaces.
-                match[:] = -1
+                if coarsened:match[:] = -1
                 free = np.flatnonzero(~self.active)
             take = min(len(new), len(free))
             reused = free[:take]
@@ -139,7 +160,6 @@ class GaussianMap:
         a, b, c, d = ids[:-1, :-1], ids[:-1, 1:], ids[1:, :-1], ids[1:, 1:]
         # Every intervening pixel must be observed. Four measured corners do
         # not authorize a triangle over a small unseen hole inside their cell.
-        from scipy.ndimage import minimum_filter
         supported = minimum_filter(valid.astype(np.uint8),size=step+1,mode='constant',cval=0)
         supported = supported[step//2::step,step//2::step][:a.shape[0],:a.shape[1]].ravel().astype(bool)
         for tri in (np.stack((a, b, c), -1).reshape(-1, 3), np.stack((b, d, c), -1).reshape(-1, 3)):
@@ -161,7 +181,7 @@ class GaussianMap:
         self.frames += 1
 
     def quality(self):
-        return np.where((self.views >= 3) & (self.residuals < .012), 2, 1)
+        return np.where(((self.views >= 3) | (self.weights >= 6)) & (self.residuals < .008), 2, 1)
 
     def restore(self, encoded):
         raw = base64.b64decode(encoded, validate=True)
@@ -178,7 +198,8 @@ class GaussianMap:
         self.normals[ids] = normal/np.maximum(np.linalg.norm(normal, axis=1)[:, None], 1e-12)
         self.sigma = np.zeros(count, np.float32)
         self.sigma[ids] = np.linalg.norm(values[:, 3:6], axis=1)
-        self.weights, self.views = np.ones(count, np.float32)*8, np.ones(count, np.uint8)
+        self.weights, self.views = np.ones(count, np.float32), np.ones(count, np.uint8)
+        self.weights[ids]=np.where(values[:,10]==2,8,1)
         self.views[ids] = np.where(values[:, 10] == 2, 3, 1)
         self.viewpoints = np.full((count, 3), 1000, np.float32)
         self.residuals = np.zeros(count, np.float32)
@@ -196,6 +217,40 @@ class GaussianMap:
                     if (len(set(map(int, tri))) == 3 and np.max(np.linalg.norm(p-np.roll(p, 1, axis=0), axis=1)) < min(.16, float(self.sigma[tri].max())*4)
                             and np.min(n @ n.T) > .98 and np.linalg.norm(np.cross(p[1]-p[0], p[2]-p[0])) > 1e-7):
                         self.faces.add(tuple(sorted(map(int, tri))))
+
+    def restore_surface(self, raw):
+        """Retain measured connectivity, including reduced large planar faces."""
+        if len(raw)<16 or raw[:8]!=b'SFNPMR2\0':raise ValueError('Invalid retained surface')
+        count,faces=np.frombuffer(raw[8:16],dtype='<u4')
+        if not 0<count<=100000 or not 0<faces<=200000 or len(raw)!=16+int(count)*20+int(faces)*12:
+            raise ValueError('Invalid retained surface extent')
+        records=np.frombuffer(raw,dtype=np.dtype([('id','<u4'),('p','<f4',(3,)),('q','u1'),('pad','u1',(3,))]),count=int(count),offset=16)
+        ids,points,quality=records['id'],records['p'],records['q']
+        triangles=np.frombuffer(raw,dtype='<u4',count=int(faces)*3,offset=16+int(count)*20).reshape(-1,3)
+        if (ids.max()>=320000 or len(np.unique(ids))!=len(ids) or not np.isfinite(points).all()
+                or (abs(points)>1000).any() or (quality>2).any() or triangles.max()>=count):
+            raise ValueError('Invalid retained surface records')
+        p=points[triangles];area=np.cross(p[:,1]-p[:,0],p[:,2]-p[:,0]);size=np.linalg.norm(area,axis=1)
+        if (size<=1e-7).any():raise ValueError('Invalid retained surface connectivity')
+        first=np.full(int(count),len(triangles),np.int32)
+        for j in range(3):np.minimum.at(first,triangles[:,j],np.arange(len(triangles)))
+        used=np.flatnonzero(first<len(triangles));reference=np.zeros((int(count),3),np.float32);reference[used]=area[first[used]]
+        normal=np.zeros_like(reference);radius=np.full(int(count),.045,np.float32)
+        for j in range(3):
+            target=triangles[:,j];sign=np.where(np.sum(area*reference[target],axis=1)<0,-1,1)
+            np.add.at(normal,target,area*sign[:,None])
+            np.minimum.at(radius,target,np.linalg.norm(p[:,j]-p[:,(j+1)%3],axis=1)/3)
+        normal/=np.maximum(np.linalg.norm(normal,axis=1),1e-12)[:,None]
+        count=int(ids.max())+1
+        self.positions,self.normals=np.zeros((count,3),np.float32),np.zeros((count,3),np.float32)
+        self.positions[ids],self.normals[ids]=points,normal
+        self.sigma=np.zeros(count,np.float32);self.sigma[ids]=np.clip(radius,.001,.045)
+        self.weights=np.ones(count,np.float32);self.weights[ids]=np.where(quality==2,8,1)
+        self.views=np.ones(count,np.uint8);self.views[ids]=np.where(quality==2,3,1)
+        self.viewpoints=np.full((count,3),1000,np.float32);self.residuals=np.zeros(count,np.float32)
+        self.active=np.zeros(count,bool);self.active[ids[used]]=True;self.occluded=np.zeros(count,np.uint8)
+        self.faces={tuple(sorted(map(int,f))) for f in ids[triangles]}
+        self.capacity=max(self.capacity,count);self.seeded_orientation=True
 
     def _records(self,selected):
         count = len(selected)
@@ -225,56 +280,64 @@ class GaussianMap:
         ranks=np.arange(len(order))-np.repeat(starts,np.diff(np.r_[starts,len(order)]))
         return order[np.lexsort((sorted_tile,ranks))[:budget]]
 
-    def _surface(self,budget):
+    def _surface(self,budget,*,fragments=True):
         active=np.flatnonzero(self.active)
-        if not len(active):return active,np.empty((0,3),np.int32)
-        selected=active;mapping=np.full(len(self.positions),-1,np.int32)
-        inverse=np.arange(len(active))
-        if len(active)>budget:
-            for scale in (.025,.035,.05,.07,.10,.14):
-                keys=np.column_stack((np.floor(self.positions[active]/scale).astype(np.int32),
-                                      np.rint(self.normals[active]*2).astype(np.int32)))
-                _,first,inverse=np.unique(keys,axis=0,return_index=True,return_inverse=True)
-                selected=active[first]
-                if len(selected)<=budget:break
-            keep=self._balanced(self.positions[selected],budget)
-            remap=np.full(len(selected),-1,np.int32);remap[keep]=np.arange(len(keep))
-            selected=selected[keep];inverse=remap[inverse]
-        mapping[active]=inverse
-        if not self.faces:return selected,np.empty((0,3),np.int32)
+        empty=np.empty((0,3),np.int32)
+        if not len(active):return active,empty
+        if not self.faces:return active[self._balanced(self.positions[active],budget)],empty
         original=np.asarray(sorted(self.faces),np.int32)
         original=original[np.all(self.active[original],axis=1)]
-        faces=mapping[original]
-        good=np.all(faces>=0,axis=1)
-        faces=np.sort(faces[good],axis=1)
-        faces=np.unique(faces,axis=0)
-        faces=faces[(faces[:,0]!=faces[:,1])&(faces[:,1]!=faces[:,2])]
-        if not len(faces):return selected,faces
-        p=self.positions[selected[faces]]
-        area=np.linalg.norm(np.cross(p[:,1]-p[:,0],p[:,2]-p[:,0]),axis=1)
-        edges=np.linalg.norm(p-np.roll(p,1,axis=1),axis=2)
-        faces=faces[(area>1e-7)&(edges.max(axis=1)<.16)]
-        # Reclustered faces retain measured support. Check their center and
-        # edge midpoints against the original oriented Gaussian footprints.
-        if len(active)>budget and len(faces):
+        if not len(original):return active[self._balanced(self.positions[active],budget)],empty
+        p=self.positions[original]
+        area=np.cross(p[:,1]-p[:,0],p[:,2]-p[:,0])
+        # Input neighbours were already bounded when observed. A subsequent
+        # boundary-preserving reduction can legitimately contain longer faces.
+        good=np.linalg.norm(area,axis=1)>1e-7
+        original=original[good];area=area[good]
+        if not len(original):return active[self._balanced(self.positions[active],budget)],empty
+        # Preserve consistent winding before reducing a measured mesh. Sorting
+        # stable IDs alone creates arbitrarily flipped adjacent triangles.
+        flip=np.sum(area*self.normals[original].mean(axis=1),axis=1)<0
+        original[flip]=original[flip][:, (0,2,1)]
+        selected,inverse=np.unique(original,return_inverse=True)
+        faces=inverse.reshape(-1,3)
+        if len(selected)>budget or len(faces)>budget*2:
+            import pyfqmr
+            reducer=pyfqmr.Simplify();reducer.setMesh(self.positions[selected].astype(np.float64),faces)
+            reducer.simplify_mesh(target_count=budget,max_iterations=40,aggressiveness=5,
+                                  preserve_border=True,verbose=False)
+            reduced,triangles,_=reducer.getMesh()
+            # Keep the preview on real Gaussian samples. Boundary vertices are
+            # locked by the reducer; snapping only interiors avoids inventing
+            # a new hull or erasing measured openings during voxel clustering.
+            distance,nearest=cKDTree(self.positions[selected]).query(reduced)
+            identities=selected[nearest]
+            valid=np.all(distance[triangles]<np.maximum(.025,self.sigma[identities[triangles]]*3),axis=1)
+            source=identities[triangles[valid]]
+            if len(source):selected,inverse=np.unique(source,return_inverse=True);faces=inverse.reshape(-1,3)
+            faces=faces[(faces[:,0]!=faces[:,1])&(faces[:,1]!=faces[:,2])&(faces[:,2]!=faces[:,0])]
             p=self.positions[selected[faces]]
-            samples=np.concatenate((p.mean(axis=1)[:,None],(p+np.roll(p,1,axis=1))*.5),axis=1)
-            tree=cKDTree(self.positions[active]);distance,index=tree.query(samples.reshape(-1,3),k=min(4,len(active)))
-            if index.ndim==1:index=index[:,None]
-            neighbours=active[index];delta=samples.reshape(-1,3)[:,None]-self.positions[neighbours]
-            plane=np.sum(delta*self.normals[neighbours],axis=-1)
-            tangent=np.maximum(0,np.sum(delta*delta,axis=-1)-plane*plane)
-            covered=(np.abs(plane)<.012)&(tangent<=(self.sigma[neighbours]*3)**2)
-            faces=faces[covered.any(axis=1).reshape(-1,4).all(axis=1)]
-        if len(faces)>budget*2:
-            faces=faces[self._balanced(self.positions[selected[faces]].mean(axis=1),budget*2)]
-        return selected,faces
+            faces=faces[np.linalg.norm(np.cross(p[:,1]-p[:,0],p[:,2]-p[:,0]),axis=1)>1e-7]
+        if not len(faces):
+            selected,inverse=np.unique(original,return_inverse=True);faces=inverse.reshape(-1,3)
+        if fragments and (len(selected)>budget or len(faces)>budget*2):
+            # An extensively fragmented border may be irreducible. Select
+            # complete measured triangles across space, not isolated vertices
+            # that disconnect every region in the preview.
+            faces=faces[self._balanced(self.positions[selected[faces]].mean(axis=1),budget//3)]
+        used,inverse=np.unique(faces,return_inverse=True)
+        return selected[used],inverse.reshape(-1,3)
 
     def _coarsen(self):
-        selected,faces=self._surface(max(1000,self.capacity*3//4))
+        if self.frames-self.coarsening_refused_at<20:return False
+        selected,faces=self._surface(max(1000,self.capacity*3//4),fragments=False)
+        if len(selected)>=int(self.active.sum()):
+            self.coarsening_refused_at=self.frames
+            return False
         self.active[:]=False;self.active[selected]=True
         self.faces={tuple(sorted(map(int,f))) for f in selected[faces]}
         self.coarsenings+=1
+        return True
 
     def snapshot(self):
         selected,faces=self._surface(self.limit)

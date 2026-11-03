@@ -65,7 +65,7 @@ def required_sources(root=ROOT):
                    'third_party/ffmpeg/README.md','third_party/ffmpeg/COPYING.LGPLv2.1'}|
                   {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES} |
                   {'room_scan/'+name for name in bridge.ROOM_PYTHON} |
-                  {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt',
+                  {'room_scan/licenses/DejaVu.txt','room_scan/licenses/nlohmann-json.txt','room_scan/licenses/PyFQMR.txt',
                    'room_scan/native_overlay.cpp','room_scan/native_camera.h','room_scan/native_math.h',
                    'room_scan/native_camera_source.h','room_scan/native_camera_client.h','room_scan/native_capture_pose.h',
                    'room_scan/native_arcturus_source.h','room_scan/native_arcturus_geometry.h','room_scan/native_arcturus_timing.h',
@@ -244,7 +244,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     files['tools/configure_mask_codec.py']=source_bytes['tools/configure_mask_codec.py']
     if room_overlay is not None:
         files['setup/room-pc-runtime.json']=source_bytes['packaging/room-pc-runtime.json']
-        for name in ('NVIDIA-Open-Model.txt','NVIDIA-Stereo-Model-Card.txt'):
+        for name in ('NVIDIA-Open-Model.txt','NVIDIA-Stereo-Model-Card.txt','PyFQMR.txt'):
             files['setup/room-licenses/'+name]=source_bytes['room_scan/licenses/'+name]
         for name in source_bytes:
             if name.startswith('room_reconstruction/') and (name.endswith('/__init__.py') or Path(name).name.startswith('live_')):

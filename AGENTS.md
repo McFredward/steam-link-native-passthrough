@@ -99,6 +99,21 @@
   Never fill unknown holes with a room hull. Qualify small auto-exposure changes
   only through verified bounded timing and spatial error; missing timing proof
   is synchronization, not evidence of a dark room. No stationary capture step.
+- The next 2026-11-03 wearer test rejected opaque noisy triangle coverage,
+  shrinking scan coverage and poor floors/ceilings. Preserve translucent output
+  under overlapping observations, fade subpixel grid detail and keep open mesh
+  boundaries during reduction. Grazing plane observations need stable local
+  normals; an occluded background must not be deleted as a free-space conflict.
+  These fixes require new wearer acceptance, not just a software benchmark.
+  The same test reported a slow Steam login: private logs show one restart,
+  then a 200-second server timeout and immediate login on the next server.
+  Avoid another login for room-only updates: prove unchanged non-room files,
+  settings/pairing, service generations and live native UI; restart only the
+  owned Room Setup service, including exact Undo and lost-reply recovery.
+  Native changes and explicit Uninstall retain the full coordinated restart.
+  Do not alter Steam credentials, login caches or global network settings.
+  Only one current PC worker may own the room relay; old/second workers must
+  not take observations or clear another worker's live session.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

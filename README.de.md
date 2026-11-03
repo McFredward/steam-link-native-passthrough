@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.12** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.13** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -53,16 +53,21 @@ und Verbindung zur Frame meldet der Installer **Room scanning is ready**.
 Fehler lassen sich mit Try again wiederholen; die bestätigte native
 Installation bleibt dabei erhalten.
 
-Installer 12 ersetzt die großen Kreise durch verbundene gemessene Flächen,
-feine Kanten und eine türkise Einblendanimation. Die Gauß-Raumkarte auf dem PC
-hat den vierfachen Platz der Vorschau, verwendet freigegebene Plätze erneut und
-nimmt auch an der Kapazitätsgrenze neue beobachtete Bereiche auf. Unbekannte
-Lücken bleiben offen; erneutes Hinsehen verbessert denselben Scan weiter.
-Komprimierte Übertragung und 512×384-Stereo im großen GPU-Profil sollen die
-Verzögerung verringern. Kleine automatische Belichtungsänderungen werden mit
-einer geprüften Zeitgrenze verarbeitet. Fehlender Zeitnachweis wird als
-Synchronisierung gemeldet, statt pauschal die Raumbeleuchtung zu bemängeln.
-Kamerazuordnung, Kalibrierung, Belichtung und Tracking bleiben geprüft.
+Installer 13 hält die Vorschau auch bei überlappenden Messungen transparent.
+Ein weiches Raster blendet in der Entfernung aus; die Mesh-Vereinfachung erhält
+die gemessenen offenen Ränder. Lokale Flächennormalen und eine Prüfung der
+inversen Tiefe verbessern schräge Blicke auf Boden und Decke. Erneute Messungen
+ziehen die Karte nicht mehr seitlich zusammen; nähere Gegenstände löschen die
+verdeckten Flächen dahinter nicht mehr.
+Die PC-Laufzeit ergänzt die geprüfte PyFQMR-Bibliothek (etwa 115 KB); vorhandene
+Modelldownloads werden wiederverwendet. Frühere Installer-Fenster vorher schließen.
+Ein aktueller PC-Prozess steuert den Scan; ältere Prozesse können ihn nicht ersetzen.
+
+Wenn sich nur Dateien der Raumeinrichtung ändern, startet die Einrichtung nur
+Room Setup neu. Steam und SteamVR laufen samt Anmeldung weiter. Laufzeitdateien,
+Einstellungen, Kopplung und native Prozessidentitäten werden dafür geprüft; auch
+die Rücknahme startet nur Room Setup neu. Änderungen an der nativen Laufzeit
+verwenden weiterhin den koordinierten vollständigen Neustart mit Wiederherstellung.
 
 Die korrigierte Größe der Wiederherstellungsdaten und die dauerhaft sichtbaren
 Fehlermeldungen aus Installer 10 bleiben enthalten.

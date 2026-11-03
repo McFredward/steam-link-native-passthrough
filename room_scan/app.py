@@ -268,9 +268,11 @@ class Application:
         if kind in ("pc_model", "pc_mesh"):
             if not self.session or self.session.stage not in (Stage.SCANNING, Stage.PAUSED) or not self.pc_relay:
                 return
-            self.session.reconstruction.accept(event)
+            with self.pc_relay.lock:
+                self.session.reconstruction.accept(event)
             self.world_revision += 1
-            self.notice = "Look slowly into empty areas. Revisit faint surfaces from another angle."
+            self.notice = ("Look slowly into empty areas. Revisit faint surfaces from another angle." if not event.get("at_capacity")
+                           else "This room has reached its scan detail limit. Continue to review or scan a separate room.")
             if kind == "pc_mesh" and self.pc_pending_action:
                 action, self.pc_pending_action = self.pc_pending_action, None
                 if action == "review":
@@ -554,7 +556,8 @@ def run(root, incoming, outgoing):
         intent = "finish" if app.pc_pending_action else "scan" if app.session and app.session.stage == Stage.SCANNING else "idle"
         reconstruction = app.session.reconstruction if app.session else None
         relay.set_scan(binding, app.capture_epoch, intent, app.session.room.id if app.session and app.session.room else None,
-                       getattr(reconstruction, "path", None), getattr(reconstruction, "sequence", 0))
+                       getattr(reconstruction, "path", None), getattr(reconstruction, "sequence", 0),
+                       surface_path=getattr(reconstruction,"surface_path",None))
         raw = (json.dumps(app.view(), ensure_ascii=False, allow_nan=False, separators=(",", ":"))+"\n").encode()
         require(len(raw) <= MAX_BYTES, "Dashboard snapshot exceeds its budget")
         outgoing.write(raw)
@@ -596,7 +599,8 @@ def run(root, incoming, outgoing):
                           f"uncertain={status['uncertain_cells']} gaussians={status.get('gaussians', 0)} "
                           f"compute_ms={event.get('compute_ms', 0)} accepted_pixels={event.get('accepted_pixels', 0)} "
                           f"map_points={status.get('map_points',0)} map_capacity={status.get('map_capacity',0)} "
-                          f"recycled={status.get('recycled_points',0)} coarsenings={status.get('coarsenings',0)}", file=sys.stderr)
+                          f"recycled={status.get('recycled_points',0)} coarsenings={status.get('coarsenings',0)} "
+                          + ' '.join(f"{name}_ms={status.get('phase_ms',{}).get(name,0)}" for name in ('rectify','stereo','geometry','fusion','preview')), file=sys.stderr)
                     last_report, reports = time.monotonic(), reports+1
             except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration) as error:
                 if errors < 64:

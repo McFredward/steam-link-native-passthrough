@@ -115,6 +115,22 @@ int main(){try{
     graphics.render(0,0,0,view,2);const auto surface=readback(graphics,graphics.swapchain(0),0);
     check(surfaceNew[center+3]==0&&surface[center+3]>0&&surface[3]==0,"measured connected surface animates without filling unknown space");
     check(surface[center+1]>surface[center]&&surface[center+2]>surface[center],"connected surface uses teal and blue instead of large white circles");
+    check(surface[center+3]<50,"live measured surfaces remain highly transparent");
+    auto overlapping=connected.vertices;
+    for(unsigned i=0;i<15;++i)overlapping.insert(overlapping.end(),connected.vertices.begin(),connected.vertices.end());
+    graphics.upload(overlapping);graphics.render(0,0,0,view,2);
+    const auto duplicate=readback(graphics,graphics.swapchain(0),0);
+    check(duplicate==surface,"overlapping coplanar observations cannot accumulate into an opaque noisy sheet");
+    for(std::size_t i=0;i<surface.size();i+=4)for(unsigned c=0;c<3;++c)
+        {const float encoded=surface[i+c]/255.f;
+         const float linear=encoded<=.04045f?encoded/12.92f:std::pow((encoded+.055f)/1.055f,2.4f);
+         check(linear<=surface[i+3]/255.f+.005f,"native compositor receives explicitly premultiplied linear scan pixels");}
+    room_native::SceneMeshBuilder distant;distant.measuredSurface({-5,-5,-10},{5,-5,-10},{0,5,-10},true,0);
+    graphics.upload(distant.vertices);graphics.render(0,0,0,view,2);
+    const auto farSurface=readback(graphics,graphics.swapchain(0),0);
+    for(unsigned y=58;y<70;++y)for(unsigned x=58;x<70;++x)
+        check(farSurface[(y*128+x)*4+3]>=15&&farSurface[(y*128+x)*4+3]<=18,"distant grid fades before it aliases into grain");
+    std::puts("PASS transparent premultiplied scan surfaces, duplicate opacity invariance and distant grid anti-aliasing");
     connected.vertices.clear();connected.measuredSurface({-.5f,-.5f,-2},{.5f,-.5f,-2},{0,.5f,-2},false,0);
     graphics.upload(connected.vertices);graphics.render(0,0,0,view,2);
     const auto uncertain=readback(graphics,graphics.swapchain(0),0);

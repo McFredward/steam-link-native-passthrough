@@ -21,8 +21,10 @@ import shlex
 import shutil
 import socket
 import stat
+import subprocess
 import sys
 import tempfile
+import time
 
 
 def fixed_checks(*sources):
@@ -859,6 +861,29 @@ class StartupHealth:
         source=self.module.NativeEvidenceSource(self.home)
         return {'baseline':source.baseline(),'checkpoint':source.checkpoint()}
 
+    def check_preserved(self, receipt):
+        """Observe an attested app-only update; never claim a fresh compositor."""
+        source=self.module.NativeEvidenceSource(self.home);source.resume(receipt['checkpoint'])
+        before=receipt['baseline'];sample=source.sample();module=self.module
+        def live(rows):
+            return {module.identity(p):p for p in rows if p['state'] not in module.INELIGIBLE_STATES}
+        prior,current=live(before['processes']),live(sample['processes'])
+        required={key for key,p in prior.items() if p['exe'] in (module.COMPOSITOR,module.SERVER)}
+        core={p['exe'] for p in prior.values() if p['exe'] in (module.COMPOSITOR,module.SERVER)}
+        ui=[p for key,p in current.items() if key in prior and p['exe']==module.WEBHELPER and p['libcef']]
+        ready=(core=={module.COMPOSITOR,module.SERVER} and required<=current.keys() and
+               any(p['kind']=='browser' for p in ui) and any(p['kind']=='renderer' or module.forked_ui_compositor_live(p) for p in ui) and
+               not before['errors'] and not sample['errors'] and
+               all(sample['unit'][k]==before['unit'][k] for k in ('InvocationID','MainPID','ControlGroup','ExecMainStartTimestampMonotonic')) and
+               sample['unit']['ActiveState']=='active' and sample['unit']['SubState']=='running')
+        isolation=sample.get('isolation')
+        if before.get('isolation_descriptor') is not None:
+            ready=ready and type(isolation)is dict and isolation.get('status')=='isolated'
+        return {'schema':'sfnp-install-startup-health-v1','software_ready':bool(ready),
+                'status':'ready' if ready else 'not-ready','reason':'preserved-runtime' if ready else 'preserved-runtime-not-ready',
+                'headset_picture_verified':False,'runtime_preserved':True,'fresh_compositor':False,
+                'automatic_restart':False,'automatic_rollback':False}
+
     def check(self,receipt):
         source=self.module.NativeEvidenceSource(self.home);source.resume(receipt['checkpoint'])
         result=self.module.wait_ready(source,receipt['baseline'],timeout=20,poll_seconds=.25,
@@ -917,6 +942,35 @@ class FrameInstall:
         code,raw=self.run(['/usr/bin/systemctl','--user',*args],timeout=10)
         self.e.require(code==0,'The Frame user service could not be checked. Nothing was restarted.')
         return raw.decode('utf-8')
+
+    def lifecycle(self):
+        def run(args,**options):
+            code,raw=self.run(args,timeout=options['timeout'])
+            return subprocess.CompletedProcess(args,code,stdout=raw)
+        return load_helper(self.e,'steam_link_setup_frame').FrameLifecycle(self.e,self.root,runner=run)
+
+    def attest_room_update(self):
+        """Recheck the exact Undo receipt and unchanged non-room payload."""
+        e=self.e;checkpoint=self.checkpoint().value()
+        e.require(checkpoint is not None,'The room-only recovery checkpoint is missing.')
+        entry=next((op for op in checkpoint['operations'] if op['path']==str(self.tx.path)),None)
+        e.require(entry and entry['before'] and entry['before']['kind']=='file','The original room update receipt is missing.')
+        before=self.tx.validate_state(e.parse(base64.b64decode(entry['before']['bytes'],validate=True)))
+        after=self.tx.state();root=self.root/'room-setup'
+        candidates=[{k:v for k,v in value.items() if k!='mode'} for value in [entry['before'],*entry['after']] if value]
+        e.require(self.tx.current(self.tx.path) in candidates,'The room update receipt changed; recovery details were kept.')
+        def core(state):return {op['path']:op for op in state['operations'] if not Path(op['path']).is_relative_to(root)}
+        e.require(after and before['settings']==after['settings'] and before['pair']==after['pair'] and core(before)==core(after),
+                  'A room-only update cannot change the native runtime or pairing. Recovery details were kept.')
+        # Generic checkpoints also reserve the native pause marker. A room
+        # update must leave it exactly at its pre-update value; it grants no
+        # permission to pause or reconfigure the running native camera.
+        pause=self.root/'camera-session.pause';helper=load_helper(e,'steam_link_setup_checkpoint')
+        e.require(all(op['path']==str(self.tx.path) or Path(op['path']).is_relative_to(root) or
+                      op['path']==str(pause) and helper.read_value(e,pause)==op['before'] for op in checkpoint['operations']),
+                  'The room-only checkpoint includes native changes. Recovery details were kept.')
+        e.require(all(self.tx.current(Path(op['path']))==op['after'] for op in core(before).values()),
+                  'The preserved native runtime files changed. Recovery details were kept.')
 
     def cold(self,*,steam=False):
         raw=self.system('show','steamvr.service','--property=ActiveState','--value').strip()
@@ -1785,13 +1839,20 @@ class FrameInstall:
         committed={**pending,'phase':'installed'};helper=load_helper(e,'steam_link_setup_checkpoint')
         previous=e.read(self.tx.path,64*1024*1024,private=True)
         self.backup('update',changes,current['settings'],[helper.file_value(e.encoded(pending)),helper.file_value(e.encoded(committed))],pause_settings=settings,target=bundle.pin)
+        lifecycle=self.lifecycle()
+        room_only=(bool(changes) and ROOM_FILES<=set(bundle.files) and settings==current['settings'] and
+                   current.get('activation_mode','active')=='active' and
+                   all(Path(op['path']).is_relative_to(self.root/'room-setup') for op in changes) and
+                   lifecycle.can_preserve_room())
+        if room_only:lifecycle.prepare_room_update(bundle.pin)
+        else:lifecycle.require_full_restart()
         e.put(self.tx.path,e.encoded(pending),previous)
         # All cold work and the exact recovery journal precede live quiescence.
         # A generation/backup failure must not pause an otherwise valid session.
-        if current['settings'].get('policy')==SESSION_POLICY or settings_moved:
+        if not room_only and (current['settings'].get('policy')==SESSION_POLICY or settings_moved):
             with self.camera_context(state=current) as camera:
                 if camera:self.camera_call(camera,'restore_owned')
-        self.prepare_camera_target(settings)
+        if not room_only:self.prepare_camera_target(settings)
         for op in changes:self.tx.replace(op)
         if current['settings'].get('policy')!=SESSION_POLICY and not settings_moved:
             # The verified new config/helper now exist, but native VR has not
@@ -1799,7 +1860,7 @@ class FrameInstall:
             with self.camera_context() as camera:self.camera_call(camera,'restore_owned')
         self.system('daemon-reload')
         return {'reason':'prepared-update','pair_id':current['pair'],'automatic_restart':False,
-                'manual_restart_required':True,'coverage_operational':False}
+                'manual_restart_required':not room_only,'room_restart_required':room_only,'coverage_operational':False}
 
     def undo(self,*,backup=False,live=False,purge_legacy=False,target=None):
         self.stop_room_capture()
@@ -1964,9 +2025,20 @@ def remote_request(engine,request,*,unit=None):
         e.require(len(source)==pin['bytes'] and e.sha(source)==pin['sha256'],'The startup checker changed.')
         observer=StartupHealth(load_module(source,'sfnp_install_health'),unit.home)
         if command=='bridge-health-baseline':return observer.baseline()
-        if command=='bridge-health':return observer.check(request['baseline'])
+        if command=='bridge-health':
+            lifecycle=unit.lifecycle();scope=lifecycle._load()
+            if scope and not scope['restart_steam']:
+                unit.attest_room_update()
+                e.require(lifecycle.preserved_running(),'Room Setup is not ready; recovery details were kept.')
+                result=observer.check_preserved(request['baseline'])
+                if result['software_ready']:
+                    time.sleep(1)
+                    result=observer.check_preserved(request['baseline'])
+                    e.require(lifecycle.preserved_running(),'Room Setup stopped; recovery details were kept.')
+                return result
+            return observer.check(request['baseline'])
     if command in ('bridge-runtime-snapshot','bridge-runtime-restart','bridge-runtime-restored'):
-        lifecycle=load_helper(e,'steam_link_setup_frame').FrameLifecycle(e,unit.root)
+        lifecycle=unit.lifecycle()
         if command=='bridge-runtime-snapshot':
             identity=request.get('continuation')
             if identity is not None:
@@ -1976,8 +2048,10 @@ def remote_request(engine,request,*,unit=None):
                           'The Frame continuation does not match the checked recovery records.')
                 return lifecycle.continue_prepared(identity)
             return lifecycle.snapshot()
-        if command=='bridge-runtime-restart':return lifecycle.restart(restoring=request.get('restoring') is True,
-            health_receipt=observer.baseline())
+        if command=='bridge-runtime-restart':
+            scope=lifecycle._load()
+            if scope and not scope['restart_steam']:unit.attest_room_update()
+            return lifecycle.restart(restoring=request.get('restoring') is True,health_receipt=observer.baseline())
         return lifecycle.restored(health_ok=request.get('health_ok') is True)
     if command in ('bridge-restore','bridge-undo','bridge-prepare'):
         provider=view.frame['runtime_files']['openvr']
@@ -2008,8 +2082,10 @@ def remote_request(engine,request,*,unit=None):
         return {**result,'installed':state is not None,'installed_version':patch_version(state.get('version')) if state else None}
     if command=='bridge-checkpoint-finish':unit.checkpoint().finish(restored=request.get('restored') is True);return {'reason':'complete'}
     if command=='bridge-finalize-inactive':return unit.finalize_inactive()
-    if command=='bridge-undo':return unit.undo(backup=request.get('automated') is True,live=request.get('automated') is True,
-                                               purge_legacy=request.get('automated') is True,target=view.pin)
+    if command=='bridge-undo':
+        unit.lifecycle().require_full_restart()
+        return unit.undo(backup=request.get('automated') is True,live=request.get('automated') is True,
+                         purge_legacy=request.get('automated') is True,target=view.pin)
     if command=='bridge-commit':unit.tx.commit();return {'reason':'committed','automatic_restart':False}
     files=request.get('files',{});e.require(type(files)is dict and 1<=len(files)<=64,'Bounded package inventory required.')
     # RPC payload staging has no service or library side effects. Its complete

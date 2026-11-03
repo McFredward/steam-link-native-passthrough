@@ -160,7 +160,9 @@ def prepare_runtime(manifest_path, root, cancelled=lambda: False):
 class Companion:
     """Own exactly one GPU child. Closing the installer stops only that child."""
     def __init__(self, exchange, setup_dir, cache_root, ui, cancelled=lambda: False):
-        self.exchange, self.setup_dir, self.cache_root = exchange, Path(setup_dir), Path(cache_root)
+        self.worker_id=os.urandom(16).hex()
+        self.exchange=lambda request:exchange({**request,"worker_id":self.worker_id})
+        self.setup_dir,self.cache_root=Path(setup_dir),Path(cache_root)
         self.ui, self.cancelled = ui, cancelled
         self.stop = threading.Event()
         self.process = None
@@ -260,12 +262,12 @@ class Companion:
                         raise RuntimeError("GPU worker stopped during warmup")
             if self.stop.is_set():
                 return
-            if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider" or ready.get('protocol')!=2:
+            if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider" or ready.get('protocol')!=3:
                 raise RuntimeError("GPU worker could not initialize")
             # Readiness includes the live Frame endpoint, not just a warmed GPU.
             deadline = time.monotonic()+15
             while not self.stop.is_set():
-                linked = self.exchange({"op": "ready", "protocol": 2, "provider": "CUDAExecutionProvider"})
+                linked = self.exchange({"op": "ready", "protocol": 3, "provider": "CUDAExecutionProvider"})
                 if not linked.get("error"):
                     break
                 if time.monotonic() >= deadline:
@@ -276,11 +278,12 @@ class Companion:
             self.ui.say("bridge_room_pc_ready")
             self.ready.set()
             busy, finish_key, last_heartbeat, seeded_map = False, None, 0., None
+            retained_capture=None
             while not self.stop.is_set() and not self.cancelled():
                 if self.process.poll() is not None:
                     raise RuntimeError("GPU worker stopped")
                 if time.monotonic()-last_heartbeat >= 2:
-                    response = self.exchange({"op": "ready", "protocol": 2, "provider": "CUDAExecutionProvider"})
+                    response = self.exchange({"op": "ready", "protocol": 3, "provider": "CUDAExecutionProvider"})
                     last_heartbeat = time.monotonic()
                     if response.get("error"):
                         self.ready.clear()
@@ -299,19 +302,28 @@ class Companion:
                 if busy:
                     self.stop.wait(.025)
                     continue
-                state = self.exchange({"op": "take", "seed": seeded_map is None})
+                state = self.exchange({"op": "take", "seed": seeded_map is None,"keep_id":retained_capture})
+                retained_capture=None
                 if state.get("error"):
                     self.stop.wait(.5)
                     continue
+                if state.get('intent')=='idle':
+                    seeded_map=None;self.stop.wait(.05);continue
+                if seeded_map is not None and state.get('map_id')!=seeded_map:
+                    state=self.exchange({'op':'take','seed':True,'keep_id':state.get('id')})
+                    if state.get('error'):self.stop.wait(.5);continue
+                    seeded_map=None
                 key = (state.get("map_id"), state.get("epoch"), str(state.get("binding")))
                 if state.get("map_id") and seeded_map is None and state.get("seed_bytes"):
                     seed = bytearray()
-                    if state['seed_bytes']>80000*48:raise ValueError('Retained room exceeds budget')
+                    if state['seed_bytes']>4400016 or state.get('seed_format') not in ('gaussians','surface'):
+                        raise ValueError('Retained room exceeds budget')
                     for offset in range(0,state['seed_bytes'],60000):
                         seed.extend(base64.b64decode(self.exchange({'op':'seed_chunk','offset':offset})['data'],validate=True))
                     message={'op':'seed','map_id':state['map_id'],'binding':state['binding'],'epoch':state['epoch'],
-                        'gaussians':base64.b64encode(seed).decode()}
+                        state['seed_format']:base64.b64encode(seed).decode()}
                     seeded_map=state['map_id']
+                    retained_capture=state.get('id')
                 elif state["intent"] == "finish" and finish_key != key:
                     message = {"op": "finish", "map_id": state["map_id"], "binding": state["binding"], "epoch": state["epoch"]}
                     finish_key = key
