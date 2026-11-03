@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PENDING",
+  "actual_windows_candidate_check": "PASS",
   "all_archive_members_verified": true,
   "archive": {
     "bytes": 23144076,
@@ -20,7 +20,15 @@
   "device_actions": false,
   "explicit_uninstall_and_native_updates_keep_full_recovery": true,
   "final_delivery_ci": {
-    "result": "PENDING"
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "9111b9bffa69e5d56153085fbb73d1e472d467f2",
+    "run": 41706565284
   },
   "headset_test": false,
   "limits": [
@@ -52,7 +60,18 @@
   "rebuilt_overlay_is_byte_identical_to_candidate_12": true,
   "recovery_checkpoint_bound_bytes": 201326592,
   "remote_archive_download": {
-    "result": "PENDING"
+    "all_archive_members_verified": true,
+    "archive_commit": "e2ce44451342d914e928c9d50a8f3841ce815517",
+    "bytes": 23144076,
+    "core_commit": "5060cd47dee7c6823c92522a266e46bdc3671611",
+    "current_source_matches_all_151_packaged_source_pins": true,
+    "device_actions": false,
+    "member_count": 1035,
+    "public_aliases_match_pinned_core": true,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "b9b69fc03a20e35569414fffe60ec3f77f150d639c8854a716220ffe5f9614f4",
+    "source_revision": "144ba98380da08adb5c61c2dd7a189043040c6ed"
   },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
@@ -87,8 +106,10 @@
       "run": 41703270622
     },
     "setup": {
-      "applicability": "The final delivery CI reruns the complete installer checks against this packaged source and its current bootstrap.",
-      "result": "PENDING"
+      "applicability": "The complete installer and actual packaged Windows entry points were checked in final delivery; all 151 packaged source pins match the source revision.",
+      "result": "success",
+      "revision": "9111b9bffa69e5d56153085fbb73d1e472d467f2",
+      "run": 41706565284
     }
   },
   "source_revision": "144ba98380da08adb5c61c2dd7a189043040c6ed",
