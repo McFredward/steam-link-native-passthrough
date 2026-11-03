@@ -1,101 +1,113 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PASS",
-  "all_1033_archive_members_verified": true,
+  "actual_windows_candidate_check": "PENDING",
+  "all_archive_members_verified": true,
   "archive": {
-    "bytes": 23135365,
-    "sha256": "43ffa60d21173c28ae4967977bdb04b9b4eea5a2f8f6ba10b158ada6eedccf42"
+    "bytes": 23144076,
+    "sha256": "b9b69fc03a20e35569414fffe60ec3f77f150d639c8854a716220ffe5f9614f4"
   },
-  "archive_commit": "bef939898cdede22ec8e493ac36a40b8ec4850a4",
-  "bootstrap_source_sha256": "86a64deaeb7928adc38adb347d3e01b582b399a8e0e38bee0a610184ce98a2e2",
+  "archive_commit": "e2ce44451342d914e928c9d50a8f3841ce815517",
+  "archive_member_count": 1035,
+  "bootstrap_source_sha256": "823fddc2955a2641e6f60af4cda860b8675b9e26173cf95db3d3fcebabfe47ab",
   "branch": "arcturus-room-setup",
+  "camera_inactive_after_reboot": true,
   "component_versions": {
-    "frame": "0.3.10-roomscan.12",
+    "frame": "0.3.11-roomscan.13",
     "pc": "0.3.12-roomscan.8"
   },
-  "continuous_coverage_software_checks": {
-    "automatic_exposure_groups_past_history_retention": 150,
-    "bounded_compression_and_corruption_refusal": true,
-    "dense_nearby_surface_connectivity": true,
-    "early_connected_regions_preserved": true,
-    "excessive_exposure_time_or_spatial_error_refused": true,
-    "final_extraction_after_live_mesh": true,
-    "moving_viewpoints_past_preview_and_map_capacity": 285,
-    "native_gpu_connected_reveal": true,
-    "new_connected_regions_after_capacity": true,
-    "retired_slots_reused_without_old_faces": true,
-    "unknown_failed_incomplete_mode_writes_clear_authority": true,
-    "unknown_gap_preserved": true
-  },
-  "core_commit": "c53d619fc97c3b959406692334ca4d3383862825",
-  "current_source_matches_all_150_packaged_source_pins": true,
+  "core_commit": "5060cd47dee7c6823c92522a266e46bdc3671611",
+  "current_source_matches_all_151_packaged_source_pins": true,
   "device_actions": false,
-  "exposure_bounds": {
-    "camera_setting_writes": false,
-    "combined_pose_and_exposure_budget_ns": 750000,
-    "frame_latch_claimed": false,
-    "maximum_rotation_error_rad": 0.0005,
-    "maximum_time_uncertainty_ns": 250000,
-    "maximum_translation_error_m": 0.0005
-  },
-  "failure_analysis": {
-    "accepted_captures": 885,
-    "clock_refusals": 0,
-    "continued_valid_stereo_pixels_per_observation": 200466,
-    "exposure_refusals": 1210,
-    "late_active_gaussians": 36241,
-    "maximum_capture_age_ms": 35.11,
-    "motion_refusals": 8,
-    "pc_model_rejections": 0,
-    "peak_active_gaussians": 47646,
-    "pose_refusals": 0,
-    "raw_images_read": false
-  },
+  "explicit_uninstall_and_native_updates_keep_full_recovery": true,
   "final_delivery_ci": {
-    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
-    "jobs": [
-      "linux",
-      "linux-python-baseline",
-      "windows-bootstrap"
-    ],
-    "result": "success",
-    "revision": "342a6f181242e37ddf222b14ffad1743f7d9e366",
-    "run": 41662110385
+    "result": "PENDING"
   },
   "headset_test": false,
-  "limits": "Measured surfaces, capacity recycling, continuous coverage, bounded automatic exposure, native rendering/input/X, compressed transport and recovery pass software checks. Installed headset coverage speed and physical surface accuracy require the next wearer test. Unknown, reflective and unmeasured regions are not invented.",
-  "linux_bootstrap_sha256": "369c59a200f13f505919a6efc5cf18549656a9480292a1471460e74173a77d27",
+  "limits": [
+    "Installed visual quality, room coverage speed and physical accuracy still require a wearer test.",
+    "Gaussian mapping is geometric, not an optimized photometric radiance field; reflective, transparent and textureless surfaces remain uncertain.",
+    "Original stereo identity, calibration, exposure/pose evidence, private file ownership and capture epoch checks remain mandatory.",
+    "A cold boot or a native-runtime update can still require Steam authentication; external server availability is not controlled by this installer.",
+    "Room-only activation requires exact unchanged native payload/settings/pairing and current native process/UI evidence; native changes retain full recovery.",
+    "Camera access stays session-only and inactive after reboot; keep the current installer open while scanning."
+  ],
+  "linux_bootstrap_sha256": "6ae403e2e7ab97fd1192f33e5a8a0ba320cc9d61e8079d5974b4b70c480682b9",
   "optional_enable_action": false,
+  "powershell_bootstrap_fixture_checks": 39,
+  "previous_scan_analysis": {
+    "compactions": 2,
+    "initial_compute_ms": 649.06,
+    "map_capacity": 240000,
+    "maximum_compute_ms": 5078.91,
+    "maximum_map_points_before_compaction": 235202,
+    "preview_faces_early": 104229,
+    "preview_faces_late": 60893,
+    "raw_images_read": false,
+    "scan_frames": 59
+  },
   "rebuilt_native_artifacts": [
     "room_overlay",
-    "room_renderer",
-    "room_camera"
+    "room_renderer"
   ],
+  "rebuilt_overlay_is_byte_identical_to_candidate_12": true,
   "recovery_checkpoint_bound_bytes": 201326592,
   "remote_archive_download": {
-    "all_archive_members_verified": true,
-    "bytes": 23135365,
-    "current_source_matches_all_150_packaged_source_pins": true,
-    "device_actions": false,
-    "member_count": 1033,
-    "public_branch_bootstrap_and_immutable_core_match": true,
-    "result": "PASS",
-    "sha256": "43ffa60d21173c28ae4967977bdb04b9b4eea5a2f8f6ba10b158ada6eedccf42"
+    "result": "PENDING"
   },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
+  "room_updates_preserve_healthy_native_runtime_only_after_exact_attestation": true,
   "schema": "sfnp-room-installer-delivery-v1",
+  "software_reproduction": {
+    "app_file_undo_after_reboot_preserves_current_native_session": true,
+    "changed_native_invocation_or_payload_refused": true,
+    "coincident_surface_copies": 16,
+    "distant_grid_fades": true,
+    "grazing_floor_and_ceiling_planes": true,
+    "lost_app_restart_reply_not_replayed": true,
+    "measured_free_space_retires_foreground_ghost": true,
+    "measured_large_faces_and_confidence_survive_handoff": true,
+    "native_camera_setting_writes_during_room_only_update": 0,
+    "native_ui_roles_required_without_claiming_fresh_compositor": true,
+    "noisy_revisits_merge_without_tangential_collapse": true,
+    "occluded_background_preserved": true,
+    "old_and_second_workers_cannot_take_or_clear_scan": true,
+    "opacity_invariant_under_duplicate_observations": true,
+    "open_boundary_preserved_through_reduction": true,
+    "premultiplied_linear_colour_verified": true,
+    "real_temporary_room_update_and_exact_undo": true,
+    "room_switch_reseeds_without_dropping_its_capture": true,
+    "steam_and_steamvr_instances_preserved": true
+  },
   "source_ci": {
     "room": {
+      "applicability": "Room reconstruction, rendering, relay, runtime manifest and camera sources are unchanged in the final source revision.",
       "result": "success",
-      "run": 41661695791
+      "revision": "fa4d408b222ec7bf1b77c6eed177ef4709e5ba80",
+      "run": 41703270622
     },
     "setup": {
-      "result": "success",
-      "run": 41660058728
+      "applicability": "The final delivery CI reruns the complete installer checks against this packaged source and its current bootstrap.",
+      "result": "PENDING"
     }
   },
-  "source_revision": "6bda2ad50f7070031ba88148a51f2ca5a60f6e92",
+  "source_revision": "144ba98380da08adb5c61c2dd7a189043040c6ed",
+  "static_frame_changes": [
+    "frame/room-setup/room_scan/app.py",
+    "frame/room-setup/room_scan/pc_reconstruction.py",
+    "frame/room-setup/room_scan/pc_relay.py",
+    "frame/room-setup/sfnp-room-renderer"
+  ],
+  "steam_login_analysis": {
+    "account_or_network_settings_changed": false,
+    "first_connection_timeout": "2026-11-03T16:40:39+01:00",
+    "first_login_request": "2026-11-03T16:37:19+01:00",
+    "login_wait_seconds": 218,
+    "next_server_immediate_login": true,
+    "restart_count": 1,
+    "service_restart_seconds": 10,
+    "successful_retry": "2026-11-03T16:40:57+01:00"
+  },
   "targeted_room_retry_preserves_native_installation": true,
   "unchanged_native_artifacts": [
     "pc_provider",
@@ -103,7 +115,8 @@
     "frame_selector",
     "mask_codec",
     "mask_util",
+    "room_camera",
     "room_vision"
   ],
-  "version": "0.3.16-roomscan.12"
+  "version": "0.3.16-roomscan.13"
 }
