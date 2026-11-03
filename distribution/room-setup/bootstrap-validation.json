@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PENDING_FINAL_CI",
+  "actual_windows_candidate_check": "PASS",
   "archive": {
     "bytes": 23117568,
     "sha256": "2c1bcb18641365bfb5f345c9a9fafa49d424c25ac5f535515ad5fe7e489a238f"
@@ -10,11 +10,27 @@
   "branch": "arcturus-room-setup",
   "core_commit": "4a4a3c1a99d6e8f208d1a79a69952578f9084d08",
   "device_actions": false,
+  "final_delivery_ci": {
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "252ff422f368e1db4a1a8d98fb2e0ff4f9c3ba96",
+    "run": 41602800181
+  },
   "headset_test": false,
   "limits": "The Frame audit found candidate 7 with no armed reader. Candidate 9 requires the normal paired update to candidate-8 native components; complete wearer accuracy/performance remains unverified.",
   "linux_bootstrap_sha256": "0231bc872871986f35e3925aee7f05790a4419d82e219841a9b2666e0ba0ec64",
   "native_component_versions_unchanged": true,
   "optional_enable_action": false,
+  "remote_archive_download": {
+    "bytes": 23117568,
+    "result": "PASS",
+    "sha256": "2c1bcb18641365bfb5f345c9a9fafa49d424c25ac5f535515ad5fe7e489a238f"
+  },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
   "schema": "sfnp-room-installer-delivery-v1",
