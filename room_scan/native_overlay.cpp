@@ -212,7 +212,7 @@ int main(int argc,char** argv){
                     }
                     else if(!awaiting){try{camera.park();}catch(const std::exception&){camera.stop();backend.send({{"event","tracking_lost"}});}}
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(camera.active()?100:30));
+                std::this_thread::sleep_for(std::chrono::milliseconds(camera.active()&&wantsFrames?5:30));
             }
             camera.stop();
         });

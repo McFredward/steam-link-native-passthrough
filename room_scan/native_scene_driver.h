@@ -98,7 +98,7 @@ public:
             if(ready_&&!registration_.ready()&&now-lastHint_>1){lastHint_=now;
                 if(originReports_++<30)std::fprintf(stderr,"Room scene origin: status=%s uncertainty_us=%llu eye_delta_mm=%.3f eye_rotation_mrad=%.3f\n",
                     originStatus_,static_cast<unsigned long long>(queryUncertainty_/1000),double(eyePositionError_*1000),double(eyeRotationError_*1000));
-                if(hint)hint("Hold still briefly to align the room preview.");}
+                if(hint)hint("Aligning the room preview. Keep looking around slowly.");}
         }catch(const std::exception&){failed();}
     }
     void view(bool allowed,const nlohmann::json& pointers){

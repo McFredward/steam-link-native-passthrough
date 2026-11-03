@@ -199,3 +199,38 @@ screen. Recovery failures retain both causes. Retry clears the old error only
 when starting a new attempt. Unknown exceptions receive a fixed public summary;
 raw exception content is not promoted into that panel. The JSONL diagnostic code
 continues to match the displayed code for authored checks.
+
+## Continuous motion and rejected Gaussian previews (installer 11)
+
+The wearer log on 2026-11-03 showed zero rendered vertices, repeated
+`event=pc_model error=RoomError`, 14 accepted captures, 125 exposure refusals and
+59 pose-history refusals. Capture age reached 124 ms, outside the public 80 ms
+historical query bound. Native scene origin registration had succeeded; these
+were acquisition/result issues, not another display-origin experiment.
+
+A cross-component reproduction found that float32 tangent axes at the legitimate
+1 mm Gaussian radius floor can have squared length a few ulps below 1e-6. Both
+Frame validators now allow a relative 1e-5 rounding margin at the unchanged
+1 mm/150 mm radius limits, while retaining finite-value, identity, covariance,
+orthogonality and ownership checks. Invalid models preserve the last good file
+and report a fixed `pc-preview-*` diagnostic instead of blaming room alignment.
+
+The acquisition worker's 100 ms sleep is replaced by a 5 ms active polling
+interval. A scan-owned sampler also records public current head poses with RAW
+clock brackets in bounded memory (at most 1024 samples/600 ms). A delayed image
+may use nine genuine recorded samples spanning its row times, capped at 20 ms
+with no sample gap above 4 ms and no query bracket above 750 us. Image age is
+capped at 500 ms. Timestamps exported to the PC remain the actual observations;
+there is no extrapolation, guessed offset or delivery-time pose substitution.
+An incomplete cache can use the existing qualified 80 ms public-history route;
+missing/uncertain observations are refused. Tracking loss, pause/Stop and new
+capture clear the history. Nothing is persisted or enabled at boot.
+
+Software regressions exercise 125 ms delayed moving poses, refusal of sparse or
+cleared history, float32 Gaussian interchange through both Frame validators,
+continuous moving views that fill a newly observed hole while keeping an unseen
+hole open, and revisit refinement. The existing native GPU/shader, menu, X,
+registration and owned-process tests remain required. This is software evidence;
+new installed headset speed and physical accuracy still require the wearer test.
+The installer is 0.3.16-roomscan.11, the changed Frame components are
+0.3.9-roomscan.11, and the unchanged PC native provider stays 0.3.12-roomscan.8.

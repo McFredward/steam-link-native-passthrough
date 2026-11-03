@@ -179,6 +179,75 @@ for raw in sys.stdin:
 
 @unittest.skipUnless(importlib.util.find_spec("numpy") and importlib.util.find_spec("scipy"), "PC numerical dependencies required")
 class GeometryTests(unittest.TestCase):
+    def test_float32_gaussians_at_size_floor_survive_frame_contract(self):
+        import numpy as np
+        from room_reconstruction.live_map import GaussianMap
+        rng = np.random.default_rng(137)
+        model = GaussianMap(10000)
+        model.positions = rng.uniform(-2, 2, (5000, 3)).astype(np.float32)
+        normal = rng.normal(size=(5000, 3))
+        model.normals = (normal/np.linalg.norm(normal, axis=1)[:, None]).astype(np.float32)
+        model.sigma = np.full(5000, .001, np.float32)
+        model.active = np.ones(5000, bool)
+        model.views, model.residuals = np.ones(5000, np.uint8), np.zeros(5000, np.float32)
+        records = list(struct.iter_unpack('<I11f', base64.b64decode(model.preview())))
+        self.assertTrue(any(sum(x*x for x in record[4:7]) < 1e-6 for record in records))
+        binding = Binding('00000000-0000-0000-0000-000000000001',
+                          '00000000-0000-0000-0000-000000000002',
+                          '00000000-0000-0000-0000-000000000003', test_only=False)
+        with tempfile.TemporaryDirectory() as root:
+            reconstruction = PcReconstruction(binding, root)
+            self.addCleanup(reconstruction.close)
+            value = {'event':'pc_model', 'sequence':1, 'binding':{k:getattr(binding,k) for k in
+                     ('session_id','origin_id','calibration_id')}, 'gaussians':model.preview(), 'face_count':0}
+            reconstruction.accept(value)
+            self.assertEqual(reconstruction.count, 5000)
+            before = reconstruction.path.read_bytes()
+            model.sigma[0] = .0009
+            with self.assertRaisesRegex(RoomError, 'invalid Gaussian shape'):
+                reconstruction.accept({**value, 'sequence':2, 'gaussians':model.preview()})
+            self.assertEqual(reconstruction.path.read_bytes(), before)
+            self.assertEqual(reconstruction.sequence, 1)
+
+    def test_continuous_moving_views_extend_map_close_observed_gap_and_preserve_unknown_gap(self):
+        import numpy as np
+        from room_reconstruction.live_map import GaussianMap
+        model = GaussianMap(10000, step=4)
+        h, w, focal = 64, 96, 80.
+        y, x = np.mgrid[:h, :w]
+        ray = np.stack(((x-47.5)/focal, -(y-31.5)/focal, -np.ones_like(x)), -1)
+        binding = Binding('00000000-0000-0000-0000-000000000001',
+                          '00000000-0000-0000-0000-000000000002',
+                          '00000000-0000-0000-0000-000000000003', test_only=False)
+        with tempfile.TemporaryDirectory() as root:
+            reconstruction = PcReconstruction(binding, root)
+            self.addCleanup(reconstruction.close)
+            initial_count = 0
+            for i in range(18):
+                theta = -.12+i*.014
+                rotation = np.array(((np.cos(theta),0,np.sin(theta)),(0,1,0),(-np.sin(theta),0,np.cos(theta))))
+                camera = np.array((i*.025, 0, 0))
+                direction = ray @ rotation.T
+                points = camera+direction*(-2/direction[...,2])[...,None]
+                local = (points-camera) @ rotation
+                normals = np.zeros_like(points);normals[...,2] = 1
+                closing = (np.abs(points[...,0]) < .15) & (np.abs(points[...,1]) < .15)
+                unknown = (np.abs(points[...,0]-.7) < .12) & (np.abs(points[...,1]-.3) < .12)
+                valid = ~unknown if i else ~(unknown|closing)
+                model.integrate(points,normals,valid,-local[...,2],camera,focal,np.column_stack((rotation,camera)))
+                if i == 0:
+                    initial_count = len(model.positions)
+                    self.assertFalse(((np.abs(model.positions[:,0])<.15)&(np.abs(model.positions[:,1])<.15)).any())
+                reconstruction.accept({'event':'pc_model','sequence':i+1,
+                    'binding':{k:getattr(binding,k) for k in ('session_id','origin_id','calibration_id')},
+                    'gaussians':model.preview(),'face_count':len(model.faces)})
+            self.assertEqual(reconstruction.accepted_frames,18)
+            self.assertGreater(len(model.positions),initial_count)
+            self.assertTrue(((np.abs(model.positions[:,0])<.15)&(np.abs(model.positions[:,1])<.15)).any())
+            self.assertFalse(((np.abs(model.positions[:,0]-.7)<.12)&(np.abs(model.positions[:,1]-.3)<.12)).any())
+            self.assertLess(float(np.max(np.abs(model.positions[:,2]+2))),1e-5)
+            self.assertTrue((model.quality()==2).any())
+
     def test_raw_stereo_rectification_keeps_row_exposure_origins(self):
         import numpy as np
         from room_reconstruction.live_geometry import rectify

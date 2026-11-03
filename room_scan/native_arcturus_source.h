@@ -37,6 +37,7 @@ class NativeArcturusSource {
     bool parked_=false;
     std::array<CameraClient::Reply,2> prefetched_{};
     NativeStereo stereo_;
+    CapturePoseHistory poseHistory_;
     CaptureStats stats_;
     Json hint(const std::string& value)const{return {{"event","capture_hint"},{"message",value}};}
 public:
@@ -44,8 +45,8 @@ public:
     std::function<Json()> sessionRecord=manualCameraSession;
     ~NativeArcturusSource(){stop();}
     bool active()const{return active_;}
-    void stop(){active_=false;parked_=false;client_.close();lastToken_.clear();prefetched_={};stereo_.close();}
-    void park(){if(active_&&!parked_){client_.request({{"command","park"}});prefetched_={};parked_=true;}}
+    void stop(){active_=false;parked_=false;poseHistory_.stop();client_.close();lastToken_.clear();prefetched_={};stereo_.close();}
+    void park(){if(active_&&!parked_){client_.request({{"command","park"}});prefetched_={};poseHistory_.stop();parked_=true;}}
     bool start(const std::string& session,const std::string& origin){
         stop();diagnostics={{"source","manual-read-only-arcturus"}};
         try{
@@ -63,6 +64,7 @@ public:
                 if(eye<0||roles[unsigned(eye)]||!stream.at("kernel_role_verified").get<bool>())throw std::runtime_error("room-camera-eye-unverified");
                 roles[unsigned(eye)]=true;}
             geometry_.configure(arcturusFactoryRig(),boundedJson("/persist/device_config.json"));
+            poseHistory_.start(system);
             const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
             do{prefetched_=client_.pair();if(!prefetched_[0].pixels.empty())break;std::this_thread::sleep_for(std::chrono::milliseconds(10));}
             while(std::chrono::steady_clock::now()<deadline);
@@ -75,6 +77,7 @@ public:
     Json next(){
         if(!active_)return {};
         CaptureStats::Attempt attempt{stats_};
+        if(parked_)poseHistory_.start(system);
         parked_=false;
         auto eyes=std::move(prefetched_);prefetched_={};
         {CaptureStats::Measure cost{stats_.costs[CaptureStats::PairRead]};if(eyes[0].pixels.empty())eyes=client_.pair(lastToken_);}
@@ -84,21 +87,22 @@ public:
             if(m.at("source_session")!=address_||m.at("producer_pid")!=description_.at("producer_pid")
                 ||m.at("producer_start_ticks")!=description_.at("producer_start_ticks"))throw std::runtime_error("Room camera producer changed; arm capture again");}
         const std::array<std::optional<ArcturusTiming>,2> timing{arcturusTiming(eyes[0].metadata),arcturusTiming(eyes[1].metadata)};
-        if(!timing[0]||!timing[1]){attempt.result=CaptureStats::Timing;return hint("Waiting for stable camera exposure. Keep passthrough visible.");}
+        if(!timing[0]||!timing[1]){attempt.result=CaptureStats::Timing;return hint("Adjusting to the room lighting. Keep looking around slowly with passthrough visible.");}
         const auto first=std::min(timing[0]->firstRowCenter,timing[1]->firstRowCenter),last=std::max(timing[0]->lastRowCenter,timing[1]->lastRowCenter);
         const auto lo=std::min(timing[0]->center,timing[1]->center),hi=std::max(timing[0]->center,timing[1]->center),center=lo+(hi-lo)/2;
         if(center<=lastExposure_)throw std::runtime_error("Room exposure sequence changed");
         CapturePoseSpan poses;
         const auto now=rawClockNs();if(now>=first)stats_.maximumAgeMs=std::max(stats_.maximumAgeMs,double(now-first)*1e-6);
-        try{CaptureStats::Measure cost{stats_.costs[CaptureStats::PoseRead]};poses.read(system,first,last);}
+        try{CaptureStats::Measure cost{stats_.costs[CaptureStats::PoseRead]};poses.read(system,first,last,&poseHistory_);}
         catch(const std::exception&){attempt.result=CaptureStats::PoseHistory;return hint("Waiting for a fresh tracked camera observation.");}
+        if(poses.sampledHistory)++stats_.cachedSpans;else ++stats_.directSpans;
         stats_.maxQueryNs=std::max(stats_.maxQueryNs,poses.queryBudget);
         // Each ray is rotated and triangulated at its actual exposure-time
         // camera origin. Faster motion still refuses acquisition, rather than
         // substituting a current pose or inventing unobserved geometry.
-        if(poses.queryBudget>750000u){attempt.result=CaptureStats::ClockBudget;return hint("Hold still briefly while the camera observation is checked.");}
+        if(poses.queryBudget>750000u){attempt.result=CaptureStats::ClockBudget;return hint("Checking camera timing. Keep looking around slowly.");}
         if(poses.translationSpan>.012f||poses.rotationSpan>.04f){attempt.result=CaptureStats::Motion;
-            return hint("Move more slowly, then hold still briefly to capture detail.");}
+            return hint("Slow down your movement to capture sharper detail.");}
         const Mat head=poses.at(center);
         if(pcMode){
             Json times=Json::array();for(const auto& t:timing)times.push_back({{"first_row_ns",t->firstRowCenter},{"line_ns",t->line},{"integration_ns",t->integration}});
