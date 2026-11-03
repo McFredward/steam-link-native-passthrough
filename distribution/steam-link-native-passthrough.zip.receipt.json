@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 23126307,
-    "sha256": "9159dc914d22c7f84a4c75445554adeddb04a25b8ed56861664dbd121895552a"
+    "bytes": 23135396,
+    "sha256": "6fae8a3f9c3f55cebf98fe76f16e7e975d79939163968b466de7c3d0f6e8668a"
   },
   "artifacts": {
     "frame_layer": {
@@ -26,15 +26,15 @@
     },
     "room_camera": {
       "bytes": 1575456,
-      "sha256": "226b3422cb100a5817ded4b384e22fd84eeba1fa6c392969557c03dce913022c"
+      "sha256": "30c18a0452376786492ec34aa6866a405cec8f836db3dd214b41d99912a5d89d"
     },
     "room_overlay": {
-      "bytes": 2099704,
-      "sha256": "3a9af46b899ec0ad49ec1c948e2e38a8553df02855994904c81c0339549343c1"
+      "bytes": 2165240,
+      "sha256": "59b3be346e89bda34ee1bb7cb4386550cb6321f7ef333f8f38c08f27213f62f2"
     },
     "room_renderer": {
       "bytes": 1640976,
-      "sha256": "f0e9f79868a10ffe8457c33b02151d1b27a149f6bd7cff842a03199cf9cb598b"
+      "sha256": "6712316d3abac1713e6a84481a2be197a661532fa7befe50c744d8e12e30705d"
     },
     "room_vision": {
       "bytes": 2822872,
@@ -42,7 +42,7 @@
     }
   },
   "component_versions": {
-    "frame": "0.3.9-roomscan.11",
+    "frame": "0.3.10-roomscan.12",
     "pc": "0.3.12-roomscan.8"
   },
   "device_actions": false,
@@ -52,8 +52,8 @@
   "readiness": "release",
   "result": "PASS",
   "runtime_profile": {
-    "bytes": 27314,
-    "sha256": "bed8abd75783e4de413bc01c6d5a7ac04f1aa16d82b9365d436af157d10bcd12"
+    "bytes": 27469,
+    "sha256": "83e40caa5243db018c8940542567941af60d3697ad58449ed37343409582395e"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -62,12 +62,12 @@
       "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
     },
     "PATCH_VERSIONS.json": {
-      "bytes": 102,
-      "sha256": "7f78f00714006c7e9642cb04187ed079ff319cd9701ed0dd3412b4036519a6ab"
+      "bytes": 103,
+      "sha256": "2a12e1a1fd74d4d28fc046240f2fc6eb7cdf95148e47bcd484c08bc8999bc132"
     },
     "VERSION": {
       "bytes": 19,
-      "sha256": "34fde245f14e1c252382ef35782a20b03b3e96c225b506979361a54a00a76164"
+      "sha256": "318a3d09095ca711426b95581a62b7cc6556f2b00a4026431fc50d188dc1ce5e"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -118,8 +118,8 @@
       "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
     },
     "probe/room_camera_native.cpp": {
-      "bytes": 3933,
-      "sha256": "0b521048713ae1e7e6b873327e23e7042302e4d381cae69651ec5f32325d8632"
+      "bytes": 3966,
+      "sha256": "944c028984effe939e4e0ec6d89a94c00295656b50b14725464f2e3e74035274"
     },
     "room_reconstruction/__init__.py": {
       "bytes": 82,
@@ -138,20 +138,20 @@
       "sha256": "a69348e10bb0c202f6b9d4b7e39c04d3f25f38251beac4956c85e58ea1735984"
     },
     "room_reconstruction/live_geometry.py": {
-      "bytes": 7050,
-      "sha256": "9f7d4560bd0f068d27b3ffe8be4e171086412bde91e13464cfb852cc429a3eb2"
+      "bytes": 8256,
+      "sha256": "0a286e013d362894fbe3a2d1af7b1c0532fd326e98c7a459294a03a78ee01492"
     },
     "room_reconstruction/live_inference.py": {
       "bytes": 3315,
       "sha256": "d511ff4cc7e59b469bf322e363737706875425b022d6d861c2fb5e6f0c2d4790"
     },
     "room_reconstruction/live_map.py": {
-      "bytes": 11018,
-      "sha256": "66a511a38add47784b6d45e16682fb319b1fd3850311954f643d69d6a2fb5593"
+      "bytes": 17646,
+      "sha256": "22b4d2d3a7fec6663657eaa4b6e21a91a93afd06aabbd0ecfde8c203a3776a7d"
     },
     "room_reconstruction/live_worker.py": {
-      "bytes": 4817,
-      "sha256": "05638dfea35063bd346197302d650a901ccfa1ae4235f2e70996215fdf5ef88d"
+      "bytes": 4762,
+      "sha256": "4e9e833a4cd7153a1ccbc560bea6710e99898fd3f5cbce0ad70c52b100cff84a"
     },
     "room_scan/__init__.py": {
       "bytes": 250,
@@ -162,8 +162,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 35369,
-      "sha256": "48b3b7298275dd578ea977d91ae46d943a2f6dba0554668788f2251f9b217e39"
+      "bytes": 35925,
+      "sha256": "bfd56666edfce13708e696b16e62676f119f8cd0365633f850c6482576273adb"
     },
     "room_scan/camera_api/buffer_source.h": {
       "bytes": 15452,
@@ -174,8 +174,8 @@
       "sha256": "dbf7c262d98cd712f00fc199c7bb8640652dbb1f375e6c3ff9a06d5bb16a7f60"
     },
     "room_scan/camera_api/exposure_registers.h": {
-      "bytes": 5241,
-      "sha256": "08101c30b36118fc39c0f9950006b7918aad02f74086c6dec267eb2ca15865ca"
+      "bytes": 7364,
+      "sha256": "1cb5b82d77b10dfc8285e83640ed5eb58922572be7f83818efef9e0b7be77729"
     },
     "room_scan/camera_api/linux_inventory.h": {
       "bytes": 13692,
@@ -274,12 +274,12 @@
       "sha256": "7e98e0282260ba550266d8c4ef7874930a0b12deced7f769e7c021f88f6f5304"
     },
     "room_scan/native_arcturus_source.h": {
-      "bytes": 10824,
-      "sha256": "37f65e336ba2a2c4b72372c86db00d7fed3615268e9b8c12289f081ee6f04e20"
+      "bytes": 11182,
+      "sha256": "54bcb415d55c955357777d9123471d95c6061a2f61555180102093a015d74de3"
     },
     "room_scan/native_arcturus_timing.h": {
-      "bytes": 3192,
-      "sha256": "29a3afdef662e1bc9e75172c3406204f15b084b0e1873995a102e3db72cdc32b"
+      "bytes": 4344,
+      "sha256": "960c52a577e0f1135841868ea24ee3e9d346b1fc6b418d5c0f123497e570732b"
     },
     "room_scan/native_camera.h": {
       "bytes": 23151,
@@ -294,8 +294,8 @@
       "sha256": "1d1a099058bf486d0f172cda161736d23e2c0c6d4b38f9f826d13b396ccf43e3"
     },
     "room_scan/native_capture_pose.h": {
-      "bytes": 7601,
-      "sha256": "a24929e96ebfdfbdad07b8ee508a0a9ddb85d235bbc0774f49c88123a984d66d"
+      "bytes": 8475,
+      "sha256": "eece283aaa7b2f6bc5ab83cff7bc0f2b4f356876b7fe89e6a4e4cc3f5982d4c0"
     },
     "room_scan/native_capture_stats.h": {
       "bytes": 2077,
@@ -310,8 +310,8 @@
       "sha256": "14f05b502eaa8c6ed69d5268f3569063600d9c4aebd3cb89591d91bdad004168"
     },
     "room_scan/native_gaussian.h": {
-      "bytes": 3221,
-      "sha256": "e0ba117adb51316af6deaa735aff5c73b3fa15bb07c6a23ba904fc6da74117a5"
+      "bytes": 3222,
+      "sha256": "c465b1eacdf5a18209dfd653444331022c31b46055601ce87f04a68a244e062f"
     },
     "room_scan/native_gpu.h": {
       "bytes": 16140,
@@ -326,8 +326,8 @@
       "sha256": "5d8b4bd5503dfdf65afd3443e06c941997b41a54036101b0ad13b28366288229"
     },
     "room_scan/native_overlay.cpp": {
-      "bytes": 33269,
-      "sha256": "b3d7fb0b75eaa9a3ae4402826c3929110291cc3bf713b1dd5733c252af0f2d0a"
+      "bytes": 33346,
+      "sha256": "50c0a7af21fb94d08643335ec6144d47aedc790cd459c66bf26fc0a71391abc9"
     },
     "room_scan/native_pipe.h": {
       "bytes": 4337,
@@ -362,20 +362,24 @@
       "sha256": "026906bad352f1315e58c5900b5ce2065cecc96a4263b0b5fbb69a30e310d955"
     },
     "room_scan/native_scene_mesh.h": {
-      "bytes": 3373,
-      "sha256": "ea03765961172fb7586472e94cd3e1f8349f2943549764a9543e56c9f18f6454"
+      "bytes": 3514,
+      "sha256": "795b10ef8fac1cf11c7d23bdffc52adf8834de6f0004c512f796901a659e140a"
     },
     "room_scan/native_scene_protocol.h": {
       "bytes": 4206,
       "sha256": "cecdbee812ad88b7be258985327e85f0ad1d7c42b3c1eff13ff2099b26e4b350"
     },
     "room_scan/native_scene_snapshots.h": {
-      "bytes": 3974,
-      "sha256": "2488e7cb891f1a8bafcb9331e670198dc4fb94876185b9498ebea8f809797905"
+      "bytes": 4220,
+      "sha256": "ff3bdae902f2e58d8e160c46649ed7a5c1b42fb5afde02adee2bcfa438a7aad4"
     },
     "room_scan/native_surface.h": {
       "bytes": 2950,
       "sha256": "b956d7ff225589c14a7d2706a3d65e6026341cacbcee35ca27a26f3ce3beafd5"
+    },
+    "room_scan/native_surface_preview.h": {
+      "bytes": 3723,
+      "sha256": "24b9eb46d9beb544785f141dedfcdd9b8f624da2662e06fa4b7c92a2192afd18"
     },
     "room_scan/native_triangulation.h": {
       "bytes": 801,
@@ -414,16 +418,16 @@
       "sha256": "1b53c78a62569cd36341d510c5dc10dd6cc5d0e067951ce0d7a00dd49a54a3db"
     },
     "room_scan/pc_reconstruction.py": {
-      "bytes": 4349,
-      "sha256": "fc9c79a5ac0809fb8966d248301dc156c739c46a56915101cd0c6062918facdc"
+      "bytes": 7265,
+      "sha256": "c004a92245a58c7188caf01cd2e7a2722feb9454c63cd0675ad57a6ceafe4077"
     },
     "room_scan/pc_relay.py": {
-      "bytes": 8514,
-      "sha256": "b1457bd599b0be94376f8d4b32a21614cf6eb96b6683f71813954c07e3c2a9dd"
+      "bytes": 9389,
+      "sha256": "7dcf9abaf5ea09d3507fd31eaf8f3edf8f14102aaa89c925d6f3db295c4f622d"
     },
     "room_scan/scene.frag": {
-      "bytes": 1845,
-      "sha256": "65e395b3aeb74192df77789a89fb6b0f49a83c038f51b938f499322a86b861b2"
+      "bytes": 2464,
+      "sha256": "a225d14d860620d87978795744ad7d656a14991acf663c2b43cc6e1248af3822"
     },
     "room_scan/scene.vert": {
       "bytes": 680,
@@ -458,8 +462,8 @@
       "sha256": "215633c0f3ae29e2c6b152882344efa43906b1d6fa8adcad436d1bfbd2695491"
     },
     "room_scan/workflow.py": {
-      "bytes": 11929,
-      "sha256": "6066b13fb6663686c0fb080d3b2b9b0a68cd068d7ad9410b7eb5e50de15f4cb1"
+      "bytes": 11958,
+      "sha256": "c697287fa223d868945d0eed5556923ad839df5ce1f780ab336b8bc739f9381b"
     },
     "setup/patch-steam-link.cmd": {
       "bytes": 1266,
@@ -510,8 +514,8 @@
       "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
     },
     "setup/steam_link_setup_room.py": {
-      "bytes": 17616,
-      "sha256": "b20d72f999a13533ef1c91076fd681a478d73131dbe9506f45d634762f547b12"
+      "bytes": 18357,
+      "sha256": "8479570ba09223542bf6d41565a6fff4bde649f9b4f6dbcdd2b987a44724bd31"
     },
     "setup/steam_link_setup_session.py": {
       "bytes": 18278,
@@ -654,7 +658,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "fdd534d6a06662a3ddef5ff8b295c6ec421fc53c",
+  "source_revision": "fc0def8ed30529383e188f18821c2ef8dfdf47ea",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -684,10 +688,10 @@
       ],
       "hardware_verified": false,
       "pin": {
-        "bytes": 24774,
-        "sha256": "27ef3758abc9639114d3fd0fc163cc1a40726d7d4c631d541cd27b548f4b49a7"
+        "bytes": 24929,
+        "sha256": "55ca529832515818ab7a9dd276c60c77444a54da7611c894b29b22d65eacab4d"
       }
     }
   ],
-  "version": "0.3.16-roomscan.11"
+  "version": "0.3.16-roomscan.12"
 }
