@@ -87,6 +87,19 @@ class RelayTests(unittest.TestCase):
             with self.assertRaises((RoomError,zlib.error)):
                 unpack(payload,extent,MAX_MODEL)
 
+        # A corrupt stream must return a fixed error, not kill the live relay.
+        import socket
+        corrupt=b'not-zlib'
+        relay._dispatch({'op':'begin','bytes':len(corrupt),'sha256':hashlib.sha256(corrupt).hexdigest(),
+                         'binding':self.binding,'epoch':7,'encoding':'zlib','expanded_bytes':1})
+        relay._dispatch({'op':'put','offset':0,'data':base64.b64encode(corrupt).decode()})
+        for request, key in (({'op':'commit'},'error'),({'op':'take'},'intent')):
+            with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as connection:
+                connection.settimeout(2);connection.connect('\0'+relay.address)
+                connection.sendall(json.dumps(request).encode())
+                self.assertIn(key,json.loads(connection.recv(96000)))
+        self.assertTrue(relay.thread.is_alive())
+
     def test_measured_preview_is_private_validated_and_final_mesh_still_requested(self):
         from room_scan.app import Application
         from room_scan.store import RoomStore
