@@ -620,7 +620,7 @@ class TextualPresenter:
                            lambda value: self.app.resolve_prompt(value, expected=prompt)), "")
 
     def choose_action(self, actions, recommended=None):
-        known = ("install", "update", "repair", "uninstall", "check", "exit", "retry", "verify", "back", "rollback", "continue", "manual", "room_capture", "room_capture_stop")
+        known = ("install", "update", "repair", "uninstall", "check", "exit", "retry", "verify", "back", "rollback", "continue", "manual", "room_scan", "room_capture_stop")
         if (type(actions) not in (list, tuple) or len(actions) > len(known)
                 or any(type(a) is not str or a not in known for a in actions)
                 or len(set(actions)) != len(actions)):
