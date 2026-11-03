@@ -19,6 +19,7 @@ from .fusion import NativeTsdfReconstruction
 from .editor import SurfaceDraft, pick_surface
 from .geometry import Mesh, Pose, RoomError, require
 from .model import Label, Room
+from .pc_reconstruction import PcResultError
 from .store import MAX_BYTES, RoomStore, decode
 from .workflow import ScanSession, Stage
 
@@ -597,9 +598,12 @@ def run(root, incoming, outgoing):
                 if errors < 64:
                     kind = event.get("event", "invalid") if isinstance(event, dict) else "invalid"
                     kind = kind if type(kind) is str and kind.isascii() and kind.replace("_", "").isalnum() and len(kind) <= 64 else "invalid"
-                    print(f"Room controller: event={kind} error={type(error).__name__}", file=sys.stderr)
+                    reason = error.code if isinstance(error, PcResultError) else "room-action-failed"
+                    print(f"Room controller: event={kind} error={type(error).__name__} reason={reason}", file=sys.stderr)
                 errors += 1
-                app.notice = "This action could not be completed. Check room alignment and your input."
+                app.notice = (str(error)+". Accepted surfaces are preserved; new captures will retry. Diagnostic code: "+error.code
+                              if isinstance(error, PcResultError)
+                              else "This action could not be completed. Check room alignment and your input.")
             emit()
     finally:
         try:

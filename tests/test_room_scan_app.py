@@ -164,6 +164,26 @@ class AppTests(unittest.TestCase):
         states=[json.loads(line) for line in outgoing.getvalue().splitlines()]
         self.assertEqual(71,len(states));self.assertTrue(states[-1]["notice"])
 
+    def test_pc_shape_rejection_reports_reason_and_preserves_accepted_frame(self):
+        import base64, struct
+        record = lambda radius: base64.b64encode(struct.pack('<I11f',17,0,0,-2,radius,0,0,0,.001,0,.6,1)).decode()
+        events = [{'event':'action','action':'new'}, {'event':'camera_ready','binding':BINDING}]
+        for sequence, radius in ((1,.001),(2,.0009)):
+            events.append({'event':'pc_model','binding':BINDING,'capture_epoch':0,'sequence':sequence,
+                           'gaussians':record(radius),'face_count':0})
+        incoming = io.BytesIO(b''.join((json.dumps(event)+'\n').encode() for event in events))
+        outgoing, errors = io.BytesIO(), io.StringIO()
+        with redirect_stderr(errors):run(self.store.root,incoming,outgoing)
+        states = [json.loads(line) for line in outgoing.getvalue().splitlines()]
+        last = states[-1]
+        self.assertEqual(last['room']['progress']['accepted_frames'],1)
+        self.assertTrue(last['gaussian_file'])
+        self.assertIn('pc-preview-covariance',last['notice'])
+        self.assertIn('preserved',last['notice'])
+        self.assertNotIn('Check room alignment',last['notice'])
+        self.assertIn('reason=pc-preview-covariance',errors.getvalue())
+        self.assertNotIn(record(.0009),errors.getvalue())
+
     def test_saved_room_is_explicitly_realigned_and_revisioned(self):
         self.test_controller_measurement_confirm_review_save_query()
         original = self.app.session.room

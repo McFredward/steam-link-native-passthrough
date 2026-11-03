@@ -85,6 +85,12 @@
   checks, PC-only isolation, explicit Stop and camera-off-after-reboot behaviour.
   A read-only audit found the maintainer's Frame still on candidate 7 with no
   active camera reader; do not describe that as a completed candidate-8 install.
+- The maintainer's 2026-11-03 scan ruling requires continuous slow looking
+  around to extend/refine the same room and close observed gaps. There must be
+  no stationary capture step. The installed log showed repeated rejected PC
+  models and camera ages beyond the 80 ms direct pose-query window. Keep actual
+  timestamped tracking history for delayed frames; never substitute a current
+  pose or weaken stereo/exposure/calibration proof. Preserve real unknown gaps.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

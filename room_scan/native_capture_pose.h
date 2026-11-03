@@ -3,6 +3,10 @@
 #pragma once
 #include "native_camera.h"
 #include <time.h>
+#include <atomic>
+#include <deque>
+#include <mutex>
+#include <thread>
 namespace room_native {
 inline std::uint64_t rawClockNs(){timespec t{};if(clock_gettime(CLOCK_MONOTONIC_RAW,&t))throw std::runtime_error("Capture clock unavailable");
     return std::uint64_t(t.tv_sec)*1000000000u+std::uint64_t(t.tv_nsec);}
@@ -20,6 +24,56 @@ inline CapturePose capturePose(VR_IVRSystem_FnTable* system,std::uint64_t target
     return {fromNative(value.mDeviceToAbsoluteTracking),{value.vVelocity.v[0],value.vVelocity.v[1],value.vVelocity.v[2]},
         {value.vAngularVelocity.v[0],value.vAngularVelocity.v[1],value.vAngularVelocity.v[2]},target,before,after};
 }
+// Camera dequeue can lag exposure by more than the public 80 ms query window.
+// Keep actual, timestamp-bracketed current-pose observations in bounded memory.
+// A span contains nine real samples; never extrapolate an old image from now.
+class CapturePoseHistory {
+    mutable std::mutex mutex_;std::deque<CapturePose> samples_;
+    std::atomic<bool> stopping_{true};std::thread worker_;
+public:
+    ~CapturePoseHistory(){stop();}
+    void clear(){std::lock_guard<std::mutex> lock(mutex_);samples_.clear();}
+    void append(const CapturePose& sample){
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(sample.queryAfterRaw<sample.queryBeforeRaw||sample.queryAfterRaw-sample.queryBeforeRaw>750000u
+            ||sample.targetRaw<sample.queryBeforeRaw||sample.targetRaw>sample.queryAfterRaw||!rigid(sample.head)){
+            samples_.clear();return;}
+        if(!samples_.empty()&&sample.targetRaw<=samples_.back().targetRaw)samples_.clear();
+        samples_.push_back(sample);
+        while(samples_.size()>1024||sample.targetRaw-samples_.front().targetRaw>600000000u)samples_.pop_front();
+    }
+    void start(VR_IVRSystem_FnTable* system){
+        stop();if(!system||!system->GetDeviceToAbsoluteTrackingPose)throw std::runtime_error("Capture history interface unavailable");
+        stopping_=false;worker_=std::thread([this,system]{while(!stopping_){
+            try{
+                const auto before=rawClockNs();TrackedDevicePose_t value{};
+                system->GetDeviceToAbsoluteTrackingPose(ETrackingUniverseOrigin_TrackingUniverseStanding,0,&value,1);
+                const auto after=rawClockNs();if(after<before||after-before>750000u||!tracked(value))clear();
+                else append({fromNative(value.mDeviceToAbsoluteTracking),{value.vVelocity.v[0],value.vVelocity.v[1],value.vVelocity.v[2]},
+                    {value.vAngularVelocity.v[0],value.vAngularVelocity.v[1],value.vAngularVelocity.v[2]},before+(after-before)/2,before,after});
+            }catch(const std::exception&){clear();}
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }});
+    }
+    void stop(){stopping_=true;if(worker_.joinable())worker_.join();clear();}
+    bool span(std::uint64_t first,std::uint64_t last,std::array<CapturePose,9>& out)const{
+        const auto now=rawClockNs();if(last<first||first>now||now-first>500000000u)return false;
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(samples_.size()<out.size()||first<samples_.front().targetRaw||last>samples_.back().targetRaw)return false;
+        std::size_t left=0,right=0;
+        while(left+1<samples_.size()&&samples_[left+1].targetRaw<=first)++left;
+        right=left;while(right<samples_.size()&&samples_[right].targetRaw<last)++right;
+        while(right-left+1<out.size()){
+            if(left&&(!((right+1)<samples_.size())||first-samples_[left].targetRaw<=samples_[right].targetRaw-last))--left;
+            else if(right+1<samples_.size())++right;
+            else return false;
+        }
+        if(samples_[right].targetRaw-samples_[left].targetRaw>20000000u)return false;
+        for(unsigned i=0;i<out.size();++i){out[i]=samples_[left+(right-left)*i/(out.size()-1)];
+            if(i&&(out[i].targetRaw<=out[i-1].targetRaw||out[i].targetRaw-out[i-1].targetRaw>4000000u))return false;}
+        return true;
+    }
+};
 class CapturePoseSpan {
     std::array<CapturePose,9> samples_{};
 public:
@@ -29,12 +83,14 @@ public:
             out.push_back({{"raw_ns",sample.targetRaw},{"head",matrix},{"query_ns",sample.queryAfterRaw-sample.queryBeforeRaw}});}
         return out;
     }
-    float translationSpan=0,rotationSpan=0;std::uint64_t queryBudget=0;
-    void read(VR_IVRSystem_FnTable* system,std::uint64_t first,std::uint64_t last){
+    float translationSpan=0,rotationSpan=0;std::uint64_t queryBudget=0;bool sampledHistory=false;
+    void read(VR_IVRSystem_FnTable* system,std::uint64_t first,std::uint64_t last,const CapturePoseHistory* history=nullptr){
         if(last<first||last-first>20000000u)throw std::runtime_error("Capture pose span exceeds budget");
         translationSpan=rotationSpan=0;queryBudget=0;
+        const bool cached=history&&history->span(first,last,samples_);
+        sampledHistory=cached;
         for(unsigned i=0;i<samples_.size();++i){
-            samples_[i]=capturePose(system,first+(last-first)*i/(samples_.size()-1));
+            if(!cached)samples_[i]=capturePose(system,first+(last-first)*i/(samples_.size()-1));
             queryBudget=std::max(queryBudget,samples_[i].queryAfterRaw-samples_[i].queryBeforeRaw);
             for(unsigned j=0;j<i;++j){translationSpan=std::max(translationSpan,length(position(samples_[i].head)-position(samples_[j].head)));
                 float trace=0;for(unsigned c=0;c<3;++c)trace+=dot(column(samples_[i].head,c),column(samples_[j].head,c));

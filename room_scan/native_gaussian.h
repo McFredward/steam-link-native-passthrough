@@ -33,7 +33,8 @@ public:
             for(float v:record.v)if(!std::isfinite(v)||std::abs(v)>1000)throw std::runtime_error("Invalid Gaussian value");
             const V3 p{record.v[0],record.v[1],record.v[2]},u{record.v[3],record.v[4],record.v[5]},v{record.v[6],record.v[7],record.v[8]};
             const auto a=length(u),b=length(v);const float opacity=record.v[9],quality=record.v[10];
-            if(a<.001f||a>.15f||b<.001f||b>.15f||std::abs(dot(u,v))>a*b*.02f||opacity<=0||opacity>1||(quality!=1&&quality!=2))
+            constexpr float minimum=.001f*(1-1e-5f),maximum=.15f*(1+1e-5f);
+            if(a<minimum||a>maximum||b<minimum||b>maximum||std::abs(dot(u,v))>a*b*.02f||opacity<=0||opacity>1||(quality!=1&&quality!=2))
                 throw std::runtime_error("Invalid Gaussian covariance");
             const auto found=seen_.find(record.id);const float first=float(found==seen_.end()?now:found->second);current.emplace(record.id,first);
             if(builder.vertices.size()+6>SceneVertexLimit)throw std::runtime_error("Gaussian scene exceeds vertex budget");

@@ -1,5 +1,6 @@
 // Measured mesh and authored elements stay in the same room coordinate space.
 #include "room_scan/native_scene_mesh.h"
+#include "room_scan/native_gaussian.h"
 #include <cstdio>
 using namespace room_native;
 void check(bool value,const char* reason){if(!value)throw std::runtime_error(reason);}
@@ -17,5 +18,24 @@ int main(){try{
     view.pendingEdges.push_back({{0,0,-1},{1,0,-1}});view.corners.push_back({0,0,-1});scene.update(view);
     check(scene.vertices.size()>30&&scene.vertices[3].style==3,"authored planes, outlines and corner handles are real native geometry");
     view.allowed=false;scene.update(view);check(scene.vertices.empty(),"invalid tracking cannot retain visible room geometry");
+    char name[]="/tmp/.pc-gaussians-contract-XXXXXX";const int fd=mkstemp(name);
+    check(fd>=0,"private Gaussian fixture file");
+    struct File {int fd;const char* name;~File(){close(fd);unlink(name);}} file{fd,name};
+    std::vector<GaussianRecord> records;bool roundedBelow=false;
+    for(unsigned i=0;i<5000;++i){const auto normal=normalized(V3{std::sin(float(i)*.31f),std::cos(float(i)*.17f),.3f});
+        const auto guide=std::abs(normal.y)>.9f?V3{1,0,0}:V3{0,1,0};
+        const auto tangent=normalized(cross(normal,guide)),u=tangent*.001f,v=cross(normal,tangent)*.001f;
+        roundedBelow=roundedBelow||length(u)<.001f||length(v)<.001f;
+        records.push_back({i,{0,0,-2,u.x,u.y,u.z,v.x,v.y,v.z,.6f,1}});}
+    check(roundedBelow,"float32 tangent axes reproduce the minimum-radius roundoff");
+    const auto bytes=records.size()*sizeof(GaussianRecord);
+    check(write(fd,records.data(),bytes)==ssize_t(bytes),"write complete private Gaussian fixture");
+    GaussianScene gaussians;SceneMeshBuilder patches;
+    gaussians.append(patches,{{"gaussian_file",name}},1);
+    check(patches.vertices.size()==records.size()*6,"all valid small Gaussians reach the renderer");
+    records[0].v[3]=.0009f;records[0].v[4]=records[0].v[5]=0;
+    check(pwrite(fd,records.data(),sizeof(GaussianRecord),0)==ssize_t(sizeof(GaussianRecord)),"replace invalid-size fixture");
+    bool rejected=false;try{gaussians.append(patches,{{"gaussian_file",name}},2);}catch(const std::exception&){rejected=true;}
+    check(rejected,"materially undersized axes remain invalid");
     std::puts("PASS native room vertices, reveal data, quality styles and semantic geometry");return 0;
 }catch(const std::exception& error){std::fprintf(stderr,"%s\n",error.what());return 1;}}
