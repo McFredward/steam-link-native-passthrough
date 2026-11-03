@@ -270,8 +270,7 @@ class Application:
                 return
             self.session.reconstruction.accept(event)
             self.world_revision += 1
-            self.notice = ("Move slowly into empty areas. Amber patches need another viewpoint."
-                           if not event.get("at_capacity") else "Preview budget reached. Revisit areas to refine them, or continue to review.")
+            self.notice = "Look slowly into empty areas. Revisit faint surfaces from another angle."
             if kind == "pc_mesh" and self.pc_pending_action:
                 action, self.pc_pending_action = self.pc_pending_action, None
                 if action == "review":
