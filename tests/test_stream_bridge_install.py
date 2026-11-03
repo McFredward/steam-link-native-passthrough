@@ -976,6 +976,46 @@ class Tests(unittest.TestCase):
         self.assertEqual(s.read(self.settings),original);self.assertFalse(self.local.inventory()['registered']);self.assertFalse(installer.receipt.exists())
         self.assertFalse((self.local.root/'pc-provider/driver.vrdrivermanifest').exists())
 
+    def layer_bundle(self):
+        # A package carrying the OpenXR layer pair, as every package built since the layer exists.
+        manifest=(ROOT/'openxr/XrApiLayer_sfnp_passthrough.json').read_bytes()
+        image=bytearray(256);image[:2]=b'MZ';image[60:64]=(64).to_bytes(4,'little');image[64:70]=b'PE\x00\x00d\x86'
+        for name,raw in ((b.OPENXR_LAYER_MANIFEST,manifest),('pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.dll',bytes(image))):
+            s.put(self.bundle_root/name,raw);self.manifest['files'][name]={'bytes':len(raw),'sha256':s.sha(raw)}
+        self.manifest['pc']['files']=sorted(b.PC_FILES|b.OPENXR_LAYER_FILES)
+        s.put(self.bundle_root/'stream-bridge-bundle.json',s.encoded(self.manifest),s.read(self.bundle_root/'stream-bridge-bundle.json'))
+        self.bundle=b.Bundle(self.bundle_root,s)
+
+    class Layers:
+        def __init__(self):self.values={}
+        def set(self,manifest,enabled):
+            if enabled:self.values[str(manifest)]=0
+            else:self.values.pop(str(manifest),None)
+
+    def test_pc_openxr_layer_registered_while_installed_and_active(self):
+        layers=self.local.openxr_layers=self.Layers();self.layer_bundle()
+        installer=b.LocalInstall(s,self.local);manifest=str(self.local.root/b.OPENXR_LAYER_MANIFEST)
+        installer.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631)
+        self.assertEqual(layers.values,{manifest:0});self.assertTrue(Path(manifest).is_file())
+        self.assertTrue(b.OPENXR_LAYER_FILES<=set(installer.state()['files']))
+        installer.uninstall(self.local.inventory())
+        self.assertEqual(layers.values,{});self.assertFalse(Path(manifest).exists())
+
+    def test_pc_openxr_layer_added_by_update(self):
+        layers=self.local.openxr_layers=self.Layers()
+        installer=b.LocalInstall(s,self.local);manifest=str(self.local.root/b.OPENXR_LAYER_MANIFEST)
+        installer.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631)
+        self.assertEqual(layers.values,{},'A package without the layer registers none')
+        self.layer_bundle()
+        installer.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631,backup=True)
+        self.assertEqual(layers.values,{manifest:0})
+        installer.uninstall(self.local.inventory());self.assertEqual(layers.values,{})
+
+    def test_pc_openxr_layer_not_left_registered_by_a_failed_install(self):
+        layers=self.local.openxr_layers=self.Layers();self.layer_bundle();self.system.fail_add=True
+        with self.assertRaises(s.SetupError):b.LocalInstall(s,self.local).install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631)
+        self.assertEqual(layers.values,{});self.assertFalse((self.local.root/b.OPENXR_LAYER_MANIFEST).exists())
+
     def test_changed_settings_or_payload_preserved(self):
         installer=b.LocalInstall(s,self.local);installer.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631)
         value=s.parse(s.read(self.settings));value[b.SETTINGS_SECTION]['controlPort']=3333;s.put(self.settings,s.encoded(value),s.read(self.settings))
