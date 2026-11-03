@@ -3,11 +3,11 @@
   "actual_windows_candidate_check": "pending",
   "all_1033_archive_members_verified": true,
   "archive": {
-    "bytes": 23135396,
-    "sha256": "6fae8a3f9c3f55cebf98fe76f16e7e975d79939163968b466de7c3d0f6e8668a"
+    "bytes": 23135365,
+    "sha256": "43ffa60d21173c28ae4967977bdb04b9b4eea5a2f8f6ba10b158ada6eedccf42"
   },
-  "archive_commit": "c851b1cb2b42752c5f6788c0b494f66715ae169e",
-  "bootstrap_source_sha256": "afeeab806b2f4da3502109fff0c3cea4a2d6eeb958fec55cff4d4b7c543db68a",
+  "archive_commit": "bef939898cdede22ec8e493ac36a40b8ec4850a4",
+  "bootstrap_source_sha256": "86a64deaeb7928adc38adb347d3e01b582b399a8e0e38bee0a610184ce98a2e2",
   "branch": "arcturus-room-setup",
   "component_versions": {
     "frame": "0.3.10-roomscan.12",
@@ -27,7 +27,7 @@
     "unknown_failed_incomplete_mode_writes_clear_authority": true,
     "unknown_gap_preserved": true
   },
-  "core_commit": "bfade687d4ed17efeb3da03a9b951b726be5344b",
+  "core_commit": "c53d619fc97c3b959406692334ca4d3383862825",
   "current_source_matches_all_150_packaged_source_pins": true,
   "device_actions": false,
   "exposure_bounds": {
@@ -57,7 +57,7 @@
   },
   "headset_test": false,
   "limits": "Measured surfaces, capacity recycling, continuous coverage, bounded automatic exposure, native rendering/input/X, compressed transport and recovery pass software checks. Installed headset coverage speed and physical surface accuracy require the next wearer test. Unknown, reflective and unmeasured regions are not invented.",
-  "linux_bootstrap_sha256": "8500423059bd56c9fe4c08a39859c18ea6c6b89ae1d45f831bc7c28c317806bf",
+  "linux_bootstrap_sha256": "369c59a200f13f505919a6efc5cf18549656a9480292a1471460e74173a77d27",
   "optional_enable_action": false,
   "rebuilt_native_artifacts": [
     "room_overlay",
@@ -70,15 +70,15 @@
   "schema": "sfnp-room-installer-delivery-v1",
   "source_ci": {
     "room": {
-      "result": "success",
-      "run": 41660353730
+      "result": "pending",
+      "run": 41661695791
     },
     "setup": {
       "result": "success",
       "run": 41660058728
     }
   },
-  "source_revision": "fc0def8ed30529383e188f18821c2ef8dfdf47ea",
+  "source_revision": "6bda2ad50f7070031ba88148a51f2ca5a60f6e92",
   "targeted_room_retry_preserves_native_installation": true,
   "unchanged_native_artifacts": [
     "pc_provider",
