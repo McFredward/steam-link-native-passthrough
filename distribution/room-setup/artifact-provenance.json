@@ -1,13 +1,13 @@
 {
-  "actual_remote_archive_verified": {
-    "bytes": 23116568,
+  "actual_powershell_archive_check": {
+    "bytes": 145,
     "result": "PASS",
-    "sha256": "99630f67c4cafc8940e8f631e57457f4a26ed0fe2899bafa8a94d465b18c9042"
+    "sha256": "a0608f586ece84cf308c0973bee4986a1743bdf1f0b18cd02e024d71f719af07"
   },
   "baseline_receipt": {
     "archive": {
-      "bytes": 23116533,
-      "sha256": "82fb44b13edcf5d4367654ebdf71a6be5694ce78bcbe2252c25df180d12b0f70"
+      "bytes": 23116568,
+      "sha256": "99630f67c4cafc8940e8f631e57457f4a26ed0fe2899bafa8a94d465b18c9042"
     },
     "artifacts": {
       "frame_layer": {
@@ -59,7 +59,7 @@
     "result": "PASS",
     "runtime_profile": {
       "bytes": 27314,
-      "sha256": "dcb81baa58389834727ab7b0ad538e51799b99ce81c2e0a477d75e603a6ebab1"
+      "sha256": "db7232762c64cc0ac767fd48bf2d8f019b5b04ed0781ab2b041518830e811bf0"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -168,8 +168,8 @@
         "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
       },
       "room_scan/app.py": {
-        "bytes": 34721,
-        "sha256": "67b1b53eb41d163459de465acbe834da5c80e1aa68bfbb140c45227cbb045f8f"
+        "bytes": 35001,
+        "sha256": "5ae25c69ab3535dde77f2443fc176d5539dcd8be21530919396f9d97fb23c838"
       },
       "room_scan/camera_api/buffer_source.h": {
         "bytes": 15452,
@@ -660,7 +660,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
+    "source_revision": "c964dec16c8949337666e3bd73ff13d96a9945a5",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -691,142 +691,77 @@
         "hardware_verified": false,
         "pin": {
           "bytes": 24774,
-          "sha256": "a5726e06acc4d519abba83730797ce6a00a45a7f24315705dc0fb8e4ccf073c2"
+          "sha256": "20b541620b04c037a148ad96bd8ba72bc704865b333f094f2167cc072a1448fa"
         }
       }
     ],
     "version": "0.3.16-roomscan.8"
   },
-  "change_scope": "Windows/NVIDIA PC companion through authenticated SSH, checked capture-time raw stereo, rolling-aware rectification, bilateral C-Fast-FoundationStereo, continuously refined Gaussian surfels, locally predicted native MR preview, measured polygon extraction, focused XR world actions and native SteamVR menu input. Installer-managed private dependencies and transient read-only camera access; no boot integration or native service replacement.",
+  "change_scope": "Required room-camera activation, private PC runtime preparation and GPU/Frame handshake before reporting readiness. Remove optional Enable and show a ready menu that retains the companion. Targeted retries preserve the committed native install. Reject stale helper builds and recheck the actual reader after model download/warmup.",
   "ci": {
-    "final_delivery": {
-      "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
-      "jobs": [
-        "linux",
-        "linux-python-baseline",
-        "windows-bootstrap"
-      ],
-      "result": "success",
-      "revision": "ecfaadbc32f45ec58058ef048203c58e692035f6",
-      "run": 41547813806
-    },
     "room": {
       "result": "success",
-      "revision": "d3f94b45aad240e83c8f5afcf9c543dab306e54c",
-      "run": 41546556172,
-      "scope": "The current source differs only in the logging publication tool and its test; all packaged source pins are identical."
+      "revision": "293cf212507c1391c4d5862d61c342c979915de5",
+      "run": 41601483367
     },
-    "setup_baseline": {
+    "setup": {
       "result": "success",
-      "revision": "c74d07994aceb9ec2a614f5c2bd3ebf92253ff92",
-      "run": 41545086095
+      "revision": "293cf212507c1391c4d5862d61c342c979915de5",
+      "run": 41601483393
     }
   },
-  "close_during_polygon_extraction_regression": "PASS: cancels the pending operation, refuses late results and returns to a fresh scan state.",
+  "component_versions_unchanged": true,
   "current_software_checks": {
-    "camera-fast-build.log": {
-      "bytes": 858,
-      "sha256": "9158fc94f9adb1bd86bb8b704f617e65889e6ba240fae74fd36c5c32a56ec531"
+    "installer-final.log": {
+      "bytes": 6984,
+      "sha256": "330dd7ea7574cf14a00a92e015eaf7bd99bc338f6897ec508a75163634121edd"
     },
-    "ci-windows-pc-pass.log": {
-      "bytes": 16532,
-      "sha256": "8ab46a6e9fd820037acbd85f6aaa0a38e46858da12524ed4f5ae51aa4d00a41e"
-    },
-    "logging-final.log": {
-      "bytes": 105,
-      "sha256": "67fe6ea7899a77fbd7b3374586288da88a905ebca1f0c0d14cb9d6b444836a94"
-    },
-    "native-pc-build-final.log": {
-      "bytes": 2357,
-      "sha256": "18ea9b90c2dd118eab2a2108165413c4575b4d6885417b266f2cde471bd98d75"
-    },
-    "pc-batch-tests-final.log": {
-      "bytes": 106,
-      "sha256": "3432a73038cc385370a50e32e22984cb61d78f62eb3b7c6b7cfdcc7908977ee7"
-    },
-    "pc-installer-tests-final.log": {
-      "bytes": 6798,
-      "sha256": "95fd83051aee5899fe93e07d5932b6792a7e704a668c6913ed6c5ad4dba3a038"
-    },
-    "pc-live-tests-final.log": {
-      "bytes": 107,
-      "sha256": "d8c0c8f0c33982aabc991ff9416e645bcbe448028a150071b0185bf21ce1cc63"
-    },
-    "pc-only-tests-final.log": {
-      "bytes": 7018,
-      "sha256": "953af8d0e153f7f9aeabbbe5022d126e6c7cd2595175a5e84dc8619784536100"
-    },
-    "pc-package-tests-final.log": {
+    "package-final.log": {
       "bytes": 117,
-      "sha256": "1d5fa0202425764d1b7fb6dc17b5ae979912a17c25cf59691bdf04b0b80945d7"
+      "sha256": "752f3cf08712bb0ae3cf65dde412464c76e35885149a69ab56a69cf844b8ac7f"
     },
-    "pc-pipe-close-final.log": {
-      "bytes": 206,
-      "sha256": "12ca5942ef1958c3292a8e8f2f017b0e655151e32bab683fa7309b6502d594d0"
+    "pc-live-final.log": {
+      "bytes": 107,
+      "sha256": "58100a6000c96e6b7aec4d2d745db1096a5a19073163cc78aa68b1b43bfdbe7c"
     },
-    "pc-room-python-final.log": {
-      "bytes": 141,
-      "sha256": "e2feab7c3969c3664049aba990beee4f3b9bae0747214ce6000fba4eb50c4c42"
+    "pc-only-final.log": {
+      "bytes": 7204,
+      "sha256": "923de33c2bbd001014e13dd84d442b740fd80c329edd4119f726bcb36ea1a127"
     },
-    "pc-session-tests-final.log": {
-      "bytes": 104,
-      "sha256": "8750d4b5acdce1e4d680a3a27eb5d68370ed8b7d37b619aa32e9e0049f881dae"
+    "textual-room.log": {
+      "bytes": 98,
+      "sha256": "3e740ba100fb66e4f0bed534f1172d263dfd742bf99fa626d991c8195392d864"
+    },
+    "tui.log": {
+      "bytes": 120,
+      "sha256": "9cb065e1a2cebc0ce6e195c13733802bba4f427ef975c515521df7a2ef2e8d94"
     }
   },
   "device_actions": false,
   "hardware_verified": false,
+  "headset_test": false,
   "limits": [
-    "Complete NVIDIA/headset latency, physical surface accuracy and controller usability require the combined installed wearer test.",
-    "The Gaussian preview is geometric surfel splatting, not a photometrically optimized radiance field.",
-    "Reflective/transparent/textureless surfaces are not guaranteed; uncertain surfaces and unknown gaps remain visible.",
-    "Keep the interactive Windows installer open throughout reconstruction; closing it stops its worker and pauses capture.",
-    "Profiles bound resolution, preview and memory; the 4090 is a reference machine, not an established minimum.",
-    "Automatic semantic recognition and game/Quest scene adapters remain pending."
+    "Complete NVIDIA/headset speed, physical scan accuracy and controller usability still require the wearer test.",
+    "The native PC and Frame payloads are candidate 8; installer 9 includes their normal paired update and requires successful room preparation.",
+    "A Frame reboot leaves the reader inactive. Reopening the verified current interactive installer prepares it again.",
+    "Read-only checks and unrelated PC-only updates do not activate the reader."
   ],
-  "model_evaluation": {
-    "bilateral_supported_pixels": 65338,
-    "development_only": true,
-    "disparity_percentiles": [
-      5.235013961791992,
-      7.009395122528076,
-      24.823183059692383
-    ],
-    "finite_output": true,
-    "headset_accuracy_verified": false,
-    "inference_seconds": 3.461026263423264,
-    "input_extent": [
-      320,
-      256
-    ],
-    "model_sha256": "2c79bbb274dc0aef687a8732b987077e9e3aa26ff9dd653141cda48c57dad5d3",
-    "nvidia_performance_verified": false,
-    "provider": "CPUExecutionProvider",
-    "recorded_rectified_pair": true,
-    "schema": "sfnp-room-pc-model-evaluation-v1"
+  "maintainer_frame_readonly_observation": {
+    "installed_frame_version": "0.3.7-roomscan.7",
+    "native_services_active": true,
+    "room_pc_endpoint_present": false,
+    "room_reader_active": false,
+    "writes": false
   },
   "prior_artifact_provenance": {
-    "bytes": 22309,
-    "sha256": "ed499c95f53bc4dc32fe165e8d88d46933de57dc3cbb3b2288bd486e3290cf68"
+    "bytes": 32652,
+    "sha256": "a28ec102c1f585723e0a015b7a75e74cdebbcdd062be221ff0b11ec57f872f76"
   },
-  "private_runtime": {
-    "manifest": {
-      "bytes": 6963,
-      "sha256": "025f918cb2dd355c25feef8c605ce6b7d2d1cd41a0dd1b7eb62c172367df7472"
-    },
-    "nvidia_gpu_performance_verified": false,
-    "pinned_download_and_extraction": true,
-    "windows_actual_model_cpu_inference": true,
-    "windows_cuda_dll_load": true
-  },
-  "reader_stop_and_metadata_validation": {
-    "camera_boot_integration": false,
-    "explicit_stop_removes_endpoint": true,
-    "helper_sha256": "226b3422cb100a5817ded4b384e22fd84eeba1fa6c392969557c03dce913022c",
-    "native_service_restarts": 0,
-    "unprivileged_transient_reader": true
-  },
-  "source_revision": "c964dec16c8949337666e3bd73ff13d96a9945a5",
+  "source_revision": "293cf212507c1391c4d5862d61c342c979915de5",
   "unchanged_compiled_source_paths": [
+    "room_scan",
+    "room_reconstruction",
+    "probe/room_camera_native.cpp",
     "layer",
     "receiver",
     "pc",
@@ -841,6 +776,10 @@
     "frame_layer",
     "frame_selector",
     "mask_codec",
-    "mask_util"
+    "mask_util",
+    "room_overlay",
+    "room_camera",
+    "room_renderer",
+    "room_vision"
   ]
 }
