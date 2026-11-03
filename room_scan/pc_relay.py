@@ -177,7 +177,7 @@ class PcRelay:
                     raw, _, flags, _ = connection.recvmsg(96000)
                     require(not flags & socket.MSG_TRUNC, "Room relay request exceeds budget")
                     reply = self._dispatch(json.loads(raw))
-                except (OSError, ValueError, KeyError, TypeError):
+                except (OSError, ValueError, KeyError, TypeError, zlib.error):
                     reply = {"error": "Room relay request refused"}
                 try:
                     connection.sendall(json.dumps(reply, separators=(",", ":"), allow_nan=False).encode())
