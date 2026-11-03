@@ -285,3 +285,72 @@ and extent limits, real GPU reveal/alpha/depth, bounded exposure adjustments pas
 history eviction, failed eye isolation and timing/spatial refusal. Hardware
 acceptance remains a wearer test. Installer: 0.3.16-roomscan.12; changed Frame
 components: 0.3.10-roomscan.12; PC native provider: unchanged 0.3.12-roomscan.8.
+
+## Translucent coverage, stable planes and room-only updates (installer 13)
+
+The candidate-12 wearer log showed inference/reconstruction cost growing from
+649 ms to 5079 ms, two map compactions and falling preview face counts despite
+continued valid stereo. The wire/triangle preview also accumulated opacity:
+coincident triangles passed the nearest-depth test and blended repeatedly.
+The native renderer now writes premultiplied colour directly after its nearest
+surface pass. Measured fill alpha is 0.035/0.065, with a restrained 25 cm world
+grid that fades before becoming subpixel detail. Triangle edges are not drawn.
+Production Vulkan readback tests cover 16 coincident copies, linear/sRGB colour
+handling, transparent unknown space and a distant surface without grid grain.
+
+PC normals use a masked local fit rather than raw adjacent noisy pixels.
+Plane support checks local inverse-depth prediction error instead of rejecting
+large first derivatives, retaining legitimate grazing floors and ceilings.
+Fusion searches compatible neighbours, aggregates their pixels once per frame
+and corrects positions along the normal while preserving tangential coverage.
+Repeated measured free space can retire a foreground ghost; a closer observation
+only occludes the older background and never disproves it. Original valid-cell
+connectivity and timestamp/calibration/pose checks remain required.
+
+Preview reduction uses PyFQMR 0.5.0 with preserve_border=True, consistent measured
+winding and snapping to real Gaussian samples. Open measured boundaries remain
+locked. Longer faces produced by a valid reduction remain valid on later
+updates; they are not discarded by the original neighbour edge-length bound.
+If a map cannot be reduced safely, preserve accepted coverage and report the
+actual room detail limit. Whole-triangle fallback is bounded and spatially
+balanced; it does not construct a hull across unknown regions. See the upstream
+[PyFQMR documentation](https://pypi.org/project/pyfqmr/0.5.0/) for the reducer API.
+The pinned 114496-byte Windows wheel and its MIT notice are part of private
+runtime preparation. Existing model/wheel downloads are hash-checked and reused.
+Protocol 3 and a per-companion worker identity prevent older or second workers
+from taking a live lease, replacing a map, or sending offline for another owner.
+Worker handoff retains the validated measured surface seed, including large
+reduced faces and open boundaries; Gaussian-only neighbourhood reconstruction
+must not replace a previously covered plane with a few isolated corner points.
+Seeds are cleared with capture epochs and transferred in bounded chunks.
+Per-stage PC timings are now reported separately for rectification, stereo,
+geometry, fusion and preview; these contain no images or room coordinates.
+
+A separate private log audit explains the Steam login delay. Steam restarted
+once, logged on at 16:37:19, timed out at 16:40:39 and successfully logged on to
+the next server at 16:40:57. The service restart itself completed in ten seconds.
+This is evidence of the first connection timing out, not a request to alter
+Steam account data or global networking. A cold boot can still require a new
+Steam connection; the installer cannot guarantee external server availability.
+
+Updates whose exact changed paths are all under the owned room-setup directory
+can now use a durable room-only lifecycle scope. Original and committed native
+receipts must have identical non-room operations, settings and pairing. The
+native pause marker must stay exactly at its pre-update value. Both Steam unit
+identities remain fixed; only sfnp-room-setup.service receives restart/start.
+Read-only native process/UI/isolation evidence confirms that the same running
+compositor/server and existing libcef UI survived. Reports explicitly say
+runtime_preserved=True and fresh_compositor=False; the normal fresh-start gate
+is unchanged. A lost reply observes the already issued app restart. Exact Undo
+restores room files and restarts only the owned app, preserving Steam login.
+Native changes or explicit Uninstall promote to the full restart scope. Unknown
+records, changed core files/PIDs or a failed app retain recovery authority.
+
+Regressions cover occluded background retention, foreground free-space removal,
+grazing floor/ceiling planes, noisy revisits without tangential collapse, open
+boundaries through reduction, duplicate/distant GPU rendering, current-worker
+ownership, real temporary-file update/Undo and no native camera setting writes,
+lost app-restart replies, changed invocation/file refusal and preserved UI roles.
+This is software evidence. Installed coverage, physical accuracy and visual
+quality remain a wearer test. Installer 0.3.16-roomscan.13; Frame components
+0.3.11-roomscan.13; PC native provider unchanged at 0.3.12-roomscan.8.

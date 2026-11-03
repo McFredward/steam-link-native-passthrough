@@ -24,6 +24,9 @@ int main(){try{
     check(measured.vertices[0].firstSeen==1,"revisits preserve animation age");
     surfaceVertices[0].p[0]-=.3f;writeSurface();measured.vertices.clear();surfaces.append(measured,surfaceState,3);
     check(measured.vertices[0].firstSeen==3,"recycled identities cannot borrow an unrelated reveal age");
+    for(auto& v:surfaceVertices)v.id+=100;
+    writeSurface();measured.vertices.clear();surfaces.append(measured,surfaceState,4);
+    check(measured.vertices[0].firstSeen==3,"refinement keeps coverage visible when measured topology identities change");
     indices[2]=3;writeSurface();bool refused=false;try{surfaces.append(measured,surfaceState,4);}catch(const std::exception&){refused=true;}
     check(refused,"binary snapshot refuses out of range face indices");indices[2]=2;writeSurface();
     check(!fchmod(surfaceFd,0644),"change fixture permissions");refused=false;

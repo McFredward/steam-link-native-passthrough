@@ -38,6 +38,7 @@ class PcReconstruction(Reconstruction):
         self.root = Path(root)
         self.path = self.surface_path = None
         self.final_mesh = False
+        self.phase_ms = {}
         self.map_points = self.map_capacity = self.recycled_points = self.coarsenings = 0
         self.count = self.reliable = self.faces = 0
         self._mesh = Mesh()
@@ -88,6 +89,9 @@ class PcReconstruction(Reconstruction):
                 surface=b'SFNPMR2\0'+struct.pack('<II',len(records),len(mesh.triangles))+vertex_raw+face_raw
                 checked(len(mesh.triangles)==faces,'connectivity')
             stats={name:result.get(name,0) for name in ('map_points','map_capacity','recycled_points','coarsenings')}
+            phases=result.get('phase_ms',{})
+            checked(type(phases)is dict and set(phases)<={'rectify','stereo','geometry','fusion','preview'}
+                    and all(type(v)in(int,float) and 0<=v<=600000 for v in phases.values()),'record')
             checked(all(type(v)is int and 0<=v<2**40 for v in stats.values()),'record')
             fd, name = tempfile.mkstemp(prefix=".pc-gaussians-", dir=self.root)
             try:
@@ -106,6 +110,7 @@ class PcReconstruction(Reconstruction):
             self.final_mesh = False
             self.faces = faces
             for name,value in stats.items():setattr(self,name,value)
+            self.phase_ms=dict(phases)
         if result['event']=='pc_mesh':
             self.retain_aligned_mesh(mesh)
             self.final_mesh=True
@@ -128,7 +133,7 @@ class PcReconstruction(Reconstruction):
     def status(self):
         return {"accepted_frames": self.accepted_frames, "reliable_cells": self.reliable,
                 "uncertain_cells": self.count-self.reliable, "gaussians": self.count,
-                "measured_faces": self.faces, "backend": "pc-neural-gaussian",'final_mesh':self.final_mesh,
+                "phase_ms":dict(self.phase_ms), "measured_faces": self.faces, "backend": "pc-neural-gaussian",'final_mesh':self.final_mesh,
                 **{name:getattr(self,name) for name in ('map_points','map_capacity','recycled_points','coarsenings')}}
 
     def retain_aligned_mesh(self, mesh):

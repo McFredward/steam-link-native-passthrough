@@ -18,7 +18,7 @@ from .geometry import require
 
 CHUNK = 60000
 MAX_MODEL = 12 * 1024 * 1024
-PROTOCOL = 2
+PROTOCOL = 3
 
 
 def unpack(raw, expanded, limit):
@@ -49,12 +49,15 @@ class PcRelay:
         self.upload = None
         self.counter = 0
         self.ready_until = 0.
+        self.worker_id = None
         self.binding = None
         self.epoch = 0
         self.intent = "idle"
         self.map_id = None
         self.model_path = None
+        self.surface_path = None
         self.seed = None
+        self.seed_format = 'gaussians'
         self.sequence = 0
         self.stopping = threading.Event()
         record = {"schema": "sfnp-room-pc-session-v1", "pid": os.getpid(), "socket": self.address}
@@ -78,17 +81,20 @@ class PcRelay:
     def ready(self):
         return time.monotonic() < self.ready_until
 
-    def set_scan(self, binding, epoch, intent, map_id=None, model_path=None, sequence=0):
+    def set_scan(self, binding, epoch, intent, map_id=None, model_path=None, sequence=0, surface_path=None):
         with self.lock:
             if (binding, epoch) != (self.binding, self.epoch):
                 self.pending = self.lease = self.upload = None
+                self.seed = None
                 while not self.events.empty():
                     self.events.get_nowait()
             self.binding, self.epoch, self.intent = binding, epoch, intent
             self.map_id = map_id
             self.model_path, self.sequence = model_path, sequence
+            self.surface_path = surface_path
             if intent == "idle":
                 self.pending = self.lease = self.upload = None
+                self.seed = None
 
     def offer(self, observation):
         raw = json.dumps(observation, separators=(",", ":"), allow_nan=False).encode()
@@ -102,25 +108,45 @@ class PcRelay:
     def _dispatch(self, request):
         with self.lock:
             command = request["op"]
+            if command == "ready":
+                worker=request.get('worker_id')
+                require(request.get("protocol") == PROTOCOL and request.get("provider") == "CUDAExecutionProvider"
+                        and type(worker)is str and len(worker)==32 and all(c in '0123456789abcdef' for c in worker),
+                        "A current warmed CUDA worker is required")
+                require(not self.ready or worker==self.worker_id,"Another setup owns PC reconstruction")
+                if worker!=self.worker_id:
+                    self.pending=self.lease=self.upload=self.seed=None
+                    while True:
+                        try:self.events.get_nowait()
+                        except queue.Empty:break
+                self.worker_id=worker
+                self.ready_until = time.monotonic() + 15
+                return {"ok": True}
+            require(self.worker_id is not None and request.get('worker_id')==self.worker_id,
+                    "PC reconstruction worker ownership changed")
             if command == "offline":
                 self.ready_until = 0
-                self.pending = self.lease = self.upload = None
-                return {"ok": True}
-            if command == "ready":
-                require(request.get("protocol") == PROTOCOL and request.get("provider") == "CUDAExecutionProvider",
-                        "A warmed CUDA worker is required")
-                self.ready_until = time.monotonic() + 15
+                self.pending = self.lease = self.upload = self.seed = None
                 return {"ok": True}
             require(self.ready, "PC reconstruction is not ready")
             self.ready_until = time.monotonic() + 15
             state = {"binding": self.binding, "epoch": self.epoch, "intent": self.intent, "map_id": self.map_id, "sequence": self.sequence}
             if command == "take":
-                self.lease, self.pending = self.pending, None
+                keep=request.get('keep_id')
+                if not self.lease or type(keep)is not int or keep!=self.lease[0] or self.pending:
+                    self.lease, self.pending = self.pending, None
                 if request.get("seed"):
                     self.seed = self.model_path.read_bytes() if self.model_path else None
+                    self.seed_format='gaussians'
+                    if self.surface_path:
+                        surface=self.surface_path.read_bytes()
+                        if len(surface)>=16 and surface[:8]==b'SFNPMR2\0' and struct.unpack_from('<I',surface,12)[0]:
+                            require(len(surface)<=4400016,'Retained surface exceeds budget')
+                            self.seed,self.seed_format=surface,'surface'
                 return {**state, "id": self.lease[0] if self.lease else None,
                         "bytes": len(self.lease[1]) if self.lease else 0,
                         "encoding":"zlib", "expanded_bytes":self.lease[2] if self.lease else 0,
+                        "seed_format":self.seed_format,
                         "seed_bytes": len(self.seed) if self.seed else 0}
             if command == "seed_chunk":
                 offset = request["offset"]

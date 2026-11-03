@@ -5,16 +5,23 @@ layout(location=2) in vec3 roomPosition;
 layout(location=3) in float age;
 layout(location=4) flat in float surfaceStyle;
 layout(location=0) out vec4 outputColor;
-void main(){
+void shade(){
     if(surfaceStyle>5.5){
-        vec3 pixels=edge/max(fwidth(edge),vec3(.000001));
-        float wire=1-smoothstep(.55,1.35,min(pixels.x,min(pixels.y,pixels.z)));
-        float reveal=smoothstep(0,.5,age),settled=smoothstep(.25,1.3,age);
+        // A continuous world grid replaces subpixel triangle edges. Fade its
+        // lines before they become smaller than a pixel at distance/grazing.
+        vec3 normal=abs(cross(dFdx(roomPosition),dFdy(roomPosition)));
+        vec2 uv=normal.y>normal.x&&normal.y>normal.z?roomPosition.xz:
+                normal.x>normal.z?roomPosition.yz:roomPosition.xy;
+        vec2 cell=uv/.25,width=max(fwidth(cell),vec2(.00001));
+        vec2 distance=abs(fract(cell-.5)-.5)/width;
+        float grid=(1-smoothstep(.35,1.05,min(distance.x,distance.y)))
+                   *(1-smoothstep(.10,.35,max(width.x,width.y)));
+        float reveal=smoothstep(0,.5,age),settled=smoothstep(.2,1.2,age);
         bool reliable=surfaceStyle>6.5;
-        vec3 fill=mix(vec3(.08,.91,.77),vec3(.25,.64,.73),settled);
-        vec3 outline=mix(vec3(.12,.98,.81),reliable?vec3(.70,.94,.93):vec3(.47,.79,.88),settled);
-        float front=1-smoothstep(.03,.16,abs(age-.34));
-        outputColor=vec4(mix(fill,outline,wire),mix(reliable?.20:.13,.64,wire)*reveal+front*.10*reveal);return;
+        vec3 fill=mix(vec3(.08,.87,.84),vec3(.19,.60,.78),settled);
+        float front=1-smoothstep(.04,.22,abs(age-.30));
+        float alpha=mix(reliable?.065:.035,reliable?.15:.11,grid)+front*.025;
+        outputColor=vec4(mix(fill,vec3(.33,.94,.96),grid*.55+front*.2),alpha*reveal);return;
     }
     if(surfaceStyle>4.5){
         float weight=exp(-.5*dot(edge.xy,edge.xy));
@@ -42,4 +49,11 @@ void main(){
     alpha=max(alpha,front*.35*reveal);
     fill=mix(fill,vec3(.2,.95,.84),front*.5);
     outputColor=vec4(mix(fill,wireColor,wire),alpha);
+}
+
+void main(){
+    shade();
+    // The nearest-surface pass writes premultiplied colour directly. Repeated
+    // coplanar triangles cannot accumulate alpha into an opaque, noisy sheet.
+    outputColor.rgb*=outputColor.a;
 }

@@ -226,7 +226,7 @@ struct SceneGraphics::Impl
         depth.depthCompareOp = VK_COMPARE_OP_LESS;
         VkPipelineColorBlendAttachmentState colorBlend{};
         colorBlend.colorWriteMask = 0xf;
-        colorBlend.blendEnable = VK_TRUE;
+        colorBlend.blendEnable = VK_FALSE;
         colorBlend.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
         colorBlend.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
         colorBlend.colorBlendOp = VK_BLEND_OP_ADD;
@@ -258,7 +258,7 @@ struct SceneGraphics::Impl
         info.renderPass = renderPass;
         colorBlend.colorWriteMask=0;colorBlend.blendEnable=VK_FALSE;
         const VkResult depthResult=vkCreateGraphicsPipelines(device,VK_NULL_HANDLE,1,&info,nullptr,&depthPipeline);
-        colorBlend.colorWriteMask=0xf;colorBlend.blendEnable=VK_TRUE;
+        colorBlend.colorWriteMask=0xf;colorBlend.blendEnable=VK_FALSE;
         depth.depthWriteEnable=VK_FALSE;depth.depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL;
         const VkResult result =
             vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline);

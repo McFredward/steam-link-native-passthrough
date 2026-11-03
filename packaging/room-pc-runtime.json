@@ -121,6 +121,14 @@
       "url": "https://files.pythonhosted.org/packages/a9/a8/0cd0cec757bd4b4b4ef150fca62ec064db7d08a291dced835a0be7d2c147/nvidia_curand_cu12-10.3.7.77-py3-none-win_amd64.whl",
       "bytes": 55783873,
       "sha256": "6d6d935ffba0f3d439b7cd968192ff068fafd9018dbf1b85b37261b13cfc9905"
+    },
+    {
+      "name": "pyfqmr",
+      "version": "0.5.0",
+      "filename": "pyfqmr-0.5.0-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/40/61/ca0fb284808f4f0f21f0a21cb05401fbed9f526ea93b1c7de0c2dcea1abc/pyfqmr-0.5.0-cp314-cp314-win_amd64.whl",
+      "bytes": 114496,
+      "sha256": "5868fabec5beb182e75038e780363713fc5f6242fd7c0ea22d3238f1950d0d79"
     }
   ],
   "model": {
@@ -138,6 +146,10 @@
     "NVIDIA-Stereo-Model-Card.txt": {
       "bytes": 7854,
       "sha256": "5259f9f2675526f1db6bcb5823cd805ba6fbabba79dfd52ee34e51a212aa762c"
+    },
+    "PyFQMR.txt": {
+      "bytes": 1065,
+      "sha256": "019753f7a4b2227295475314251cd65bb29bd109e61f4a24cb6f5776e303db91"
     }
   }
 }

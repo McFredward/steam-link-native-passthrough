@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.12**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.13**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
@@ -51,14 +51,19 @@ reader, downloads/prepares the PC runtime, warms the model and connects to the
 Frame before reporting **Room scanning is ready**. A failed room phase offers
 Try again and preserves the committed native installation.
 
-Installer 12 replaces the large live circles with connected measured surfaces,
-fine edges and an animated teal reveal. The PC Gaussian map has four times the
-preview budget, recycles retired points and keeps accepting new observed areas
-at capacity. Unknown gaps stay open; revisits continue refining the same map.
-Transfers are compressed and the high-memory profile uses 512×384 stereo for
-lower latency. Small automatic exposure changes use a verified bounded timing
-interval; missing timing proof is described as synchronization, not poor room
-lighting. Camera identity, calibration, timing and tracking checks remain required.
+Installer 13 keeps live surfaces translucent even when observations overlap,
+uses a soft world grid that fades with distance, and preserves measured mesh
+boundaries during reduction. Local plane normals and inverse-depth consistency
+improve grazing floor/ceiling observations. Revisit fusion retains tangential
+coverage; a closer object no longer erases its occluded background.
+The PC runtime adds the pinned PyFQMR mesh reducer (about 115 KB); existing model
+downloads are reused. Close earlier installer windows before starting this build.
+A single current PC worker owns the scan; older workers cannot replace its map.
+
+When only Room Setup files change, setup refreshes that owned application while
+Steam and SteamVR remain running. Exact unchanged core files, settings, pairing
+and native process identities are checked; Undo also refreshes only Room Setup.
+Native runtime changes still use the coordinated full restart and recovery flow.
 
 The installer retains the recovery-size fix and persistent failure panel from
 installer 10. Failures show their step, cause and recovery result; a successful

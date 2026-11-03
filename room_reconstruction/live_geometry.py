@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import base64
 import numpy as np
-from scipy.ndimage import minimum_filter
+from scipy.ndimage import minimum_filter, gaussian_filter
 from scipy.spatial.transform import Rotation
 
 
@@ -107,6 +107,32 @@ def rectify(observation, width, height):
     return images, masks, origins, world_rays, room, (focal, focal, cx, cy)
 
 
+def surface_normals(points, depth, valid, rays):
+    """Estimate local orientation without amplifying individual disparity pixels.
+
+    Inverse depth is affine on a plane, including a sloping floor or ceiling.
+    Reject depth edges by its local prediction error, rather than rejecting
+    every large first derivative at a grazing angle. Positions stay measured.
+    """
+    inverse = 1/np.maximum(depth, .01)
+    for axis in (0, 1):
+        predicted = 2/np.maximum(np.roll(inverse, 1, axis)+np.roll(inverse, -1, axis), 1e-12)
+        valid &= np.abs(depth-predicted) < .025+.015*depth
+    weight = gaussian_filter(valid.astype(float), 1.5, truncate=2, mode='constant')
+    local = np.stack([gaussian_filter(np.where(valid, points[..., i], 0), 1.5,
+                                     truncate=2, mode='constant') for i in range(3)], -1)
+    local /= np.maximum(weight, 1e-12)[..., None]
+    normal = np.cross(np.roll(local, -2, 1)-np.roll(local, 2, 1),
+                      np.roll(local, -2, 0)-np.roll(local, 2, 0))
+    norm = np.linalg.norm(normal, axis=-1)
+    normal /= np.maximum(norm, 1e-12)[..., None]
+    normal *= np.where(np.sum(normal*rays, axis=-1) > 0, -1, 1)[..., None]
+    valid = minimum_filter(valid.astype(np.uint8), size=7, mode='constant', cval=0).astype(bool)
+    valid &= (norm > 1e-7) & (weight > .9)
+    valid &= np.abs(np.sum((points-local)*normal, axis=-1)) < .02+.003*depth
+    return normal, valid
+
+
 def triangulate(disparities, masks, origins, rays, room, intrinsics):
     left, right = disparities
     height, width = left.shape
@@ -133,13 +159,5 @@ def triangulate(disparities, masks, origins, rays, room, intrinsics):
     local = (points-room[:, 3]) @ room[:, :3]
     depth = -local[..., 2]
     valid &= (ta > 0) & (tb > 0) & (depth >= .25) & (depth <= 6) & (np.linalg.norm(pa-pb, axis=-1) < .006)
-    normal = np.cross(np.roll(points, -1, axis=1)-np.roll(points, 1, axis=1),
-                      np.roll(points, -1, axis=0)-np.roll(points, 1, axis=0))
-    norm = np.linalg.norm(normal, axis=-1)
-    valid &= norm > 1e-7
-    normal /= np.maximum(norm, 1e-12)[..., None]
-    normal *= np.where(np.sum(normal*a, axis=-1) > 0, -1, 1)[..., None]
-    discontinuity = np.maximum(np.abs(depth-np.roll(depth, 1, axis=0)), np.abs(depth-np.roll(depth, 1, axis=1)))
-    valid &= discontinuity < .025+.015*depth
-    valid = minimum_filter(valid.astype(np.uint8), size=3, mode="constant", cval=0).astype(bool)
+    normal, valid = surface_normals(points, depth, valid, a)
     return points, normal, valid, depth

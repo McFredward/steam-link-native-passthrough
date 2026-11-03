@@ -45,7 +45,7 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install the exact PC numerical test dependencies
-        run: python -m pip install numpy==2.5.4 scipy==1.18.1
+        run: python -m pip install numpy==2.5.4 scipy==1.18.1 pyfqmr==0.5.0
       - name: Check metric rays, real gaps, revisit refinement and bounded transport
         run: python -B -m unittest discover -s tests -p test_room_pc_live.py -q
       - name: Check the offline Gaussian trainer adapter separately
