@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 23135365,
-    "sha256": "43ffa60d21173c28ae4967977bdb04b9b4eea5a2f8f6ba10b158ada6eedccf42"
+    "bytes": 23144076,
+    "sha256": "b9b69fc03a20e35569414fffe60ec3f77f150d639c8854a716220ffe5f9614f4"
   },
   "artifacts": {
     "frame_layer": {
@@ -34,7 +34,7 @@
     },
     "room_renderer": {
       "bytes": 1640976,
-      "sha256": "6712316d3abac1713e6a84481a2be197a661532fa7befe50c744d8e12e30705d"
+      "sha256": "8c98ff3c697330c68183fd3734c87a84dd82be4a50b7813c51ab2331ad1ab0d7"
     },
     "room_vision": {
       "bytes": 2822872,
@@ -42,7 +42,7 @@
     }
   },
   "component_versions": {
-    "frame": "0.3.10-roomscan.12",
+    "frame": "0.3.11-roomscan.13",
     "pc": "0.3.12-roomscan.8"
   },
   "device_actions": false,
@@ -52,8 +52,8 @@
   "readiness": "release",
   "result": "PASS",
   "runtime_profile": {
-    "bytes": 27469,
-    "sha256": "8c8926df151a313c707f0931461e308aaa378e78790416456d0d859dd0942404"
+    "bytes": 27620,
+    "sha256": "3fb368ea372bd29e854a74e388b340a51eb99f86adcba1bfe57df0279b5006f2"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -63,11 +63,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 103,
-      "sha256": "2a12e1a1fd74d4d28fc046240f2fc6eb7cdf95148e47bcd484c08bc8999bc132"
+      "sha256": "b289d655c76075dec3c00e19e8f48e7caa08dc7c6959ad500469bd3ee541eaa6"
     },
     "VERSION": {
       "bytes": 19,
-      "sha256": "318a3d09095ca711426b95581a62b7cc6556f2b00a4026431fc50d188dc1ce5e"
+      "sha256": "3f0b239e6736ed841a8ab089ac17a798a7b97a4e98700d2f05407c01dec0addc"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -90,8 +90,8 @@
       "sha256": "5964b7e27682be2448e9540743fc52f86d67c8a2af941b6f3dd2060d13a86665"
     },
     "packaging/room-pc-runtime.json": {
-      "bytes": 6963,
-      "sha256": "025f918cb2dd355c25feef8c605ce6b7d2d1cd41a0dd1b7eb62c172367df7472"
+      "bytes": 7485,
+      "sha256": "46044a09ff08bda38850128b55d8f3c9f474bb5ff71d2101eee8231d4e2dd0a9"
     },
     "packaging/room-vision.json": {
       "bytes": 833,
@@ -138,20 +138,20 @@
       "sha256": "a69348e10bb0c202f6b9d4b7e39c04d3f25f38251beac4956c85e58ea1735984"
     },
     "room_reconstruction/live_geometry.py": {
-      "bytes": 8256,
-      "sha256": "0a286e013d362894fbe3a2d1af7b1c0532fd326e98c7a459294a03a78ee01492"
+      "bytes": 9168,
+      "sha256": "bc74537e31ff209b78c598b09def63ab097eccc4694d5493a9b46fcba156fa6b"
     },
     "room_reconstruction/live_inference.py": {
       "bytes": 3315,
       "sha256": "d511ff4cc7e59b469bf322e363737706875425b022d6d861c2fb5e6f0c2d4790"
     },
     "room_reconstruction/live_map.py": {
-      "bytes": 17646,
-      "sha256": "22b4d2d3a7fec6663657eaa4b6e21a91a93afd06aabbd0ecfde8c203a3776a7d"
+      "bytes": 22782,
+      "sha256": "2d4dc8adac4b9ae065771db1768fefe1f257214b62714d2c6553c7d937d81e09"
     },
     "room_reconstruction/live_worker.py": {
-      "bytes": 4762,
-      "sha256": "4e9e833a4cd7153a1ccbc560bea6710e99898fd3f5cbce0ad70c52b100cff84a"
+      "bytes": 5624,
+      "sha256": "419e9de75e8d395f9b067968c16e169f32b79e1fccabcf8d02fbc78f4e9d2e88"
     },
     "room_scan/__init__.py": {
       "bytes": 250,
@@ -162,8 +162,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 35785,
-      "sha256": "5cc6f0315b37e196963d3727291f56730adf5a0c292616df7d4b04ce2249a8c4"
+      "bytes": 36219,
+      "sha256": "e000312b72357d027d4d3bcf3e95d096533ff143ad69d842069ec663830956f9"
     },
     "room_scan/camera_api/buffer_source.h": {
       "bytes": 15452,
@@ -260,6 +260,10 @@
     "room_scan/licenses/OpenXR.txt": {
       "bytes": 11358,
       "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "room_scan/licenses/PyFQMR.txt": {
+      "bytes": 1065,
+      "sha256": "019753f7a4b2227295475314251cd65bb29bd109e61f4a24cb6f5776e303db91"
     },
     "room_scan/licenses/nlohmann-json.txt": {
       "bytes": 1075,
@@ -378,8 +382,8 @@
       "sha256": "b956d7ff225589c14a7d2706a3d65e6026341cacbcee35ca27a26f3ce3beafd5"
     },
     "room_scan/native_surface_preview.h": {
-      "bytes": 3723,
-      "sha256": "24b9eb46d9beb544785f141dedfcdd9b8f624da2662e06fa4b7c92a2192afd18"
+      "bytes": 4401,
+      "sha256": "719c5e7b07ae68349e75844e715367e2a48fc704d1da2a870679faa3d7c92da2"
     },
     "room_scan/native_triangulation.h": {
       "bytes": 801,
@@ -402,8 +406,8 @@
       "sha256": "dc170918155dd6d71eabe3e32383d8ca7246985d4d2e9066ad409caa399c3ac2"
     },
     "room_scan/native_xr_graphics.cpp": {
-      "bytes": 30510,
-      "sha256": "d21c6d1e89362db4c4fc898dc072ddeebeebfc2be358ba3184cc2124ae3e5fb6"
+      "bytes": 30512,
+      "sha256": "af6aa753d2180fe2e54ef2970f18bc0ee329d0f5b9fa58da2b95a360d8470983"
     },
     "room_scan/native_xr_graphics.h": {
       "bytes": 1236,
@@ -418,16 +422,16 @@
       "sha256": "1b53c78a62569cd36341d510c5dc10dd6cc5d0e067951ce0d7a00dd49a54a3db"
     },
     "room_scan/pc_reconstruction.py": {
-      "bytes": 7265,
-      "sha256": "c004a92245a58c7188caf01cd2e7a2722feb9454c63cd0675ad57a6ceafe4077"
+      "bytes": 7618,
+      "sha256": "166239b4333bad22589ecbba23ae56941e2b3df82790a048ae9785a9132b7b46"
     },
     "room_scan/pc_relay.py": {
-      "bytes": 9389,
-      "sha256": "7dcf9abaf5ea09d3507fd31eaf8f3edf8f14102aaa89c925d6f3db295c4f622d"
+      "bytes": 10995,
+      "sha256": "3ade7f56e876e9cd85fcfc1615c86bdf6ebb89d2a551c0aa02d873b82faca590"
     },
     "room_scan/scene.frag": {
-      "bytes": 2464,
-      "sha256": "a225d14d860620d87978795744ad7d656a14991acf663c2b43cc6e1248af3822"
+      "bytes": 3126,
+      "sha256": "13cf53fe9cecbec858676b4a29088e370f3a2fd5468538e0f77e2fd4ef2a863a"
     },
     "room_scan/scene.vert": {
       "bytes": 680,
@@ -498,8 +502,8 @@
       "sha256": "7bb86e77953823f6c7a6cb2a25100cf66a18d20ab67440c260d9bb85e04e8bab"
     },
     "setup/steam_link_setup_frame.py": {
-      "bytes": 21103,
-      "sha256": "655cde8d59e02adc18b60b5cbe088860293c48facd871d4f36d8042d43c146b3"
+      "bytes": 27331,
+      "sha256": "adf15b2ccb8ffaa18375002022f606d919a3886d23d5caaac63e8403e7ffb8bd"
     },
     "setup/steam_link_setup_legacy.py": {
       "bytes": 9473,
@@ -514,8 +518,8 @@
       "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
     },
     "setup/steam_link_setup_room.py": {
-      "bytes": 18357,
-      "sha256": "8479570ba09223542bf6d41565a6fff4bde649f9b4f6dbcdd2b987a44724bd31"
+      "bytes": 19093,
+      "sha256": "dfbdba9b41f5d572a3da9b69f7148026a4a7cc0cbd601095b231852e12fe46a5"
     },
     "setup/steam_link_setup_session.py": {
       "bytes": 18278,
@@ -526,8 +530,8 @@
       "sha256": "8e200f3270518fe45414ca52d41ac4d63c1bbc61a5fc0ce4cdc7ca4caa432373"
     },
     "setup/steam_link_setup_ui.py": {
-      "bytes": 87971,
-      "sha256": "fffa7027c13f3f3bd709f100ef79e2d8e875db6f8380e55224321649772ba004"
+      "bytes": 88099,
+      "sha256": "67145b87a1db0452eea34d164c44cda42252997674df1c3c7678447fdbde8208"
     },
     "setup/steam_link_setup_vendor.py": {
       "bytes": 2108,
@@ -538,8 +542,8 @@
       "sha256": "1371e8b7b20fe344df58ed6dd22db8e89012a7f5f7a9816fe41b369a28721786"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 192325,
-      "sha256": "96c377001d59f00ff535bcf1ac18cd022158c6ffbe5727d3d7a83653618f50a3"
+      "bytes": 197965,
+      "sha256": "457c5d005c9ecdd599329286ab036b012132cd1dcfac00dd90f57a4be61249da"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -594,8 +598,8 @@
       "sha256": "89c789e09d30b8ed6a7b836208a3b1bad9d1d48d6d98ca34f8e052e0f9cf6913"
     },
     "tools/check_room_pc_runtime.py": {
-      "bytes": 2290,
-      "sha256": "27191c61bd8548b6b589c285d2b3ffdd275a1b5ac3878f25249567ae5f2d8d68"
+      "bytes": 2597,
+      "sha256": "66785c41f438bc1a292a6556ee8f19fdcff466d30cfb673d0d69699f02191b2b"
     },
     "tools/compositor_startup_health.py": {
       "bytes": 89190,
@@ -642,8 +646,8 @@
       "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
     },
     "tools/package_stream_bridge.py": {
-      "bytes": 29107,
-      "sha256": "ddb0c79ba68c7d63ab094cc5dd5389efe81f1044f09592d0c0d00f0264e86e9f"
+      "bytes": 29152,
+      "sha256": "e5629e6eb8dc932689e0d6d8e747c4c095f5869d71e2a621e1d728f0d08812ca"
     },
     "tools/package_stream_link_setup.py": {
       "bytes": 7826,
@@ -658,7 +662,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "6bda2ad50f7070031ba88148a51f2ca5a60f6e92",
+  "source_revision": "144ba98380da08adb5c61c2dd7a189043040c6ed",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -688,10 +692,10 @@
       ],
       "hardware_verified": false,
       "pin": {
-        "bytes": 24929,
-        "sha256": "b74c4cc0507d48807163512c9ee1e61bb52c0a0515f288b52896683deade8093"
+        "bytes": 25080,
+        "sha256": "5c726782ce77fa5fa71432f383b86ae3e17999ed6e34ab2e56143fa367007c5e"
       }
     }
   ],
-  "version": "0.3.16-roomscan.12"
+  "version": "0.3.16-roomscan.13"
 }
