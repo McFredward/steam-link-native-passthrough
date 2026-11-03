@@ -1799,6 +1799,27 @@ class Tests(unittest.TestCase):
             item=b.failure_record(s,error,checks)
             self.assertNotIn('fixture secret',json.dumps(item));self.assertNotIn('password',json.dumps(item))
 
+    def test_public_failure_reports_the_authored_cause_stage_and_code(self):
+        ui=mock.Mock()
+        b.present_failure(s,ui,'frame_prepare',s.SetupError('Setup recovery checkpoint exceeds its bound.'))
+        args,kwargs=ui.failure.call_args
+        self.assertIn('recovery record is too large',args[0])
+        self.assertEqual(kwargs,{'stage':'frame_prepare','code':'check_289b83ed88e020b2','recovery':False})
+        for error in (RuntimeError('PRIVATE_FAILURE_TEXT'),s.SetupError('PRIVATE_FAILURE_TEXT'),OSError(28,'PRIVATE_FAILURE_TEXT')):
+            ui.reset_mock();b.present_failure(s,ui,'pc_install',error,recovery=True)
+            args,kwargs=ui.failure.call_args
+            self.assertNotIn('PRIVATE_FAILURE_TEXT',args[0]);self.assertTrue(kwargs['recovery'])
+        self.assertIn('OS error 28',args[0])
+
+    def test_failure_panel_error_cannot_interrupt_automatic_recovery(self):
+        ports=object.__new__(b.Automation)
+        ports.e=s;ports.ui=mock.Mock();ports.local=self.local
+        ports.context={'stage':'frame_prepare','log':None,'paths_printed':True}
+        ports.ui.failure.side_effect=RuntimeError('private presentation failure')
+        # Production Workflow continues with restore_files after this call.
+        ports.failure(s.SetupError('Setup recovery checkpoint exceeds its bound.'),recovery=False)
+        ports.ui.failure.assert_called_once()
+
     def test_failure_before_apply_prints_durable_log_and_recovery_paths(self):
         import contextlib,io,types
         class Peer:

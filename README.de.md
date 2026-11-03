@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.9** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.10** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -52,6 +52,12 @@ Erst nach geprüftem Kamera-Zugriff, Einrichtung der PC-Laufzeit, Modell-Warmup
 und Verbindung zur Frame meldet der Installer **Room scanning is ready**.
 Fehler lassen sich mit Try again wiederholen; die bestätigte native
 Installation bleibt dabei erhalten.
+
+Installer 10 behebt die Größenbegrenzung der Wiederherstellungsdaten für das
+vollständige Raumscan-Paket. Fehler zeigen Schritt, Ursache und Diagnosecode
+dauerhaft an, auch im Abschlussbildschirm. Nach erfolgreicher Rücksetzung
+bleibt klar erkennbar, dass die Installation fehlgeschlagen ist und der
+vorherige Stand wiederhergestellt wurde.
 
 PC-Dateien liegen unter `%LOCALAPPDATA%\steam-link-native-passthrough`, Modell
 und Rechenlaufzeit im Unterordner `room-pc-runtime`. Auf der Frame liegen die

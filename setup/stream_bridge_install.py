@@ -1529,8 +1529,10 @@ class FrameInstall:
                     entry['after'][index]=journal;replaced=True;break
             if not replaced and journal not in entry['after']:entry['after'].append(journal)
             self.e.require(len(entry['after'])<=3,'Unknown camera finalization checkpoint preserved.')
-            prior=self.e.read(checkpoint.path,64*1024*1024,private=True)
-            self.e.put(checkpoint.path,self.e.encoded(value),prior)
+            prior=self.e.read(checkpoint.path,helper.LIMIT,private=True)
+            updated=self.e.encoded(value)
+            self.e.require(len(updated)<=helper.LIMIT,'Setup recovery checkpoint exceeds its bound.')
+            self.e.put(checkpoint.path,updated,prior,limit=helper.LIMIT)
             self.e.put(self.tx.path,self.e.encoded(state),before)
             before=self.e.read(self.tx.path,64*1024*1024,private=True)
         for op in state['operations']:
@@ -2426,7 +2428,10 @@ class Automation:
     def failure(self,error,*,recovery):
         record_failure(self.context['log'],self.e,self.context['stage'],error)
         support_paths(self.local,self.context)
-        if isinstance(error,self.e.SetupError):print(str(error),file=sys.stderr)
+        if not isinstance(error,KeyboardInterrupt):
+            # Reporting must never prevent the workflow from restoring files.
+            try:present_failure(self.e,self.ui,self.context['stage'],error,recovery=recovery)
+            except Exception:pass
 
 
 class PcOnlyAutomation(Automation):
@@ -2539,12 +2544,45 @@ def support_paths(local,context):
     context['paths_printed']=True
 
 
+def failure_checks(engine):
+    return fixed_checks(Path(engine.__file__).read_bytes(),Path(__file__).read_bytes(),
+            *(Path(__file__).with_name(name+'.py').read_bytes() for name in
+              ('steam_link_setup_pc','steam_link_setup_frame','steam_link_setup_checkpoint','steam_link_setup_workflow')))
+
+
+def present_failure(engine,ui,stage,error,*,recovery=False):
+    """Publish authored checks or fixed OS summaries, never raw exception text."""
+    checks=failure_checks(engine);record=failure_record(engine,error,checks)
+    code=record['reason'];message=checks.get(code)
+    if message=='Setup recovery checkpoint exceeds its bound.':
+        message='The recovery record is too large to safely prepare this update. Setup cannot continue this operation safely.'
+    if message is None:
+        classification=load_helper(engine,'steam_link_setup_log').classify_failure(error)
+        code=classification['reason']
+        message={
+            'permission_denied':'Setup could not access a required file or operation. Check permissions before retrying.',
+            'sharing_violation':'A required file is in use by another process. Close that process before retrying.',
+            'missing':'A required file or folder could not be found. Check the installation and retry.',
+            'timeout':'The operation timed out. Its result must be checked before continuing.',
+            'remote_unavailable':'The connection to the Frame failed. Reconnect and retry.',
+            'io_error':'A file or system operation failed. Check available storage and the setup log before retrying.',
+        }.get(code,'Setup could not complete this operation. The setup log contains its diagnostic code.')
+        if isinstance(error,engine.SetupError) and getattr(error,'_sfnp_public_connection_failure',False):
+            # SSH transport exceptions and remote checks are tagged only after
+            # the session/helper has reduced them to authored public messages.
+            message=str(error);code=record['reason']
+    number=record['errno']
+    if type(number)is int and 0<number<4096:message+=' OS error '+str(number)+'.'
+    if ui and hasattr(ui,'failure'):
+        ui.failure(message,stage=stage,code=code,recovery=recovery)
+    elif ui and hasattr(ui,'problem'):ui.problem('Setup failed: '+message+' ['+code+']')
+    else:print('Setup failed ('+stage+'): '+message+' ['+code+']',file=sys.stderr)
+
+
 def record_failure(log,engine,stage,error):
     if not log:return
     try:
-        checks=fixed_checks(Path(engine.__file__).read_bytes(),Path(__file__).read_bytes(),
-            *(Path(__file__).with_name(name+'.py').read_bytes() for name in
-              ('steam_link_setup_pc','steam_link_setup_frame','steam_link_setup_checkpoint','steam_link_setup_workflow')))
+        checks=failure_checks(engine)
         reason=failure_record(engine,error,checks)['reason']
         log.record_failure(stage,error,reason=reason if reason in checks else None)
     except (OSError,ValueError,TypeError):log.record_failure(stage,error)
@@ -2560,6 +2598,8 @@ def run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=No
         if log:log.event('session','start',status='started')
         while True:
             try:
+                ui=context.get('ui')
+                if ui and hasattr(ui,'clear_failure'):ui.clear_failure()
                 result=_run(args,engine,local,input_fn=input_fn,discover_frame=discover_frame,
                             remote_factory=remote_factory,context=context)
                 if result!=-1:
@@ -2571,7 +2611,7 @@ def run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=No
                 if args.check or args.dry_run or not sys.stdin.isatty():raise
                 if isinstance(error,KeyboardInterrupt):return 130
                 ui=context.get('ui') or engine.load_presentation().Presenter(input_fn=input_fn,lang=args.lang,input_enabled=True)
-                if isinstance(error,engine.SetupError):print(str(error),file=sys.stderr)
+                present_failure(engine,ui,context['stage'],error)
                 ui.say('bridge_retry_question')
                 if ui.choose_action(['retry','exit'],recommended='retry')!='retry':return 130 if isinstance(error,KeyboardInterrupt) else 2
             # A preflight/discovery retry is still the same setup session.

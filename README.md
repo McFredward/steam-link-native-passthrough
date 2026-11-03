@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.9**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.10**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
@@ -50,6 +50,11 @@ there is no separate Enable option. Setup activates and verifies the camera
 reader, downloads/prepares the PC runtime, warms the model and connects to the
 Frame before reporting **Room scanning is ready**. A failed room phase offers
 Try again and preserves the committed native installation.
+
+Installer 10 fixes recovery-record capacity for the complete room payload.
+Failures now show the failed step, cause and diagnostic code in a persistent
+error panel, including the final screen. A verified restore explicitly says
+that setup failed and the previous installation was kept.
 
 PC files live under `%LOCALAPPDATA%\steam-link-native-passthrough`; reconstruction
 dependencies and model cache are in its `room-pc-runtime` directory. Frame app

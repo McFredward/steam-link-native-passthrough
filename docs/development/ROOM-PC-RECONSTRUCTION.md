@@ -176,3 +176,26 @@ read-only checks and unrelated PC-only updates remain isolated. The ready menu
 keeps its owned companion running instead of defaulting to Check only/exit.
 The installer version changes; PC and Frame native patch versions remain at
 candidate 8 because their installed payload is unchanged.
+
+## Installer recovery and failure presentation
+
+Installer 0.3.16-roomscan.10 keeps native component versions unchanged. The
+complete shipped Frame payload is about 15 MB, but recovery embeds both payload
+states and the old/pending/committed installation receipts (which embed base64
+payloads again). A fresh checkpoint exceeds 64 MiB; a conservative full update
+requires about 115 MiB. The dedicated recovery bound is now 192 MiB, including
+retained continuation authority. Ordinary files remain capped at 32 MiB. The
+inactive-camera finalization path uses the same recovery read/write bound.
+Exact predecessors, private permissions, atomic publication, fsync, scope checks
+and changed-file refusal still apply. A regression uses actual shipped Frame
+binaries and sources for fresh install, update, retained continuation and exact
+restore, with no executable loading or device operations.
+
+Public failures show an authored cause, human-readable stage and diagnostic
+code outside the activity log. Successful recovery does not replace the failure
+with a success result: the installer says the requested changes were not
+installed, keeps the cause visible through Retry/Exit and repeats it on the final
+screen. Recovery failures retain both causes. Retry clears the old error only
+when starting a new attempt. Unknown exceptions receive a fixed public summary;
+raw exception content is not promoted into that panel. The JSONL diagnostic code
+continues to match the displayed code for authored checks.
