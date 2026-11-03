@@ -183,6 +183,7 @@ jobs:
   windows-bootstrap:
     if: github.event_name != 'workflow_dispatch' || inputs.scope == 'all' || inputs.scope == 'windows' || inputs.scope == 'windows-auth' || inputs.scope == 'windows-ui'
     runs-on: windows-2025
+    # Includes real production-size recovery plus both packaged UI runtimes.
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
