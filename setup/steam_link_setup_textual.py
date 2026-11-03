@@ -523,6 +523,13 @@ class TextualPresenter:
         """Show only caller-vetted, public connection-failure context."""
         self._call(self.app.show_notice, _plain(message, 500), state="warning")
 
+    def failure(self,message,*,stage,code,recovery=False):
+        summary=_existing_words().failure_summary(_plain(message,1200),stage=stage,code=code,recovery=recovery)
+        self._call(self.app.show_failure,summary,recovery)
+
+    def clear_failure(self):
+        self._call(self.app.clear_failure)
+
     def path(self, value, key="report"):
         self._call(self.app.add_path, self.text(key).strip(), _plain(value, 4096))
 
@@ -684,6 +691,9 @@ class SetupApp(App[int]):
     #notice { height: auto; padding: 1 2; border-left: thick #3c87a4; background: #112233; margin-bottom: 1; }
     #notice.warning { border-left: thick #e1aa69; background: #30261e; }
     #notice.ok { border-left: thick #75cba8; }
+    #failure, #complete-error { display: none; height: auto; padding: 1 2; border: round #eb817c; background: #351e25; color: #ffe1df; margin-bottom: 1; }
+    #failure { padding: 0 1; max-height: 50%; margin: 0; }
+    #complete-title.error { color: #eb817c; }
     #action-area { height: auto; }
     #action-heading { height: auto; text-style: bold; margin-bottom: 1; }
     #actions { height: auto; max-height: 19; border: round #315a72; background: #101c2a; padding: 0 1; }
@@ -765,6 +775,9 @@ class SetupApp(App[int]):
         self.version_plan_prefix = ""
         self.untested_runtime_plan = ""
         self.outcome = None
+        self.failure_summary = None
+        self.recovery_failure = None
+        self.recovery_status = "No successful restoration has been confirmed."
         self.stage_name = "pc_inventory"
         self.paths: dict[tuple[str, str], None] = {}
         self.detail_history: list[str] = []
@@ -785,6 +798,7 @@ class SetupApp(App[int]):
         with Vertical(id="masthead"):
             yield Static("◉  STEAM LINK  /  NATIVE PASSTHROUGH", id="brand", markup=False)
             yield Static(self.words["subtitle"], id="tagline", markup=False)
+        yield Static("", id="failure", markup=False)
         with VerticalScroll(id="body"):
             yield Static(self.words["small"], id="small", markup=False)
             with Horizontal(id="devices"):
@@ -805,6 +819,7 @@ class SetupApp(App[int]):
                 yield Static(self.words["choose"], id="action-help", markup=False)
             with Vertical(id="complete-area"):
                 yield Static("", id="complete-title", markup=False)
+                yield Static("", id="complete-error", markup=False)
                 yield Static(self.words["finish_help"], classes="muted", markup=False)
                 yield Button(self.words["close"], id="close", variant="primary")
             with Collapsible(title=self.words["files"], collapsed=True, id="files"):
@@ -877,9 +892,16 @@ class SetupApp(App[int]):
     def show_notice(self, value, key="", state="info"):
         notice = self.query_one("#notice", Static)
         notice.update(_plain(value, 4096))
-        notice.set_class(state == "warning" or key in ("bridge_partial", "bridge_recovery_incomplete", "bridge_recovery_pending", "missing", "bridge_untested_installed"), "warning")
+        notice.set_class(state == "warning" or key in ("bridge_partial", "bridge_failed_restored", "bridge_recovery_incomplete", "bridge_recovery_pending", "missing", "bridge_untested_installed"), "warning")
         notice.set_class(state == "ok", "ok")
         self.add_detail(value)
+        if self.failure_summary:
+            if key=="bridge_partial":self.recovery_status="Restoring the previous setup."
+            elif key in ("bridge_rolled_back","bridge_pc_rolled_back"):
+                self.recovery_status="Previous setup restored and verified. The requested installation did not complete."
+            elif key in ("bridge_recovery_incomplete","bridge_pc_recovery_incomplete"):
+                self.recovery_status="Restoration is incomplete. Recovery records have been kept. Choose Try again to continue restoration."
+            self._render_failure()
         if key in ("bridge_installed", "bridge_pc_only_installed", "bridge_removed", "bridge_rolled_back", "bridge_pc_rolled_back", "bridge_current", "check_finish", "bridge_untested_installed"):
             self.outcome = key
         if key.endswith("_plan") or key in ("bridge_stop_first", "bridge_retry_ambiguous"):
@@ -889,6 +911,31 @@ class SetupApp(App[int]):
             self.query_one("#pc-status", Static).update(self.words["ready" if key == "pc_ready" else "attention"])
         if key in ("found", "receiver_ready", "receiver_changed", "pc_only"):
             self.query_one("#frame-status", Static).update(self.words[{"found": "connected", "receiver_ready": "ready", "receiver_changed": "attention", "pc_only": "absent"}[key]])
+
+    def _render_failure(self):
+        card=self.query_one("#failure",Static)
+        card.display=self.failure_summary is not None
+        if self.failure_summary:
+            text=self.failure_summary+"\n\nRecovery: "+self.recovery_status
+            if self.recovery_failure:text+="\n\n"+self.recovery_failure
+            card.update(text)
+
+    def show_failure(self,summary,recovery=False):
+        if recovery and self.failure_summary:
+            self.recovery_failure=summary
+        else:
+            self.failure_summary=summary
+            self.recovery_failure=None
+        self.recovery_status="Restoration is incomplete. Recovery records have been kept." if recovery else "The operation stopped. Recovery status will appear here."
+        self._render_failure()
+        self.add_detail(summary)
+        self.query_one("#files",Collapsible).collapsed=False
+
+    def clear_failure(self):
+        self.failure_summary=None
+        self.recovery_failure=None
+        self.outcome=None
+        self._render_failure()
 
     def update_inventory(self, pc=None, frame=None, report=None):
         label=_existing_words().installer_label(lambda k:self.texts[k],report)
@@ -1021,8 +1068,17 @@ class SetupApp(App[int]):
         self.set_stage("complete")
         outcome = {"bridge_pc_only_installed": "connection_installed", "bridge_pc_rolled_back": "restored", "bridge_installed": "connection_installed", "bridge_untested_installed": "installed_inactive", "bridge_removed": "removed",
                    "bridge_rolled_back": "restored", "bridge_current": "current", "check_finish": "check_done"}.get(self.outcome)
-        heading = "cancelled" if code == 130 else outcome or ("finished" if code == 0 else "failed")
-        self.query_one("#complete-title", Static).update(self.words[heading])
+        heading = "cancelled" if code == 130 else (outcome or "finished") if code == 0 else "failed"
+        title=self.words[heading] if code in (0,130) else "Setup failed"
+        if code not in (0,130) and outcome=="restored":title+=" · Previous setup restored"
+        self.query_one("#complete-title", Static).update(title)
+        self.query_one("#complete-title", Static).set_class(code not in (0,130),"error")
+        if code not in (0,130) and self.failure_summary:
+            card=self.query_one("#complete-error",Static)
+            card.update(self.failure_summary+"\n\nRecovery: "+self.recovery_status+
+                        ("\n\n"+self.recovery_failure if self.recovery_failure else ""))
+            card.display=True
+            self.query_one("#step",Static).update("Setup failed")
         if code == 130:
             self.show_notice(self.words["cancelled_help"], state="warning")
         if code != 0:

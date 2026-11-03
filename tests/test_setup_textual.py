@@ -69,6 +69,69 @@ class PicturePorts:
 
 
 class TextualSetupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_prepare_error_survives_successful_rollback_and_final_screen(self):
+        engine_spec=importlib.util.spec_from_file_location('_sfnp_failure_engine',ROOT/'setup/steam_link_setup.py')
+        engine=importlib.util.module_from_spec(engine_spec);engine_spec.loader.exec_module(engine)
+        bridge_spec=importlib.util.spec_from_file_location('_sfnp_failure_bridge',ROOT/'setup/stream_bridge_install.py')
+        bridge=importlib.util.module_from_spec(bridge_spec);bridge_spec.loader.exec_module(bridge)
+        class Ports(PicturePorts):
+            def prepare(self,action):
+                UI.active_presenter().stage('frame_prepare')
+                raise engine.SetupError('Setup recovery checkpoint exceeds its bound.')
+            def failure(self,error,*,recovery):
+                bridge.present_failure(engine,UI.active_presenter(),'frame_prepare',error,recovery=recovery)
+        ports=Ports()
+        def backend():return FLOW.Workflow(ports,UI.active_presenter()).run('update')
+        app=UI.SetupApp(backend,'en')
+        async with app.run_test(size=(80,24)) as pilot:
+            await until(pilot,lambda:isinstance(app.screen,UI.PictureScreen))
+            await until(pilot,lambda:app.focused is not None and app.focused.id=='picture-no')
+            self.assertIn('recovery record is too large',str(app.query_one('#failure',Static).render()))
+            await pilot.click('#picture-yes')
+            await until(pilot,lambda:app.prompt is not None and app.action_names==['retry','exit'])
+            card=app.query_one('#failure',Static)
+            self.assertTrue(card.display)
+            for text in ('Setup failed','Prepare the Frame','recovery record is too large',
+                         'check_289b83ed88e020b2','Previous setup restored and verified','did not complete'):
+                self.assertIn(text,str(card.render()))
+            await pilot.press('end','enter')
+            await until(pilot,lambda:app.backend_finished)
+            self.assertEqual(app.backend_result,2)
+            self.assertIn('Setup failed',str(app.query_one('#complete-title',Static).render()))
+            self.assertIn('Previous setup restored',str(app.query_one('#complete-title',Static).render()))
+            self.assertTrue(card.display)
+            self.assertIn('recovery record is too large',str(app.query_one('#complete-error',Static).render()))
+            await pilot.pause()
+            visible=' '.join(html.unescape(re.sub(r'<[^>]+>',' ',app.export_screenshot())).split())
+            self.assertIn('recovery record is too large',visible)
+            await pilot.resize_terminal(60,24)
+            self.assertTrue(card.display)
+        app.backend.join()
+
+    async def test_recovery_error_preserves_initial_cause_and_retry_clears_card(self):
+        def backend():
+            p=UI.active_presenter()
+            p.failure('Original preparation failed.',stage='frame_prepare',code='operation_refused')
+            p.say('bridge_partial')
+            p.failure('Restoration could not finish.',stage='rollback',code='io_error',recovery=True)
+            p.say('bridge_recovery_incomplete')
+            if p.choose_action(['retry','exit'],recommended='retry')!='retry':return 2
+            p.clear_failure()
+            p.say('bridge_installed')
+            return 0
+        app=UI.SetupApp(backend,'en')
+        async with app.run_test(size=(80,24)) as pilot:
+            await until(pilot,lambda:app.prompt is not None)
+            card=app.query_one('#failure',Static)
+            for text in ('Original preparation failed.','Restoration could not finish.','Restoration is incomplete'):
+                self.assertIn(text,str(card.render()))
+            await pilot.press('enter')
+            await until(pilot,lambda:app.backend_finished)
+            self.assertEqual(app.backend_result,0)
+            self.assertFalse(card.display)
+            self.assertIn('Patch installed',str(app.query_one('#complete-title',Static).render()))
+        app.backend.join()
+
     async def test_pc_only_apply_finishes_without_frame_restart_or_picture_prompt(self):
         for lang in ('en','de'):
             ports=PicturePorts();ports.frame_required=False

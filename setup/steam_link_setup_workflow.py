@@ -175,6 +175,8 @@ class Workflow:
         try:
             while True:
                 try:
+                    clear=getattr(self.ui,'clear_failure',None)
+                    if clear:clear()
                     self.check_cancelled()
                     if reconcile:
                         self.ui.say('bridge_pending_apply' if self.frame_required else 'bridge_pc_pending_apply')
@@ -215,6 +217,7 @@ class Workflow:
                     # safe recovery path; explicit cancellation was split above.
                     if not self.recover():return 2
                     self.check_cancelled()
+                    self.ui.say('bridge_failed_restored')
                     answer=self.ui.choose_action(['retry','exit'],recommended='retry')
                     self.check_cancelled()
                     if answer!='retry':return 2

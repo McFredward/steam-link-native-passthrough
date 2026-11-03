@@ -67,6 +67,7 @@ TEXT = {
         'bridge_starting': 'Briefly restarting Steam and SteamVR on the Frame, then checking the interface',
         'bridge_pc_stopped': 'SteamVR on this PC stays closed, including after recovery. Start your game normally when you are ready.',
         'bridge_rolled_back': 'The previous setup has been restored and its startup checks passed. PC SteamVR stays closed. The log and recovery paths are kept below.',
+        'bridge_failed_restored': 'Setup failed. The requested changes were not installed. The previous setup was restored and verified. Choose Try again to retry, or Exit to keep the previous setup.',
         'bridge_retry_question': 'Would you like to try again?',
         'bridge_connection_failed': 'The connection or sign-in failed. Details and the setup log show the reason; you can try again.',
         'bridge_cancelled_retained': 'Setup cancelled. No automatic rollback was started. Any pending recovery records were kept for your next setup run.',
@@ -231,6 +232,7 @@ TEXT = {
         'bridge_starting': 'Steam und SteamVR auf der Frame werden kurz neu gestartet; danach wird die Oberfläche geprüft',
         'bridge_pc_stopped': 'SteamVR auf diesem PC bleibt auch nach einer Wiederherstellung geschlossen. Starte dein Spiel wie gewohnt, sobald du bereit bist.',
         'bridge_rolled_back': 'Der vorherige Zustand ist wiederhergestellt und hat die Startprüfungen bestanden. PC-SteamVR bleibt geschlossen. Das Log und die Wiederherstellungspfade bleiben unten erhalten.',
+        'bridge_failed_restored': 'Setup failed. The requested changes were not installed. The previous setup was restored and verified. Choose Try again to retry, or Exit to keep the previous setup.',
         'bridge_retry_question': 'Möchtest du es erneut versuchen?',
         'bridge_connection_failed': 'Die Verbindung oder Anmeldung ist fehlgeschlagen. Details und Setup-Log zeigen den Grund; du kannst es erneut versuchen.',
         'bridge_cancelled_retained': 'Einrichtung abgebrochen. Es wurde keine automatische Rücknahme gestartet. Ausstehende Wiederherstellungsdaten bleiben für den nächsten Lauf erhalten.',
@@ -365,6 +367,24 @@ TEXT = {
         'cancelled': 'Einrichtung beendet. Etwaige Wiederherstellungsdetails stehen unten.',
     },
 }
+
+
+FAILURE_STAGES = {
+    'bundle':'Read the installer package','preflight':'Check installation requirements',
+    'pc_inventory':'Check this PC','frame_discovery':'Find the Frame','frame_inventory':'Check the Frame',
+    'startup_baseline':'Record the original startup','runtime_stop':'Close PC SteamVR',
+    'frame_prepare':'Prepare the Frame','pc_install':'Prepare this PC','frame_commit':'Apply the prepared changes',
+    'runtime_start':'Restart the Frame interface','startup_health':'Check the Frame startup',
+    'picture_check':'Check the headset picture','rollback':'Restore the previous setup',
+    'room_setup':'Prepare room scanning','cleanup':'Finish setup records',
+}
+
+
+def failure_summary(message,*,stage,code,recovery=False):
+    """Format an already vetted public failure consistently in both presenters."""
+    label=FAILURE_STAGES.get(stage,'Setup')
+    diagnostic=code if type(code)is str and re.fullmatch(r'check_[0-9a-f]{16}|[a-z_]{1,40}',code) else 'unknown_error'
+    return ('Recovery failed' if recovery else 'Setup failed')+'\nFailed step: '+label+'\nCause: '+message[:1200]+'\nDiagnostic code: '+diagnostic
 
 
 def language(override=None):
@@ -639,6 +659,12 @@ class Presenter:
         with self._lock:
             self._clear()
             self._paragraph(str(message)[:500])
+            self._write('\n')
+
+    def failure(self,message,*,stage,code,recovery=False):
+        with self._lock:
+            self._clear()
+            self._paragraph(failure_summary(message,stage=stage,code=code,recovery=recovery))
             self._write('\n')
 
     def section(self, key):
