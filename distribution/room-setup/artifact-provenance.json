@@ -1,13 +1,8 @@
 {
-  "actual_powershell_archive_check": {
-    "bytes": 145,
-    "result": "PASS",
-    "sha256": "a0608f586ece84cf308c0973bee4986a1743bdf1f0b18cd02e024d71f719af07"
-  },
   "baseline_receipt": {
     "archive": {
-      "bytes": 23116568,
-      "sha256": "99630f67c4cafc8940e8f631e57457f4a26ed0fe2899bafa8a94d465b18c9042"
+      "bytes": 23117568,
+      "sha256": "2c1bcb18641365bfb5f345c9a9fafa49d424c25ac5f535515ad5fe7e489a238f"
     },
     "artifacts": {
       "frame_layer": {
@@ -59,7 +54,7 @@
     "result": "PASS",
     "runtime_profile": {
       "bytes": 27314,
-      "sha256": "db7232762c64cc0ac767fd48bf2d8f019b5b04ed0781ab2b041518830e811bf0"
+      "sha256": "203fa80352f01a95cfb60ed9de237d41cb8794fc5ef992ba31c1df8feff5cf93"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -73,7 +68,7 @@
       },
       "VERSION": {
         "bytes": 18,
-        "sha256": "1e4622e620f10469fda19a931979c6a833c8767a97086000d769d21d14644bca"
+        "sha256": "5aa8d73bf53decadc84f64cb0e115de5b4d791bc1e2704a0c2fc8047e5994879"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -516,20 +511,20 @@
         "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
       },
       "setup/steam_link_setup_room.py": {
-        "bytes": 16519,
-        "sha256": "d0563b726466e4489e2a6cabba05df87208841cffe955aab7a58dda4ae0598cf"
+        "bytes": 17616,
+        "sha256": "b20d72f999a13533ef1c91076fd681a478d73131dbe9506f45d634762f547b12"
       },
       "setup/steam_link_setup_session.py": {
         "bytes": 18278,
         "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
       },
       "setup/steam_link_setup_textual.py": {
-        "bytes": 60079,
-        "sha256": "46847eaa053128da1c92682cc7b2c86c91094f45d0ac397b1cdbb368766826ac"
+        "bytes": 60076,
+        "sha256": "fe2ee02e7fafc99a669892256ba0599d120d67a69c58383e76dea9a7a887f34c"
       },
       "setup/steam_link_setup_ui.py": {
-        "bytes": 85811,
-        "sha256": "1236bae36e4c5005695c26854abd5da5fb93339d403d391bb95f14682914361d"
+        "bytes": 86198,
+        "sha256": "0c6d8cb5a188cc3b4ab919c256ee58a1525ee7c1bc8a337216ca6ed9ef454987"
       },
       "setup/steam_link_setup_vendor.py": {
         "bytes": 2108,
@@ -540,8 +535,8 @@
         "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
       },
       "setup/stream_bridge_install.py": {
-        "bytes": 187164,
-        "sha256": "d713b9bbb203e78b041c1f7765cc7491fcfb0da621ca15c8ecf9ef0a6066e773"
+        "bytes": 189748,
+        "sha256": "632b9be6ec9784e46e05a89f30c33809d138cf5354e22c4e5c1a757cf40a0ffe"
       },
       "third_party/ffmpeg/COPYING.LGPLv2.1": {
         "bytes": 26517,
@@ -644,8 +639,8 @@
         "sha256": "fe07748a2ba42932aa98e2526cd477f73b75860d0b962878aca5940768f1d2a7"
       },
       "tools/package_stream_bridge.py": {
-        "bytes": 28796,
-        "sha256": "0ff48d56b2ea3a0bac20ea0375867b47d7220e1760bb16351372615b926ac59e"
+        "bytes": 29107,
+        "sha256": "ddb0c79ba68c7d63ab094cc5dd5389efe81f1044f09592d0c0d00f0264e86e9f"
       },
       "tools/package_stream_link_setup.py": {
         "bytes": 7826,
@@ -660,7 +655,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "c964dec16c8949337666e3bd73ff13d96a9945a5",
+    "source_revision": "293cf212507c1391c4d5862d61c342c979915de5",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -691,56 +686,54 @@
         "hardware_verified": false,
         "pin": {
           "bytes": 24774,
-          "sha256": "20b541620b04c037a148ad96bd8ba72bc704865b333f094f2167cc072a1448fa"
+          "sha256": "fd11bc5ef2308848fb15483aefa61d5f3920395c22a2cb9936eaf502f4b8cf34"
         }
       }
     ],
-    "version": "0.3.16-roomscan.8"
+    "version": "0.3.16-roomscan.9"
   },
-  "change_scope": "Required room-camera activation, private PC runtime preparation and GPU/Frame handshake before reporting readiness. Remove optional Enable and show a ready menu that retains the companion. Targeted retries preserve the committed native install. Reject stale helper builds and recheck the actual reader after model download/warmup.",
-  "ci": {
-    "final_delivery": {
-      "actual_windows_candidate_archive": "PASS",
-      "result": "success",
-      "revision": "252ff422f368e1db4a1a8d98fb2e0ff4f9c3ba96",
-      "run": 41602800181
-    },
-    "room": {
-      "result": "success",
-      "revision": "293cf212507c1391c4d5862d61c342c979915de5",
-      "run": 41601483367
-    },
-    "setup": {
-      "result": "success",
-      "revision": "293cf212507c1391c4d5862d61c342c979915de5",
-      "run": 41601483393
-    }
-  },
+  "change_scope": "Raise the dedicated recovery checkpoint bound from 64 to 192 MiB for nested real room payload receipts, including continuation and inactive finalization. Keep ordinary-file, privacy, scope and exact predecessor checks. Show authored failure cause/stage/code in a fixed error panel and repeat it at completion; successful rollback remains a failed requested installation. Preserve the initial cause through recovery failure and clear it only on Retry.",
   "component_versions_unchanged": true,
   "current_software_checks": {
+    "checkpoint.log": {
+      "bytes": 103,
+      "sha256": "c73475594020a47d3cc94dbb4e3b996afb6d42e627fc1cf151db0e067020ecdf"
+    },
     "installer-final.log": {
-      "bytes": 6984,
-      "sha256": "330dd7ea7574cf14a00a92e015eaf7bd99bc338f6897ec508a75163634121edd"
+      "bytes": 7154,
+      "sha256": "f7d0f04bb007450c39ee8c3b25bdad654ab1ec7cf44d3ee34cdbb5f1a3f00a7b"
+    },
+    "logging-final.log": {
+      "bytes": 119,
+      "sha256": "25da1db8bc90c6a41704a44e5d6bc88596d09afecabb4ac80b2b098ee4780a21"
     },
     "package-final.log": {
       "bytes": 117,
-      "sha256": "752f3cf08712bb0ae3cf65dde412464c76e35885149a69ab56a69cf844b8ac7f"
+      "sha256": "736e0f7cbcaf9cafcc94f332bb1d98043939191a94ae03f68959c664325ca67f"
     },
     "pc-live-final.log": {
       "bytes": 107,
-      "sha256": "58100a6000c96e6b7aec4d2d745db1096a5a19073163cc78aa68b1b43bfdbe7c"
+      "sha256": "5485efb45c2595068f01a7220003a5cbf9b1b43275ecd764fe04fef057425bd3"
     },
     "pc-only-final.log": {
-      "bytes": 7204,
-      "sha256": "923de33c2bbd001014e13dd84d442b740fd80c329edd4119f726bcb36ea1a127"
+      "bytes": 4412,
+      "sha256": "1b1233a5315e3f699bcaca4f13f738aa2949442c8f7e2168df8a6c69ba9a2096"
     },
-    "textual-room.log": {
-      "bytes": 98,
-      "sha256": "3e740ba100fb66e4f0bed534f1172d263dfd742bf99fa626d991c8195392d864"
+    "session-final.log": {
+      "bytes": 116,
+      "sha256": "2f0c91603980c6a25eac9652e4904db5b925bd1f6586d3e143a6890b98b409e8"
+    },
+    "textual-final.log": {
+      "bytes": 153,
+      "sha256": "e9c3eaa53dd91dead82c23464275c0fff8d8eed964f15df301a030806ee78600"
     },
     "tui.log": {
       "bytes": 120,
-      "sha256": "9cb065e1a2cebc0ce6e195c13733802bba4f427ef975c515521df7a2ef2e8d94"
+      "sha256": "c4e6316257221927900d30003d119926fb87d9606b2f3d095ea68f4e4377ec94"
+    },
+    "workflow-final.log": {
+      "bytes": 10883,
+      "sha256": "f341bb179276f4f65e65bbde79dbe5c6f55aa710fe5e3d3ad8e9840b6c83f89c"
     }
   },
   "device_actions": false,
@@ -748,22 +741,22 @@
   "headset_test": false,
   "limits": [
     "Complete NVIDIA/headset speed, physical scan accuracy and controller usability still require the wearer test.",
-    "The native PC and Frame payloads are candidate 8; installer 9 includes their normal paired update and requires successful room preparation.",
-    "A Frame reboot leaves the reader inactive. Reopening the verified current interactive installer prepares it again.",
-    "Read-only checks and unrelated PC-only updates do not activate the reader."
+    "The nine native binaries and all packaged Frame files remain exact candidate-9 bytes, with native component versions from candidate 8.",
+    "The large-payload regression executes no native binaries and performs no device operations.",
+    "Camera activation remains session-only and required after the confirmed paired update; there is no separate Enable action."
   ],
-  "maintainer_frame_readonly_observation": {
-    "installed_frame_version": "0.3.7-roomscan.7",
-    "native_services_active": true,
-    "room_pc_endpoint_present": false,
-    "room_reader_active": false,
-    "writes": false
+  "maintainer_install_failure": {
+    "authored_cause": "Setup recovery checkpoint exceeds its bound.",
+    "command": "bridge-prepare",
+    "diagnostic_code": "check_289b83ed88e020b2",
+    "previous_setup_restored": true,
+    "stage": "frame_prepare"
   },
   "prior_artifact_provenance": {
-    "bytes": 32652,
-    "sha256": "a28ec102c1f585723e0a015b7a75e74cdebbcdd062be221ff0b11ec57f872f76"
+    "bytes": 30183,
+    "sha256": "77f1509a13cb57a654a6489bbf2ecbae04b95ec2072f1ba56ec715b640fa8ff2"
   },
-  "source_revision": "293cf212507c1391c4d5862d61c342c979915de5",
+  "source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc",
   "unchanged_compiled_source_paths": [
     "room_scan",
     "room_reconstruction",
