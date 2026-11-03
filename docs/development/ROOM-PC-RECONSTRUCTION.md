@@ -343,7 +343,9 @@ compositor/server and existing libcef UI survived. Reports explicitly say
 runtime_preserved=True and fresh_compositor=False; the normal fresh-start gate
 is unchanged. A lost reply observes the already issued app restart. Exact Undo
 restores room files and restarts only the owned app, preserving Steam login.
-Native changes or explicit Uninstall promote to the full restart scope. Unknown
+Native changes, explicit Uninstall or recovery of an already failed native UI
+promote to the full restart scope. That recovery uses the unchanged fresh-start
+health gate; healthy room updates never enter it. Unknown
 records, changed core files/PIDs or a failed app retain recovery authority.
 
 Regressions cover occluded background retention, foreground free-space removal,
