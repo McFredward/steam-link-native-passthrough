@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "pending",
+  "actual_windows_candidate_check": "PASS",
   "archive": {
     "bytes": 23119699,
     "sha256": "6327e3f8f304df7e0c5192a063bc5489c125a313db58775a978ccf701c4ae30e"
@@ -9,8 +9,20 @@
   "bootstrap_source_sha256": "c753d669a3134bf4a80f18fa97b5e4754f65fed69b70cee67eeb8d5b9d29dffe",
   "branch": "arcturus-room-setup",
   "core_commit": "a3c2df540fe855edf33cbedcc2dbf6887ee1ce57",
+  "current_source_matches_all_149_packaged_source_pins": true,
   "device_actions": false,
   "failure_stage_cause_diagnostic_and_recovery_visible": true,
+  "final_delivery_ci": {
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux-python-baseline",
+      "windows-bootstrap",
+      "linux"
+    ],
+    "result": "success",
+    "revision": "f88ff1007c8ec479e823b07635bb38856ea7878c",
+    "run": 41630144919
+  },
   "headset_test": false,
   "limits": "Installer-only repair. Complete NVIDIA/headset speed, physical scan accuracy and controller usability remain unverified by the wearer.",
   "linux_bootstrap_sha256": "45823ee9a73fa0d5f699e27fb5e7d37dfa54df83e8cc8688984370e8aae5c4cb",
@@ -30,7 +42,16 @@
     "unchanged_before_file_bytes_after_restore": true
   },
   "production_payload_install_update_retained_continuation_restore": "PASS",
+  "real_ssh_signin_and_ctrl_c_cleanup": "PASS",
   "recovery_checkpoint_bound_bytes": 201326592,
+  "remote_archive_download": {
+    "all_archive_members_verified": true,
+    "bytes": 23119699,
+    "device_actions": false,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "6327e3f8f304df7e0c5192a063bc5489c125a313db58775a978ccf701c4ae30e"
+  },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
   "rollback_is_not_reported_as_successful_installation": true,
@@ -41,12 +62,14 @@
       "run": 41628782065
     },
     "setup": {
-      "reason": "Windows job reached its previous six-minute CI limit; Linux and Python-baseline checks passed. Final delivery CI uses a ten-minute Windows budget.",
-      "result": "cancelled",
-      "run": 41628781940
+      "covers_packaged_source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc",
+      "result": "success",
+      "revision": "f88ff1007c8ec479e823b07635bb38856ea7878c",
+      "run": 41630144919
     }
   },
   "source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc",
   "targeted_room_retry_preserves_native_installation": true,
-  "version": "0.3.16-roomscan.10"
+  "version": "0.3.16-roomscan.10",
+  "windows_ci_budget_minutes": 10
 }
