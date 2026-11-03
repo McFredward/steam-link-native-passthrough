@@ -1,8 +1,8 @@
 {
   "baseline_receipt": {
     "archive": {
-      "bytes": 23117568,
-      "sha256": "2c1bcb18641365bfb5f345c9a9fafa49d424c25ac5f535515ad5fe7e489a238f"
+      "bytes": 23119699,
+      "sha256": "6327e3f8f304df7e0c5192a063bc5489c125a313db58775a978ccf701c4ae30e"
     },
     "artifacts": {
       "frame_layer": {
@@ -54,7 +54,7 @@
     "result": "PASS",
     "runtime_profile": {
       "bytes": 27314,
-      "sha256": "203fa80352f01a95cfb60ed9de237d41cb8794fc5ef992ba31c1df8feff5cf93"
+      "sha256": "28b51834d8ac7b77c52f79b9d211b4a825f2468c7fee05f1eb7102dca662aeb2"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -67,8 +67,8 @@
         "sha256": "036e5e2019ae07e90c138e490f4552f926560b93ebcd228d3a0215b508acb1ca"
       },
       "VERSION": {
-        "bytes": 18,
-        "sha256": "5aa8d73bf53decadc84f64cb0e115de5b4d791bc1e2704a0c2fc8047e5994879"
+        "bytes": 19,
+        "sha256": "b8d6774c3a4cd927a9dc4f2d04373ccb7b164d0eeb167866946b85676a55780c"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -491,8 +491,8 @@
         "sha256": "fa497fcb37f7647ba129b3ed8ed59ce016f0a86edcd8432e715e43ffc8c22db6"
       },
       "setup/steam_link_setup_checkpoint.py": {
-        "bytes": 19846,
-        "sha256": "320b3e958c52b16cb1b1c610e267869584dce277c73a1ae8dd91c8e5ccdd1a2e"
+        "bytes": 20148,
+        "sha256": "7bb86e77953823f6c7a6cb2a25100cf66a18d20ab67440c260d9bb85e04e8bab"
       },
       "setup/steam_link_setup_frame.py": {
         "bytes": 21103,
@@ -519,24 +519,24 @@
         "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
       },
       "setup/steam_link_setup_textual.py": {
-        "bytes": 60076,
-        "sha256": "fe2ee02e7fafc99a669892256ba0599d120d67a69c58383e76dea9a7a887f34c"
+        "bytes": 63170,
+        "sha256": "8e200f3270518fe45414ca52d41ac4d63c1bbc61a5fc0ce4cdc7ca4caa432373"
       },
       "setup/steam_link_setup_ui.py": {
-        "bytes": 86198,
-        "sha256": "0c6d8cb5a188cc3b4ab919c256ee58a1525ee7c1bc8a337216ca6ed9ef454987"
+        "bytes": 87971,
+        "sha256": "fffa7027c13f3f3bd709f100ef79e2d8e875db6f8380e55224321649772ba004"
       },
       "setup/steam_link_setup_vendor.py": {
         "bytes": 2108,
         "sha256": "00208745e459d4d0303dbcde8c2bc9c3e1c20072eeeb48a025396c7bdb4d62a1"
       },
       "setup/steam_link_setup_workflow.py": {
-        "bytes": 11433,
-        "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
+        "bytes": 11592,
+        "sha256": "1371e8b7b20fe344df58ed6dd22db8e89012a7f5f7a9816fe41b369a28721786"
       },
       "setup/stream_bridge_install.py": {
-        "bytes": 189748,
-        "sha256": "632b9be6ec9784e46e05a89f30c33809d138cf5354e22c4e5c1a757cf40a0ffe"
+        "bytes": 192325,
+        "sha256": "96c377001d59f00ff535bcf1ac18cd022158c6ffbe5727d3d7a83653618f50a3"
       },
       "third_party/ffmpeg/COPYING.LGPLv2.1": {
         "bytes": 26517,
@@ -655,7 +655,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "293cf212507c1391c4d5862d61c342c979915de5",
+    "source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -686,81 +686,102 @@
         "hardware_verified": false,
         "pin": {
           "bytes": 24774,
-          "sha256": "fd11bc5ef2308848fb15483aefa61d5f3920395c22a2cb9936eaf502f4b8cf34"
+          "sha256": "b274367afdc6db3622e35657fcd156b502736f67e684f925bbf5b0f12a2024a2"
         }
       }
     ],
-    "version": "0.3.16-roomscan.9"
+    "version": "0.3.16-roomscan.10"
   },
-  "change_scope": "Raise the dedicated recovery checkpoint bound from 64 to 192 MiB for nested real room payload receipts, including continuation and inactive finalization. Keep ordinary-file, privacy, scope and exact predecessor checks. Show authored failure cause/stage/code in a fixed error panel and repeat it at completion; successful rollback remains a failed requested installation. Preserve the initial cause through recovery failure and clear it only on Retry.",
-  "component_versions_unchanged": true,
+  "capture_history_bounds": {
+    "maximum_image_age_ms": 500,
+    "maximum_samples": 1024,
+    "persistent_storage": false,
+    "pose_span_ms": 20,
+    "query_bracket_us": 750,
+    "retention_ms": 600,
+    "sample_gap_ms": 4,
+    "samples_per_exposure": 9
+  },
+  "change_scope": "Allow only float32 roundoff at the unchanged Gaussian radius limits in both Frame validators. Preserve accepted models and report fixed PC preview reasons. Poll capture promptly and keep a scan-owned bounded history of actual timestamp-bracketed current poses; delayed frames use nine genuine earlier observations with strict gap/span/query budgets and no extrapolation. Remove stationary capture instructions; moving viewpoints extend/refine the same scan while real unknown holes remain open.",
   "current_software_checks": {
+    "app.log": {
+      "bytes": 117,
+      "sha256": "aaea6da3042376bcfa78d83c686a982f170534bc2492dbab92770bca77bcd3b6"
+    },
     "checkpoint.log": {
       "bytes": 103,
-      "sha256": "c73475594020a47d3cc94dbb4e3b996afb6d42e627fc1cf151db0e067020ecdf"
+      "sha256": "234da6923a01389037e8b30e106cdd7abd76b15276cad0dc42592030baedadef"
     },
-    "installer-final.log": {
+    "installer.log": {
       "bytes": 7154,
-      "sha256": "f7d0f04bb007450c39ee8c3b25bdad654ab1ec7cf44d3ee34cdbb5f1a3f00a7b"
+      "sha256": "ab8af01031f6f5418348faf40ffe1975c7289431b56fa626f3ba275051cebe84"
     },
-    "logging-final.log": {
-      "bytes": 119,
-      "sha256": "25da1db8bc90c6a41704a44e5d6bc88596d09afecabb4ac80b2b098ee4780a21"
+    "native-build.log": {
+      "bytes": 2351,
+      "sha256": "032c8bf93b7ac44a2be4f4ad52f767c777182bfb2431ba3f4db714ea464582b4"
     },
-    "package-final.log": {
+    "package.log": {
       "bytes": 117,
-      "sha256": "736e0f7cbcaf9cafcc94f332bb1d98043939191a94ae03f68959c664325ca67f"
+      "sha256": "91d3a40f2b2f2320947a4510e98e4b07f60696f0443f97fc3caf5dc1d3186618"
     },
-    "pc-live-final.log": {
-      "bytes": 107,
-      "sha256": "5485efb45c2595068f01a7220003a5cbf9b1b43275ecd764fe04fef057425bd3"
+    "pc-live.log": {
+      "bytes": 110,
+      "sha256": "60063aea911246fe538a3b057872fa83cc9c6abec57cae0b21f30f5c6b2513ce"
     },
-    "pc-only-final.log": {
+    "pc-only.log": {
       "bytes": 4412,
-      "sha256": "1b1233a5315e3f699bcaca4f13f738aa2949442c8f7e2168df8a6c69ba9a2096"
+      "sha256": "a6876187e3204f85aa7dc8bf72f6ff3b49d83fd8a32e2a0197f93c4d3fa25ff1"
     },
-    "session-final.log": {
-      "bytes": 116,
-      "sha256": "2f0c91603980c6a25eac9652e4904db5b925bd1f6586d3e143a6890b98b409e8"
+    "pose-history-test.log": {
+      "bytes": 68,
+      "sha256": "8d4864b6f871c57617accb002e4eba5e7b9b5b7d26f5af7e1a0ae58ebe5acf52"
     },
-    "textual-final.log": {
-      "bytes": 153,
-      "sha256": "e9c3eaa53dd91dead82c23464275c0fff8d8eed964f15df301a030806ee78600"
-    },
-    "tui.log": {
-      "bytes": 120,
-      "sha256": "c4e6316257221927900d30003d119926fb87d9606b2f3d095ea68f4e4377ec94"
-    },
-    "workflow-final.log": {
-      "bytes": 10883,
-      "sha256": "f341bb179276f4f65e65bbde79dbe5c6f55aa710fe5e3d3ad8e9840b6c83f89c"
+    "scan.log": {
+      "bytes": 124,
+      "sha256": "7812564a3b19243d02d6b8c9fa8b95e8636358a02f192c2da5fdd4299e1c9b09"
     }
   },
   "device_actions": false,
   "hardware_verified": false,
   "headset_test": false,
   "limits": [
-    "Complete NVIDIA/headset speed, physical scan accuracy and controller usability still require the wearer test.",
-    "The nine native binaries and all packaged Frame files remain exact candidate-9 bytes, with native component versions from candidate 8.",
-    "The large-payload regression executes no native binaries and performs no device operations.",
-    "Camera activation remains session-only and required after the confirmed paired update; there is no separate Enable action."
+    "The next installed wearer test must confirm continuous coverage speed and physical surface accuracy.",
+    "The reader, vision library, PC native provider and private neural runtime are unchanged.",
+    "The geometric Gaussian preview is not an optimized photometric radiance field; reflective/transparent/textureless surfaces remain uncertain.",
+    "Identity, calibrated stereo, exposure evidence, pose timing, private file ownership and capture epochs remain mandatory.",
+    "Camera access remains session-only and inactive after reboot; the interactive installer remains open during PC reconstruction."
   ],
-  "maintainer_install_failure": {
-    "authored_cause": "Setup recovery checkpoint exceeds its bound.",
-    "command": "bridge-prepare",
-    "diagnostic_code": "check_289b83ed88e020b2",
-    "previous_setup_restored": true,
-    "stage": "frame_prepare"
+  "maintainer_log_observation": {
+    "accepted_captures": 14,
+    "exposure_refusals": 125,
+    "maximum_capture_age_ms": 124.13,
+    "pc_model_rejections": 8,
+    "pose_refusals": 59,
+    "raw_images_read": false,
+    "rendered_vertices": 0,
+    "scene_origin_verified": true
   },
   "prior_artifact_provenance": {
-    "bytes": 30183,
-    "sha256": "77f1509a13cb57a654a6489bbf2ecbae04b95ec2072f1ba56ec715b640fa8ff2"
+    "bytes": 30256,
+    "sha256": "ab7b0a2e868f1b193a28385515c8888741a352a31818f18e4b66ed0b5a36cb44"
   },
-  "source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc",
+  "rebuilt_native_artifacts": [
+    "room_overlay",
+    "room_renderer"
+  ],
+  "software_reproduction": {
+    "continuous_viewpoints": 18,
+    "float32_radius_floor_rejection_reproduced": true,
+    "frame_contract_accepts_5000_valid_small_gaussians": true,
+    "materially_invalid_sizes_still_refused": true,
+    "moving_capture_pose_age_ms": 125,
+    "native_renderer_accepts_5000_valid_small_gaussians": true,
+    "observed_gap_closes": true,
+    "sampler_stop_joins_and_clears_history": true,
+    "unobserved_gap_remains_open": true
+  },
+  "source_revision": "fdd534d6a06662a3ddef5ff8b295c6ec421fc53c",
   "unchanged_compiled_source_paths": [
-    "room_scan",
-    "room_reconstruction",
-    "probe/room_camera_native.cpp",
     "layer",
     "receiver",
     "pc",
@@ -768,7 +789,21 @@
     "third_party",
     "CMakeLists.txt",
     "cmake",
-    "setup/steam_link_askpass.c"
+    "setup/steam_link_askpass.c",
+    "probe/room_camera_native.cpp",
+    "room_scan/camera_api",
+    "tools/build_room_camera_api.sh",
+    "room_scan/vision_api.h",
+    "room_scan/vision_common.h",
+    "room_scan/vision_fusion.cpp",
+    "room_scan/vision_stereo.cpp",
+    "room_scan/vision.exports",
+    "room_scan/native_vision.h",
+    "tools/build_room_vision.py",
+    "packaging/room-vision.json",
+    "room_reconstruction",
+    "setup/steam_link_setup_room.py",
+    "packaging/room-pc-runtime.json"
   ],
   "unchanged_native_artifacts": [
     "pc_provider",
@@ -776,9 +811,7 @@
     "frame_selector",
     "mask_codec",
     "mask_util",
-    "room_overlay",
     "room_camera",
-    "room_renderer",
     "room_vision"
   ]
 }
