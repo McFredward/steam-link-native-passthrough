@@ -283,7 +283,9 @@ class ActualTextualSSH(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(app.backend_result,130 if stall else 0)
                 self.assertNotIn('synthetic quiet password','\n'.join(app.detail_history))
                 self.assertEqual(fixture.credentials._values,{})
-                await pilot.press('enter')
+                # run_test closes the completed app below. A final Pilot key
+                # can race App.exit on Windows and wait forever for its stopped
+                # animator; it proves nothing about SSH cancellation/cleanup.
             app.backend.join(3);self.assertFalse(app.backend.is_alive())
         finally:fixture.doCleanups()
 
