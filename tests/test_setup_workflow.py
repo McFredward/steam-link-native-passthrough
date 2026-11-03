@@ -103,7 +103,7 @@ class Files(fixtures.Tests):
         updated=self.newer_bundle();choices=[];confirmations=[];commands=[];inventories=[];messages=[]
         frame_fixture=load('sfnp_pending_update_lifecycle_fixture',ROOT/'tests/test_setup_frame.py')
         system=frame_fixture.System()
-        def lifecycle(*a):
+        def lifecycle(*a,**options):
             return frame_fixture.frame.FrameLifecycle(s,self.froot,runner=system,sleeper=system.sleep,
                 monotonic=lambda:system.now,poll_attempts=4,poll_interval=.01,phase_timeout=1)
         lifecycle().restart()

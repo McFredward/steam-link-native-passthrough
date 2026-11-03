@@ -154,7 +154,7 @@ class DurableActivation(unittest.TestCase):
         files=fixture.fixtures.Tests('runTest');files.setUp();self.addCleanup(files.doCleanups)
         before=self.current_health()
         observer=types.SimpleNamespace(baseline=self.current_health)
-        helper=types.SimpleNamespace(FrameLifecycle=lambda *args:self.runtime)
+        helper=types.SimpleNamespace(FrameLifecycle=lambda *args,**options:self.runtime)
         request=bridge.request(files.bundle,'bridge-runtime-restart',restoring=True)
         with mock.patch.object(bridge,'load_module',return_value=object()), \
              mock.patch.object(bridge,'StartupHealth',return_value=observer), \
