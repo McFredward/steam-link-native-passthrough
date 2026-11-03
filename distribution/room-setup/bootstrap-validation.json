@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "pending",
+  "actual_windows_candidate_check": "PASS",
   "all_1033_archive_members_verified": true,
   "archive": {
     "bytes": 23135365,
@@ -52,8 +52,15 @@
     "raw_images_read": false
   },
   "final_delivery_ci": {
-    "actual_windows_candidate_archive_and_embedded_entry_points": "pending",
-    "result": "pending"
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "342a6f181242e37ddf222b14ffad1743f7d9e366",
+    "run": 41662110385
   },
   "headset_test": false,
   "limits": "Measured surfaces, capacity recycling, continuous coverage, bounded automatic exposure, native rendering/input/X, compressed transport and recovery pass software checks. Installed headset coverage speed and physical surface accuracy require the next wearer test. Unknown, reflective and unmeasured regions are not invented.",
@@ -65,12 +72,22 @@
     "room_camera"
   ],
   "recovery_checkpoint_bound_bytes": 201326592,
+  "remote_archive_download": {
+    "all_archive_members_verified": true,
+    "bytes": 23135365,
+    "current_source_matches_all_150_packaged_source_pins": true,
+    "device_actions": false,
+    "member_count": 1033,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "43ffa60d21173c28ae4967977bdb04b9b4eea5a2f8f6ba10b158ada6eedccf42"
+  },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
   "schema": "sfnp-room-installer-delivery-v1",
   "source_ci": {
     "room": {
-      "result": "pending",
+      "result": "success",
       "run": 41661695791
     },
     "setup": {
