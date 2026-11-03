@@ -18,6 +18,9 @@ class SceneMeshBuilder {
     }
 public:
     std::vector<SceneVertex> vertices;
+    void measuredSurface(V3 a,V3 b,V3 c,bool reliable,float first){
+        triangle(a,b,c,{.12f,.84f,.78f,1},first,reliable?7.f:6.f);
+    }
     void line(V3 a,V3 b,std::array<float,4> color,float radius=.0015f){
         const auto delta=b-a;if(length(delta)<1e-6f)return;
         const auto direction=normalized(delta);const auto guide=std::abs(direction.y)<.9f?V3{0,1,0}:V3{1,0,0};

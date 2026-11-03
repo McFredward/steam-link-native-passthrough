@@ -224,7 +224,7 @@ class ScanSession:
     def __exit__(self, *_):
         self.close()
 
-    def view(self):
+    def view(self,*,geometry=True):
         """Renderer-facing state; no percentage, invented geometry or fake scan."""
         mesh = (self.reconstruction.mesh() if self.reconstruction is not None
                 and self.stage in (Stage.SCANNING, Stage.PAUSED) else self.room.mesh if self.room else None)
@@ -238,7 +238,7 @@ class ScanSession:
                 "can_save": self.stage == Stage.REVIEW and world_visuals and not self.review_issues(),
                 "progress": self.reconstruction.status() if self.reconstruction else None,
                 "world_visuals_allowed": world_visuals,
-                "mesh": mesh.to_dict() if mesh and world_visuals else None,
+                "mesh": mesh.to_dict() if geometry and mesh and world_visuals else None,
                 "elements": [e.to_dict() for e in self.room.elements] if self.room else [],
                 "legend": {"building": "Building", "reliable": "Reliably captured", "uncertain": "More views needed"},
                 "unknown_surfaces": "unobserved-no-geometry"}

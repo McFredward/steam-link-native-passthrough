@@ -79,7 +79,7 @@ class Application:
         self.notice = ""
         if (action in ("review", "add") and self.pc_relay and self.session
                 and self.session.reconstruction.status().get("gaussians", 0)
-                and not self.session.reconstruction.mesh().triangles):
+                and not self.session.reconstruction.status().get('final_mesh',False)):
             self.pc_pending_action = action
             if self.session.stage == Stage.SCANNING:
                 self.session.pause()
@@ -117,7 +117,7 @@ class Application:
         elif action == "resume":
             raise RoomError("Native tracking and capture must be checked before resuming")
         elif action == "add":
-            require(self.session is not None and self.session.view()["can_add_element"], "No editable room")
+            require(self.session is not None and self.session.view(geometry=False)["can_add_element"], "No editable room")
             self.page = "types"
         elif action.startswith("type:"):
             self.selected = None
@@ -429,7 +429,7 @@ class Application:
         elif self.page == "scan":
             title, subtitle, step = "Discover your room", "Turquoise reveals new surfaces. Amber needs another view. Look into empty areas, then revisit them from the side.", 2
             active = self.session.stage == Stage.SCANNING
-            button("review", "Continue", self.session.view()["can_review"], True)
+            button("review", "Continue", self.session.view(geometry=False)["can_review"], True)
             button("add", "Add furniture or surfaces", self.session.tracking_verified)
             button("pause" if active else "resume", "Pause" if active else "Resume",
                    not self.starting and (active or not self.session.capacity_reached))
@@ -490,8 +490,10 @@ class Application:
                 button("new", "Scan a new room", primary=True)
             button("align_start", "Align saved room", self.alignment_anchor is not None and not self.starting, primary=True)
             button("back", "Back", not self.starting)
-        state = self.session.view() if self.session else None
+        surface = getattr(self.session.reconstruction,'surface_path',None) if self.pc_relay and self.session else None
+        state = self.session.view(geometry=not bool(surface)) if self.session else None
         if self.page == "align_place" and self.aligned_preview is not None and state is not None:
+            surface = None
             state = {**state, "mesh": self.aligned_preview.mesh.to_dict(),
                      "elements": [e.to_dict() for e in self.aligned_preview.elements]}
         if state is not None and self.page in ("home", "prepare", "alignment", "saved"):
@@ -504,6 +506,7 @@ class Application:
                 "capture_active": bool(self.session and self.session.provider_open),
                 "capture_collecting": bool(self.session and self.session.stage == Stage.SCANNING and not self.pc_pending_action),
                 "pc_ready": self.pc_relay.ready if self.pc_relay else False,
+                "surface_file":str(surface) if surface and state and state['world_visuals_allowed'] else None,
                 "gaussian_file": str(self.session.reconstruction.path) if self.pc_relay and self.session
                     and getattr(self.session.reconstruction, "path", None) and not self.session.reconstruction.mesh().triangles
                     and self.page not in ("review", "saved", "home", "prepare", "alignment") else None,
@@ -592,7 +595,9 @@ def run(root, incoming, outgoing):
                     print(f"Room scan: frames={status['accepted_frames']} vertices={len(mesh.vertices)} "
                           f"triangles={len(mesh.triangles)} reliable={status['reliable_cells']} "
                           f"uncertain={status['uncertain_cells']} gaussians={status.get('gaussians', 0)} "
-                          f"compute_ms={event.get('compute_ms', 0)} accepted_pixels={event.get('accepted_pixels', 0)}", file=sys.stderr)
+                          f"compute_ms={event.get('compute_ms', 0)} accepted_pixels={event.get('accepted_pixels', 0)} "
+                          f"map_points={status.get('map_points',0)} map_capacity={status.get('map_capacity',0)} "
+                          f"recycled={status.get('recycled_points',0)} coarsenings={status.get('coarsenings',0)}", file=sys.stderr)
                     last_report, reports = time.monotonic(), reports+1
             except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration) as error:
                 if errors < 64:

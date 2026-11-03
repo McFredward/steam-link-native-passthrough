@@ -7,7 +7,8 @@ namespace room_camera_api {
 class ExposureRegisters {
     struct Transfer {unsigned address=0;std::vector<std::uint8_t> bytes;std::uint64_t started=0;};
     struct Setting {std::uint64_t released=0,stableSince=0;unsigned coarse=0;};
-    struct Eye {bool hold=false;unsigned mask=0,coarse=0;std::deque<Setting> history;};
+    struct Anchor {std::uint64_t released=0;unsigned minimum=0,maximum=0;};
+    struct Eye {bool hold=false;unsigned mask=0,coarse=0;std::deque<Setting> history;std::deque<Anchor> anchors;};
     std::map<unsigned,Transfer> pending_;std::array<Eye,2> eyes_{};
     std::uint64_t successful_=0,failed_=0;
     static std::array<bool,2> affected(unsigned address){return {address==0x1a||address==0x36,address==0x10||address==0x36};}
@@ -22,8 +23,9 @@ class ExposureRegisters {
                 if(value==1){eye.hold=true;eye.mask=0;eye.coarse=0;}
                 else if(value==0&&eye.hold){
                     eye.hold=false;
-                    if(eye.mask!=3||!eye.coarse){eye.history.clear();continue;}
+                    if(eye.mask!=3||!eye.coarse){eye.history.clear();eye.anchors.clear();continue;}
                     const auto stable=eye.history.empty()||eye.history.back().coarse!=eye.coarse?end:eye.history.back().stableSince;
+                    for(auto& anchor:eye.anchors){anchor.minimum=std::min(anchor.minimum,eye.coarse);anchor.maximum=std::max(anchor.maximum,eye.coarse);}
                     eye.history.push_back({end,stable,eye.coarse});if(eye.history.size()>128)eye.history.pop_front();
                 }else eye=Eye{};
             }else if(reg==0x0202||reg==0x0203){
@@ -60,20 +62,44 @@ public:
         }
     }
     void read(PassiveTrace& trace,unsigned producer){for(const auto& sample:trace.read(producer,0))observe(sample.tid,sample.rawTime,*sample.layout,sample.bytes);}
-    Json settings(const std::string& role,std::uint64_t sof,std::uint64_t eof)const{
+    Json settings(const std::string& role,std::uint64_t sof,std::uint64_t eof,std::uint64_t previous=0){
         const int index=role=="passthrough_left"?0:role=="passthrough_right"?1:-1;
         if(index<0||eof<sof)return nullptr;
         for(const auto& item:pending_){const auto mask=affected(item.second.address);
             if(mask[unsigned(index)]&&item.second.started<=eof&&item.second.bytes.size()==3)return nullptr;}
-        const auto& history=eyes_[unsigned(index)].history;
+        auto& eye=eyes_[unsigned(index)];const auto& history=eye.history;
         const Setting* selected=nullptr;for(const auto& s:history)if(s.released<sof)selected=&s;
         if(!selected)return nullptr;
         bool unchanged=true;unsigned groups=0;
         for(const auto& s:history)if(s.released>=selected->stableSince&&s.released<=eof){++groups;if(s.coarse!=selected->coarse)unchanged=false;}
-        return {{"coarse_integration_lines",selected->coarse},{"group_release_raw_ns",selected->released},
+        Json result={{"coarse_integration_lines",selected->coarse},{"group_release_raw_ns",selected->released},
             {"same_value_since_raw_ns",selected->stableSince},{"same_value_group_count",groups},
             {"unchanged_through_eof",unchanged},{"successful_i2c_result",true},
             {"frame_latch_verified",false}};
+        // An earlier settled cohort establishes a known sensor state. During
+        // auto-exposure, retain every successfully written value since that
+        // anchor. Their envelope bounds the exposure without claiming which
+        // group latched to this frame. Unknown/failed/mode-changing writes have
+        // already cleared this history; no earlier authority survives them.
+        if(previous&&previous<sof&&sof-previous>=14000000u&&sof-previous<=40000000u){
+            const auto period=sof-previous;const Setting* anchor=nullptr;
+            for(std::size_t i=0;i<history.size();++i){const auto& candidate=history[i];
+                if(candidate.released>=sof)break;
+                std::size_t first=i;while(first&&history[first-1].stableSince==candidate.stableSince)--first;
+                if(i-first>=2&&candidate.released-history[first].released>=2*period)anchor=&candidate;
+            }
+            if(anchor&&(eye.anchors.empty()||anchor->released>eye.anchors.back().released)){
+                Anchor known{anchor->released,anchor->coarse,anchor->coarse};
+                for(const auto& s:history)if(s.released>=known.released){known.minimum=std::min(known.minimum,s.coarse);known.maximum=std::max(known.maximum,s.coarse);}
+                eye.anchors.push_back(known);while(eye.anchors.size()>8)eye.anchors.pop_front();
+            }
+            const Anchor* known=nullptr;for(const auto& item:eye.anchors)if(item.released<sof)known=&item;
+            if(known&&selected->released<sof&&sof-selected->released<=2*period){
+                result["envelope_verified"]=true;result["envelope_anchor_raw_ns"]=known->released;
+                result["envelope_min_coarse"]=known->minimum;result["envelope_max_coarse"]=known->maximum;
+            }
+        }
+        return result;
     }
     Json diagnostics()const{return {{"successful_register_writes",successful_},{"failed_transfers",failed_}};}
 };

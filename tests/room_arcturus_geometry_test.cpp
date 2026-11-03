@@ -41,6 +41,8 @@ int main(){try{
     check(delayed.queryBudget==200,"cached sample retains its actual API query bracket");
     const auto samples=delayed.exportSamples();check(samples.size()==9,"nine genuine sampled poses reach the PC");
     for(const auto& sample:samples)check((sample.at("raw_ns").get<std::uint64_t>()-epoch)%1000000u==0,"history exports observed timestamps, not fabricated query times");
+    check(delayed.supportsTimeUncertainty(250000),"slow continuous movement supports a bounded exposure interval");
+    check(!delayed.supportsTimeUncertainty(5000000),"time uncertainty cannot permit excessive spatial error");
     history.clear();refused=false;try{delayed.read(nullptr,first,last,&history);}catch(const std::exception&){refused=true;}
     check(refused,"cleared tracking history cannot borrow old room poses");
     for(unsigned i=0;i<10;++i){const auto stamp=epoch+std::uint64_t(i)*5000000u;

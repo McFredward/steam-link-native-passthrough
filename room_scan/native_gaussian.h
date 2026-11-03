@@ -29,7 +29,7 @@ public:
             offset+=std::size_t(n);}
         std::unordered_map<std::uint32_t,double> current;current.reserve(records.size());
         for(const auto& record:records){
-            if(record.id>=80000||current.count(record.id))throw std::runtime_error("Invalid Gaussian identity");
+            if(record.id>=320000||current.count(record.id))throw std::runtime_error("Invalid Gaussian identity");
             for(float v:record.v)if(!std::isfinite(v)||std::abs(v)>1000)throw std::runtime_error("Invalid Gaussian value");
             const V3 p{record.v[0],record.v[1],record.v[2]},u{record.v[3],record.v[4],record.v[5]},v{record.v[6],record.v[7],record.v[8]};
             const auto a=length(u),b=length(v);const float opacity=record.v[9],quality=record.v[10];

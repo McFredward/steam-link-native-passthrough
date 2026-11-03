@@ -8,6 +8,7 @@ from pathlib import Path
 import struct
 import tempfile
 import time
+import zlib
 import unittest
 from unittest import mock
 
@@ -34,7 +35,7 @@ class RelayTests(unittest.TestCase):
     def test_latest_capture_lease_chunks_and_epoch_cancel(self):
         relay = self.relay
         self.assertRaises(RoomError, relay._dispatch, {"op": "take"})
-        relay._dispatch({"op": "ready", "protocol": 1, "provider": "CUDAExecutionProvider"})
+        relay._dispatch({"op": "ready", "protocol": 2, "provider": "CUDAExecutionProvider"})
         self.assertIsNone(relay.pending)
         relay.set_scan(self.binding, 4, "scan", "room-a")
         for number in range(3):
@@ -46,10 +47,10 @@ class RelayTests(unittest.TestCase):
             reply = relay._dispatch({"op": "chunk", "id": lease["id"], "offset": offset})
             self.assertLess(len(json.dumps(reply)), 128*1024)
             raw.extend(base64.b64decode(reply["data"]))
-        self.assertEqual(json.loads(raw)["sequence"], 2)
+        self.assertEqual(json.loads(zlib.decompress(raw))["sequence"], 2)
         model = json.dumps({"binding": self.binding, "capture_epoch": 4}).encode()
         relay._dispatch({"op": "begin", "bytes": len(model), "sha256": hashlib.sha256(model).hexdigest(),
-                         "binding": self.binding, "epoch": 4})
+                         "binding": self.binding, "epoch": 4,"encoding":"zlib","expanded_bytes":len(model)})
         relay.set_scan(None, 5, "idle")
         self.assertRaises(RoomError, relay._dispatch, {"op": "put", "offset": 0, "data": base64.b64encode(model).decode()})
         self.assertTrue(relay.events.empty())
@@ -57,13 +58,63 @@ class RelayTests(unittest.TestCase):
 
     def test_private_socket_refuses_cpu_and_bad_digest(self):
         relay = self.relay
-        self.assertRaises(RoomError, relay._dispatch, {"op": "ready", "protocol": 1, "provider": "CPUExecutionProvider"})
-        relay._dispatch({"op": "ready", "protocol": 1, "provider": "CUDAExecutionProvider"})
+        self.assertRaises(RoomError, relay._dispatch, {"op": "ready", "protocol": 2, "provider": "CPUExecutionProvider"})
+        relay._dispatch({"op": "ready", "protocol": 2, "provider": "CUDAExecutionProvider"})
         relay.set_scan(self.binding, 0, "scan", "room-a")
-        relay._dispatch({"op": "begin", "bytes": 2, "sha256": "0"*64, "binding": self.binding, "epoch": 0})
+        relay._dispatch({"op": "begin", "bytes": 2, "sha256": "0"*64, "binding": self.binding, "epoch": 0,"encoding":"zlib","expanded_bytes":2})
         relay._dispatch({"op": "put", "offset": 0, "data": base64.b64encode(b"{}").decode()})
         self.assertRaises(RoomError, relay._dispatch, {"op": "commit"})
         self.assertTrue(relay.events.empty())
+
+    def test_compressed_packets_have_exact_bounded_extent(self):
+        from room_scan.pc_relay import unpack, MAX_MODEL
+        relay = self.relay
+        self.assertRaises(RoomError, relay._dispatch, {"op":"ready", "protocol":1, "provider":"CUDAExecutionProvider"})
+        relay._dispatch({"op":"ready", "protocol":2, "provider":"CUDAExecutionProvider"})
+        relay.set_scan(self.binding, 7, "scan", "room-a")
+        value = {"binding":self.binding, "capture_epoch":7, "noise":base64.b64encode(os.urandom(180000)).decode()}
+        raw = json.dumps(value).encode(); compressed = zlib.compress(raw, 1)
+        self.assertGreater(len(compressed), CHUNK*2)
+        relay._dispatch({"op":"begin", "bytes":len(compressed), "sha256":hashlib.sha256(compressed).hexdigest(),
+                         "binding":self.binding, "epoch":7, "encoding":"zlib", "expanded_bytes":len(raw)})
+        for offset in range(0, len(compressed), CHUNK):
+            relay._dispatch({"op":"put", "offset":offset, "data":base64.b64encode(compressed[offset:offset+CHUNK]).decode()})
+        relay._dispatch({"op":"commit"})
+        self.assertEqual(relay.events.get_nowait(), value)
+        for payload, extent in ((compressed[:-1],len(raw)), (compressed+b'x',len(raw)),
+                                (compressed,len(raw)-1), (compressed,len(raw)+1),
+                                (zlib.compress(b'x'*100000),10), (compressed,MAX_MODEL+1)):
+            with self.assertRaises((RoomError,zlib.error)):
+                unpack(payload,extent,MAX_MODEL)
+
+    def test_measured_preview_is_private_validated_and_final_mesh_still_requested(self):
+        from room_scan.app import Application
+        from room_scan.store import RoomStore
+        app = Application(RoomStore(Path(self.temporary.name)/'rooms'),
+                          reconstruction_factory=lambda b:PcReconstruction(b,self.temporary.name))
+        self.addCleanup(app.close);app.pc_relay=self.relay
+        app.action('new');app.event({'event':'camera_ready','binding':self.binding})
+        points=((0.,0.,-2.),(.1,0.,-2.),(0.,.1,-2.))
+        records=b''.join(struct.pack('<I11f',i,*p,.02,0,0,0,.02,0,.6,1) for i,p in enumerate(points))
+        vertices=b''.join(struct.pack('<I3fB3x',i,*p,1) for i,p in enumerate(points))
+        result={'event':'pc_model','binding':self.binding,'sequence':1,'capture_epoch':0,
+                'gaussians':base64.b64encode(records).decode(),'face_count':1,
+                'surface_vertices':base64.b64encode(vertices).decode(),
+                'surface_triangles':base64.b64encode(struct.pack('<3I',0,1,2)).decode()}
+        app.event(result);r=app.session.reconstruction
+        view=app.view();self.assertIsNone(view['room']['mesh'])
+        self.assertEqual(view['surface_file'],str(r.surface_path))
+        accepted=r.surface_path.read_bytes();self.assertEqual(accepted[:8],b'SFNPMR2\0')
+        self.assertEqual(r.surface_path.stat().st_mode&0o777,0o600)
+        with self.assertRaises(RoomError):
+            r.accept({**result,'sequence':2,'surface_triangles':base64.b64encode(struct.pack('<3I',0,1,3)).decode()})
+        self.assertEqual(r.surface_path.read_bytes(),accepted)
+        self.assertEqual(r.sequence,1)
+        app.action('review');self.assertEqual(app.pc_pending_action,'review')
+        app.event({'event':'pc_mesh','binding':self.binding,'sequence':2,'capture_epoch':0,
+                   'mesh':{'vertices':[list(p) for p in points],'triangles':[[0,1,2]],'quality':['uncertain']*3}})
+        self.assertTrue(r.final_mesh);self.assertEqual(app.page,'review')
+        self.assertEqual(app.view()['surface_file'],str(r.surface_path))
 
     def test_renderer_model_validation_and_stale_results(self):
         binding = Binding(**self.binding, test_only=False)
@@ -129,7 +180,7 @@ class RelayTests(unittest.TestCase):
         import sys
         script = Path(self.temporary.name)/"fixture_gpu.py"
         script.write_text('''import sys,json,base64,struct
-print(json.dumps({'event':'ready','provider':'CUDAExecutionProvider','protocol':1}),flush=True)
+print(json.dumps({'event':'ready','provider':'CUDAExecutionProvider','protocol':2}),flush=True)
 for raw in sys.stdin:
  m=json.loads(raw);o=m['observation']
  record=struct.pack('<I11f',0,0,0,-2,.02,0,0,0,.02,0,.6,1)
@@ -268,6 +319,16 @@ class GeometryTests(unittest.TestCase):
         self.assertGreater(float(origins[0][230, 160, 0]-origins[0][25, 160, 0]), .001)
         self.assertAlmostEqual(float(room[0, 3]), -.026, places=8)
         self.assertTrue(np.isfinite(rays).all())
+        import copy
+        bounded=copy.deepcopy(observation)
+        for t in bounded['timing']:
+            t.update(uncertainty_ns=13080,integration_min_ns=986920,integration_max_ns=1013080)
+        self.assertTrue(rectify(bounded,320,256)[1][0].any())
+        bounded['poses'][-1]['head'][3]+=1
+        self.assertRaisesRegex(ValueError,'spatial uncertainty',rectify,bounded,320,256)
+        bounded=copy.deepcopy(observation);bounded['timing'][0]['uncertainty_ns']=250001
+        self.assertRaisesRegex(ValueError,'timing uncertainty',rectify,bounded,320,256)
+
 
     def test_metric_stereo_rays_and_real_holes(self):
         import numpy as np
@@ -323,6 +384,53 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(np.allclose(restored.positions, model.positions))
         self.assertEqual(int(restored.active.sum()), len(model.positions))
         self.assertGreater(len(restored.mesh()["triangles"]), 100)
+
+    def test_dense_near_surface_keeps_measured_connectivity(self):
+        import numpy as np
+        from room_reconstruction.live_map import GaussianMap
+        h,w,f=64,96,300.
+        y,x=np.mgrid[:h,:w]
+        points=np.stack(((x-(w-1)/2)/f,-(y-(h-1)/2)/f,-np.ones_like(x)),axis=-1)
+        normal=np.zeros_like(points);normal[...,2]=1
+        valid=np.ones((h,w),bool);valid[25:36,40:52]=False
+        model=GaussianMap(10000)
+        model.integrate(points,normal,valid,np.ones((h,w)),np.zeros(3),f)
+        mesh=model.mesh();p=np.array(mesh['vertices']);tri=p[np.array(mesh['triangles'])]
+        self.assertGreater(len(tri),100)
+        self.assertGreater(np.abs(np.cross(tri[:,1]-tri[:,0],tri[:,2]-tri[:,0])[:,2]).sum()/2,.045)
+        center=tri.mean(axis=1)
+        self.assertFalse(((np.abs(center[:,0])<.013)&(np.abs(center[:,1])<.009)).any())
+
+    def test_map_recycles_capacity_and_keeps_new_regions_in_connected_preview(self):
+        import numpy as np
+        from room_reconstruction.live_map import GaussianMap
+        h,w,f=32,48,100.
+        y,x=np.mgrid[:h,:w]
+        base=np.stack(((x-(w-1)/2)*2/f,-(y-(h-1)/2)*2/f,-np.full_like(x,2.)),axis=-1)
+        normal=np.zeros_like(base);normal[...,2]=1
+        model=GaussianMap(1000)
+        for i in range(285):
+            camera=np.array((i*.12,0,0));p=base+camera
+            valid=~((np.abs(p[...,0]-2)<.15)&(np.abs(p[...,1])<.15))
+            model.integrate(p,normal,valid,np.full((h,w),2.),camera,f)
+        self.assertLessEqual(len(model.positions),model.capacity)
+        self.assertGreater(model.coarsenings,0);self.assertGreater(model.recycled,0)
+        snapshot=model.snapshot()
+        vertices=list(struct.iter_unpack('<I3fB3x',base64.b64decode(snapshot['surface_vertices'])))
+        faces=np.array(list(struct.iter_unpack('<3I',base64.b64decode(snapshot['surface_triangles']))))
+        points=np.array([v[1:4] for v in vertices])
+        self.assertLessEqual(len(vertices),model.limit);self.assertGreater(len(faces),100)
+        centers=points[faces].mean(axis=1)
+        self.assertTrue((centers[:,0]>33.5).any(),'new region still has connected surfaces after capacity')
+        self.assertTrue((centers[:,0]<.5).any(),'early coverage survives compaction')
+        self.assertFalse(((np.abs(centers[:,0]-2)<.14)&(np.abs(centers[:,1])<.14)).any())
+        # Retired points release their IDs and cannot leave old triangles at a new position.
+        before=model.recycled;model.active[:]=False
+        camera=np.array((40.,0,0));model.integrate(base+camera,normal,np.ones((h,w),bool),np.full((h,w),2.),camera,f)
+        self.assertGreater(model.recycled,before)
+        self.assertLessEqual(len(model.positions),model.capacity)
+        snap=model.snapshot();newpoints=np.array([r[1:4] for r in struct.iter_unpack('<I3fB3x',base64.b64decode(snap['surface_vertices']))])
+        self.assertTrue((newpoints[:,0]>39).all())
 
     def test_row_history_refuses_extrapolation_and_reflections(self):
         import numpy as np

@@ -18,6 +18,7 @@ import threading
 import time
 import urllib.request
 import zipfile
+import zlib
 
 
 def exchange_frame(request):
@@ -211,9 +212,11 @@ class Companion:
                     remaining -= len(line)
 
     def _upload(self, value):
-        raw = json.dumps(value, separators=(",", ":"), allow_nan=False).encode()
+        plain = json.dumps(value, separators=(",", ":"), allow_nan=False).encode()
+        if len(plain)>12*1024*1024:raise ValueError('PC preview exceeds budget')
+        raw = zlib.compress(plain,1)
         response = self.exchange({"op": "begin", "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
-            "binding": value["binding"], "epoch": value["capture_epoch"]})
+            "binding": value["binding"], "epoch": value["capture_epoch"],"encoding":"zlib","expanded_bytes":len(plain)})
         if response.get("error"):
             return False
         for offset in range(0, len(raw), 60000):
@@ -232,7 +235,7 @@ class Companion:
             free = int(gpu.stdout.splitlines()[0].strip())
             if free < 3000:
                 raise ValueError("PC reconstruction needs at least 3 GB of free NVIDIA VRAM")
-            width, height, limit = (320, 256, 25000) if free < 6000 else (512, 384, 50000) if free < 10000 else (640, 480, 60000)
+            width, height, limit = (320, 256, 25000) if free < 6000 else (512, 384, 50000) if free < 10000 else (512, 384, 60000)
             self.ui.say("bridge_room_pc_preparing")
             runtime = prepare_runtime(self.setup_dir/"room-pc-runtime.json", self.cache_root,
                                       lambda: self.stop.is_set() or self.cancelled())
@@ -257,12 +260,12 @@ class Companion:
                         raise RuntimeError("GPU worker stopped during warmup")
             if self.stop.is_set():
                 return
-            if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider":
+            if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider" or ready.get('protocol')!=2:
                 raise RuntimeError("GPU worker could not initialize")
             # Readiness includes the live Frame endpoint, not just a warmed GPU.
             deadline = time.monotonic()+15
             while not self.stop.is_set():
-                linked = self.exchange({"op": "ready", "protocol": 1, "provider": "CUDAExecutionProvider"})
+                linked = self.exchange({"op": "ready", "protocol": 2, "provider": "CUDAExecutionProvider"})
                 if not linked.get("error"):
                     break
                 if time.monotonic() >= deadline:
@@ -277,7 +280,7 @@ class Companion:
                 if self.process.poll() is not None:
                     raise RuntimeError("GPU worker stopped")
                 if time.monotonic()-last_heartbeat >= 2:
-                    response = self.exchange({"op": "ready", "protocol": 1, "provider": "CUDAExecutionProvider"})
+                    response = self.exchange({"op": "ready", "protocol": 2, "provider": "CUDAExecutionProvider"})
                     last_heartbeat = time.monotonic()
                     if response.get("error"):
                         self.ready.clear()
@@ -325,7 +328,12 @@ class Companion:
                         packet.extend(base64.b64decode(chunk["data"], validate=True))
                     if len(packet) != state["bytes"]:
                         continue
-                    message = {"op": "observation", "map_id": state["map_id"], "observation": json.loads(packet)}
+                    if state.get('encoding')!='zlib' or type(state.get('expanded_bytes')) is not int or not 0<state['expanded_bytes']<=1100000:
+                        raise ValueError('Invalid camera packet encoding')
+                    decoder=zlib.decompressobj();plain=decoder.decompress(packet,state['expanded_bytes']+1)
+                    if len(plain)!=state['expanded_bytes'] or not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+                        raise ValueError('Camera packet decompression refused')
+                    message = {"op": "observation", "map_id": state["map_id"], "observation": json.loads(plain)}
                     finish_key = None
                 else:
                     self.stop.wait(.05)

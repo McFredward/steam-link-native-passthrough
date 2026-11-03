@@ -69,7 +69,7 @@ public:
             do{prefetched_=client_.pair();if(!prefetched_[0].pixels.empty())break;std::this_thread::sleep_for(std::chrono::milliseconds(10));}
             while(std::chrono::steady_clock::now()<deadline);
             if(prefetched_[0].pixels.empty())throw std::runtime_error("room-camera-no-live-pair");
-            binding={{"session_id",session},{"origin_id",origin},{"calibration_id",stableId(geometry_.descriptor.dump()+"eof-imx616-4360ns-v1")}};
+            binding={{"session_id",session},{"origin_id",origin},{"calibration_id",stableId(geometry_.descriptor.dump()+"eof-imx616-4360ns-v2-bounded-exposure")}};
             active_=true;sequence_=lastExposure_=0;status="manual-arcturus-stereo-ready";
             diagnostics["baseline_m"]=geometry_.baseline;diagnostics["reason"]=status;return true;
         }catch(const std::exception& error){status=error.what();diagnostics["reason"]=status;stop();return false;}
@@ -87,25 +87,28 @@ public:
             if(m.at("source_session")!=address_||m.at("producer_pid")!=description_.at("producer_pid")
                 ||m.at("producer_start_ticks")!=description_.at("producer_start_ticks"))throw std::runtime_error("Room camera producer changed; arm capture again");}
         const std::array<std::optional<ArcturusTiming>,2> timing{arcturusTiming(eyes[0].metadata),arcturusTiming(eyes[1].metadata)};
-        if(!timing[0]||!timing[1]){attempt.result=CaptureStats::Timing;return hint("Adjusting to the room lighting. Keep looking around slowly with passthrough visible.");}
+        if(!timing[0]||!timing[1]){attempt.result=CaptureStats::Timing;return hint("Synchronizing camera observations. Keep looking around slowly.");}
         const auto first=std::min(timing[0]->firstRowCenter,timing[1]->firstRowCenter),last=std::max(timing[0]->lastRowCenter,timing[1]->lastRowCenter);
+        const auto exposureUncertainty=std::max(timing[0]->uncertainty,timing[1]->uncertainty);
         const auto lo=std::min(timing[0]->center,timing[1]->center),hi=std::max(timing[0]->center,timing[1]->center),center=lo+(hi-lo)/2;
         if(center<=lastExposure_)throw std::runtime_error("Room exposure sequence changed");
         CapturePoseSpan poses;
         const auto now=rawClockNs();if(now>=first)stats_.maximumAgeMs=std::max(stats_.maximumAgeMs,double(now-first)*1e-6);
-        try{CaptureStats::Measure cost{stats_.costs[CaptureStats::PoseRead]};poses.read(system,first,last,&poseHistory_);}
+        try{CaptureStats::Measure cost{stats_.costs[CaptureStats::PoseRead]};poses.read(system,first-exposureUncertainty,last+exposureUncertainty,&poseHistory_);}
         catch(const std::exception&){attempt.result=CaptureStats::PoseHistory;return hint("Waiting for a fresh tracked camera observation.");}
         if(poses.sampledHistory)++stats_.cachedSpans;else ++stats_.directSpans;
         stats_.maxQueryNs=std::max(stats_.maxQueryNs,poses.queryBudget);
         // Each ray is rotated and triangulated at its actual exposure-time
         // camera origin. Faster motion still refuses acquisition, rather than
         // substituting a current pose or inventing unobserved geometry.
-        if(poses.queryBudget>750000u){attempt.result=CaptureStats::ClockBudget;return hint("Checking camera timing. Keep looking around slowly.");}
+        if(poses.queryBudget+exposureUncertainty>750000u||!poses.supportsTimeUncertainty(exposureUncertainty)){
+            attempt.result=CaptureStats::ClockBudget;return hint("Checking camera timing. Keep looking around slowly.");}
         if(poses.translationSpan>.012f||poses.rotationSpan>.04f){attempt.result=CaptureStats::Motion;
             return hint("Slow down your movement to capture sharper detail.");}
         const Mat head=poses.at(center);
         if(pcMode){
-            Json times=Json::array();for(const auto& t:timing)times.push_back({{"first_row_ns",t->firstRowCenter},{"line_ns",t->line},{"integration_ns",t->integration}});
+            Json times=Json::array();for(const auto& t:timing)times.push_back({{"first_row_ns",t->firstRowCenter},{"line_ns",t->line},{"integration_ns",t->integration},
+                {"uncertainty_ns",t->uncertainty},{"integration_min_ns",t->minimumIntegration},{"integration_max_ns",t->maximumIntegration}});
             Json reference=Json::array();for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c)reference.push_back(head.m[r][c]);
             attempt.result=CaptureStats::Accepted;lastExposure_=center;++sequence_;
             return {{"event","stereo_observation"},{"schema","sfnp-room-stereo-v1"},{"binding",binding},{"sequence",sequence_},

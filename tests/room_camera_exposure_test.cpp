@@ -33,5 +33,21 @@ int main(){try{
     std::vector<std::uint8_t> malformed(24,0);put(malformed,20,(100u<<16)|20u,4);bool refused=false;
     try{writeLayout.dynamic(malformed,"buf");}catch(const std::exception&){refused=true;}
     check(refused,"kernel dynamic payload bounds are validated independently of an exposure provider");
+    ExposureRegisters adaptive;constexpr auto period=16666667ULL;
+    group(adaptive,1194,sof-3*period);group(adaptive,1194,sof-2*period);group(adaptive,1194,sof-period);
+    const auto baseline=adaptive.settings("passthrough_left",sof,eof,sof-period);
+    check(adaptive.settings("passthrough_right",sof,eof,sof-period).value("envelope_verified",false),"both sensors establish their own exposure authority");
+    check(baseline.value("envelope_verified",false),"three genuinely settled groups establish an exposure envelope");
+    group(adaptive,1200,sof+1000000u);
+    const auto changing=adaptive.settings("passthrough_left",sof,eof,sof-period);
+    check(changing.at("envelope_min_coarse")==1194&&changing.at("envelope_max_coarse")==1200
+        &&!changing.at("unchanged_through_eof").get<bool>()&&!changing.at("frame_latch_verified").get<bool>(),"bounded changes do not pretend exact latch proof");
+    for(unsigned i=1;i<=150;++i){const auto time=sof+i*period;group(adaptive,1194+i%2,time-1000000u);
+        check(adaptive.settings("passthrough_left",time,time+11000000u,time-period).value("envelope_verified",false),"small continuous automatic adjustments preserve bounded authority beyond history retention");}
+    const auto later=sof+151*period;
+    transfer(adaptive,0x1a,0x0104,1,later-3000000u);transfer(adaptive,0x1a,0x0202,4,later-2000000u);
+    transfer(adaptive,0x1a,0x0104,0,later-1000000u);
+    check(adaptive.settings("passthrough_left",later,later+11000000u,later-period).is_null(),"incomplete hold group clears retained envelope");
+    check(adaptive.settings("passthrough_right",later,later+11000000u,later-period).value("envelope_verified",false),"incomplete eye group cannot invalidate the other eye");
     std::puts("PASS passive successful transfers, dual eye groups, exposure changes, failure isolation and payload bounds");return 0;
 }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}}

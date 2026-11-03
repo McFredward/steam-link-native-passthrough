@@ -34,7 +34,7 @@ def main():
     try:
         engine = StereoInference(args.runtime, args.width, args.height)
         engine.warmup()
-        emit({"event": "ready", "provider": engine.provider, "protocol": 1,
+        emit({"event": "ready", "provider": engine.provider, "protocol": 2,
               "width": args.width, "height": args.height})
         model = GaussianMap(args.limit)
         map_id, binding, epoch, observation_sequence, exposure, serial = None, None, None, 0, 0, 0
@@ -78,7 +78,7 @@ def main():
                 emit({"event": "pc_hint", "binding": binding, "capture_epoch": epoch, "sequence": serial})
                 continue
             emit({"event": "pc_model", "binding": binding, "capture_epoch": epoch, "sequence": serial,
-                  "gaussians": model.preview(), "face_count": len(model.faces), "at_capacity": len(model.positions) >= model.limit,
+                  **model.snapshot(), "at_capacity": model.capacity_limited,
                   "compute_ms": round((time.perf_counter()-started)*1000, 2), "accepted_pixels": int(valid.sum())})
     except Exception as error:
         print("PC room reconstruction: "+type(error).__name__+": "+str(error)[:240], file=sys.stderr)

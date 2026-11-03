@@ -35,7 +35,7 @@ int main(int argc,char** argv){
                 for(const auto& event:events)if(auto image=frames.copy(event,api.framesRequested())){
                     image->metadata["source_session"]=api.address();
                     const auto& timing=image->metadata.at("capture_metadata");
-                    if(timing.is_object())image->metadata["observed_exposure_registers"]=exposure.settings(image->metadata.at("role"),timing.at("sof_raw_ns"),timing.at("eof_raw_ns"));
+                    if(timing.is_object())image->metadata["observed_exposure_registers"]=exposure.settings(image->metadata.at("role"),timing.at("sof_raw_ns"),timing.at("eof_raw_ns"),timing.at("previous_sof_raw_ns"));
                     snapshots.add(std::move(*image));
                 }
                 api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},

@@ -234,3 +234,54 @@ registration and owned-process tests remain required. This is software evidence;
 new installed headset speed and physical accuracy still require the wearer test.
 The installer is 0.3.16-roomscan.11, the changed Frame components are
 0.3.9-roomscan.11, and the unchanged PC native provider stays 0.3.12-roomscan.8.
+
+## Continuous coverage and measured surface preview (installer 12)
+
+The next wearer log reached 885 accepted captures with no pose, clock or PC-model
+refusals, but 1210 exposure qualification refusals. The active map shrank from
+about 47,600 to 36,200 points despite continued valid stereo pixels. The fixed
+60,000-slot array never reused retired IDs; its preview and storage budgets were
+the same. Live rendering ignored measured connectivity and displayed only large
+Gaussian footprints. This was not acceptable room coverage.
+
+The PC map now has four times the bounded display budget (100k/200k/240k slots
+for the low/middle/high profiles). It reuses retired slots, removes their old
+faces and spatially coarsens at full capacity before accepting new observations.
+The preview chooses representatives across spatial cells instead of only early
+points. Only measured neighbour faces are remapped; cells require every interior
+pixel to be observed. Reduced surfaces retain oriented support checks, edge and
+area limits. There is no convex hull or invented fill for unknown regions.
+
+Each protocol-2 PC result carries validated Gaussian records and their measured
+surface connectivity. Both capture and result packets use zlib with exact bounded
+expanded extents, chunked authenticated transfer and unchanged binding/epoch
+checks. Frame writes an atomic private binary surface snapshot; the native
+preparation worker reads it outside the XR thread. HUD updates reference the
+snapshot rather than serializing the room mesh again. Real triangles reveal in
+teal with fine edges; confidence changes the fill opacity. The PC Gaussian map
+remains the reconstruction state, not a trained photometric radiance field.
+Continue still requests the final measured polygon extraction before editing.
+The high-memory profile uses 512×384 rather than 640×480 to reduce inference and
+transfer cost; headset latency remains to be measured on the installed candidate.
+
+A successful settled cohort of at least three native hold groups spanning two
+frame periods can anchor an exposure envelope. All successfully observed coarse
+integration values since the anchor remain in its min/max interval, including
+later writes conservatively. Unknown, failed, incomplete or mode-changing writes
+clear the affected eye's authority. Anchors survive bounded history eviction;
+there is no guessed per-frame latch. Exposure-time uncertainty is conservatively
+half the integration range, capped at 250 us. Combined pose-query plus exposure
+uncertainty must stay within 750 us; observed motion must imply at most 0.5 mm
+translation and 0.5 mrad rotation uncertainty. Nine genuine row-time poses still
+bracket the interval. The PC independently checks time and spatial bounds.
+This observes the native camera only; it does not write exposure settings.
+Transient synchronization notices wait for two seconds without an accepted
+capture and no longer claim that missing timing proof means poor room lighting.
+
+Regressions cover growth beyond the preview and map capacities, recycled slots,
+old and new measured regions, unknown gaps, revisit refinement, binary surface
+validation and private ownership, final extraction, compressed packet corruption
+and extent limits, real GPU reveal/alpha/depth, bounded exposure adjustments past
+history eviction, failed eye isolation and timing/spatial refusal. Hardware
+acceptance remains a wearer test. Installer: 0.3.16-roomscan.12; changed Frame
+components: 0.3.10-roomscan.12; PC native provider: unchanged 0.3.12-roomscan.8.

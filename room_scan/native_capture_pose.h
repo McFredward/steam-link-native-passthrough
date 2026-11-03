@@ -110,5 +110,19 @@ public:
         }
         throw std::runtime_error("Capture pose interpolation unavailable");
     }
+    bool supportsTimeUncertainty(std::uint64_t ns)const{
+        if(!ns)return true;
+        const double uncertainty=double(ns)*1e-9;
+        for(unsigned i=1;i<samples_.size();++i){const auto& a=samples_[i-1];const auto& b=samples_[i];
+            if(b.targetRaw<=a.targetRaw)return false;
+            const double dt=double(b.targetRaw-a.targetRaw)*1e-9;
+            auto q=quaternion(a.head),r=quaternion(b.head);double sign=0,difference=0;
+            for(unsigned j=0;j<4;++j)sign+=double(q[j])*r[j];
+            for(unsigned j=0;j<4;++j){const double v=double(q[j])-(sign<0?-double(r[j]):double(r[j]));difference+=v*v;}
+            const double angle=4*std::asin(std::min(1.,std::sqrt(difference)/2));
+            if(double(length(position(b.head)-position(a.head)))*uncertainty/dt>.0005||angle*uncertainty/dt>.0005)return false;
+        }
+        return true;
+    }
 };
 } // namespace room_native

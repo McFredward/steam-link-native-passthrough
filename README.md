@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.11**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.12**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
@@ -51,12 +51,14 @@ reader, downloads/prepares the PC runtime, warms the model and connects to the
 Frame before reporting **Room scanning is ready**. A failed room phase offers
 Try again and preserves the committed native installation.
 
-Installer 11 fixes float32 rounding that rejected valid small Gaussian patches.
-Capture now polls promptly and keeps a bounded history of real timestamped
-tracking observations, so delayed camera frames retain their capture-time poses
-while you look around slowly. Unknown regions stay open and further viewpoints
-extend and refine the same scan. Camera identity, calibration, exposure evidence,
-pose timing and private-file checks remain required; there is no stillness step.
+Installer 12 replaces the large live circles with connected measured surfaces,
+fine edges and an animated teal reveal. The PC Gaussian map has four times the
+preview budget, recycles retired points and keeps accepting new observed areas
+at capacity. Unknown gaps stay open; revisits continue refining the same map.
+Transfers are compressed and the high-memory profile uses 512×384 stereo for
+lower latency. Small automatic exposure changes use a verified bounded timing
+interval; missing timing proof is described as synchronization, not poor room
+lighting. Camera identity, calibration, timing and tracking checks remain required.
 
 The installer retains the recovery-size fix and persistent failure panel from
 installer 10. Failures show their step, cause and recovery result; a successful

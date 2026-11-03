@@ -108,6 +108,18 @@ int main(){try{
     const auto gaussianDepth=readback(graphics,graphics.depthSwapchain(0),0);float cornerDepth=0;std::memcpy(&cornerDepth,gaussianDepth.data()+gaussianCorner,4);
     check(cornerDepth==1,"discarded Gaussian corners do not occlude unobserved space");
     check(gaussianSettled[center]>gaussianSettled[center+2],"uncertain Gaussian surfaces settle to amber guidance");
+    room_native::SceneMeshBuilder connected;
+    connected.measuredSurface({-.5f,-.5f,-2},{.5f,-.5f,-2},{0,.5f,-2},true,0);
+    graphics.upload(connected.vertices);graphics.render(0,0,0,view,0);
+    const auto surfaceNew=readback(graphics,graphics.swapchain(0),0);
+    graphics.render(0,0,0,view,2);const auto surface=readback(graphics,graphics.swapchain(0),0);
+    check(surfaceNew[center+3]==0&&surface[center+3]>0&&surface[3]==0,"measured connected surface animates without filling unknown space");
+    check(surface[center+1]>surface[center]&&surface[center+2]>surface[center],"connected surface uses teal and blue instead of large white circles");
+    connected.vertices.clear();connected.measuredSurface({-.5f,-.5f,-2},{.5f,-.5f,-2},{0,.5f,-2},false,0);
+    graphics.upload(connected.vertices);graphics.render(0,0,0,view,2);
+    const auto uncertain=readback(graphics,graphics.swapchain(0),0);
+    check(uncertain[center+3]<surface[center+3],"uncertain measured regions stay visibly lighter than confirmed surfaces");
+    std::puts("PASS connected measured surface shader, animated teal reveal, confidence and real gaps");
     graphics.shutdown();check(chains.empty(),"all owned swapchain images are released");dlclose(loader);
     std::puts("PASS real native MR shaders, animated alpha, transparent gaps, metric depth, order-independent occlusion and independent per-eye swapchains");
     std::puts("PASS real Gaussian shader, animated reveal, uncertainty colour and transparent colour/depth footprint");return 0;
