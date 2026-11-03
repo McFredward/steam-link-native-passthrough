@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.8**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.9**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
@@ -44,6 +44,17 @@ read-only Arcturus reader for this session after the confirmed paired update.
 Camera access stays off after a Frame reboot; reopening the verified current
 feature installer enables it again. **Stop room capture** disables it immediately.
 No firmware, camera driver or native camera service is replaced.
+
+Room scanning is required in this branch. Apply the recommended Install/Update;
+there is no separate Enable option. Setup activates and verifies the camera
+reader, downloads/prepares the PC runtime, warms the model and connects to the
+Frame before reporting **Room scanning is ready**. A failed room phase offers
+Try again and preserves the committed native installation.
+
+PC files live under `%LOCALAPPDATA%\steam-link-native-passthrough`; reconstruction
+dependencies and model cache are in its `room-pc-runtime` directory. Frame app
+files live in `~/.local/share/SteamLinkNativePassthrough/stream-bridge/room-setup`,
+with saved rooms in `~/.local/share/SteamLinkNativePassthrough/rooms`.
 
 This candidate reconstructs on a **Windows PC with an NVIDIA GPU**. The installer
 prepares a private CUDA/ONNX Runtime and NVIDIA C-Fast-FoundationStereo model

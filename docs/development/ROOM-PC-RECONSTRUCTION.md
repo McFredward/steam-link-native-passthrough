@@ -161,3 +161,18 @@ included; the earlier instruction to leave it at 0.3.11 applied while its
 payload was unchanged. Preserve the immutable source/archive/core/wrapper
 delivery chain, required checks, exact artifact pins and reversible installer.
 Do not update main, stable releases or tags.
+
+## Candidate 9 required installation phase
+
+Room scanning is a required component of the paired feature installer. There is
+no separate Enable choice. After the committed native installation, setup arms
+the checked reader, prepares the private PC runtime and waits for GPU warmup and
+a successful Frame relay handshake. It checks the camera again afterwards so a
+Frame reboot during a large download cannot leave a stale success status.
+Failure reports an incomplete room phase and offers Retry against the committed
+installation. It must not repeat the paired native transaction or restart native
+services. Current interactive installs perform the same preparation directly;
+read-only checks and unrelated PC-only updates remain isolated. The ready menu
+keeps its owned companion running instead of defaulting to Check only/exit.
+The installer version changes; PC and Frame native patch versions remain at
+candidate 8 because their installed payload is unchanged.

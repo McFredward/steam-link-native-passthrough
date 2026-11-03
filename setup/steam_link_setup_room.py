@@ -163,6 +163,8 @@ class Companion:
         self.ui, self.cancelled = ui, cancelled
         self.stop = threading.Event()
         self.process = None
+        self.ready = threading.Event()
+        self.finished = threading.Event()
         self.results = queue.Queue(maxsize=2)
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
@@ -175,6 +177,14 @@ class Companion:
         if self.process and self.process.poll() is None:
             self.process.kill()
             self.process.wait(3)
+
+    def wait_ready(self):
+        while not self.ready.wait(.1):
+            if self.cancelled() or self.stop.is_set():
+                raise KeyboardInterrupt
+            if self.finished.is_set():
+                return False
+        return not self.finished.is_set()
 
     def _read(self):
         while not self.stop.is_set():
@@ -249,7 +259,19 @@ class Companion:
                 return
             if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider":
                 raise RuntimeError("GPU worker could not initialize")
+            # Readiness includes the live Frame endpoint, not just a warmed GPU.
+            deadline = time.monotonic()+15
+            while not self.stop.is_set():
+                linked = self.exchange({"op": "ready", "protocol": 1, "provider": "CUDAExecutionProvider"})
+                if not linked.get("error"):
+                    break
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Installed Frame room endpoint is unavailable")
+                self.stop.wait(.2)
+            if self.stop.is_set():
+                return
             self.ui.say("bridge_room_pc_ready")
+            self.ready.set()
             busy, finish_key, last_heartbeat, seeded_map = False, None, 0., None
             while not self.stop.is_set() and not self.cancelled():
                 if self.process.poll() is not None:
@@ -258,8 +280,10 @@ class Companion:
                     response = self.exchange({"op": "ready", "protocol": 1, "provider": "CUDAExecutionProvider"})
                     last_heartbeat = time.monotonic()
                     if response.get("error"):
+                        self.ready.clear()
                         self.stop.wait(.5)
                         continue
+                    self.ready.set()
                 try:
                     result = self.results.get_nowait()
                 except queue.Empty:
@@ -314,6 +338,8 @@ class Companion:
             if not self.stop.is_set():
                 self.ui.say("bridge_room_pc_failed")
         finally:
+            self.finished.set()
+            self.ready.clear()
             try:
                 self.exchange({"op": "offline"})
             except (OSError, ValueError, RuntimeError):

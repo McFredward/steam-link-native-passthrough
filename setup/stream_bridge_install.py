@@ -2120,13 +2120,51 @@ def request(bundle,command,**values):
 
 
 def start_room_companion(engine,remote,ui,context,local):
-    if context.get('room_companion') is not None or local.system!='Windows':return
+    if context.get('room_companion') is not None:
+        companion=context['room_companion']
+        if not companion.finished.is_set():return companion
+        companion.close();context.pop('room_companion')
+    if local.system!='Windows':return None
     helper=load_helper(engine,'steam_link_setup_room')
     setup_directory=engine.no_links(Path(engine.__file__)).parent
-    if not (setup_directory/'room-pc-runtime.json').is_file():return
+    engine.require((setup_directory/'room-pc-runtime.json').is_file(),
+                   'The required PC room reconstruction files are missing. Download this branch installer again.')
+    if hasattr(ui,'path'):ui.path(local.root/'room-pc-runtime',key='bridge_room_pc_path')
     context['room_companion']=helper.Companion(
         lambda message:remote.call({'command':'bridge-room-pc-exchange','room':message}),
         setup_directory,local.root/'room-pc-runtime',ui,getattr(ui,'cancelled',lambda:False))
+    return context['room_companion']
+
+
+def prepare_required_room_setup(engine,bundle,remote,ui,context,local,frame,*,address,login):
+    """Required post-commit setup. Failure preserves the healthy core installation."""
+    engine.require(frame is not None and frame.get('room_capture_available') is True,
+                   'Room Setup is not current on the Frame. Apply the recommended update; room scanning is included automatically.')
+    context['room_setup_pending']=True
+    ui.say('bridge_room_required_setup')
+    if frame.get('room_capture_state')!='armed':
+        activated=manage_room_capture(engine,bundle,remote,ui,context,address=address,login=login)
+        if getattr(ui,'cancelled',lambda:False)():raise KeyboardInterrupt
+        engine.require(activated,
+                       'Room scanning is required in this build, but camera activation failed. Choose Try again to finish room setup. The installed patch is preserved; no restart or rollback is required.')
+    companion=start_room_companion(engine,remote,ui,context,local)
+    if local.system=='Windows':
+        engine.require(companion is not None and companion.wait_ready(),
+                       'Room scanning is required in this build, but PC reconstruction is not ready. Choose Try again to retry its setup without reinstalling or restarting the Frame.')
+    # Model download/warmup may take a while. Recheck the actual Frame reader
+    # before declaring the combined setup ready, including after a Frame reboot.
+    current=remote.call(request(bundle,'bridge-inventory'))
+    engine.require(current.get('room_capture_available') is True,
+                   'The installed Frame room files changed during setup. Check the recommended update before scanning.')
+    if current.get('room_capture_state')!='armed':
+        engine.require(manage_room_capture(engine,bundle,remote,ui,context,address=address,login=login),
+                       'The Frame camera session ended during PC setup. Choose Try again to finish activation.')
+        current=remote.call(request(bundle,'bridge-inventory'))
+    engine.require(current.get('room_capture_state')=='armed',
+                   'Room camera activation could not be verified. Choose Try again; Room Setup is not ready yet.')
+    context['room_setup_ready']=True
+    context.pop('room_setup_pending',None)
+    return current
 
 
 def terminal_scope(engine,ui,remote):
@@ -2154,10 +2192,11 @@ def manage_room_capture(engine,bundle,remote,ui,context,*,address,login,stop=Fal
         engine.require(result.get('state')==('inactive' if stop else 'armed'),'The manual camera session did not confirm its requested state.')
         ui.say('bridge_room_capture_stopped' if stop else 'bridge_room_capture_enabled')
         return True
-    except (OSError,ValueError):
-        # Optional activation happens after the completed installation. Its
-        # failure must not restore files or restart an otherwise healthy Frame.
+    except (OSError,ValueError) as error:
+        # Activation follows the committed transaction. The required-feature
+        # caller reports failure without undoing a healthy native installation.
         ui.say('bridge_room_capture_failed')
+        if isinstance(error,engine.SetupError) and hasattr(ui,'problem'):ui.problem(str(error))
         return False
     finally:
         password=None
@@ -2667,7 +2706,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         # Presentation after a committed operation cannot turn a successful
         # installation into rollback. A lost read-only refresh leaves an honest
         # status notice; the exact completed operation and logs stay intact.
-        if not hasattr(ui,'inventory') or remote is None:return
+        if remote is None:return
         try:
             current_pc=local.inventory()
             with terminal_scope(e,ui,remote):current_frame=remote.call(request(bundle,'bridge-inventory'))
@@ -2697,20 +2736,17 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
             item['activation_mode']=='active' for item in (report['pc'],frame)):
         recommended='check'
     if pc_finishing:actions=['retry','check','exit'];recommended='retry'
-    if (interactive and args.action is None and components_current and recommended=='check' and not pending
-            and frame is not None and frame.get('room_capture_available') is True
-            and frame.get('room_capture_state')!='armed' and not context.get('room_capture_auto_attempted')):
-        # This feature build automatically arms a verified current installation
-        # when opened again after reboot. Read-only CLI checks returned above;
-        # changed PC components cannot enter this path or touch the Frame.
-        context['room_capture_auto_attempted']=True
-        if manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user):
-            frame={**frame,'room_capture_state':'armed'}
-    if (interactive and args.action is None and components_current and recommended=='check' and not pending
-            and frame is not None and frame.get('room_capture_state')=='armed'):
-        start_room_companion(e,remote,ui,context,local)
-    if not pc_finishing and not pending and frame is not None and frame.get('room_capture_available') is True:
-        actions.insert(0,'room_capture_stop' if frame.get('room_capture_state')=='armed' else 'room_capture')
+    requested_action=None if (context.get('room_setup_pending') or context.get('room_setup_ready')) and components_current and args.action in ('install','update','repair') else args.action
+    if (interactive and requested_action is None and components_current and recommended=='check' and not pending
+            and ROOM_FILES<=set(bundle.files) and not context.get('room_capture_user_stopped')):
+        frame=prepare_required_room_setup(e,bundle,remote,ui,context,local,frame,address=address,login=args.user)
+    elif interactive and ROOM_FILES<=set(bundle.files) and not components_current and ui:
+        ui.say('bridge_room_required_update')
+    if not pc_finishing and not pending and frame is not None and frame.get('room_capture_available') is True and frame.get('room_capture_state')=='armed':
+        actions.insert(0,'room_capture_stop')
+    if context.get('room_setup_ready') and context.get('room_companion') is not None:
+        if 'check' in actions:actions.remove('check')
+        actions.insert(0,'room_scan');recommended='room_scan'
     resumed=context.pop('confirmed_apply',None)
     if resumed is not None:
         e.require(type(resumed)is dict and set(resumed)=={'bundle','intent'} and resumed['bundle']==bundle.pin and
@@ -2723,18 +2759,18 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         e.require(action is not None,'The confirmed changes are no longer available after recovery; check the reported PC and Frame state.')
         if ui:ui.say('bridge_resuming_update')
     else:
-        action=args.action or (ui.choose_action(actions,recommended=recommended) if ui else None)
+        action=requested_action or (ui.choose_action(actions,recommended=recommended) if ui else None)
     if log and action in actions:log.event('preflight','result',action=action,status='pending')
     if action in (None,'exit','check'):
         if action=='check' and ui:ui.say('check_finish')
         return 0
     e.require(interactive and action in actions,'That action is not available for this checked package.')
-    if action in ('room_capture','room_capture_stop'):
-        if action=='room_capture_stop' and context.get('room_companion') is not None:
+    if action=='room_scan':return -1
+    if action=='room_capture_stop':
+        context['room_capture_user_stopped']=True
+        if context.get('room_companion') is not None:
             context.pop('room_companion').close()
-        manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user,stop=action=='room_capture_stop')
-        if action=='room_capture':start_room_companion(e,remote,ui,context,local)
-        if context.get('room_companion') is not None:return -1
+        manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user,stop=True)
         return 0
     if pc_finishing:
         if action!='retry':return 0
@@ -2769,6 +2805,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
     context['operation_action']=action
     if context.get('room_companion') is not None:
         context.pop('room_companion').close()
+    context.pop('room_setup_ready',None)
     automation=PcOnlyAutomation if pc_plan or pc_scope is not None else Automation
     ports=automation(e,bundle,local,installed,remote,ui,context,factory,address,args.user)
     if action in ('install','update','repair') and not ports.confirm_runtime():return 0
@@ -2776,10 +2813,8 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
     def completed(result):
         if result==0:
             ready=refresh_inventory()
-            if not pc_plan and action in ('install','update','repair') and ROOM_FILES<=set(bundle.files) and ready is not None:
-                if ready.get('room_capture_available') is True and ready.get('room_capture_state')!='armed':
-                    manage_room_capture(e,bundle,remote,ui,context,address=address,login=args.user)
-                start_room_companion(e,remote,ui,context,local)
+            if not pc_plan and action in ('install','update','repair') and ROOM_FILES<=set(bundle.files):
+                prepare_required_room_setup(e,bundle,remote,ui,context,local,ready,address=address,login=args.user)
                 if context.get('room_companion') is not None:return -1
         return result
     if pending and action in ('install','update','repair','uninstall') and not (pc_scope is not None and not pc_plan):
