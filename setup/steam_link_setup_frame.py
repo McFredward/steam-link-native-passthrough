@@ -290,8 +290,13 @@ class FrameLifecycle:
         return bool(activation and self._value['phase']=='awaiting-health' and
                     self._fresh_running(self._show(ROOM_UNIT),activation['room_unit']))
 
-    def _restart_room(self, restoring):
+    def _restart_room(self, restoring, health):
         before=self._units();prior=self._value;kind='original' if restoring else 'prepared'
+        if restoring and not all(self._running(v) for v in before.values()):
+            # Exact app Undo must not strand an already failed native UI.
+            # Healthy room updates never take this full-recovery path.
+            self.require_full_restart()
+            return self.restart(restoring=True,health_receipt=health)
         baseline=prior.get('activation',{}).get('baseline',prior['baseline'])
         unchanged=all(self._running(before[u]) and all(before[u][k]==baseline[u][k]
                       for k in ('InvocationID','MainPID','ActiveEnterTimestampMonotonic')) for u in UNITS)
@@ -348,7 +353,7 @@ class FrameLifecycle:
         health = self._health_receipt(health_receipt) if health_receipt is not None else None
         self._load()
         if self._value and not self._value['restart_steam']:
-            return self._restart_room(restoring)
+            return self._restart_room(restoring,health)
         before = self._units()
         kind = 'original' if restoring else 'prepared'
         prior = self._value

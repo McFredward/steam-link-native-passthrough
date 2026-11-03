@@ -159,6 +159,14 @@ class LifecycleTests(unittest.TestCase):
         self.assertTrue(self.instance().preserved_running())
         self.instance().restored(health_ok=True);self.assertFalse(self.journal.exists())
 
+    def test_room_undo_recovers_an_already_failed_native_runtime_with_full_health_authority(self):
+        self.room_scope();self.instance().restart()
+        self.system.units['steamvr.service'].update(ActiveState='failed',SubState='failed',MainPID='0',Result='signal')
+        health={'baseline':{'native':'failed'},'checkpoint':{}}
+        result=self.instance().restart(restoring=True,health_receipt=health)
+        self.assertFalse(result['runtime_preserved']);self.assertEqual(result['health_receipt'],health)
+        self.assertEqual(self.system.actions[-4:],[('stop','steam.service'),('reset-failed','steamvr.service'),('start','steamvr.service'),('start','steam.service')])
+
     def test_room_scope_continuation_and_explicit_native_update_remain_distinct(self):
         self.room_scope();self.instance().restart();self.instance().continue_prepared('a4'*16)
         self.instance().restart();self.assertEqual(self.system.actions,[('restart',frame.ROOM_UNIT)]*2)
