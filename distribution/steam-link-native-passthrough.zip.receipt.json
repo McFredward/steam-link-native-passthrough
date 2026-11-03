@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 23135396,
-    "sha256": "6fae8a3f9c3f55cebf98fe76f16e7e975d79939163968b466de7c3d0f6e8668a"
+    "bytes": 23135365,
+    "sha256": "43ffa60d21173c28ae4967977bdb04b9b4eea5a2f8f6ba10b158ada6eedccf42"
   },
   "artifacts": {
     "frame_layer": {
@@ -53,7 +53,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 27469,
-    "sha256": "83e40caa5243db018c8940542567941af60d3697ad58449ed37343409582395e"
+    "sha256": "8c8926df151a313c707f0931461e308aaa378e78790416456d0d859dd0942404"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -162,8 +162,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 35925,
-      "sha256": "bfd56666edfce13708e696b16e62676f119f8cd0365633f850c6482576273adb"
+      "bytes": 35785,
+      "sha256": "5cc6f0315b37e196963d3727291f56730adf5a0c292616df7d4b04ce2249a8c4"
     },
     "room_scan/camera_api/buffer_source.h": {
       "bytes": 15452,
@@ -658,7 +658,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "fc0def8ed30529383e188f18821c2ef8dfdf47ea",
+  "source_revision": "6bda2ad50f7070031ba88148a51f2ca5a60f6e92",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -689,7 +689,7 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 24929,
-        "sha256": "55ca529832515818ab7a9dd276c60c77444a54da7611c894b29b22d65eacab4d"
+        "sha256": "b74c4cc0507d48807163512c9ee1e61bb52c0a0515f288b52896683deade8093"
       }
     }
   ],

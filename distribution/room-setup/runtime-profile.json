@@ -248,8 +248,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 35925,
-      "sha256": "bfd56666edfce13708e696b16e62676f119f8cd0365633f850c6482576273adb"
+      "bytes": 35785,
+      "sha256": "5cc6f0315b37e196963d3727291f56730adf5a0c292616df7d4b04ce2249a8c4"
     },
     "room_scan/camera_api/buffer_source.h": {
       "bytes": 15452,
@@ -744,5 +744,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "fc0def8ed30529383e188f18821c2ef8dfdf47ea"
+  "source_revision": "6bda2ad50f7070031ba88148a51f2ca5a60f6e92"
 }

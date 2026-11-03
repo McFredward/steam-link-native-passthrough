@@ -696,7 +696,7 @@
   "current_software_checks": {
     "app.log": {
       "bytes": 117,
-      "sha256": "1e9c44bd3cac87d34e11320ef766f365456554c31ad5fca69c71424f58723d50"
+      "sha256": "adeb771df59e599e55bb61aed601b2252c14fcf0900a7ca38cdb7d069e313298"
     },
     "camera-build.log": {
       "bytes": 854,
@@ -720,7 +720,7 @@
     },
     "pc-live.log": {
       "bytes": 114,
-      "sha256": "193f6b9d38c8981239895f36b30d05e2cb9e4a9013c73465e7b78892e4813900"
+      "sha256": "a50897e7c5907b98c25ed998f18303fdc0941d3caa5376dd9e11aa39bea49134"
     },
     "pc-only.log": {
       "bytes": 4412,
@@ -789,7 +789,7 @@
     "unknown_failed_incomplete_mode_writes_clear_authority": true,
     "unknown_gap_preserved": true
   },
-  "source_revision": "fc0def8ed30529383e188f18821c2ef8dfdf47ea",
+  "source_revision": "6bda2ad50f7070031ba88148a51f2ca5a60f6e92",
   "unchanged_compiled_source_paths": [
     "layer",
     "receiver",
