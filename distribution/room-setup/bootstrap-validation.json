@@ -1,50 +1,52 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PASS",
+  "actual_windows_candidate_check": "pending",
   "archive": {
-    "bytes": 23117568,
-    "sha256": "2c1bcb18641365bfb5f345c9a9fafa49d424c25ac5f535515ad5fe7e489a238f"
+    "bytes": 23119699,
+    "sha256": "6327e3f8f304df7e0c5192a063bc5489c125a313db58775a978ccf701c4ae30e"
   },
-  "archive_commit": "fecbac2d0ecf1fb4f45793f4d7759eef3c17c2d5",
-  "bootstrap_source_sha256": "9525cf992c62bc4fdee30ba1f8a3a46505ae2eeb54403dc4f3031dbdb5dc08f9",
+  "archive_commit": "27c9b08f02fb45adecb4a36a878c672225f37f98",
+  "bootstrap_source_sha256": "c753d669a3134bf4a80f18fa97b5e4754f65fed69b70cee67eeb8d5b9d29dffe",
   "branch": "arcturus-room-setup",
-  "core_commit": "4a4a3c1a99d6e8f208d1a79a69952578f9084d08",
+  "core_commit": "a3c2df540fe855edf33cbedcc2dbf6887ee1ce57",
   "device_actions": false,
-  "final_delivery_ci": {
-    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
-    "jobs": [
-      "linux",
-      "linux-python-baseline",
-      "windows-bootstrap"
-    ],
-    "result": "success",
-    "revision": "252ff422f368e1db4a1a8d98fb2e0ff4f9c3ba96",
-    "run": 41602800181
-  },
+  "failure_stage_cause_diagnostic_and_recovery_visible": true,
   "headset_test": false,
-  "limits": "The Frame audit found candidate 7 with no armed reader. Candidate 9 requires the normal paired update to candidate-8 native components; complete wearer accuracy/performance remains unverified.",
-  "linux_bootstrap_sha256": "0231bc872871986f35e3925aee7f05790a4419d82e219841a9b2666e0ba0ec64",
+  "limits": "Installer-only repair. Complete NVIDIA/headset speed, physical scan accuracy and controller usability remain unverified by the wearer.",
+  "linux_bootstrap_sha256": "45823ee9a73fa0d5f699e27fb5e7d37dfa54df83e8cc8688984370e8aae5c4cb",
   "native_component_versions_unchanged": true,
   "optional_enable_action": false,
-  "remote_archive_download": {
-    "bytes": 23117568,
+  "ordinary_file_bound_bytes": 33554432,
+  "previous_room_7_frame_prepare_and_exact_restore": {
+    "checkpoint_bytes": 89842133,
+    "device_actions": false,
+    "hardware_test": false,
+    "old_room_native_payloads": "candidate 7",
+    "original_receipt_bytes": 19928632,
+    "real_frame_prepare": true,
     "result": "PASS",
-    "sha256": "2c1bcb18641365bfb5f345c9a9fafa49d424c25ac5f535515ad5fe7e489a238f"
+    "runtime_execution": "synthetic native API and shader generation; real installer/file/checkpoint operations",
+    "target_frame_payload_bytes": 15006899,
+    "unchanged_before_file_bytes_after_restore": true
   },
+  "production_payload_install_update_retained_continuation_restore": "PASS",
+  "recovery_checkpoint_bound_bytes": 201326592,
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
+  "rollback_is_not_reported_as_successful_installation": true,
   "schema": "sfnp-room-installer-delivery-v1",
   "source_ci": {
     "room": {
       "result": "success",
-      "run": 41601483367
+      "run": 41628782065
     },
     "setup": {
-      "result": "success",
-      "run": 41601483393
+      "reason": "Windows job reached its previous six-minute CI limit; Linux and Python-baseline checks passed. Final delivery CI uses a ten-minute Windows budget.",
+      "result": "cancelled",
+      "run": 41628781940
     }
   },
-  "source_revision": "293cf212507c1391c4d5862d61c342c979915de5",
+  "source_revision": "e877fd87fad8687bb68b9a4047195314dbbe2cfc",
   "targeted_room_retry_preserves_native_installation": true,
-  "version": "0.3.16-roomscan.9"
+  "version": "0.3.16-roomscan.10"
 }
