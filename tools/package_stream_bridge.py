@@ -50,7 +50,7 @@ def required_sources(root=ROOT):
                    'setup/steam_link_setup_pc.py','setup/steam_link_setup_frame.py',
                    'setup/steam_link_setup_checkpoint.py','setup/steam_link_setup_workflow.py','setup/steam_link_setup_legacy.py',
                    'setup/patch-steam-link.cmd','setup/patch-steam-link.sh','LICENSE','third_party/lz4/LICENSE','third_party/zstd/LICENSE',
-                   'pc/stream-bridge-sender-provider.vrdrivermanifest',
+                   'pc/stream-bridge-sender-provider.vrdrivermanifest','openxr/XrApiLayer_sfnp_passthrough.json',
                    'tools/package_stream_bridge.py','tools/package_stream_link_setup.py',
                    'tools/package_setup_dependencies.py','tools/package_setup_textual.py',
                    'packaging/setup-textual.json','packaging/setup-python.json','packaging/setup-openssh.json',
@@ -62,19 +62,21 @@ def required_sources(root=ROOT):
                   {name.removeprefix('frame/') for name in bridge.TOOLS|bridge.PROFILES})
 
 
-def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None):
+def own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder=None,openxr_layer=None):
+    engine.require(openxr_layer is not None,'The PC OpenXR layer DLL is required.')
     artifacts={name:engine.read(path) for name,path in
-               [('pc_provider',pc_provider),('frame_layer',frame_layer),('frame_selector',frame_selector)]}
+               [('pc_provider',pc_provider),('frame_layer',frame_layer),('frame_selector',frame_selector),('openxr_layer',openxr_layer)]}
     if mask_decoder is not None:
         engine.require(type(mask_decoder)is dict and set(mask_decoder)=={'mask_codec','mask_util'},
                        'A complete private mask decoder pair is required.')
         artifacts.update({name:engine.read(path) for name,path in mask_decoder.items()})
-    pc=artifacts['pc_provider'];engine.require(len(pc)>=128 and pc[:2]==b'MZ','The PC provider must be the reviewed x64 DLL.')
-    offset=struct.unpack_from('<I',pc,60)[0]
-    engine.require(offset<=len(pc)-26 and pc[offset:offset+4]==b'PE\0\0' and
-                   struct.unpack_from('<H',pc,offset+4)[0]==0x8664 and
-                   struct.unpack_from('<H',pc,offset+24)[0]==0x20b and
-                   struct.unpack_from('<H',pc,offset+22)[0]&0x2000,'Unsupported PC provider architecture or image kind.')
+    for name in ('pc_provider','openxr_layer'):
+        pc=artifacts[name];engine.require(len(pc)>=128 and pc[:2]==b'MZ','The PC provider and OpenXR layer must be reviewed x64 DLLs.')
+        offset=struct.unpack_from('<I',pc,60)[0]
+        engine.require(offset<=len(pc)-26 and pc[offset:offset+4]==b'PE\0\0' and
+                       struct.unpack_from('<H',pc,offset+4)[0]==0x8664 and
+                       struct.unpack_from('<H',pc,offset+24)[0]==0x20b and
+                       struct.unpack_from('<H',pc,offset+22)[0]&0x2000,'Unsupported PC provider or OpenXR layer architecture or image kind.')
     for name in ('frame_layer','frame_selector',*(('mask_codec','mask_util') if mask_decoder is not None else ())):
         raw=artifacts[name]
         engine.require(len(raw)>=64 and raw[:7]==b'\x7fELF\x02\x01\x01' and
@@ -114,7 +116,7 @@ def validation(engine,profile,profile_raw,artifacts,receipts):
 
 
 def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,openssh_zip,
-          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None):
+          *,release=False,validation_receipts=(),textual_wheels=None,askpass_exe=None,root=ROOT,channel=None,mask_decoder=None,openxr_layer=None):
     engine=load('sfnp_bridge_package_engine',root/'setup/steam_link_setup.py')
     bridge=load('sfnp_bridge_package_install',root/'setup/stream_bridge_install.py')
     shared=load('sfnp_bridge_package_runtime',root/'tools/package_stream_link_setup.py')
@@ -132,7 +134,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     version=bridge.patch_version(source_bytes['VERSION'].decode('ascii').strip())
     engine.require(version is not None,'An installer semantic version is required.')
     components=patch_versions(engine,bridge,source_bytes['PATCH_VERSIONS.json'])
-    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder)
+    artifacts=own_artifacts(engine,pc_provider,frame_layer,frame_selector,mask_decoder,openxr_layer)
     engine.require(profile['artifacts']=={name:pin(raw) for name,raw in artifacts.items()},
                    'A native artifact differs from the reviewed runtime profile.')
     pc,frame=profile['pc'],profile['frame']
@@ -144,6 +146,8 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
                    'Both runtime roles must be reviewed before release packaging.')
     payload={'pc-provider/bin/win64/driver_steam_link_native_passthrough.dll':artifacts['pc_provider'],
              'pc-provider/driver.vrdrivermanifest':source_bytes['pc/stream-bridge-sender-provider.vrdrivermanifest'],
+             'pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.dll':artifacts['openxr_layer'],
+             bridge.OPENXR_LAYER_MANIFEST:source_bytes['openxr/XrApiLayer_sfnp_passthrough.json'],
              'frame/'+bridge.LIBRARY:artifacts['frame_layer'],
              'frame/libsfnp_stream_launch.so':artifacts['frame_selector']}
     if mask_decoder is not None:
@@ -164,7 +168,7 @@ def build(pc_provider,frame_layer,frame_selector,runtime_profile,python_zip,open
     payload['frame/'+bridge.LOG_DEFAULT]=defaults
     bundle={'schema':bridge.SCHEMA,'logging':logging,'version':version,'readiness':'release' if release else 'prototype',
             'bridge_protocol':profile['bridge_protocol'],'files':{name:pin(raw) for name,raw in sorted(payload.items())},
-            'pc':{**pc,'version':components['pc'],'files':sorted(bridge.PC_FILES|{'pc-provider/'+bridge.LOG_DEFAULT})},'frame':{**frame,'version':components['frame'],'files':sorted(name for name in payload if name.startswith('frame/'))}}
+            'pc':{**pc,'version':components['pc'],'files':sorted(bridge.PC_FILES|bridge.OPENXR_LAYER_FILES|{'pc-provider/'+bridge.LOG_DEFAULT})},'frame':{**frame,'version':components['frame'],'files':sorted(name for name in payload if name.startswith('frame/'))}}
     # Exercise the actual installed-engine manifest parser. This publishes no
     # native shader, changes no provider registration and never calls dlopen.
     with tempfile.TemporaryDirectory(prefix='sfnp-package-contract-') as temporary:
@@ -259,7 +263,7 @@ def publish(path,raw):
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    for name in ('pc-provider','frame-layer','frame-selector','runtime-profile','python-zip','openssh-zip','textual-wheels','askpass-exe','output'):
+    for name in ('pc-provider','openxr-layer','frame-layer','frame-selector','runtime-profile','python-zip','openssh-zip','textual-wheels','askpass-exe','output'):
         parser.add_argument('--'+name,type=Path,required=True)
     parser.add_argument('--release',action='store_true')
     parser.add_argument('--validation-receipt',action='append',type=Path,default=[])
@@ -269,7 +273,8 @@ def main(argv=None):
     if bool(args.mask_codec)!=bool(args.mask_util):parser.error('Supply both --mask-codec and --mask-util.')
     decoder={'mask_codec':args.mask_codec,'mask_util':args.mask_util} if args.mask_codec else None
     raw,receipt=build(args.pc_provider,args.frame_layer,args.frame_selector,args.runtime_profile,args.python_zip,args.openssh_zip,
-                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder)
+                      release=args.release,validation_receipts=args.validation_receipt,textual_wheels=args.textual_wheels,askpass_exe=args.askpass_exe,mask_decoder=decoder,
+                      openxr_layer=args.openxr_layer)
     sidecar=args.output.with_suffix(args.output.suffix+'.receipt.json')
     if args.output.exists() or sidecar.exists():raise ValueError('An output or receipt already exists; it was preserved.')
     publish(args.output,raw)
