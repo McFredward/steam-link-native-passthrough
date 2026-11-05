@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PENDING",
+  "actual_windows_candidate_check": "PASS",
   "all_archive_members_verified": true,
   "archive": {
     "bytes": 23194788,
@@ -18,6 +18,17 @@
   "core_commit": "2e7fcd5a5b9530e3683327c72e511e75197b5a22",
   "current_source_matches_all_packaged_source_pins": true,
   "device_actions": false,
+  "final_delivery_ci": {
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "c91071183cd1ef07995d0221330c18bfe47ea7a3",
+    "run": 42099920945
+  },
   "fixture_checks_skipped_on_linux": 1,
   "hardware_verified": false,
   "headset_test": false,
@@ -56,7 +67,21 @@
     "room_overlay",
     "room_renderer"
   ],
-  "result": "FINAL_DELIVERY_PENDING",
+  "remote_archive_download": {
+    "all_archive_members_verified": true,
+    "archive_commit": "65ed880792f91d2086865d9b18e69ce33de9fd9e",
+    "bytes": 23194788,
+    "core_commit": "2e7fcd5a5b9530e3683327c72e511e75197b5a22",
+    "current_source_matches_all_159_packaged_source_pins": true,
+    "device_actions": false,
+    "member_count": 1042,
+    "public_aliases_match_pinned_core": true,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "511b8c41c7ccf82f354a7f08d9fe3584d43e7c19bbab82c9e53f2609b080d44d",
+    "source_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c"
+  },
+  "result": "PASS",
   "schema": "sfnp-room-bootstrap-validation-v1",
   "software_reproduction": {
     "actual_shader_pulse_changes_rgb_only": true,
@@ -217,9 +242,15 @@
     "synthetic_sloping_ceiling_degrees": 50
   },
   "source_ci": {
+    "all_packaged_source_pins_match_source_revision": true,
+    "earlier_source_setup_run": 42099217547,
+    "earlier_source_setup_status": "cancelled by newer delivery push; final full setup run supersedes it",
+    "room_result": "success",
+    "room_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c",
     "room_run": 42099217409,
-    "setup_run": 42099217547,
-    "status": "PENDING"
+    "setup_result": "success",
+    "setup_revision": "c91071183cd1ef07995d0221330c18bfe47ea7a3",
+    "setup_run": 42099920945
   },
   "source_pin_count": 159,
   "source_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c",
