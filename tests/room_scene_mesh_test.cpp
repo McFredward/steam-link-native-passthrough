@@ -1,6 +1,7 @@
 // Measured mesh and authored elements stay in the same room coordinate space.
 #include "room_scan/native_scene_mesh.h"
 #include "room_scan/native_gaussian.h"
+#include "room_scan/native_scan_guidance.h"
 #include <cstdio>
 using namespace room_native;
 void check(bool value,const char* reason){if(!value)throw std::runtime_error(reason);}
@@ -37,5 +38,13 @@ int main(){try{
     check(pwrite(fd,records.data(),sizeof(GaussianRecord),0)==ssize_t(sizeof(GaussianRecord)),"replace invalid-size fixture");
     bool rejected=false;try{gaussians.append(patches,{{"gaussian_file",name}},2);}catch(const std::exception&){rejected=true;}
     check(rejected,"materially undersized axes remain invalid");
+    ScanGuidance guidance;const auto empty=nlohmann::json(std::vector<unsigned>(72,0));
+    guidance.configure({{"id","room-a"},{"active",true},{"observed",empty},{"measured",empty}});
+    SceneMeshBuilder arrows;const auto instruction=guidance.append(arrows,Mat{},1);
+    check(!instruction.empty()&&arrows.vertices.size()==144,"a live head-responsive guide exists before any depth is captured");
+    const auto firstArrow=arrows.vertices.front();arrows.vertices.clear();guidance.append(arrows,Mat{},1.6);
+    check(firstArrow.color[3]!=arrows.vertices.front().color[3],"the actual guide visibly pulses without camera or model updates");
+    guidance.configure({{"id","room-a"},{"active",false},{"observed",empty},{"measured",empty}});
+    arrows.vertices.clear();check(guidance.append(arrows,Mat{},2).empty()&&arrows.vertices.empty(),"paused scans hide the guide");
     std::puts("PASS native room vertices, reveal data, quality styles and semantic geometry");return 0;
 }catch(const std::exception& error){std::fprintf(stderr,"%s\n",error.what());return 1;}}

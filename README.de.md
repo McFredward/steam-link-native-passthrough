@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.14** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.15** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -53,15 +53,17 @@ und Verbindung zur Frame meldet der Installer **Room scanning is ready**.
 Fehler lassen sich mit Try again wiederholen; die bestätigte native
 Installation bleibt dabei erhalten.
 
-Installer 13 hält die Vorschau auch bei überlappenden Messungen transparent.
-Ein weiches Raster blendet in der Entfernung aus; die Mesh-Vereinfachung erhält
-die gemessenen offenen Ränder. Lokale Flächennormalen und eine Prüfung der
-inversen Tiefe verbessern schräge Blicke auf Boden und Decke. Erneute Messungen
-ziehen die Karte nicht mehr seitlich zusammen; nähere Gegenstände löschen die
-verdeckten Flächen dahinter nicht mehr.
-Die PC-Laufzeit ergänzt die geprüfte PyFQMR-Bibliothek (etwa 115 KB); vorhandene
-Modelldownloads werden wiederverwendet. Frühere Installer-Fenster vorher schließen.
-Ein aktueller PC-Prozess steuert den Scan; ältere Prozesse können ihn nicht ersetzen.
+Installer 15 behält das transparente Raster und ergänzt eine dezente Farbwelle
+sowie animierte Pfeile zu ungesehenen Richtungen und Bereichen ohne gute Tiefe.
+Langsames kontinuierliches Umsehen erweitert und verfeinert den Scan. Detaillierte
+Gauß-Teilkarten werden auf dem PC gesichert; die bisherige Grenze von 240.000
+Punkten für den ganzen Raum beendet die Aufnahme nicht mehr. Die Frame zeigt
+vollständige gemessene Teilflächen innerhalb ihres Grafikbudgets und wechselt
+sie beim Umsehen. Unbekannte Lücken bleiben offen. Ein lokaler Bildvergleich
+prüft und korrigiert die Stereo-Schätzung, auch bei schrägen Deckenansichten.
+Strukturlose oder spiegelnde Flächen bleiben schwierig. Die Änderungen benötigen
+noch einen Test im Headset. Vorhandene Modelle und Bibliotheken werden genutzt.
+Frühere Installer-Fenster schließen; ein aktueller PC-Prozess steuert den Scan.
 
 Wenn sich nur Dateien der Raumeinrichtung ändern, startet die Einrichtung nur
 Room Setup neu. Steam und SteamVR laufen samt Anmeldung weiter. Laufzeitdateien,
@@ -73,7 +75,8 @@ Die korrigierte Größe der Wiederherstellungsdaten und die dauerhaft sichtbaren
 Fehlermeldungen aus Installer 10 bleiben enthalten.
 
 PC-Dateien liegen unter `%LOCALAPPDATA%\steam-link-native-passthrough`, Modell
-und Rechenlaufzeit im Unterordner `room-pc-runtime`. Auf der Frame liegen die
+und Rechenlaufzeit im Unterordner `room-pc-runtime`; detaillierte Geometrie wird
+unter `room-pc-runtime/room-maps` gesichert. Auf der Frame liegen die
 Programmdateien unter `~/.local/share/SteamLinkNativePassthrough/stream-bridge/room-setup`
 und Räume unter `~/.local/share/SteamLinkNativePassthrough/rooms`.
 
@@ -83,7 +86,7 @@ C-Fast-FoundationStereo vor: beim ersten Mal etwa 1,7 GB Download, mindestens
 5 GB freier Speicherplatz. System-Python, CUDA-Toolkit und GPU-Treiber werden
 nicht geändert. Auf **PC reconstruction is running** warten und den
 **Installer während des Scans geöffnet lassen**. Mindestens 3 GB freier
-NVIDIA-Grafikspeicher werden benötigt; Auflösung und Kartengröße passen sich
+NVIDIA-Grafikspeicher werden benötigt; Auflösung und CUDA-Speicherbudget passen sich
 an. Dies ist ein erster Teststand, keine vermessene GPU-Kompatibilitätsliste.
 
 Auf der Frame **Scan a new room → Start scan** wählen und Farb-Passthrough
@@ -96,8 +99,9 @@ verfeinert vorhandene Flächen. Die Vorschau verwendet geometrische,
 aus Tiefendaten aufgebaute Gauß-Flächen; ein fotometrisch optimiertes
 Radiance Field ist noch nicht enthalten.
 
-**Continue** erzeugt Polygone aus gemessenen Gauß-Nachbarschaften zum Prüfen
-und Speichern. **Add furniture or surfaces** bereitet dieselben Flächen zum
+**Continue** erzeugt ein begrenztes Interaktionsmesh zum Prüfen und Speichern;
+die detaillierteren geometrischen Teilkarten bleiben auf dem zugehörigen PC.
+**Add furniture or surfaces** bereitet die Flächen zum
 Markieren von Boden, Wänden, Tischen, Türen, Fenstern und Möbeln vor.
 Buttons verwenden den nativen Menü-Laser; Raumecken werden mit den Aim-Aktionen
 der aktiven XR-Ansicht platziert. **X oben rechts** beendet die Aufnahme und

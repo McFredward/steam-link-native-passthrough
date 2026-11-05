@@ -33,7 +33,7 @@ int main(){try{
     try{surfaces.append(measured,surfaceState,4);}catch(const std::exception&){refused=true;}
     check(refused,"public binary geometry is refused");check(!fchmod(surfaceFd,0600),"restore private fixture");
     int input[2];check(!pipe(input),"snapshot pipe");check(dup2(input[0],STDIN_FILENO)>=0,"snapshot stdin");close(input[0]);
-    SceneSnapshots worker(std::chrono::steady_clock::now());
+    SceneSnapshots worker(std::chrono::steady_clock::now(),3);
     Json state={{"schema","sfnp-room-dashboard-v1"},{"world_revision",1},{"pending",nullptr},{"corners",Json::array()},
         {"room",{{"world_visuals_allowed",true},{"elements",Json::array()},
             {"mesh",{{"vertices",{{-.5f,-.5f,-2.f},{.5f,-.5f,-2.f},{0.f,.5f,-2.f}}},
@@ -54,5 +54,26 @@ int main(){try{
     state["room"]["mesh"]=nullptr;state["surface_file"]=surfaceName;
     state["gaussian_file"]="/invalid/legacy-file-must-not-be-opened";send();const auto connected=wait(4);
     check(connected->allowed&&connected->vertices->size()==3&&connected->vertices->at(0).style==7,"preparation worker selects measured surfaces and bypasses legacy circles");
-    close(input[1]);std::puts("PASS off-frame native geometry preparation, immutable snapshots, reuse and tracking invalidation");return 0;
+    char backName[]="/tmp/.pc-surfaces-region-XXXXXX";const int backFd=mkstemp(backName);
+    check(backFd>=0,"private second region");Cleanup backCleanup{backName,backFd};
+    auto backVertices=surfaceVertices;for(auto& v:backVertices)v.p[2]=2;
+    std::vector<std::uint8_t> backRaw(16+backVertices.size()*20+12);
+    std::memcpy(backRaw.data(),"SFNPMR2\0",8);const std::uint32_t count=backVertices.size(),faces=1;
+    std::memcpy(backRaw.data()+8,&count,4);std::memcpy(backRaw.data()+12,&faces,4);
+    std::memcpy(backRaw.data()+16,backVertices.data(),backVertices.size()*20);
+    std::memcpy(backRaw.data()+16+backVertices.size()*20,indices.data(),12);
+    check(write(backFd,backRaw.data(),backRaw.size())==ssize_t(backRaw.size()),"write complete second region");
+    worker.focus(Mat{});state["serial"]=5;state["world_revision"]=3;state["surface_file"]=nullptr;
+    state["surface_tiles"]={{{"path",surfaceName},{"center",{0,0,-2}},{"faces",1}},
+                            {{"path",backName},{"center",{0,0,2}},{"faces",1}}};
+    send();const auto frontRegion=wait(5);
+    check(frontRegion->vertices->size()==3&&frontRegion->vertices->front().position[2]<0,"GPU budget selects a complete front region");
+    worker.focus(pose({0,0,0},{0,1,0,0}));
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);bool changed=false;
+    while(std::chrono::steady_clock::now()<deadline){const auto current=worker.latest();
+        if(current->vertices!=frontRegion->vertices&&current->vertices->size()==3&&current->vertices->front().position[2]>0){changed=true;break;}
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));}
+    check(changed,"turning reveals the other cached whole region without a camera or PC update");
+    close(input[1]);std::puts("PASS off-frame native geometry preparation, immutable snapshots, reuse and tracking invalidation");
+    std::puts("PASS independent detailed regions and head-responsive GPU budgeting");return 0;
 }catch(const std::exception& error){std::fprintf(stderr,"%s\n",error.what());return 1;}}

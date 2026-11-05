@@ -5,6 +5,16 @@ import base64
 import numpy as np
 from scipy.ndimage import minimum_filter, gaussian_filter
 from scipy.spatial.transform import Rotation
+from functools import lru_cache
+
+
+@lru_cache(maxsize=3)
+def image_grid(width,height):
+    y,x=np.mgrid[:height,:width]
+    focal=width*220/320
+    rays=np.stack(((x-(width-1)/2)/focal,-(y-(height-1)/2)/focal,-np.ones_like(x)),axis=-1)
+    for value in (x,y,rays):value.flags.writeable=False
+    return y,x,rays
 
 
 def matrix(value):
@@ -56,10 +66,9 @@ def rectify(observation, width, height):
     room = np.column_stack((reference[:, :3] @ rectified[:, :3], reference[:, :3] @ rectified[:, 3]+reference[:, 3]))
     focal = width*220/320
     cx, cy = (width-1)/2, (height-1)/2
-    y, x = np.mgrid[:height, :width]
-    rays = np.stack(((x-cx)/focal, -(y-cy)/focal, -np.ones_like(x)), axis=-1)
-    world_rays = rays @ room[:, :3].T
-    head_rays = world_rays @ reference[:, :3]
+    y,x,rays=image_grid(width,height)
+    world_rays = np.einsum('...j,ij->...i',rays,room[:,:3])
+    head_rays = np.einsum('...i,ij->...j',world_rays,reference[:,:3])
     images, masks, origins = [], [], []
     for index, eye in enumerate(rig["eyes"]):
         raw = base64.b64decode(observation["images"][index], validate=True)
@@ -71,30 +80,38 @@ def rectify(observation, width, height):
         if (intrinsics.shape != (4,) or k.shape != (4,) or not np.isfinite(k).all()
                 or not np.isfinite(intrinsics).all() or np.any(intrinsics[:2] < 500)):
             raise ValueError("Unverified optical calibration")
-        uv = project_kb(head_rays @ lens[:, :3], intrinsics, k)/4
+        uv = project_kb(np.einsum('...i,ij->...j',head_rays,lens[:,:3]), intrinsics, k)/4
         timing = observation["timing"][index]
         if timing["line_ns"] != 4360 or not 0 < timing["integration_ns"] < 40000000:
             raise ValueError("Unsupported row timing")
         uncertainty=timing.get('uncertainty_ns',0)
-        if (type(uncertainty)is not int or not 0<=uncertainty<=250000
-                or max(p['query_ns'] for p in observation['poses'])+uncertainty>750000):
+        center_bound=timing.get('uncertainty_kind')=='exposure-center-v1'
+        query_budget=max(p['query_ns'] for p in observation['poses'])
+        if (type(uncertainty)is not int or not 0<=uncertainty<=(1500000 if center_bound else 250000)
+                or query_budget>750000 or not center_bound and query_budget+uncertainty>750000):
             raise ValueError('Exposure timing uncertainty exceeds budget')
-        if uncertainty:
+        if uncertainty or center_bound:
             minimum,maximum=timing['integration_min_ns'],timing['integration_max_ns']
-            if not 0<minimum<=timing['integration_ns']<=maximum<40000000 or (maximum-minimum+1)//2!=uncertainty:
+            expected=(0 if minimum==maximum else (maximum-minimum+3)//4+1) if center_bound else (maximum-minimum+1)//2
+            if not 0<minimum<=timing['integration_ns']<=maximum<40000000 or expected!=uncertainty:
                 raise ValueError('Unverified exposure interval')
             history=np.stack([matrix(p['head']) for p in observation['poses']])
+            if center_bound:
+                first=timing['first_row_ns'];last=first+2463*4360
+                if observation['poses'][0]['raw_ns']>first-uncertainty or observation['poses'][-1]['raw_ns']<last+uncertainty:
+                    raise ValueError('Exposure uncertainty is outside pose history')
             dt=np.diff(np.asarray([p['raw_ns'] for p in observation['poses']],dtype=np.int64))*1e-9
             if len(dt)!=8 or np.any(dt<=0):raise ValueError('Unqualified exposure pose history')
             rotation=Rotation.from_matrix(history[:,:,:3])
-            if (np.max(np.linalg.norm(np.diff(history[:,:,3],axis=0),axis=1)/dt)*uncertainty*1e-9>.0005
-                    or np.max((rotation[:-1].inv()*rotation[1:]).magnitude()/dt)*uncertainty*1e-9>.0005):
+            spatial_time=(uncertainty+query_budget if center_bound else uncertainty)*1e-9
+            if (np.max(np.linalg.norm(np.diff(history[:,:,3],axis=0),axis=1)/dt)*spatial_time>.0005
+                    or np.max((rotation[:-1].inv()*rotation[1:]).magnitude()/dt)*spatial_time>.0005):
                 raise ValueError('Exposure interval has too much spatial uncertainty')
         rotations, translations = row_poses(observation["poses"], timing["first_row_ns"]+np.arange(2464, dtype=np.int64)*4360)
         for _ in range(2):
             rows = np.clip((uv[..., 1]*4+.5).astype(np.int32), 0, 2463)
             at_head = np.einsum("...ji,...j->...i", rotations[rows], world_rays)
-            uv = project_kb(at_head @ lens[:, :3], intrinsics, k)/4
+            uv = project_kb(np.einsum('...i,ij->...j',at_head,lens[:,:3]), intrinsics, k)/4
         valid = np.isfinite(uv).all(axis=-1) & (uv[..., 0] >= 0) & (uv[..., 1] >= 0) & (uv[..., 0] < 615) & (uv[..., 1] < 615)
         safe = np.clip(uv, 0, 614.999)
         ix, iy = safe[..., 0].astype(int), safe[..., 1].astype(int)
@@ -118,8 +135,8 @@ def surface_normals(points, depth, valid, rays):
     for axis in (0, 1):
         predicted = 2/np.maximum(np.roll(inverse, 1, axis)+np.roll(inverse, -1, axis), 1e-12)
         valid &= np.abs(depth-predicted) < .025+.015*depth
-    weight = gaussian_filter(valid.astype(float), 1.5, truncate=2, mode='constant')
-    local = np.stack([gaussian_filter(np.where(valid, points[..., i], 0), 1.5,
+    weight = gaussian_filter(valid.astype(np.float32), 1.5, truncate=2, mode='constant')
+    local = np.stack([gaussian_filter(np.where(valid, points[..., i], 0).astype(np.float32), 1.5,
                                      truncate=2, mode='constant') for i in range(3)], -1)
     local /= np.maximum(weight, 1e-12)[..., None]
     normal = np.cross(np.roll(local, -2, 1)-np.roll(local, 2, 1),
@@ -133,7 +150,7 @@ def surface_normals(points, depth, valid, rays):
     return normal, valid
 
 
-def triangulate(disparities, masks, origins, rays, room, intrinsics):
+def triangulate(disparities, masks, origins, rays, room, intrinsics, *, lr_tolerance=.85):
     left, right = disparities
     height, width = left.shape
     if right.shape != left.shape or not np.isfinite(left).all() or not np.isfinite(right).all():
@@ -145,7 +162,7 @@ def triangulate(disparities, masks, origins, rays, room, intrinsics):
     sample = lambda a: a[y, lo]*(1-t)[..., None]+a[y, lo+1]*t[..., None]
     rd = right[y, lo]*(1-t)+right[y, lo+1]*t
     valid = masks[0] & masks[1][y, lo] & masks[1][y, lo+1] & (ru >= 0) & (ru < width-1) & (left > .1)
-    valid &= np.abs(left-rd) < .85
+    valid &= np.abs(left-rd) < lr_tolerance
     a = rays / np.linalg.norm(rays, axis=-1)[..., None]
     b = sample(rays)
     b /= np.linalg.norm(b, axis=-1)[..., None]
@@ -156,7 +173,7 @@ def triangulate(disparities, masks, origins, rays, room, intrinsics):
     ta, tb = (da-ab*db)/denominator, (ab*da-db)/denominator
     pa, pb = origins[0]+ta[..., None]*a, sample(origins[1])+tb[..., None]*b
     points = (pa+pb)/2
-    local = (points-room[:, 3]) @ room[:, :3]
+    local = np.einsum('...i,ij->...j',points-room[:,3],room[:,:3])
     depth = -local[..., 2]
     valid &= (ta > 0) & (tb > 0) & (depth >= .25) & (depth <= 6) & (np.linalg.norm(pa-pb, axis=-1) < .006)
     normal, valid = surface_normals(points, depth, valid, a)

@@ -26,6 +26,7 @@ class SceneGraphics
     XrSwapchain swapchain(size_t eye) const;
     XrSwapchain depthSwapchain(size_t eye) const;
     void setRoomPose(const XrPosef& pose);
+    void setScanPulse(bool enabled);
     void upload(const std::vector<room_native::SceneVertex>& vertices,bool pointer=false);
     uint32_t width(size_t eye) const;
     uint32_t height(size_t eye) const;

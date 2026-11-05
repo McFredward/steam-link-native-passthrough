@@ -5,6 +5,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <unordered_set>
+#include <memory>
 namespace room_native {
 struct SurfaceVertex {std::uint32_t id;float p[3];std::uint8_t quality,padding[3];};
 static_assert(sizeof(SurfaceVertex)==20);
@@ -17,6 +18,7 @@ class SurfaceScene {
         return (index(p.x)<<28)|(index(p.y)<<14)|index(p.z);
     }
 public:
+    void forgetTriangles(){seen_.clear();}
     void append(SceneMeshBuilder& builder,const nlohmann::json& state,double now){
         const auto path=state.at("surface_file").get<std::string>();
         if(path.size()>4096||path.find("/.pc-surfaces-")==std::string::npos)throw std::runtime_error("Invalid room surface path");
@@ -56,6 +58,56 @@ public:
             current.emplace(key,Seen{first,center});builder.measuredSurface(p,q,r,a.quality==2&&b.quality==2&&c.quality==2,float(first));
         }
         seen_=std::move(current);
+    }
+};
+
+// Dense regions stay separate. Read and prepare only whole nearby regions;
+// acquisition and the detailed PC map are independent of the GPU draw budget.
+class SurfaceTiles {
+    std::size_t budget_;
+    struct Entry {SurfaceScene scene;ino_t inode=0;off_t size=0;timespec modified{};
+        std::shared_ptr<const std::vector<SceneVertex>> vertices;};
+    std::unordered_map<std::string,Entry> entries_;
+public:
+    explicit SurfaceTiles(std::size_t budget=SceneVertexLimit):budget_(std::min(budget,SceneVertexLimit)){}
+    bool limited=false;
+    void append(SceneMeshBuilder& builder,const nlohmann::json& state,double now,const Mat* focus=nullptr){
+        const auto& tiles=state.at("surface_tiles");
+        if(!tiles.is_array()||tiles.size()>8192)throw std::runtime_error("Invalid room region extent");
+        struct Tile {std::string path;V3 center;unsigned faces;float score;};
+        std::vector<Tile> order;std::unordered_set<std::string> paths;std::size_t total=builder.vertices.size();
+        for(const auto& tile:tiles){const auto path=tile.at("path").get<std::string>();const auto& p=tile.at("center");
+            const auto faces=tile.at("faces").get<unsigned>();
+            if(path.size()>4096||path.find("/.pc-surfaces-")==std::string::npos||!paths.insert(path).second
+                ||!p.is_array()||p.size()!=3||faces>200000)throw std::runtime_error("Invalid room region");
+            V3 center{p[0].get<float>(),p[1].get<float>(),p[2].get<float>()};
+            for(float v:{center.x,center.y,center.z})if(!std::isfinite(v)||std::abs(v)>1002)throw std::runtime_error("Invalid room region center");
+            const V3 delta=focus?center-position(*focus):center;
+            const bool behind=focus&&dot(delta,column(*focus,2)*-1)<-.5f;
+            order.push_back({path,center,faces,length(delta)+(behind?1000.f:0.f)});total+=std::size_t(faces)*3;
+        }
+        limited=total>budget_;
+        std::stable_sort(order.begin(),order.end(),[](const Tile& a,const Tile& b){return a.score<b.score;});
+        for(auto it=entries_.begin();it!=entries_.end();)if(!paths.count(it->first))it=entries_.erase(it);else ++it;
+        std::unordered_set<std::string> selected;
+        for(const auto& tile:order){
+            if(builder.vertices.size()+std::size_t(tile.faces)*3>budget_)continue;
+            selected.insert(tile.path);auto& entry=entries_[tile.path];struct stat info{};
+            if(lstat(tile.path.c_str(),&info)){if(errno==ENOENT)continue;throw std::runtime_error("Room region is unavailable");}
+            if(!S_ISREG(info.st_mode)||info.st_uid!=getuid()||(info.st_mode&0077))throw std::runtime_error("Untrusted room region");
+            if(!entry.vertices||entry.inode!=info.st_ino||entry.size!=info.st_size
+                ||entry.modified.tv_sec!=info.st_mtim.tv_sec||entry.modified.tv_nsec!=info.st_mtim.tv_nsec){
+                SceneMeshBuilder region;entry.scene.append(region,{{"surface_file",tile.path}},now);
+                if(region.vertices.size()!=std::size_t(tile.faces)*3)throw std::runtime_error("Room region connectivity changed");
+                entry.vertices=std::make_shared<const std::vector<SceneVertex>>(std::move(region.vertices));
+                entry.inode=info.st_ino;entry.size=info.st_size;entry.modified=info.st_mtim;
+            }
+            builder.vertices.insert(builder.vertices.end(),entry.vertices->begin(),entry.vertices->end());
+        }
+        // Files remain owned and complete on the Frame; their prepared GPU
+        // copies can be loaded again on a turn without another camera image.
+        if(limited)for(auto& item:entries_)if(!selected.count(item.first)){
+            item.second.vertices.reset();item.second.scene.forgetTriangles();}
     }
 };
 } // namespace room_native

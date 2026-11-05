@@ -1,4 +1,4 @@
-"""Private same-user relay. Camera packets and model replies are latest-only."""
+"""Private same-user relay with latest capture and lossless bounded model replies."""
 from __future__ import annotations
 
 import base64
@@ -18,7 +18,7 @@ from .geometry import require
 
 CHUNK = 60000
 MAX_MODEL = 12 * 1024 * 1024
-PROTOCOL = 3
+PROTOCOL = 4
 
 
 def unpack(raw, expanded, limit):
@@ -160,6 +160,7 @@ class PcRelay:
             if command == "begin":
                 require(request["binding"] == self.binding and request["epoch"] == self.epoch and self.intent != "idle",
                         "Scan ended or capture binding changed")
+                if self.events.full():return {'busy':True}
                 size, digest = request["bytes"], request["sha256"]
                 require(type(size) is int and 0 < size <= MAX_MODEL and type(digest) is str and len(digest) == 64,
                         "Invalid model transfer")
@@ -182,7 +183,7 @@ class PcRelay:
                 require(value["binding"] == self.binding and value["capture_epoch"] == self.epoch
                         and self.intent != "idle", "Late result refused")
                 if self.events.full():
-                    self.events.get_nowait()
+                    return {'busy':True}
                 self.events.put_nowait(value)
                 return {"ok": True}
             raise ValueError("Unknown room relay operation")

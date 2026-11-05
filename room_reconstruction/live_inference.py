@@ -16,8 +16,10 @@ def input_tensor(image):
 
 
 class StereoInference:
-    def __init__(self, runtime, width=512, height=384, *, cpu_development=False):
+    def __init__(self, runtime, width=512, height=384, *, cpu_development=False, batch=1, vram_mb=3072):
         self.width, self.height = width, height
+        if batch not in (1,2) or not 1536<=vram_mb<=8192:raise ValueError('Invalid stereo memory profile')
+        self.batch=batch
         if (width, height) not in ((320, 256), (512, 384), (640, 480)):
             raise ValueError("Unsupported bounded stereo profile")
         runtime = Path(runtime)
@@ -36,7 +38,7 @@ class StereoInference:
         options.intra_op_num_threads = 4
         options.enable_mem_pattern = False
         provider = "CPUExecutionProvider" if cpu_development else ("CUDAExecutionProvider", {
-            "device_id": "0", "gpu_mem_limit": str(3*1024**3), "arena_extend_strategy": "kSameAsRequested",
+            "device_id": "0", "gpu_mem_limit": str(vram_mb*1024**2), "arena_extend_strategy": "kSameAsRequested",
             "cudnn_conv_algo_search": "HEURISTIC"})
         self.session = ort.InferenceSession(str(model), sess_options=options, providers=[provider])
         if not cpu_development and self.session.get_providers()[0] != "CUDAExecutionProvider":
@@ -46,12 +48,20 @@ class StereoInference:
     def disparity(self, images):
         if any(image.shape != (self.height, self.width) for image in images):
             raise ValueError("Neural stereo input extent changed")
-        # Sequential bilateral inference bounds VRAM on smaller NVIDIA cards.
+        # The dynamic-batch model can run both matching directions together.
+        # Smaller NVIDIA cards retain sequential bilateral inference.
+        if self.batch==2:
+            left=np.stack((input_tensor(images[0]),input_tensor(images[1][:,::-1])))
+            right=np.stack((input_tensor(images[1]),input_tensor(images[0][:,::-1])))
+            result=self.session.run(['disparity'],{'left_image':left,'right_image':right})[0]
+            if result.shape!=(2,1,self.height,self.width) or not np.isfinite(result).all():
+                raise ValueError('Unexpected batched neural stereo output')
+            return [result[0,0].copy(),result[1,0,:,::-1].copy()]
         outputs = []
         for left, right, flip in ((images[0], images[1], False), (images[1][:, ::-1], images[0][:, ::-1], True)):
             result = self.session.run(["disparity"], {"left_image": input_tensor(left)[None],
                 "right_image": input_tensor(right)[None]})[0]
-            if result.shape != (1, 1, self.height, self.width):
+            if result.shape != (1, 1, self.height, self.width) or not np.isfinite(result).all():
                 raise ValueError("Unexpected neural stereo output")
             result = result[0, 0]
             outputs.append(result[:, ::-1].copy() if flip else result)

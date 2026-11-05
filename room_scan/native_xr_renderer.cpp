@@ -4,6 +4,7 @@
 #include "native_scene_snapshots.h"
 #include "native_capture_pose.h"
 #include "native_xr_input.h"
+#include "native_scan_guidance.h"
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -37,6 +38,7 @@ class Scene {
     double lastProbe_=-1,lastReport_=0;std::uint64_t frames_=0;unsigned reports_=0;
     bool previouslyVisible_=false;float visibleSince_=0;
     SceneSnapshots snapshots_{start_};SceneMeshBuilder pointerBuilder_;
+    ScanGuidance guidance_;std::vector<SceneVertex> basePointers_;double lastGuidance_=-1;
     std::shared_ptr<const PreparedScene> prepared_;std::shared_ptr<const std::vector<SceneVertex>> uploaded_;
     double seconds()const{return std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count();}
     void createInstance(){
@@ -67,12 +69,14 @@ class Scene {
             origin_=next;controlValid_=packet->at("valid").get<bool>()&&origin_!=blockedOrigin_;
             if(controlValid_)stageFromRoom_=sceneMatrix(packet->at("stage_from_room"));
             pointers_=packet->at("pointers");if(!pointers_.is_array()||pointers_.size()>2)throw std::runtime_error("Room scene pointer budget reached");
+            guidance_.configure(packet->value("guidance",Json()));
             pointersChanged=true;
         }
         if(pointersChanged){pointerBuilder_.vertices.clear();for(const auto& p:pointers_){
                 const auto a=vectorJson(p.at("origin")),b=vectorJson(p.at("target"));
                 pointerBuilder_.line(a,b,{.7f,.96f,.93f,.55f});if(p.value("marker",false))pointerBuilder_.marker(b);}
-            graphics_.upload(pointerBuilder_.vertices,true);}
+            basePointers_=pointerBuilder_.vertices;
+            if(!guidance_.active())graphics_.upload(pointerBuilder_.vertices,true);}
     }
     void probe(){
         const double now=seconds();if(now-lastProbe_<(controlValid_?1.:.1))return;lastProbe_=now;
@@ -124,10 +128,24 @@ class Scene {
             std::array<XrView,2> views{{{XR_TYPE_VIEW},{XR_TYPE_VIEW}}};uint32_t count=0;SCENE_XR(xrLocateViews(session_,&locate,&status,views.size(),&count,views.data()));
             const auto valid=XR_VIEW_STATE_POSITION_VALID_BIT|XR_VIEW_STATE_ORIENTATION_VALID_BIT;
             if(count==2&&(status.viewStateFlags&valid)==valid){
+                Mat roomHead;
+                if(controlValid_){roomHead=multiply(inverse(stageFromRoom_),xrPose(views[0].pose));
+                    const auto right=multiply(inverse(stageFromRoom_),xrPose(views[1].pose));
+                    const auto center=(position(roomHead)+position(right))*.5f;
+                    roomHead.m[0][3]=center.x;roomHead.m[1][3]=center.y;roomHead.m[2][3]=center.z;
+                    snapshots_.focus(roomHead);}
                 const bool visible=controlValid_&&prepared_&&prepared_->allowed&&!prepared_->state->at("room").is_null()
                     &&prepared_->state->at("room").value("origin_id","")==origin_;
                 if(visible&&!previouslyVisible_)visibleSince_=float(seconds());
                 previouslyVisible_=visible;
+                graphics_.setScanPulse(visible&&guidance_.active());
+                if(visible&&guidance_.active()){
+                    pointerBuilder_.vertices=basePointers_;
+                    const auto message=guidance_.append(pointerBuilder_,roomHead,seconds());
+                    graphics_.upload(pointerBuilder_.vertices,true);
+                    if(!message.empty()&&seconds()-lastGuidance_>1){lastGuidance_=seconds();
+                        sendScenePacket(channel_,{{"event","guidance"},{"message",message}});}
+                }
                 graphics_.setRoomPose(xrPose(stageFromRoom_));
                 for(unsigned eye=0;eye<2;++eye){uint32_t colorIndex=0,depthIndex=0;XrSwapchainImageAcquireInfo acquire{XR_TYPE_SWAPCHAIN_IMAGE_ACQUIRE_INFO};
                     SCENE_XR(xrAcquireSwapchainImage(graphics_.swapchain(eye),&acquire,&colorIndex));

@@ -101,14 +101,15 @@ public:
         // Each ray is rotated and triangulated at its actual exposure-time
         // camera origin. Faster motion still refuses acquisition, rather than
         // substituting a current pose or inventing unobserved geometry.
-        if(poses.queryBudget+exposureUncertainty>750000u||!poses.supportsTimeUncertainty(exposureUncertainty)){
+        if(poses.queryBudget>750000u||!poses.supportsTimeUncertainty(exposureUncertainty+poses.queryBudget)){
             attempt.result=CaptureStats::ClockBudget;return hint("Checking camera timing. Keep looking around slowly.");}
         if(poses.translationSpan>.012f||poses.rotationSpan>.04f){attempt.result=CaptureStats::Motion;
             return hint("Slow down your movement to capture sharper detail.");}
         const Mat head=poses.at(center);
         if(pcMode){
             Json times=Json::array();for(const auto& t:timing)times.push_back({{"first_row_ns",t->firstRowCenter},{"line_ns",t->line},{"integration_ns",t->integration},
-                {"uncertainty_ns",t->uncertainty},{"integration_min_ns",t->minimumIntegration},{"integration_max_ns",t->maximumIntegration}});
+                {"uncertainty_ns",t->uncertainty},{"uncertainty_kind","exposure-center-v1"},
+                {"integration_min_ns",t->minimumIntegration},{"integration_max_ns",t->maximumIntegration}});
             Json reference=Json::array();for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c)reference.push_back(head.m[r][c]);
             attempt.result=CaptureStats::Accepted;lastExposure_=center;++sequence_;
             return {{"event","stereo_observation"},{"schema","sfnp-room-stereo-v1"},{"binding",binding},{"sequence",sequence_},

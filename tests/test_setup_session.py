@@ -47,6 +47,7 @@ def dispatch(request):
  if action=='raise':
   print(request['secret']);sys.stderr.write(request['secret']);raise ValueError(request['secret'])
  if action=='large':return {'large':'x'*20000}
+ if action=='stream':return {'camera_packet':'x'*1500000}
  if action=='nan':return {'number':float('nan')}
  if action=='inject':
   sys.__stdout__.write('{"id":999,"ok":true,"result":{}}\n');sys.__stdout__.flush()
@@ -157,6 +158,12 @@ class Tests(unittest.TestCase):
         connection = self.connection(max_reply=512)
         with self.assertRaises(session.SessionError): connection.call({'action':'large'})
         self.assert_reaped(connection)
+
+    def test_explicit_room_stream_preserves_large_bounded_replies_in_one_session(self):
+        connection=self.connection(max_reply=8*1024*1024)
+        self.assertEqual(len(connection.call({'action':'stream'})['camera_packet']),1500000)
+        self.assertEqual(connection.call({'action':'inventory'})['calls'],2)
+        self.assertEqual(len(self.authentications()),1)
 
     def test_nonfinite_result_closes_the_session(self):
         connection = self.connection()

@@ -135,6 +135,15 @@ int main(){try{
     graphics.upload(connected.vertices);graphics.render(0,0,0,view,2);
     const auto uncertain=readback(graphics,graphics.swapchain(0),0);
     check(uncertain[center+3]<surface[center+3],"uncertain measured regions stay visibly lighter than confirmed surfaces");
+    graphics.setScanPulse(true);graphics.render(0,0,0,view,3.2f);
+    const auto pulseA=readback(graphics,graphics.swapchain(0),0);
+    const auto pulseDepth=readback(graphics,graphics.depthSwapchain(0),0);
+    graphics.render(0,0,0,view,3.8f);const auto pulseB=readback(graphics,graphics.swapchain(0),0);
+    check(pulseA!=pulseB,"the production polygon shader visibly pulses while geometry is unchanged");
+    for(std::size_t i=3;i<pulseA.size();i+=4)check(pulseA[i]==pulseB[i]&&pulseA[i]==uncertain[i],"scan pulse preserves the accepted transparency");
+    check(pulseDepth==readback(graphics,graphics.depthSwapchain(0),0),"scan animation cannot change measured metric depth");
+    graphics.setScanPulse(false);
+    std::puts("PASS visible polygon scan pulse with unchanged alpha and metric depth");
     std::puts("PASS connected measured surface shader, animated teal reveal, confidence and real gaps");
     graphics.shutdown();check(chains.empty(),"all owned swapchain images are released");dlclose(loader);
     std::puts("PASS real native MR shaders, animated alpha, transparent gaps, metric depth, order-independent occlusion and independent per-eye swapchains");

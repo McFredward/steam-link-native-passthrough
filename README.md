@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.14**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.15**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
@@ -51,14 +51,17 @@ reader, downloads/prepares the PC runtime, warms the model and connects to the
 Frame before reporting **Room scanning is ready**. A failed room phase offers
 Try again and preserves the committed native installation.
 
-Installer 13 keeps live surfaces translucent even when observations overlap,
-uses a soft world grid that fades with distance, and preserves measured mesh
-boundaries during reduction. Local plane normals and inverse-depth consistency
-improve grazing floor/ceiling observations. Revisit fusion retains tangential
-coverage; a closer object no longer erases its occluded background.
-The PC runtime adds the pinned PyFQMR mesh reducer (about 115 KB); existing model
-downloads are reused. Close earlier installer windows before starting this build.
-A single current PC worker owns the scan; older workers cannot replace its map.
+Installer 15 retains the translucent grid and adds a subtle colour pulse and
+animated arrows towards unseen directions, then areas needing better depth.
+Slow continuous looking around extends and revisits the scan. Detailed Gaussian
+submaps are checkpointed on the PC; the former 240,000-point whole-room limit
+does not stop acquisition. The Frame displays complete nearby measured patches
+within its GPU budget and switches them when you turn your head. Unknown gaps
+stay open. Local photometric verification corrects stereo proposals before
+fusion, including sloping ceiling views; blank or reflective surfaces remain
+uncertain. These software changes still need an installed wearer test.
+The existing model and dependencies are reused. Close earlier installer windows
+before starting this build. A single current PC worker owns the scan.
 
 When only Room Setup files change, setup refreshes that owned application while
 Steam and SteamVR remain running. Exact unchanged core files, settings, pairing
@@ -70,7 +73,8 @@ installer 10. Failures show their step, cause and recovery result; a successful
 restore is explicitly a failed requested installation.
 
 PC files live under `%LOCALAPPDATA%\steam-link-native-passthrough`; reconstruction
-dependencies and model cache are in its `room-pc-runtime` directory. Frame app
+dependencies and model cache are in its `room-pc-runtime` directory; detailed
+geometry checkpoints are in `room-pc-runtime/room-maps`. Frame app
 files live in `~/.local/share/SteamLinkNativePassthrough/stream-bridge/room-setup`,
 with saved rooms in `~/.local/share/SteamLinkNativePassthrough/rooms`.
 
@@ -79,7 +83,7 @@ prepares a private CUDA/ONNX Runtime and NVIDIA C-Fast-FoundationStereo model
 (about 1.7 GB on first use, 5 GB free disk space required). It changes no system
 Python, CUDA toolkit or GPU driver. Wait for **PC reconstruction is running** and
 **keep the installer open** throughout the scan. At least 3 GB free NVIDIA VRAM
-is required; resolution and map size scale with available memory. This is a
+is required; stereo resolution and CUDA memory use scale with available memory. This is a
 first test candidate, not a measured GPU compatibility list.
 
 In Room Setup, choose **Scan a new room → Start scan** with colour passthrough
@@ -90,8 +94,8 @@ for another viewpoint, and unobserved gaps stay empty. Revisit surfaces from the
 side to refine them. These are depth-initialized geometric Gaussians, not a
 photometrically optimized radiance field.
 
-**Continue** extracts polygons from measured Gaussian neighbourhoods for review
-and saving. **Add furniture or surfaces** prepares the same surfaces for marking
+**Continue** extracts a bounded interaction mesh for review and saving; the
+more detailed geometric submaps remain on the paired PC. **Add furniture or surfaces** prepares surfaces for marking
 floors, walls, tables, doors, windows and furniture with the controllers. The
 native menu laser handles buttons; focused XR aim actions place world corners.
 The top-right **X** stops capture and returns to the SteamVR menu with the

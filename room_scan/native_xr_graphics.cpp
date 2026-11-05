@@ -88,6 +88,7 @@ struct SceneGraphics::Impl
 
     XrInstance xrInstance = XR_NULL_HANDLE;
     XrPosef roomPose{{0,0,0,1},{0,0,0}};
+    bool scanPulse=false;
     struct Vertices {VkBuffer buffer=VK_NULL_HANDLE;VkDeviceMemory memory=VK_NULL_HANDLE;void* mapped=nullptr;uint32_t count=0;std::size_t capacity=0;};
     Vertices mesh,pointers;
     XrGraphicsBindingVulkan2KHR binding{XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR};
@@ -173,6 +174,7 @@ struct SceneGraphics::Impl
             XrMatrix4x4f mvp;
             float time;
             float revealStart;
+            float scanPulse;
         };
         VkPushConstantRange pushConstants{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                                           0, sizeof(PushConstants)};
@@ -520,7 +522,8 @@ void SceneGraphics::render(size_t eyeIndex, uint32_t imageIndex, uint32_t depthI
         XrMatrix4x4f mvp;
         float time;
         float revealStart;
-    } pushConstants{mvp, time,revealStart};
+        float scanPulse;
+    } pushConstants{mvp, time,revealStart,_impl->scanPulse?1.f:0.f};
     vkCmdPushConstants(_impl->commandBuffer, _impl->pipelineLayout,
                        VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0,
                        sizeof(pushConstants), &pushConstants);
@@ -599,6 +602,7 @@ void SceneGraphics::shutdown()
 
 XrSwapchain SceneGraphics::depthSwapchain(size_t eye)const{return _impl->eyes.at(eye).depthSwapchain;}
 void SceneGraphics::setRoomPose(const XrPosef& pose){_impl->roomPose=pose;}
+void SceneGraphics::setScanPulse(bool enabled){_impl->scanPulse=enabled;}
 void SceneGraphics::upload(const std::vector<room_native::SceneVertex>& values,bool pointer){
     if(values.size()>room_native::SceneVertexLimit)throw std::runtime_error("Room scene vertex count exceeds budget");
     auto& target=pointer?_impl->pointers:_impl->mesh;

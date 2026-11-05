@@ -10,6 +10,7 @@ class RoomSceneDriver {
     std::string executable_,loader_,origin_;bool wanted_=false,failed_=false,ready_=false;
     std::uint64_t revision_=UINT64_MAX;bool sentAllowed_=false;double lastHint_=0;
     const char* originStatus_="waiting";float eyePositionError_=0,eyeRotationError_=0;
+    nlohmann::json guidance_;
     std::uint64_t queryUncertainty_=0;unsigned originReports_=0;
     void failed(){
         if(failed_)return;
@@ -85,6 +86,11 @@ public:
                             multiply(registration_.roomFromStage(),sceneMatrix(hand.at("grip"))),hand.at("pressed"),true,now};}
                 }
                 else if(kind=="error"){failed();return;}
+                else if(kind=="guidance"){
+                    const auto message=packet->at("message").get<std::string>();
+                    if(message.size()>180||message.find('\n')!=std::string::npos)throw std::runtime_error("Invalid scan instruction");
+                    if(registration_.ready()&&hint)hint(message);
+                }
                 else if(kind=="origin_changed"){registration_.reset();if(originChanged)originChanged();}
                 else if(kind=="origin_probe"){
                     try{observe(*packet);}catch(const std::exception&){/* A delayed observation does not establish an origin. */}
@@ -92,7 +98,8 @@ public:
                 else throw std::runtime_error("Unexpected room scene reply");
             }
             if(child_.writeFailed()){failed();return;}
-            if(state){const auto revision=state->value("world_revision",std::uint64_t(0));const auto& room=state->at("room");
+            if(state){guidance_=state->value("guidance",nlohmann::json());
+                const auto revision=state->value("world_revision",std::uint64_t(0));const auto& room=state->at("room");
                 const bool allowed=!room.is_null()&&room.value("world_visuals_allowed",false);
                 if(revision_!=revision||sentAllowed_!=allowed){child_.snapshot(state);revision_=revision;sentAllowed_=allowed;}}
             if(ready_&&!registration_.ready()&&now-lastHint_>1){lastHint_=now;
@@ -106,7 +113,7 @@ public:
         const bool verified=allowed&&aligned();
         try{child_.control({{"event","view"},{"origin_id",origin_},{"valid",verified},
             {"stage_from_room",verified?sceneMatrix(inverse(registration_.roomFromStage())):nlohmann::json(nullptr)},
-            {"pointers",verified?pointers:nlohmann::json::array()}});}
+            {"pointers",verified?pointers:nlohmann::json::array()},{"guidance",verified?guidance_:nlohmann::json()}});}
         catch(const std::exception&){failed();}
     }
 };

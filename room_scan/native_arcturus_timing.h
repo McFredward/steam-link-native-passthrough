@@ -46,10 +46,12 @@ inline std::optional<ArcturusTiming> arcturusTiming(const Json& frame){
             ||!minimum||maximum<minimum||maximum>65535||coarse<minimum||coarse>maximum)return std::nullopt;
         out.minimumIntegration=std::uint64_t(minimum)*out.line;out.maximumIntegration=std::uint64_t(maximum)*out.line;
         out.integration=out.minimumIntegration+(out.maximumIntegration-out.minimumIntegration)/2;
-        // Use the larger integration uncertainty as a conservative timestamp
-        // bound. Exposure-center uncertainty itself is only half as large.
-        out.uncertainty=(out.maximumIntegration-out.minimumIntegration+1)/2;
-        if(out.uncertainty>250000u)return std::nullopt;
+        // The row center is EOF-readout-integration/2: an integration interval
+        // of width R gives a center interval of width R/2 and radius R/4.
+        // Query latency and the entire center interval must still pass the
+        // unchanged 0.5 mm / 0.5 mrad spatial gate before any image is exported.
+        out.uncertainty=out.maximumIntegration==out.minimumIntegration?0:(out.maximumIntegration-out.minimumIntegration+3)/4+1;
+        if(out.uncertainty>1500000u)return std::nullopt;
     }
     if(out.maximumIntegration+2*out.line>=period||eof<readout+out.maximumIntegration)return std::nullopt;
     out.firstRowCenter=eof-readout-out.integration/2;
