@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PENDING",
+  "actual_windows_candidate_check": "PASS",
   "all_archive_members_verified": true,
   "all_frame_payload_files_byte_identical_to_candidate_13": true,
   "archive": {
@@ -21,7 +21,15 @@
   "current_source_matches_all_155_packaged_source_pins": true,
   "device_actions": false,
   "final_delivery_ci": {
-    "result": "PENDING"
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "68a1228b5ac5a338dc7b6a7c48fc48dd13c9b96a",
+    "run": 42024944568
   },
   "headset_test": false,
   "limits": [
@@ -62,7 +70,18 @@
   "rebuilt_native_artifacts": [],
   "recovery_checkpoint_bound_bytes": 201326592,
   "remote_archive_download": {
-    "result": "PENDING"
+    "all_archive_members_verified": true,
+    "archive_commit": "86b760f31d1ef1383302bdaf2303194f662e3446",
+    "bytes": 23158641,
+    "core_commit": "8c1fdf27a6adc26e1043e727b2b24bbaf78d7976",
+    "current_source_matches_all_155_packaged_source_pins": true,
+    "device_actions": false,
+    "member_count": 1039,
+    "public_aliases_match_pinned_core": true,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "8e5a08fd7e66ad232c3de722a1323f8398875dc59ee9410dabb75e14408f292e",
+    "source_revision": "91e737b4388d2b7dbad190d5201a14a5867c5d44"
   },
   "required_camera_activation": true,
   "required_pc_warmup_and_frame_handshake": true,
