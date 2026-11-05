@@ -356,3 +356,51 @@ lost app-restart replies, changed invocation/file refusal and preserved UI roles
 This is software evidence. Installed coverage, physical accuracy and visual
 quality remain a wearer test. Installer 0.3.16-roomscan.13; Frame components
 0.3.11-roomscan.13; PC native provider unchanged at 0.3.12-roomscan.8.
+
+## Candidate 14: preserve complete coverage at the preview limit
+
+The 2026-11-05 wearer test accepted the translucent grid. Keep its shader,
+opacity, distance fade and native renderer unchanged. The same test rejected
+a sudden fragmentation followed by little visible growth. Private read-only
+logs show 96,609 preview faces at observation 34 and exactly 20,000 at
+observation 36, despite 155,854 valid stereo pixels. Preview processing grew
+to 1.33 seconds. The `budget//3` fallback selected isolated faces when the
+boundary-locked reducer could not meet the vertex budget. It reproduced the
+reported visual failure; the camera and display tracking continued working.
+
+`live_surface.py` now unions overlapping measured planar patches in local
+40 cm groups. A fitted group must agree with the measured normals and remain
+within 2 cm of all its input vertices; other groups keep their original faces.
+The two retained world coordinates are projected directly, avoiding numerical
+cracks from separately rotated plane bases. Pinned Shapely 2.1.2/GEOS unions
+the measured triangle footprints and uses constrained triangulation, including
+interior rings. There is no convex hull, positive-radius polygon simplification
+or raster hole fill. Input uncertainty is retained. Original observed positions
+may undergo bounded plane refinement; this does not establish physical accuracy
+on reflective or textureless real surfaces.
+
+Compaction completes before matching a new observation, so no old correspondence
+can refer to a reused point. Overlapping internal borders no longer consume the
+preview budget indefinitely. Irreducible geometry keeps the last complete
+preview and explicitly reports the existing detail-capacity notice; neither
+the preview nor the map drops scattered triangles to pretend it fits. Final
+mesh extraction can retain that same accepted complete surface.
+
+Three new regressions fail against unchanged candidate 13 and pass after the
+fix: overlapping disconnected patch borders, 100 consecutive live snapshots
+with early coverage plus new regions and a real opening, and complete-preview
+retention for deliberately irreducible disjoint patches. The production-budget
+synthetic replay uses 63,100 measured vertices: candidate 13 loses 3.589 m2 of
+9.867 m2, while candidate 14 retains that projected support and the opening.
+Another 45 observations extend the covered area to 17.597 m2. This private
+geometry replay excludes neural inference, transport and headset display; it
+is not an installed speed or visual acceptance result.
+
+The installer includes the pinned Windows CPython 3.14 Shapely wheel and all
+three bundled copyright/license notices. Existing neural-model/CUDA downloads
+are reused. The required runtime gate checks the actual union and triangulator
+before readiness, including the real private Windows build in CI. Frame source,
+native artifacts, services, shader and camera API are unchanged; no patch-version
+bump is needed. Installer 0.3.16-roomscan.14 retains Frame 0.3.11-roomscan.13 and
+PC native provider 0.3.12-roomscan.8. Current installations use the new installer
+and PC worker without a Frame restart; camera access remains session-only.

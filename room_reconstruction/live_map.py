@@ -11,6 +11,10 @@ from scipy.spatial import cKDTree
 from scipy.ndimage import distance_transform_edt, minimum_filter
 
 
+class SurfaceBudgetError(ValueError):
+    """A measured boundary cannot fit; retain the last complete preview."""
+
+
 class GaussianMap:
     def __init__(self, limit=60000, step=4):
         if not 1000 <= limit <= 80000 or step not in (4, 6, 8):
@@ -32,9 +36,15 @@ class GaussianMap:
         self.faces = set()
         self.frames = 0
         self.seeded_orientation = False
+        self.previous_snapshot = None
 
     def integrate(self, points, normals, valid, depth, camera, focal, room=None):
         self.capacity_limited = False
+        # Compact before computing this observation's correspondences. A
+        # compaction during allocation invalidates both matches and new IDs.
+        if (int(self.active.sum()) > self.limit*2 or len(self.faces) > self.limit*3
+                or int(self.active.sum())+int(valid[::self.step, ::self.step].sum()) > self.capacity):
+            self._coarsen()
         if self.seeded_orientation:
             flip=np.sum(self.normals*(camera-self.positions),axis=1)<0
             self.normals[flip]*=-1
@@ -117,13 +127,6 @@ class GaussianMap:
             representatives = new[unique]
             new = representatives
             free = np.flatnonzero(~self.active)
-            if len(new) > len(free)+self.capacity-len(self.positions):
-                coarsened = self._coarsen()
-                # Compaction can change the representatives matched above.
-                # These assignments belong to the pre-compaction observation;
-                # discard their faces, rather than joining unrelated surfaces.
-                if coarsened:match[:] = -1
-                free = np.flatnonzero(~self.active)
             take = min(len(new), len(free))
             reused = free[:take]
             if take:
@@ -173,11 +176,9 @@ class GaussianMap:
             compatible = np.max(edges, axis=1) < np.minimum(.16, limit)
             compatible &= np.linalg.norm(np.cross(vertices[:, 1]-vertices[:, 0], vertices[:, 2]-vertices[:, 0]), axis=1) > 1e-7
             for face in tri[compatible]:
-                self.faces.add(tuple(sorted(map(int, face))))
-        if len(self.faces)>640000:
-            faces=np.asarray(sorted(self.faces),np.int32)
-            keep=self._balanced(self.positions[faces].mean(axis=1),640000)
-            self.faces={tuple(map(int,f)) for f in faces[keep]}
+                key=tuple(sorted(map(int, face)))
+                if len(self.faces)<640000 or key in self.faces:self.faces.add(key)
+                else:self.capacity_limited=True
         self.frames += 1
 
     def quality(self):
@@ -207,6 +208,7 @@ class GaussianMap:
         self.active[ids] = True
         self.capacity = max(self.capacity, count)
         self.faces = set()
+        self.previous_snapshot = None
         # Rebuild only overlapping local Gaussian support, never a room hull.
         distances, neighbours = cKDTree(values[:, :3]).query(values[:, :3], k=min(7, len(ids)))
         if distances.ndim == 2:
@@ -251,6 +253,7 @@ class GaussianMap:
         self.active=np.zeros(count,bool);self.active[ids[used]]=True;self.occluded=np.zeros(count,np.uint8)
         self.faces={tuple(sorted(map(int,f))) for f in ids[triangles]}
         self.capacity=max(self.capacity,count);self.seeded_orientation=True
+        self.previous_snapshot=None
 
     def _records(self,selected):
         count = len(selected)
@@ -302,6 +305,8 @@ class GaussianMap:
         selected,inverse=np.unique(original,return_inverse=True)
         faces=inverse.reshape(-1,3)
         if len(selected)>budget or len(faces)>budget*2:
+            if fragments and self._coarsen():
+                return self._surface(budget,fragments=False)
             import pyfqmr
             reducer=pyfqmr.Simplify();reducer.setMesh(self.positions[selected].astype(np.float64),faces)
             reducer.simplify_mesh(target_count=budget,max_iterations=40,aggressiveness=5,
@@ -320,43 +325,71 @@ class GaussianMap:
             faces=faces[np.linalg.norm(np.cross(p[:,1]-p[:,0],p[:,2]-p[:,0]),axis=1)>1e-7]
         if not len(faces):
             selected,inverse=np.unique(original,return_inverse=True);faces=inverse.reshape(-1,3)
-        if fragments and (len(selected)>budget or len(faces)>budget*2):
-            # An extensively fragmented border may be irreducible. Select
-            # complete measured triangles across space, not isolated vertices
-            # that disconnect every region in the preview.
-            faces=faces[self._balanced(self.positions[selected[faces]].mean(axis=1),budget//3)]
         used,inverse=np.unique(faces,return_inverse=True)
+        if len(used)>budget or len(faces)>budget*2:
+            raise SurfaceBudgetError('Measured boundaries exceed the preview budget')
         return selected[used],inverse.reshape(-1,3)
 
     def _coarsen(self):
-        if self.frames-self.coarsening_refused_at<20:return False
-        selected,faces=self._surface(max(1000,self.capacity*3//4),fragments=False)
-        if len(selected)>=int(self.active.sum()):
+        from .live_surface import merge_measured
+        if self.frames-self.coarsening_refused_at<5 or not self.faces:return False
+        faces=np.asarray(sorted(self.faces),np.int32)
+        faces=faces[self.active[faces].all(axis=1)]
+        if not len(faces):return False
+        points,normals,quality,faces=merge_measured(self.positions,self.normals,self.quality(),faces)
+        count=len(points)
+        if not len(faces) or count>=int(self.active.sum()):
             self.coarsening_refused_at=self.frames
             return False
-        self.active[:]=False;self.active[selected]=True
-        self.faces={tuple(sorted(map(int,f))) for f in selected[faces]}
+        active=np.flatnonzero(self.active)
+        _,nearest=cKDTree(self.positions[active]).query(points)
+        nearest=active[nearest]
+        flip=np.sum(normals*self.normals[nearest],axis=1)<0
+        normals[flip]*=-1
+        sigma=self.sigma[nearest].copy()
+        viewpoints=self.viewpoints[nearest].copy()
+        # Publish the complete measured union atomically. Old unreferenced IDs
+        # become reusable; no observation can keep pre-compaction matches.
+        self.positions[:count],self.normals[:count]=points,normals
+        self.sigma[:count]=sigma
+        self.weights[:count]=np.where(quality==2,8,1)
+        self.views[:count]=np.where(quality==2,3,1)
+        self.viewpoints[:count]=viewpoints;self.residuals[:count]=0
+        self.occluded[:]=0;self.active[:]=False;self.active[:count]=True
+        self.faces={tuple(sorted(map(int,f))) for f in faces}
         self.coarsenings+=1
         return True
 
     def snapshot(self):
-        selected,faces=self._surface(self.limit)
-        dtype=np.dtype([('id','<u4'),('point','<f4',(3,)),('quality','u1'),('pad','u1',(3,))])
-        vertices=np.zeros(len(selected),dtype=dtype)
-        vertices['id']=selected;vertices['point']=self.positions[selected];vertices['quality']=self.quality()[selected]
-        return {'gaussians':self._records(selected),
-                'surface_vertices':base64.b64encode(vertices.tobytes()).decode(),
-                'surface_triangles':base64.b64encode(np.asarray(faces,dtype='<u4').tobytes()).decode(),
-                'face_count':len(faces),'map_points':int(self.active.sum()),'map_capacity':self.capacity,
+        try:
+            selected,faces=self._surface(self.limit)
+            dtype=np.dtype([('id','<u4'),('point','<f4',(3,)),('quality','u1'),('pad','u1',(3,))])
+            vertices=np.zeros(len(selected),dtype=dtype)
+            vertices['id']=selected;vertices['point']=self.positions[selected];vertices['quality']=self.quality()[selected]
+            self.previous_snapshot={'gaussians':self._records(selected),
+                    'surface_vertices':base64.b64encode(vertices.tobytes()).decode(),
+                    'surface_triangles':base64.b64encode(np.asarray(faces,dtype='<u4').tobytes()).decode(),
+                    'face_count':len(faces)}
+        except SurfaceBudgetError:
+            self.capacity_limited=True
+            if self.previous_snapshot is None:raise
+        return {**self.previous_snapshot,'map_points':int(self.active.sum()),'map_capacity':self.capacity,
                 'recycled_points':self.recycled,'coarsenings':self.coarsenings}
 
     def preview(self):
-        return self._records(self._surface(self.limit)[0])
+        return self.snapshot()['gaussians']
 
     def mesh(self):
         if not self.faces:
             raise ValueError("No measured surface connectivity. Capture more viewpoints first.")
-        selected,faces = self._surface(min(100000,self.limit*2))
+        try:selected,faces = self._surface(min(100000,self.limit*2))
+        except SurfaceBudgetError:
+            if self.previous_snapshot is None:raise
+            raw=base64.b64decode(self.previous_snapshot['surface_vertices'])
+            vertices=np.frombuffer(raw,dtype=np.dtype([('id','<u4'),('point','<f4',(3,)),('quality','u1'),('pad','u1',(3,))]))
+            faces=np.frombuffer(base64.b64decode(self.previous_snapshot['surface_triangles']),dtype='<u4').reshape(-1,3)
+            return {'vertices':vertices['point'].round(5).tolist(),'triangles':faces.tolist(),
+                    'quality':['reliable' if q==2 else 'uncertain' for q in vertices['quality']]}
         if not len(faces):
             raise ValueError("No consistent measured surfaces. Continue scanning from another angle.")
         used, inverse = np.unique(faces, return_inverse=True);used=selected[used]

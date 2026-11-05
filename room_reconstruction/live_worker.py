@@ -29,10 +29,17 @@ def main():
     from .live_geometry import rectify, triangulate
     from .live_map import GaussianMap
     import pyfqmr  # Required and verified before advertising readiness.
+    import shapely  # Includes the private GEOS union and constrained triangulator.
+    if not callable(shapely.constrained_delaunay_triangles):
+        raise RuntimeError('The measured-surface triangulator is unavailable')
     def emit(value):
         sys.stdout.write(json.dumps(value, separators=(",", ":"), allow_nan=False)+"\n")
         sys.stdout.flush()
     try:
+        probe=shapely.Polygon(((0,0),(3,0),(3,3),(0,3)),holes=[((1,1),(2,1),(2,2),(1,2))])
+        checked=shapely.union_all(shapely.get_parts(shapely.constrained_delaunay_triangles(probe)))
+        if not shapely.equals(probe,checked):
+            raise RuntimeError('The measured-surface runtime did not preserve its opening')
         engine = StereoInference(args.runtime, args.width, args.height)
         engine.warmup()
         emit({"event": "ready", "provider": engine.provider, "protocol": 3,
