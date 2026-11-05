@@ -1,231 +1,246 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PASS",
+  "actual_windows_candidate_check": "PENDING",
   "all_archive_members_verified": true,
-  "all_frame_payload_files_byte_identical_to_candidate_13": true,
   "archive": {
-    "bytes": 23158641,
-    "sha256": "8e5a08fd7e66ad232c3de722a1323f8398875dc59ee9410dabb75e14408f292e"
+    "bytes": 23194788,
+    "sha256": "511b8c41c7ccf82f354a7f08d9fe3584d43e7c19bbab82c9e53f2609b080d44d"
   },
-  "archive_commit": "86b760f31d1ef1383302bdaf2303194f662e3446",
-  "archive_member_count": 1039,
-  "bootstrap_source_sha256": "6ec837de7949b0fe7bae2d4320cdf4bbc5e6cf5709e7351194cba50a22a54703",
+  "archive_commit": "65ed880792f91d2086865d9b18e69ce33de9fd9e",
+  "archive_member_count": 1042,
+  "bootstrap_source_sha256": "4f7c55e73484b9769eaab95db7bd4096c79cd6bbd195e4e937da0ae555037534",
   "branch": "arcturus-room-setup",
   "camera_inactive_after_reboot": true,
   "component_versions": {
-    "frame": "0.3.11-roomscan.13",
+    "frame": "0.3.12-roomscan.15",
     "pc": "0.3.12-roomscan.8"
   },
-  "core_commit": "8c1fdf27a6adc26e1043e727b2b24bbaf78d7976",
-  "current_installation_uses_new_pc_worker_without_frame_restart": true,
-  "current_source_matches_all_155_packaged_source_pins": true,
+  "core_commit": "2e7fcd5a5b9530e3683327c72e511e75197b5a22",
+  "current_source_matches_all_packaged_source_pins": true,
   "device_actions": false,
-  "final_delivery_ci": {
-    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
-    "jobs": [
-      "linux",
-      "linux-python-baseline",
-      "windows-bootstrap"
-    ],
-    "result": "success",
-    "revision": "68a1228b5ac5a338dc7b6a7c48fc48dd13c9b96a",
-    "run": 42024944568
-  },
+  "fixture_checks_skipped_on_linux": 1,
+  "hardware_verified": false,
   "headset_test": false,
   "limits": [
-    "Installed room accuracy, visual continuity and speed require the next wearer test.",
-    "Geometry replay excludes neural inference, network transport and headset display.",
-    "Local measured plane refinement is bounded to 2 cm; nonplanar patches retain original measured triangles.",
-    "Exact projected triangle union and constrained triangulation retain unobserved openings; there is no convex hull or positive-radius polygon simplification.",
-    "A truly irreducible boundary holds the last complete accepted preview and reports the explicit detail limit.",
-    "The Frame shader, renderer, camera API and service payloads are unchanged. Camera access remains session-only and inactive after reboot.",
-    "Keep only the current installer open while scanning; the reference device does not require an RTX 4090."
+    "Installed visual quality, continuous room speed and physical ceiling accuracy require the next wearer test.",
+    "Synthetic geometry checks exclude inference, network transport and headset display; CPU model execution does not measure NVIDIA throughput.",
+    "Gaussian mapping remains geometric rather than an optimized photometric radiance field; blank, reflective and transparent surfaces can remain unknown.",
+    "Detailed geometry checkpoints live on the paired PC. The bounded Frame review/save interaction mesh is a proxy, not a full-resolution export.",
+    "Complete local preview parts are selected within the Frame GPU budget; acquisition has independent bounded regional storage.",
+    "Original stereo identity, calibration, exposure history, 0.5 mm / 0.5 mrad uncertainty limits, private file ownership and epoch checks remain required.",
+    "Only Room Setup files change on the Frame; unchanged native Steam/SteamVR components retain room-only update/recovery.",
+    "Camera access is session-only and inactive after reboot. No firmware, camera driver or XRService is replaced; keep the current installer open during scanning."
   ],
-  "linux_bootstrap_sha256": "fef85ed6228d19caf6bd5db249dbaf570b372875ffbcc4bae92ca7203aec2fd8",
+  "linux_bootstrap_sha256": "28ef5c1dcd8f9ae6bfdd3f8e51eed5d4607668b0f8df70a6daa421f878b302e4",
+  "only_room_setup_frame_payload_changed": true,
   "optional_enable_action": false,
   "powershell_bootstrap_fixture_checks": 39,
   "previous_scan_analysis": {
-    "accepted_pixels_at_drop": 155854,
-    "compactions_at_drop": 0,
+    "coarsenings": 0,
+    "exposure_refusals_dominated": true,
+    "head_motion_refusals_rare": true,
+    "late_preview_faces": 104288,
+    "late_preview_vertices": 59833,
     "map_capacity": 240000,
-    "map_points_at_drop": 195264,
-    "maximum_compute_ms": 2705.95,
-    "maximum_preview_ms": 1331.61,
-    "preview_faces_after": 20000,
-    "preview_faces_before": 96609,
+    "maximum_compute_ms": 6085.35,
+    "maximum_preview_ms": 4904.62,
     "raw_images_read": false
   },
   "private_runtime_change": {
-    "added_wheel": {
-      "bytes": 1773019,
-      "filename": "shapely-2.1.2-cp314-cp314-win_amd64.whl",
-      "name": "shapely",
-      "sha256": "a444e7afccdb0999e203b976adb37ea633725333e5b119ad40b1ca291ecf311c",
-      "url": "https://files.pythonhosted.org/packages/74/d4/135684f342e909330e50d31d441ace06bf83c7dc0777e11043f99167b123/shapely-2.1.2-cp314-cp314-win_amd64.whl",
-      "version": "2.1.2"
-    },
-    "all_existing_model_and_wheel_pins_unchanged": true,
-    "existing_download_cache_reused": true
+    "existing_download_cache_reused": true,
+    "maximum_cuda_arena_mb": 8192,
+    "model_and_all_wheel_pins_unchanged": true,
+    "sequential_bilateral_inference_on_smaller_profiles": true
   },
-  "rebuilt_native_artifacts": [],
-  "recovery_checkpoint_bound_bytes": 201326592,
-  "remote_archive_download": {
-    "all_archive_members_verified": true,
-    "archive_commit": "86b760f31d1ef1383302bdaf2303194f662e3446",
-    "bytes": 23158641,
-    "core_commit": "8c1fdf27a6adc26e1043e727b2b24bbaf78d7976",
-    "current_source_matches_all_155_packaged_source_pins": true,
-    "device_actions": false,
-    "member_count": 1039,
-    "public_aliases_match_pinned_core": true,
-    "public_branch_bootstrap_and_immutable_core_match": true,
-    "result": "PASS",
-    "sha256": "8e5a08fd7e66ad232c3de722a1323f8398875dc59ee9410dabb75e14408f292e",
-    "source_revision": "91e737b4388d2b7dbad190d5201a14a5867c5d44"
-  },
-  "required_camera_activation": true,
-  "required_pc_warmup_and_frame_handshake": true,
-  "schema": "sfnp-room-installer-delivery-v1",
+  "rebuilt_native_artifacts": [
+    "room_overlay",
+    "room_renderer"
+  ],
+  "result": "FINAL_DELIVERY_PENDING",
+  "schema": "sfnp-room-bootstrap-validation-v1",
   "software_reproduction": {
-    "before_observation_compaction": true,
-    "consecutive_live_snapshots_preserve_old_and_new_regions": 100,
-    "constrained_triangulation_preserves_real_opening": true,
-    "irreducible_capacity_retains_complete_accepted_preview": true,
-    "new_regressions_fail_on_unchanged_candidate_13": 3,
-    "no_scattered_triangle_fallback": true,
-    "production_geometry_replay": {
-      "after": {
-        "continued_scan": [
-          {
-            "area_m2": 12.581190083030885,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 29.87,
-            "faces": 7038,
-            "frames": 5,
-            "vertices": 3561
-          },
-          {
-            "area_m2": 13.20875118735466,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 33.2,
-            "faces": 8439,
-            "frames": 10,
-            "vertices": 3808
-          },
-          {
-            "area_m2": 13.835706859318092,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 40.58,
-            "faces": 11722,
-            "frames": 15,
-            "vertices": 4052
-          },
-          {
-            "area_m2": 14.461845730837572,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 42.52,
-            "faces": 12428,
-            "frames": 20,
-            "vertices": 4301
-          },
-          {
-            "area_m2": 15.088958298553672,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 43.85,
-            "faces": 13207,
-            "frames": 25,
-            "vertices": 4552
-          },
-          {
-            "area_m2": 15.715956191605079,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 46.22,
-            "faces": 14252,
-            "frames": 30,
-            "vertices": 4805
-          },
-          {
-            "area_m2": 16.343080602845546,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 49.97,
-            "faces": 15866,
-            "frames": 35,
-            "vertices": 5053
-          },
-          {
-            "area_m2": 16.969099281682773,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 51.48,
-            "faces": 16716,
-            "frames": 40,
-            "vertices": 5308
-          },
-          {
-            "area_m2": 17.596590081538018,
-            "at_capacity": false,
-            "compactions": 1,
-            "compute_ms": 53.38,
-            "faces": 17582,
-            "frames": 45,
-            "vertices": 5560
-          }
-        ],
-        "first_snapshot_ms": 636.44,
-        "invented_area_m2": 0.0,
-        "known_area_lost_m2": 9.831902509774279e-17,
-        "maximum_fusion_and_snapshot_ms": 58.41,
-        "observed_area_m2": 9.86712521386181,
-        "triangles": 228,
-        "vertices": 313
-      },
-      "before": {
-        "first_snapshot_ms": 724.1,
-        "invented_area_m2": 0.0,
-        "known_area_lost_m2": 3.5890981220591938,
-        "observed_area_m2": 6.2780270918026195,
-        "triangles": 20000,
-        "vertices": 40000
-      }
+    "actual_shader_pulse_changes_rgb_only": true,
+    "blank_ceiling_not_fabricated": true,
+    "changed_checkpoint_preserved": true,
+    "dynamic_pinned_model": {
+      "actual_pinned_model": true,
+      "batch": 2,
+      "hardware_performance": false,
+      "provider": "CPUExecutionProvider",
+      "result": "PASS",
+      "seconds": 15.075
     },
-    "production_input_vertices": 63100,
-    "production_preview_point_budget": 60000,
-    "strict_frame_gaussian_and_surface_reader_accepts_fused_mesh": true,
-    "translucent_grid_shader_and_renderer_unchanged": true
+    "eviction_persistence": true,
+    "guide_independent_of_new_camera_or_pc_frame": true,
+    "malformed_batch_refused_before_adoption": true,
+    "occluded_background_preserved": true,
+    "old_x_menu_ray_tracking_and_shaders_regressions": true,
+    "pending_previews_drain_before_final_mesh": true,
+    "production_resolution_geometry_replay": {
+      "all_updates_strict_frame_reader": true,
+      "frames": [
+        {
+          "faces": 52318,
+          "frame": 1,
+          "frame_reader_ms": 588.96,
+          "fusion_ms": 459.48,
+          "parts": 64,
+          "pending": true,
+          "points": 88064,
+          "preview_ms": 365.81
+        },
+        {
+          "faces": 98230,
+          "frame": 2,
+          "frame_reader_ms": 641.99,
+          "fusion_ms": 360.02,
+          "parts": 128,
+          "pending": true,
+          "points": 89344,
+          "preview_ms": 255.03
+        },
+        {
+          "faces": 144612,
+          "frame": 3,
+          "frame_reader_ms": 312.68,
+          "fusion_ms": 620.92,
+          "parts": 192,
+          "pending": true,
+          "points": 90624,
+          "preview_ms": 330.98
+        },
+        {
+          "faces": 175076,
+          "frame": 4,
+          "frame_reader_ms": 365.65,
+          "fusion_ms": 371.45,
+          "parts": 234,
+          "pending": true,
+          "points": 91904,
+          "preview_ms": 290.55
+        },
+        {
+          "faces": 175076,
+          "frame": 5,
+          "frame_reader_ms": 311.53,
+          "fusion_ms": 345.85,
+          "parts": 234,
+          "pending": true,
+          "points": 93184,
+          "preview_ms": 261.81
+        },
+        {
+          "faces": 184848,
+          "frame": 6,
+          "frame_reader_ms": 331.47,
+          "fusion_ms": 365.38,
+          "parts": 247,
+          "pending": true,
+          "points": 94720,
+          "preview_ms": 270.31
+        },
+        {
+          "faces": 184962,
+          "frame": 7,
+          "frame_reader_ms": 297.93,
+          "fusion_ms": 353.56,
+          "parts": 247,
+          "pending": true,
+          "points": 96000,
+          "preview_ms": 274.29
+        },
+        {
+          "faces": 184962,
+          "frame": 8,
+          "frame_reader_ms": 353.19,
+          "fusion_ms": 370.19,
+          "parts": 247,
+          "pending": true,
+          "points": 97280,
+          "preview_ms": 464.36
+        },
+        {
+          "faces": 185196,
+          "frame": 9,
+          "frame_reader_ms": 363.56,
+          "fusion_ms": 360.35,
+          "parts": 247,
+          "pending": true,
+          "points": 98560,
+          "preview_ms": 295.04
+        },
+        {
+          "faces": 189497,
+          "frame": 10,
+          "frame_reader_ms": 333.7,
+          "fusion_ms": 372.01,
+          "parts": 247,
+          "pending": true,
+          "points": 99840,
+          "preview_ms": 293.36
+        },
+        {
+          "faces": 201936,
+          "frame": 11,
+          "frame_reader_ms": 353.4,
+          "fusion_ms": 354.37,
+          "parts": 260,
+          "pending": true,
+          "points": 101120,
+          "preview_ms": 332.23
+        },
+        {
+          "faces": 208349,
+          "frame": 12,
+          "frame_reader_ms": 391.75,
+          "fusion_ms": 375.94,
+          "parts": 260,
+          "pending": true,
+          "points": 102400,
+          "preview_ms": 320.86
+        }
+      ],
+      "inference_network_and_headset_excluded": true,
+      "resolution": [
+        640,
+        480
+      ],
+      "result": "PASS"
+    },
+    "queue_full_retries_without_dropping_regions": true,
+    "regional_capacity_grows_beyond_240000": true,
+    "repeated_cross_region_depth_conflict_retires_old_foreground": true,
+    "stable_region_paths": true,
+    "synthetic_ceiling_error_p95_below_m": 0.04,
+    "synthetic_ceiling_median_error_after_m": 0.013723,
+    "synthetic_ceiling_median_error_before_m": 0.319637,
+    "synthetic_sloping_ceiling_degrees": 50
   },
   "source_ci": {
-    "room": {
-      "result": "success",
-      "revision": "91e737b4388d2b7dbad190d5201a14a5867c5d44",
-      "run": 42024327734
-    },
-    "setup": {
-      "result": "success",
-      "revision": "91e737b4388d2b7dbad190d5201a14a5867c5d44",
-      "run": 42024327733
-    }
+    "room_run": 42099217409,
+    "setup_run": 42099217547,
+    "status": "PENDING"
   },
-  "source_revision": "91e737b4388d2b7dbad190d5201a14a5867c5d44",
-  "static_frame_changes": [],
+  "source_pin_count": 159,
+  "source_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c",
+  "static_frame_changes": [
+    "frame/room-setup/room_scan/app.py",
+    "frame/room-setup/room_scan/capture.py",
+    "frame/room-setup/room_scan/pc_reconstruction.py",
+    "frame/room-setup/room_scan/pc_relay.py",
+    "frame/room-setup/room_scan/workflow.py",
+    "frame/room-setup/sfnp-room-overlay",
+    "frame/room-setup/sfnp-room-renderer"
+  ],
   "targeted_room_retry_preserves_native_installation": true,
-  "translucent_grid_and_renderer_unchanged": true,
   "unchanged_native_artifacts": [
     "pc_provider",
     "frame_layer",
     "frame_selector",
     "mask_codec",
     "mask_util",
-    "room_overlay",
     "room_camera",
-    "room_renderer",
     "room_vision"
   ],
-  "version": "0.3.16-roomscan.14"
+  "version": "0.3.16-roomscan.15"
 }
