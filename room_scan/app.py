@@ -257,6 +257,8 @@ class Application:
                 self.pc_relay.offer(event)
             return
         if kind == "pc_hint":
+            if self.session and hasattr(self.session.reconstruction,'update_coverage') and 'coverage' in event:
+                self.session.reconstruction.update_coverage(event)
             self.notice = "No consistent depth here yet. Look at an edge or textured surface, then move slowly to the side."
             return
         if kind == "pc_error":
@@ -271,8 +273,7 @@ class Application:
             with self.pc_relay.lock:
                 self.session.reconstruction.accept(event)
             self.world_revision += 1
-            self.notice = ("Look slowly into empty areas. Revisit faint surfaces from another angle." if not event.get("at_capacity")
-                           else "This room has reached its scan detail limit. Continue to review or scan a separate room.")
+            self.notice = "Keep looking around slowly. Follow the animated guide into unseen areas; your detailed scan is stored on the PC."
             if kind == "pc_mesh" and self.pc_pending_action:
                 action, self.pc_pending_action = self.pc_pending_action, None
                 if action == "review":
@@ -492,7 +493,9 @@ class Application:
             button("align_start", "Align saved room", self.alignment_anchor is not None and not self.starting, primary=True)
             button("back", "Back", not self.starting)
         surface = getattr(self.session.reconstruction,'surface_path',None) if self.pc_relay and self.session else None
-        state = self.session.view(geometry=not bool(surface)) if self.session else None
+        reconstruction=self.session.reconstruction if self.session else None
+        surface_files=reconstruction.surface_files() if hasattr(reconstruction,'surface_files') else []
+        state = self.session.view(geometry=not bool(surface or surface_files)) if self.session else None
         if self.page == "align_place" and self.aligned_preview is not None and state is not None:
             surface = None
             state = {**state, "mesh": self.aligned_preview.mesh.to_dict(),
@@ -508,8 +511,13 @@ class Application:
                 "capture_collecting": bool(self.session and self.session.stage == Stage.SCANNING and not self.pc_pending_action),
                 "pc_ready": self.pc_relay.ready if self.pc_relay else False,
                 "surface_file":str(surface) if surface and state and state['world_visuals_allowed'] else None,
+                "surface_files":surface_files if state and state['world_visuals_allowed'] else [],
+                "surface_tiles":reconstruction.surface_tiles() if hasattr(reconstruction,'surface_tiles') and state and state['world_visuals_allowed'] else [],
+                "preview_camera":getattr(reconstruction,'preview_camera',None),
+                "guidance":{'id':self.session.room.id,'active':self.session.stage==Stage.SCANNING,
+                            **getattr(reconstruction,'coverage',{'observed':[0]*72,'measured':[0]*72})} if self.session else None,
                 "gaussian_file": str(self.session.reconstruction.path) if self.pc_relay and self.session
-                    and getattr(self.session.reconstruction, "path", None) and not self.session.reconstruction.mesh().triangles
+                    and getattr(self.session.reconstruction, "path", None) and not self.session.reconstruction.has_surface()
                     and self.page not in ("review", "saved", "home", "prepare", "alignment") else None,
                 "camera_check_pending": self.starting,
                 "capture_epoch": self.capture_epoch,
@@ -587,19 +595,24 @@ def run(root, incoming, outgoing):
             event = None
             try:
                 event = decode(raw) if raw is not None else relay_event
+                applied_at=time.monotonic()
                 app.event(event)
+                apply_ms=(time.monotonic()-applied_at)*1000
                 if event.get("event") == "stereo_observation":
                     continue
                 if (event.get("event") in ("depth", "pc_model", "pc_mesh") and app.session and app.session.reconstruction
                         and time.monotonic()-last_report >= 5 and reports < 120):
                     reconstruction = app.session.reconstruction
-                    status, mesh = reconstruction.status(), reconstruction.mesh()
-                    print(f"Room scan: frames={status['accepted_frames']} vertices={len(mesh.vertices)} "
-                          f"triangles={len(mesh.triangles)} reliable={status['reliable_cells']} "
+                    status = reconstruction.status()
+                    vertices=status.get('gaussians',0) if isinstance(reconstruction,PcReconstruction) else len(reconstruction.mesh().vertices)
+                    faces=status.get('measured_faces',0) if isinstance(reconstruction,PcReconstruction) else len(reconstruction.mesh().triangles)
+                    print(f"Room scan: frames={status['accepted_frames']} vertices={vertices} "
+                          f"triangles={faces} reliable={status['reliable_cells']} "
                           f"uncertain={status['uncertain_cells']} gaussians={status.get('gaussians', 0)} "
                           f"compute_ms={event.get('compute_ms', 0)} accepted_pixels={event.get('accepted_pixels', 0)} "
                           f"map_points={status.get('map_points',0)} map_capacity={status.get('map_capacity',0)} "
                           f"recycled={status.get('recycled_points',0)} coarsenings={status.get('coarsenings',0)} "
+                          f"apply_ms={apply_ms:.2f} regions={getattr(reconstruction,'tile_count',0)} "
                           + ' '.join(f"{name}_ms={status.get('phase_ms',{}).get(name,0)}" for name in ('rectify','stereo','geometry','fusion','preview')), file=sys.stderr)
                     last_report, reports = time.monotonic(), reports+1
             except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration) as error:

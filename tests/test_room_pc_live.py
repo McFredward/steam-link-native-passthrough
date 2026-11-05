@@ -36,7 +36,7 @@ class RelayTests(unittest.TestCase):
     def test_latest_capture_lease_chunks_and_epoch_cancel(self):
         relay = self.relay
         self.assertRaises(RoomError, self.dispatch, {"op": "take"})
-        self.dispatch({"op": "ready", "protocol": 3, "provider": "CUDAExecutionProvider"})
+        self.dispatch({"op": "ready", "protocol": 4, "provider": "CUDAExecutionProvider"})
         self.assertIsNone(relay.pending)
         relay.set_scan(self.binding, 4, "scan", "room-a")
         for number in range(3):
@@ -59,8 +59,8 @@ class RelayTests(unittest.TestCase):
 
     def test_private_socket_refuses_cpu_and_bad_digest(self):
         relay = self.relay
-        self.assertRaises(RoomError, self.dispatch, {"op": "ready", "protocol": 3, "provider": "CPUExecutionProvider"})
-        self.dispatch({"op": "ready", "protocol": 3, "provider": "CUDAExecutionProvider"})
+        self.assertRaises(RoomError, self.dispatch, {"op": "ready", "protocol": 4, "provider": "CPUExecutionProvider"})
+        self.dispatch({"op": "ready", "protocol": 4, "provider": "CUDAExecutionProvider"})
         relay.set_scan(self.binding, 0, "scan", "room-a")
         self.dispatch({"op": "begin", "bytes": 2, "sha256": "0"*64, "binding": self.binding, "epoch": 0,"encoding":"zlib","expanded_bytes":2})
         self.dispatch({"op": "put", "offset": 0, "data": base64.b64encode(b"{}").decode()})
@@ -71,7 +71,7 @@ class RelayTests(unittest.TestCase):
         from room_scan.pc_relay import unpack, MAX_MODEL
         relay = self.relay
         self.assertRaises(RoomError, self.dispatch, {"op":"ready", "protocol":1, "provider":"CUDAExecutionProvider"})
-        self.dispatch({"op":"ready", "protocol":3, "provider":"CUDAExecutionProvider"})
+        self.dispatch({"op":"ready", "protocol":4, "provider":"CUDAExecutionProvider"})
         relay.set_scan(self.binding, 7, "scan", "room-a")
         value = {"binding":self.binding, "capture_epoch":7, "noise":base64.b64encode(os.urandom(180000)).decode()}
         raw = json.dumps(value).encode(); compressed = zlib.compress(raw, 1)
@@ -132,17 +132,17 @@ class RelayTests(unittest.TestCase):
 
     def test_old_or_second_workers_cannot_take_or_clear_an_active_scan(self):
         relay=self.relay
-        self.dispatch({'op':'ready','protocol':3,'provider':'CUDAExecutionProvider'})
+        self.dispatch({'op':'ready','protocol':4,'provider':'CUDAExecutionProvider'})
         relay.set_scan(self.binding,2,'scan','room-a')
         relay.offer({'binding':self.binding,'capture_epoch':2,'pixels':'owned'})
         pending=relay.pending
         for request in ({'op':'ready','protocol':2,'provider':'CUDAExecutionProvider'},
-                        {'op':'ready','protocol':3,'provider':'CUDAExecutionProvider','worker_id':'14'*16},
+                        {'op':'ready','protocol':4,'provider':'CUDAExecutionProvider','worker_id':'14'*16},
                         {'op':'take','worker_id':'14'*16},{'op':'offline'}, {'op':'offline','worker_id':'14'*16}):
             with self.assertRaises(RoomError):relay._dispatch(request)
             self.assertTrue(relay.ready);self.assertEqual(relay.pending,pending)
         self.dispatch({'op':'offline'})
-        relay._dispatch({'op':'ready','protocol':3,'provider':'CUDAExecutionProvider','worker_id':'14'*16})
+        relay._dispatch({'op':'ready','protocol':4,'provider':'CUDAExecutionProvider','worker_id':'14'*16})
         self.assertRaises(RoomError,self.dispatch,{'op':'offline'})
         self.assertTrue(relay.ready)
 
@@ -150,7 +150,7 @@ class RelayTests(unittest.TestCase):
         path=Path(self.temporary.name)/'.pc-surfaces-seed'
         vertices=b''.join(struct.pack('<I3fB3x',i,*p,1) for i,p in enumerate(((0,0,-2),(1,0,-2),(0,1,-2))))
         raw=b'SFNPMR2\0'+struct.pack('<II',3,1)+vertices+struct.pack('<3I',0,1,2);path.write_bytes(raw)
-        self.dispatch({'op':'ready','protocol':3,'provider':'CUDAExecutionProvider'})
+        self.dispatch({'op':'ready','protocol':4,'provider':'CUDAExecutionProvider'})
         self.relay.set_scan(self.binding,0,'scan','room-a',surface_path=path)
         state=self.dispatch({'op':'take','seed':True});self.assertEqual(state['seed_format'],'surface')
         self.assertEqual(state['seed_bytes'],len(raw))
@@ -223,7 +223,7 @@ class RelayTests(unittest.TestCase):
         script = Path(self.temporary.name)/"fixture_gpu.py"
         script.write_text('''import sys,json,base64,struct
 from pathlib import Path
-print(json.dumps({'event':'ready','provider':'CUDAExecutionProvider','protocol':3}),flush=True)
+print(json.dumps({'event':'ready','provider':'CUDAExecutionProvider','protocol':4}),flush=True)
 for raw in sys.stdin:
  m=json.loads(raw)
  if m['op']=='seed':
@@ -389,6 +389,18 @@ class GeometryTests(unittest.TestCase):
         self.assertRaisesRegex(ValueError,'spatial uncertainty',rectify,bounded,320,256)
         bounded=copy.deepcopy(observation);bounded['timing'][0]['uncertainty_ns']=250001
         self.assertRaisesRegex(ValueError,'timing uncertainty',rectify,bounded,320,256)
+        bounded=copy.deepcopy(observation)
+        uncertainty=500001
+        for t in bounded['timing']:
+            t.update(uncertainty_kind='exposure-center-v1',uncertainty_ns=uncertainty,
+                     integration_ns=2000000,integration_min_ns=1000000,integration_max_ns=3000000)
+        for i,p in enumerate(bounded['poses']):
+            p['raw_ns']=first-uncertainty+(last-first+2*uncertainty)*i//8
+        self.assertTrue(rectify(bounded,320,256)[1][0].any())
+        outside=copy.deepcopy(bounded);outside['poses'][-1]['raw_ns']-=1
+        self.assertRaisesRegex(ValueError,'outside pose history',rectify,outside,320,256)
+        moving=copy.deepcopy(bounded);moving['poses'][-1]['head'][3]+=.01
+        self.assertRaisesRegex(ValueError,'spatial uncertainty',rectify,moving,320,256)
 
 
     def test_metric_stereo_rays_and_real_holes(self):

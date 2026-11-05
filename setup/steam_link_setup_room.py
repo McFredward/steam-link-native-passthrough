@@ -21,8 +21,52 @@ import zipfile
 import zlib
 
 
+def stream_exchange(request, exchange):
+    """Batch bounded local packets inside one authenticated SSH round trip."""
+    worker=request.get('worker_id')
+    def call(value):
+        result=exchange({**value,'worker_id':worker})
+        if result.get('error'):raise ValueError('Room stream operation refused')
+        return result
+    if request['op']=='batch':
+        items=request.get('requests')
+        if type(items)is not list or not 1<=len(items)<=256:raise ValueError('Invalid room transfer batch')
+        if any(type(item)is not dict or item.get('op') not in ('begin','put','commit') for item in items):
+            raise ValueError('Invalid room transfer operation')
+        if (items[0]['op']!='begin' or items[-1]['op']!='commit'
+                or any(item['op']!='put' for item in items[1:-1])):
+            raise ValueError('Invalid room transfer order')
+        for item in items:
+            result=call(item)
+            if result.get('busy'):return {'busy':True}
+        return {'ok':True}
+    if request['op']=='take_all':
+        state=call({**request,'op':'take'})
+        for size_key,command,data_key,limit in (('bytes','chunk','packet',1100000),('seed_bytes','seed_chunk','seed_data',4400016)):
+            if command=='seed_chunk' and not request.get('seed'):continue
+            count=state.get(size_key,0)
+            if type(count)is not int or not 0<=count<=limit:raise ValueError('Room stream extent exceeds budget')
+            if not count:continue
+            raw=bytearray()
+            for offset in range(0,count,60000):
+                raw.extend(base64.b64decode(call({'op':command,'id':state.get('id'),'offset':offset})['data'],validate=True))
+            if len(raw)!=count:raise ValueError('Room stream extent changed')
+            state[data_key]=base64.b64encode(raw).decode()
+        return state
+    result=exchange(request)
+    if request['op']=='ready' and not result.get('error'):result={**result,'stream_protocol':1}
+    return result
+
+
 def exchange_frame(request):
     """Runs only on the Frame through the installer's authenticated SSH session."""
+    if request.get('op') in ('batch','take_all','ready'):
+        try:return stream_exchange(request,_exchange_frame)
+        except (OSError,ValueError,KeyError,TypeError):return {'error':'Room stream transfer refused'}
+    return _exchange_frame(request)
+
+
+def _exchange_frame(request):
     root = Path(f"/run/user/{os.getuid()}/sfnp-room-pc")
     try:
         info = root.lstat()
@@ -197,8 +241,11 @@ class Companion:
             try:
                 if len(raw) > 12*1024*1024:
                     raise ValueError("PC result exceeds budget")
-                self.results.put(json.loads(raw), timeout=3)
-            except (ValueError, queue.Full):
+                value=json.loads(raw)
+                while not self.stop.is_set():
+                    try:self.results.put(value,timeout=.2);break
+                    except queue.Full:continue
+            except ValueError:
                 break
 
     def _read_errors(self):
@@ -217,16 +264,25 @@ class Companion:
         plain = json.dumps(value, separators=(",", ":"), allow_nan=False).encode()
         if len(plain)>12*1024*1024:raise ValueError('PC preview exceeds budget')
         raw = zlib.compress(plain,1)
-        response = self.exchange({"op": "begin", "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
-            "binding": value["binding"], "epoch": value["capture_epoch"],"encoding":"zlib","expanded_bytes":len(plain)})
+        begin={"op": "begin", "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
+            "binding": value["binding"], "epoch": value["capture_epoch"],"encoding":"zlib","expanded_bytes":len(plain)}
+        if getattr(self,'fast_stream',False):
+            requests=[begin,*({'op':'put','offset':offset,'data':base64.b64encode(raw[offset:offset+60000]).decode()}
+                              for offset in range(0,len(raw),60000)),{'op':'commit'}]
+            if self.stop.is_set():return None
+            response=self.exchange({'op':'batch','requests':requests})
+            return False if response.get('busy') else True if response.get('ok') is True else None
+        response = self.exchange(begin)
+        if response.get('busy'):return False
         if response.get("error"):
-            return False
+            return None
         for offset in range(0, len(raw), 60000):
             if self.stop.is_set():
-                return False
+                return None
             if self.exchange({"op": "put", "offset": offset, "data": base64.b64encode(raw[offset:offset+60000]).decode()}).get("error"):
-                return False
-        return not self.exchange({"op": "commit"}).get("error")
+                return None
+        response=self.exchange({"op":"commit"})
+        return False if response.get('busy') else True if response.get('ok') is True else None
 
     def _run(self):
         try:
@@ -237,7 +293,9 @@ class Companion:
             free = int(gpu.stdout.splitlines()[0].strip())
             if free < 3000:
                 raise ValueError("PC reconstruction needs at least 3 GB of free NVIDIA VRAM")
-            width, height, limit = (320, 256, 25000) if free < 6000 else (512, 384, 50000) if free < 10000 else (512, 384, 60000)
+            width, height, limit = (320, 256, 25000) if free < 6000 else (512, 384, 50000) if free < 16000 else (640, 480, 80000)
+            batch=2 if free>=10000 else 1
+            vram_mb=min(8192,max(1536,free//3))
             self.ui.say("bridge_room_pc_preparing")
             runtime = prepare_runtime(self.setup_dir/"room-pc-runtime.json", self.cache_root,
                                       lambda: self.stop.is_set() or self.cancelled())
@@ -246,7 +304,8 @@ class Companion:
             self.ui.say("bridge_room_pc_warming")
             launcher = "import sys,runpy;sys.path.insert(0,sys.argv.pop(1));runpy.run_module('room_reconstruction.live_worker',run_name='__main__')"
             command = [sys.executable, "-B", "-c", launcher, str(self.setup_dir), "--runtime", str(runtime),
-                       "--width", str(width), "--height", str(height), "--limit", str(limit)]
+                       "--width", str(width), "--height", str(height), "--limit", str(limit),
+                       '--maps',str(self.cache_root/'room-maps'),'--batch',str(batch),'--vram-mb',str(vram_mb)]
             self.process = subprocess.Popen(command, cwd=self.setup_dir, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace", creationflags=subprocess.CREATE_NO_WINDOW)
             reader = threading.Thread(target=self._read, daemon=True)
@@ -262,13 +321,14 @@ class Companion:
                         raise RuntimeError("GPU worker stopped during warmup")
             if self.stop.is_set():
                 return
-            if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider" or ready.get('protocol')!=3:
+            if ready.get("event") != "ready" or ready.get("provider") != "CUDAExecutionProvider" or ready.get('protocol')!=4:
                 raise RuntimeError("GPU worker could not initialize")
             # Readiness includes the live Frame endpoint, not just a warmed GPU.
             deadline = time.monotonic()+15
             while not self.stop.is_set():
-                linked = self.exchange({"op": "ready", "protocol": 3, "provider": "CUDAExecutionProvider"})
+                linked = self.exchange({"op": "ready", "protocol": 4, "provider": "CUDAExecutionProvider"})
                 if not linked.get("error"):
+                    self.fast_stream=linked.get('stream_protocol')==1
                     break
                 if time.monotonic() >= deadline:
                     raise RuntimeError("Installed Frame room endpoint is unavailable")
@@ -278,39 +338,47 @@ class Companion:
             self.ui.say("bridge_room_pc_ready")
             self.ready.set()
             busy, finish_key, last_heartbeat, seeded_map = False, None, 0., None
-            retained_capture=None
+            retained_capture=None;pending_result=None
             while not self.stop.is_set() and not self.cancelled():
                 if self.process.poll() is not None:
                     raise RuntimeError("GPU worker stopped")
                 if time.monotonic()-last_heartbeat >= 2:
-                    response = self.exchange({"op": "ready", "protocol": 3, "provider": "CUDAExecutionProvider"})
+                    response = self.exchange({"op": "ready", "protocol": 4, "provider": "CUDAExecutionProvider"})
                     last_heartbeat = time.monotonic()
                     if response.get("error"):
                         self.ready.clear()
                         self.stop.wait(.5)
                         continue
                     self.ready.set()
-                try:
-                    result = self.results.get_nowait()
-                except queue.Empty:
-                    result = None
+                result=pending_result
+                if result is None:
+                    try:result=self.results.get_nowait()
+                    except queue.Empty:result=None
                 if result:
                     if result["event"] == "error":
                         raise RuntimeError("GPU reconstruction failed")
-                    if result["event"] != "seeded":self._upload(result)
+                    if result['event']!='seeded':
+                        uploaded=self._upload(result)
+                        if uploaded is False:
+                            pending_result=result;self.stop.wait(.025);continue
+                        if uploaded is None:seeded_map=None
+                    pending_result=None
                     busy = False
                 if busy:
                     self.stop.wait(.025)
                     continue
-                state = self.exchange({"op": "take", "seed": seeded_map is None,"keep_id":retained_capture})
+                take='take_all' if self.fast_stream else 'take'
+                state = self.exchange({"op": take, "seed": seeded_map is None,"keep_id":retained_capture})
                 retained_capture=None
                 if state.get("error"):
                     self.stop.wait(.5)
                     continue
                 if state.get('intent')=='idle':
+                    if seeded_map is not None and ready.get('tiled'):
+                        self.process.stdin.write(json.dumps({'op':'flush','map_id':seeded_map})+'\n');self.process.stdin.flush();busy=True
                     seeded_map=None;self.stop.wait(.05);continue
                 if seeded_map is not None and state.get('map_id')!=seeded_map:
-                    state=self.exchange({'op':'take','seed':True,'keep_id':state.get('id')})
+                    state=self.exchange({'op':take,'seed':True,'keep_id':state.get('id')})
                     if state.get('error'):self.stop.wait(.5);continue
                     seeded_map=None
                 key = (state.get("map_id"), state.get("epoch"), str(state.get("binding")))
@@ -318,8 +386,11 @@ class Companion:
                     seed = bytearray()
                     if state['seed_bytes']>4400016 or state.get('seed_format') not in ('gaussians','surface'):
                         raise ValueError('Retained room exceeds budget')
-                    for offset in range(0,state['seed_bytes'],60000):
-                        seed.extend(base64.b64decode(self.exchange({'op':'seed_chunk','offset':offset})['data'],validate=True))
+                    if self.fast_stream:seed.extend(base64.b64decode(state['seed_data'],validate=True))
+                    else:
+                        for offset in range(0,state['seed_bytes'],60000):
+                            seed.extend(base64.b64decode(self.exchange({'op':'seed_chunk','offset':offset})['data'],validate=True))
+                    if len(seed)!=state['seed_bytes']:raise ValueError('Retained surface extent changed')
                     message={'op':'seed','map_id':state['map_id'],'binding':state['binding'],'epoch':state['epoch'],
                         state['seed_format']:base64.b64encode(seed).decode()}
                     seeded_map=state['map_id']
@@ -332,12 +403,14 @@ class Companion:
                     packet = bytearray()
                     if not 0 < state["bytes"] <= 1100000:
                         raise ValueError("Camera relay packet exceeds budget")
-                    for offset in range(0, state["bytes"], 60000):
-                        chunk = self.exchange({"op": "chunk", "id": state["id"], "offset": offset})
-                        if chunk.get("error"):
-                            packet.clear()
-                            break
-                        packet.extend(base64.b64decode(chunk["data"], validate=True))
+                    if self.fast_stream:packet.extend(base64.b64decode(state['packet'],validate=True))
+                    else:
+                        for offset in range(0, state["bytes"], 60000):
+                            chunk = self.exchange({"op": "chunk", "id": state["id"], "offset": offset})
+                            if chunk.get("error"):
+                                packet.clear()
+                                break
+                            packet.extend(base64.b64decode(chunk["data"], validate=True))
                     if len(packet) != state["bytes"]:
                         continue
                     if state.get('encoding')!='zlib' or type(state.get('expanded_bytes')) is not int or not 0<state['expanded_bytes']<=1100000:

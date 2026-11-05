@@ -124,6 +124,15 @@
   and retain an explicit complete preview if a boundary truly cannot fit.
   Validate repeated live snapshots across capacity and subsequent expansion;
   face counts and a single final snapshot alone do not prove continuity.
+- On 2026-11-05 the maintainer rejected candidate 14's slow, inaccurate scan,
+  stationary-looking progress, high or missing ceilings and premature detail
+  limit. Continuous slow head movement must extend and refine a detailed map.
+  Animated guidance must distinguish unseen directions from observed areas
+  lacking qualified depth. Retain the accepted translucent grid, add a subtle
+  visible pulse, and keep acquisition/storage independent of the display budget.
+  Do not turn ambiguous passive stereo into a fabricated ceiling. Validate
+  incremental backpressure, regional persistence, moving revisits and actual
+  shader animations separately from installed headset speed and accuracy.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

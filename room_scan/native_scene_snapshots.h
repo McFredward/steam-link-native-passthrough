@@ -21,15 +21,36 @@ struct PreparedScene {
 };
 class SceneSnapshots {
     std::atomic<bool> stop_{false};std::shared_ptr<const PreparedScene> latest_;std::thread reader_;
+    std::shared_ptr<const Mat> focus_;
+    std::size_t drawBudget_=SceneVertexLimit;
     std::chrono::steady_clock::time_point start_;
     void readLoop(){
         std::string pending;std::array<char,16384> bytes{};
-        MeshView mesh;GaussianScene gaussians;SurfaceScene surfaces;std::shared_ptr<const std::vector<SceneVertex>> vertices;
+        MeshView mesh;GaussianScene gaussians;SurfaceScene surfaces;SurfaceTiles tiles(drawBudget_);
+        std::shared_ptr<const std::vector<SceneVertex>> vertices;
+        std::shared_ptr<const nlohmann::json> lastValue;
+        std::shared_ptr<const Mat> lastFocus;
+        const auto prepare=[&](std::shared_ptr<const nlohmann::json> value,bool force){
+            const auto revision=mesh.revision;const bool allowed=mesh.allowed;
+            const auto now=std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count();
+            mesh.update(*value,now);const auto focus=std::atomic_load(&focus_);
+            if(force||!vertices||revision!=mesh.revision||allowed!=mesh.allowed||(mesh.allowed&&tiles.limited&&focus!=lastFocus)){
+                SceneMeshBuilder builder;builder.update(mesh);
+                if(mesh.allowed){
+                    if(value->contains("surface_tiles")&&!value->at("surface_tiles").empty())tiles.append(builder,*value,now,focus.get());
+                    else if(value->contains("surface_file")&&!value->at("surface_file").is_null())surfaces.append(builder,*value,now);
+                    else gaussians.append(builder,*value,now);}
+                vertices=std::make_shared<const std::vector<SceneVertex>>(std::move(builder.vertices));
+            }
+            lastValue=value;lastFocus=focus;
+            std::shared_ptr<const PreparedScene> result=std::make_shared<const PreparedScene>(PreparedScene{std::move(value),vertices,mesh.allowed});
+            std::atomic_store(&latest_,std::move(result));
+        };
         try{while(!stop_){
             pollfd descriptor{STDIN_FILENO,POLLIN,0};const auto ready=poll(&descriptor,1,50);
             if(ready<0&&errno==EINTR)continue;
             if(ready<0)break;
-            if(!ready)continue;
+            if(!ready){if(lastValue&&mesh.allowed&&tiles.limited&&std::atomic_load(&focus_)!=lastFocus)prepare(lastValue,true);continue;}
             const auto size=read(STDIN_FILENO,bytes.data(),bytes.size());
             if(size<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))continue;
             if(size<=0)break;
@@ -45,25 +66,22 @@ class SceneSnapshots {
                     for(const auto& element:room.at("elements"))boundedElement(element);
                     if(!value->at("pending").is_null())boundedElement(value->at("pending"));
                 }
-                const auto revision=mesh.revision;const bool allowed=mesh.allowed;
-                mesh.update(*value,std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count());
-                if(!vertices||revision!=mesh.revision||allowed!=mesh.allowed){
-                    SceneMeshBuilder builder;builder.update(mesh);
-                    if(mesh.allowed){const auto time=std::chrono::duration<double>(std::chrono::steady_clock::now()-start_).count();
-                        if(value->contains("surface_file")&&!value->at("surface_file").is_null())surfaces.append(builder,*value,time);
-                        else gaussians.append(builder,*value,time);}
-                    vertices=std::make_shared<const std::vector<SceneVertex>>(std::move(builder.vertices));}
-                std::shared_ptr<const PreparedScene> prepared=std::make_shared<const PreparedScene>(PreparedScene{std::move(value),vertices,mesh.allowed});
-                std::atomic_store(&latest_,std::move(prepared));pending.erase(0,end+1);
+                prepare(std::move(value),false);pending.erase(0,end+1);
             }
         }}catch(const std::exception&){failed=true;}
         alive=false;
     }
 public:
     std::atomic<bool> alive{true},failed{false};
-    explicit SceneSnapshots(std::chrono::steady_clock::time_point start):start_(start){
+    explicit SceneSnapshots(std::chrono::steady_clock::time_point start,std::size_t budget=SceneVertexLimit):drawBudget_(budget),start_(start){
         fcntl(STDIN_FILENO,F_SETFL,fcntl(STDIN_FILENO,F_GETFL)|O_NONBLOCK);reader_=std::thread([this]{readLoop();});}
     std::shared_ptr<const PreparedScene> latest()const{return std::atomic_load(&latest_);}
+    void focus(const Mat& pose){
+        if(!rigid(pose))return;
+        const auto old=std::atomic_load(&focus_);
+        if(old&&length(position(*old)-position(pose))<.12f&&dot(column(*old,2),column(pose,2))>.9928f)return;
+        std::atomic_store(&focus_,std::make_shared<const Mat>(pose));
+    }
     ~SceneSnapshots(){stop_=true;if(reader_.joinable())reader_.join();}
 };
 } // namespace room_native

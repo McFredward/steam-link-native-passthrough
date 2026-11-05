@@ -222,7 +222,8 @@ class Reconstruction:
         qualities = list(self.base_mesh.quality) + [cell.quality for cell in self.cells.values()]
         return {"observed_cells": len(qualities), "reliable_cells": qualities.count("reliable"),
                 "uncertain_cells": qualities.count("uncertain"), "building_cells": qualities.count("building"),
-                "accepted_frames": self.accepted_frames, "whole_room_percentage": None}
+                "accepted_frames": self.accepted_frames, "whole_room_percentage": None,
+                "measured_faces":len(self.base_mesh.triangles)+len(self.triangles)}
 
 
 class ArcturusProviderUnavailable:

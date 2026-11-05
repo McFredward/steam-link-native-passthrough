@@ -31,10 +31,13 @@ int main(){try{
     e["unchanged_through_eof"]=false;e["envelope_verified"]=true;e["envelope_anchor_raw_ns"]=950000000ULL;
     e["envelope_min_coarse"]=1194;e["envelope_max_coarse"]=1200;
     const auto bounded=arcturusTiming(frame);
-    check(bounded&&bounded->uncertainty==13080&&bounded->minimumIntegration==1194*4360ULL
+    check(bounded&&bounded->uncertainty==6541&&bounded->minimumIntegration==1194*4360ULL
         &&bounded->maximumIntegration==1200*4360ULL,"verified small exposure changes retain a conservative time interval");
     check(std::abs(double(t->center)-double(bounded->center))<=double(bounded->uncertainty),"old true exposure center lies inside the interval");
-    e["envelope_max_coarse"]=1500;check(!arcturusTiming(frame),"large exposure interval stays unqualified");
+    e["envelope_max_coarse"]=1500;
+    check(arcturusTiming(frame)&&arcturusTiming(frame)->uncertainty==333541,
+          "larger center intervals require the unchanged spatial gate, not stationary exposure settings");
+    e["envelope_max_coarse"]=5000;check(!arcturusTiming(frame),"unsupported center interval stays unqualified");
     e["envelope_max_coarse"]=1200;e["envelope_anchor_raw_ns"]=1000000001ULL;
     check(!arcturusTiming(frame),"future anchor cannot grant exposure authority");
     e["envelope_anchor_raw_ns"]=950000000ULL;e["group_release_raw_ns"]=940000000ULL;

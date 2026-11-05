@@ -21,7 +21,8 @@ import time
 MAX_SOURCE = 1024 * 1024
 MAX_INITIAL = 2 * 1024 * 1024
 MAX_REQUEST = 90 * 1024 * 1024
-MAX_REPLY = 128 * 1024
+MAX_REPLY = 8 * 1024 * 1024
+DEFAULT_REPLY = 128 * 1024
 SCHEMA = 'sfnp-setup-session-v1'
 
 
@@ -46,7 +47,7 @@ SCHEMA='sfnp-setup-session-v1'
 MAX_INITIAL=2097152
 MAX_SOURCE=1048576
 MAX_REQUEST=94371840
-MAX_REPLY=131072
+MAX_REPLY=8388608
 def need(value):
  if not value:raise ValueError('protocol')
 def pairs(items):
@@ -129,7 +130,7 @@ class Session:
     permanently closes it, including when an operation's result is uncertain.
     """
     def __init__(self, ssh_args, agent_source, *, timeout=120, interactive=False,
-                 max_request=MAX_REQUEST, max_reply=MAX_REPLY, auth=None, cancelled=None):
+                 max_request=MAX_REQUEST, max_reply=DEFAULT_REPLY, auth=None, cancelled=None):
         if (type(ssh_args) not in (list, tuple) or not ssh_args or
                 not all(type(arg) is str and arg and '\x00' not in arg for arg in ssh_args)):
             raise SessionError('A validated SSH argument list is required.')

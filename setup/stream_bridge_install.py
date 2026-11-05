@@ -2159,7 +2159,7 @@ class Remote:
             self._session_errors=(session.SessionError,)
             auth=self.auth.open(self.address,self.login) if self.auth is not None and self.interactive else None
             self.session=session.Session(e.ssh_args(self.address,self.login,interactive=self.interactive,inline_auth=auth is not None),source,
-                interactive=self.interactive,timeout=90,auth=auth,cancelled=self.cancelled)
+                interactive=self.interactive,timeout=90,max_reply=8*1024*1024,auth=auth,cancelled=self.cancelled)
         # Ordered Frame activation may wait for three native service phases.
         # Their individual 30-second bounds plus RPC overhead must fit inside
         # this request; other operations retain their existing timeout.

@@ -16,10 +16,11 @@ class SurfaceBudgetError(ValueError):
 
 
 class GaussianMap:
-    def __init__(self, limit=60000, step=4):
-        if not 1000 <= limit <= 80000 or step not in (4, 6, 8):
+    def __init__(self, limit=60000, step=4, *, cell_m=.018, min_tangent=.022, compact=True):
+        if not 1000 <= limit <= 80000 or step not in (2, 4, 6, 8) or not .002<=cell_m<=.018:
             raise ValueError("Invalid Gaussian map budget")
         self.limit, self.step = limit, step
+        self.cell_m,self.min_tangent,self.compact=cell_m,min_tangent,compact
         self.capacity = min(320000, limit*4)
         self.recycled = self.coarsenings = 0
         self.capacity_limited = False
@@ -38,36 +39,40 @@ class GaussianMap:
         self.seeded_orientation = False
         self.previous_snapshot = None
 
-    def integrate(self, points, normals, valid, depth, camera, focal, room=None):
+    def observe_visibility(self,depth,valid,room,focal,principal=None,minimum_depth=None):
+        """Retire repeatable free-space conflicts even outside the new surface tile."""
+        before=int(self.active.sum())
+        if room is not None and len(self.positions):
+            observed=np.flatnonzero(self.active)
+            local = (self.positions[observed]-room[:, 3]) @ room[:, :3]
+            old_depth = -local[:, 2]
+            height, width = depth.shape
+            cx,cy=principal or ((width-1)/2,(height-1)/2)
+            px = np.rint(local[:, 0]*focal/np.maximum(old_depth, .01)+cx).astype(int)
+            py = np.rint(-local[:, 1]*focal/np.maximum(old_depth, .01)+cy).astype(int)
+            inside = (old_depth > .25) & (px >= 0) & (px < width) & (py >= 0) & (py < height)
+            projected = np.flatnonzero(inside);selected=observed[projected]
+            x,y=px[projected],py[projected]
+            near=minimum_depth if minimum_depth is not None else minimum_filter(np.where(valid,depth,0),size=3,mode='constant')
+            contradicted=valid[y,x]&(old_depth[projected]+.12<near[y,x])
+            target=selected[contradicted]
+            self.occluded[target]=np.minimum(self.occluded[target].astype(int)+1,255)
+            self.occluded[selected[~contradicted]]=0
+            self.active[self.occluded>=3]=False
+        return before-int(self.active.sum())
+
+    def integrate(self, points, normals, valid, depth, camera, focal, room=None, principal=None, visibility=None,minimum_depth=None):
         self.capacity_limited = False
         # Compact before computing this observation's correspondences. A
         # compaction during allocation invalidates both matches and new IDs.
-        if (int(self.active.sum()) > self.limit*2 or len(self.faces) > self.limit*3
+        if self.compact and (int(self.active.sum()) > self.limit*2 or len(self.faces) > self.limit*3
                 or int(self.active.sum())+int(valid[::self.step, ::self.step].sum()) > self.capacity):
             self._coarsen()
         if self.seeded_orientation:
             flip=np.sum(self.normals*(camera-self.positions),axis=1)<0
             self.normals[flip]*=-1
             self.seeded_orientation=False
-        if room is not None and len(self.positions):
-            observed=np.flatnonzero(self.active)
-            local = (self.positions[observed]-room[:, 3]) @ room[:, :3]
-            old_depth = -local[:, 2]
-            height, width = depth.shape
-            px = np.rint(local[:, 0]*focal/np.maximum(old_depth, .01)+(width-1)/2).astype(int)
-            py = np.rint(-local[:, 1]*focal/np.maximum(old_depth, .01)+(height-1)/2).astype(int)
-            inside = (old_depth > .25) & (px >= 0) & (px < width) & (py >= 0) & (py < height)
-            projected = np.flatnonzero(inside)
-            selected=observed[projected]
-            x, y = px[projected], py[projected]
-            # A nearer observation occludes a valid wall; it does not disprove
-            # that wall. Retire only repeatable measured free-space conflicts.
-            near = minimum_filter(np.where(valid, depth, 0), size=3, mode='constant')
-            contradicted = valid[y, x] & (old_depth[projected]+.12 < near[y, x])
-            target = selected[contradicted]
-            self.occluded[target] = np.minimum(self.occluded[target].astype(int)+1, 255)
-            self.occluded[selected[~contradicted]] = 0
-            self.active[self.occluded >= 3] = False
+        self.observe_visibility(depth,valid if visibility is None else visibility,room,focal,principal,minimum_depth)
         step = self.step
         p, n = points[::step, ::step], normals[::step, ::step]
         good = valid[::step, ::step].copy()
@@ -91,7 +96,7 @@ class GaussianMap:
             plane = np.sum(delta*self.normals[index],axis=-1)
             tangent = np.sqrt(np.maximum(0,np.sum(delta*delta,axis=-1)-plane*plane))
             compatible = (distance < .07) & (np.sum(self.normals[index]*measured_n[:,None], axis=-1) > .75)
-            compatible &= (np.abs(plane)<.035)&(tangent<np.maximum(.022,self.sigma[index]*1.5))
+            compatible &= (np.abs(plane)<.035)&(tangent<np.maximum(self.min_tangent,self.sigma[index]*1.5))
             score=np.where(compatible,distance+np.abs(plane),np.inf)
             best=np.argmin(score,axis=1);chosen=np.arange(len(measured));usable=np.isfinite(score[chosen,best])
             match[usable]=index[chosen[usable],best[usable]]
@@ -122,7 +127,7 @@ class GaussianMap:
         # Consolidate newly observed overlapping samples before allocating stable IDs.
         if len(new):
             observed_new = new
-            keys = np.floor(measured[new]/.018).astype(np.int32)
+            keys = np.floor(measured[new]/self.cell_m).astype(np.int32)
             _, unique, assignment = np.unique(keys, axis=0, return_index=True, return_inverse=True)
             representatives = new[unique]
             new = representatives
@@ -175,13 +180,17 @@ class GaussianMap:
             limit = np.maximum(.045, np.max(self.sigma[tri], axis=1)*5)
             compatible = np.max(edges, axis=1) < np.minimum(.16, limit)
             compatible &= np.linalg.norm(np.cross(vertices[:, 1]-vertices[:, 0], vertices[:, 2]-vertices[:, 0]), axis=1) > 1e-7
-            for face in tri[compatible]:
-                key=tuple(sorted(map(int, face)))
-                if len(self.faces)<640000 or key in self.faces:self.faces.add(key)
-                else:self.capacity_limited=True
+            incoming={tuple(face) for face in np.sort(tri[compatible],axis=1).tolist()}
+            additions=incoming-self.faces
+            remaining=max(0,640000-len(self.faces))
+            if len(additions)>remaining:
+                self.faces.update(sorted(additions)[:remaining]);self.capacity_limited=True
+            else:self.faces.update(additions)
         self.frames += 1
 
     def quality(self):
+        if self.min_tangent<.01:
+            return np.where((self.views>=2)&(self.weights>=3)&(self.residuals<.008),2,1)
         return np.where(((self.views >= 3) | (self.weights >= 6)) & (self.residuals < .008), 2, 1)
 
     def restore(self, encoded):
@@ -255,7 +264,7 @@ class GaussianMap:
         self.capacity=max(self.capacity,count);self.seeded_orientation=True
         self.previous_snapshot=None
 
-    def _records(self,selected):
+    def _records(self,selected,quality=None):
         count = len(selected)
         normals = self.normals[selected]
         guide = np.tile((0., 1., 0.), (count, 1))
@@ -269,7 +278,7 @@ class GaussianMap:
         records["values"][:, 3:6] = u*self.sigma[selected, None]
         records["values"][:, 6:9] = v*self.sigma[selected, None]
         records["values"][:, 9] = .60
-        records["values"][:, 10] = self.quality()[selected]
+        records["values"][:, 10] = self.quality()[selected] if quality is None else quality
         return base64.b64encode(records.tobytes()).decode()
 
     @staticmethod
@@ -332,6 +341,7 @@ class GaussianMap:
 
     def _coarsen(self):
         from .live_surface import merge_measured
+        if not self.compact:return False
         if self.frames-self.coarsening_refused_at<5 or not self.faces:return False
         faces=np.asarray(sorted(self.faces),np.int32)
         faces=faces[self.active[faces].all(axis=1)]

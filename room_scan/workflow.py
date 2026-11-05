@@ -98,7 +98,7 @@ class ScanSession:
             self.message = "Scan paused. Tracking, camera association or measurements need to be checked again."
             raise error
         self.message = ("Capture more areas from different viewpoints." if count
-                        else "Reliable measurements are missing here. Change your viewpoint or lighting.")
+                        else "Reliable measurements are missing here. Look from another angle and include a visible surface edge.")
         return count
 
     def pause(self):
@@ -226,8 +226,9 @@ class ScanSession:
 
     def view(self,*,geometry=True):
         """Renderer-facing state; no percentage, invented geometry or fake scan."""
-        mesh = (self.reconstruction.mesh() if self.reconstruction is not None
+        mesh = ((self.reconstruction.mesh() if self.reconstruction is not None
                 and self.stage in (Stage.SCANNING, Stage.PAUSED) else self.room.mesh if self.room else None)
+                if geometry else None)
         world_visuals = self.tracking_verified and self.stage in (Stage.SCANNING, Stage.PAUSED, Stage.REVIEW)
         return {"stage": self.stage.value, "message": self.message,
                 "origin_id": self.room.origin_id if self.room else None,

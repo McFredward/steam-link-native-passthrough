@@ -404,3 +404,80 @@ native artifacts, services, shader and camera API are unchanged; no patch-versio
 bump is needed. Installer 0.3.16-roomscan.14 retains Frame 0.3.11-roomscan.13 and
 PC native provider 0.3.12-roomscan.8. Current installations use the new installer
 and PC worker without a Frame restart; camera access remains session-only.
+
+### Candidate 15: continuous detailed regions and immediate scan guidance
+
+The next wearer report rejects candidate 14's latency, stationary-looking
+progress, inaccurate or missing ceilings and premature detail refusal. The
+read-only Frame journal shows compute growing to 6,085.35 ms, including
+4,904.62 ms of whole-map preview work. Accepted measurements continue while
+map storage stays exactly at 240,000 points and the preview at 104,288 faces.
+Camera exposure qualifications, rather than head-motion refusals, dominate
+capture gaps. No camera images were read and no device service was changed
+for this investigation.
+
+Candidate 15 removes full-map plane union/QEM from live updates. Metre-scale
+Gaussian submaps retain 6 mm allocation cells and observations every two
+rectified pixels; only observed connectivity is partitioned into quarter-metre
+preview regions. Regional private NPZ checkpoints under the PC runtime's
+`room-maps` directory preserve positions, normals, confidence, revisit history
+and measured topology. They contain no raw camera images. An LRU bounds resident
+PC maps. The old 240,000-point whole-room acquisition limit is gone; this is
+still bounded software, with checked local region and coordinate extents.
+The bounded Frame interaction/save mesh remains a proxy, not a full-resolution
+export of those PC checkpoints.
+
+Incremental updates carry stable region identities and explicit removals. The
+Frame validates the entire update before adopting it, keeps file paths stable
+for reveal age, and avoids expanding the combined room mesh for each HUD
+snapshot. Complete nearby parts fit the native GPU budget; head turns select
+other cached parts independently of new camera frames. No scattered-triangle
+fallback or fabricated room hull is used. Farther verified observations can
+retire false foreground even when the new measurements belong to another
+region; a closer object preserves its occluded background.
+
+One authenticated SSH call downloads all bounded camera chunks; another
+uploads a bounded compressed model transaction. Capabilities negotiate this
+batch route; older local chunk handling remains available. Incremental model
+updates use explicit backpressure instead of dropping an old queue entry.
+The sender retains a busy result until accepted, and finalization drains all
+pending regions before the interaction mesh. The remote setup reply limit is
+8 MiB only where this owned stream needs it; ordinary Session defaults stay
+128 KiB. All image, binding, epoch, digest and expansion checks remain required.
+The room protocol is 4, so an older warmed worker cannot claim readiness.
+
+Stereo supports bilateral dynamic batch 2 on larger NVIDIA memory profiles,
+with sequential matching retained on smaller profiles. A local 5-pixel
+photometric check and subpixel refinement qualify neural proposals, followed
+by a stricter left/right consistency test. Blank areas cannot become a
+confident invented ceiling. In a synthetic 50-degree ceiling view with a
+known 1.2-pixel disparity bias, median height error falls from about 32 cm to
+1.4 cm and the 95th percentile is below 4 cm. This is a controlled geometry
+test, not an installed camera accuracy measurement.
+
+For a verified integration interval of width R, exposure-centre uncertainty
+is R/4 plus conservative integer rounding, rather than R/2. A maximum 1.5 ms
+interval remains conditional on exposure history and the unchanged 0.5 mm /
+0.5 mrad spatial limits including query uncertainty. Pose samples must span the
+entire uncertain rolling exposure. This admits qualified slow movement without
+substituting a current pose or adding a stationary capture phase.
+
+The accepted translucent grid gains a 2.5-second colour pulse. Shader tests
+compare actual rendered pixels: colour changes, alpha and metric depth do not.
+Three pulsing arrows use the current native head pose, marking seen directions
+immediately rather than waiting for stereo. A 72-sector guide distinguishes
+unseen directions from looked-at directions that still lack qualified depth,
+prioritizes ceiling edges when appropriate, and asks for another viewpoint.
+Directional coverage is guidance, not a whole-room completion percentage.
+Controller menu rays and X retain their existing paths and regression checks.
+
+Software checks cover growing beyond the former room capacity, persistence
+through resident eviction, changed-checkpoint refusal, incremental queue
+backpressure, atomic partial-update refusal, stable paths, cross-region depth
+correction, unsupported ceilings, dynamic-batch execution of the actual pinned
+model and native Vulkan animation/head-responsive selection. Installed NVIDIA
+throughput, ceiling accuracy and the complete visual flow still need the next
+wearer test. Installer 0.3.16-roomscan.15 carries Frame 0.3.12-roomscan.15;
+the native PC provider stays 0.3.12-roomscan.8. The model/wheel manifest and
+camera-reader helper binary are unchanged. Camera access remains session-only
+and inactive after reboot; no firmware, driver or XRService is replaced.

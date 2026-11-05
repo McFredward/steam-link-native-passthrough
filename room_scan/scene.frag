@@ -4,6 +4,8 @@ layout(location=1) in vec3 edge;
 layout(location=2) in vec3 roomPosition;
 layout(location=3) in float age;
 layout(location=4) flat in float surfaceStyle;
+layout(location=5) in float scanClock;
+layout(location=6) flat in float pulseEnabled;
 layout(location=0) out vec4 outputColor;
 void shade(){
     if(surfaceStyle>5.5){
@@ -19,6 +21,11 @@ void shade(){
         float reveal=smoothstep(0,.5,age),settled=smoothstep(.2,1.2,age);
         bool reliable=surfaceStyle>6.5;
         vec3 fill=mix(vec3(.08,.87,.84),vec3(.19,.60,.78),settled);
+        // A coherent colour wave across the world grid. Opacity and metric
+        // depth stay unchanged; this is display animation, never scan data.
+        float scanWave=pow(.5+.5*sin(scanClock*2.51327412-roomPosition.y*1.6
+                                  -roomPosition.x*.5-roomPosition.z*.5),6)*pulseEnabled;
+        fill=mix(fill,vec3(.25,1.,.91),scanWave*(.15+.35*grid));
         float front=1-smoothstep(.04,.22,abs(age-.30));
         float alpha=mix(reliable?.065:.035,reliable?.15:.11,grid)+front*.025;
         outputColor=vec4(mix(fill,vec3(.33,.94,.96),grid*.55+front*.2),alpha*reveal);return;
