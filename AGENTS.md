@@ -114,6 +114,16 @@
   Do not alter Steam credentials, login caches or global network settings.
   Only one current PC worker may own the room relay; old/second workers must
   not take observations or clear another worker's live session.
+- On 2026-11-05 the maintainer accepted candidate 13's translucent grid and
+  requested retaining it; a subtle pulse is optional future work. They rejected
+  a sudden shattering of existing coverage followed by stagnant growth. Private
+  telemetry shows the preview falling from 96,609 faces to exactly 20,000 while
+  valid measurements continue. Never replace complete accepted surfaces with
+  scattered triangles at a vertex/face limit. Merge overlapping measured planar
+  support with its real openings intact, compact before observation matching,
+  and retain an explicit complete preview if a boundary truly cannot fit.
+  Validate repeated live snapshots across capacity and subsequent expansion;
+  face counts and a single final snapshot alone do not prove continuity.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

@@ -554,7 +554,9 @@ class GeometryTests(unittest.TestCase):
         model=GaussianMap(1000);model.integrate(points,normals,valid,np.full((h,w),2.),np.zeros(3),f)
         snapshot=model.snapshot();vertices=np.array([r[1:4] for r in struct.iter_unpack('<I3fB3x',base64.b64decode(snapshot['surface_vertices']))])
         triangles=np.array(list(struct.iter_unpack('<3I',base64.b64decode(snapshot['surface_triangles']))))
-        self.assertLessEqual(len(vertices),1000);self.assertGreater(len(triangles),100)
+        self.assertLessEqual(len(vertices),1000)
+        measured=vertices[triangles]
+        self.assertGreater(float(np.linalg.norm(np.cross(measured[:,1]-measured[:,0],measured[:,2]-measured[:,0]),axis=1).sum()/2),2.5)
         tri=vertices[triangles][:,:,:2]
         for a in np.linspace(-.13,.13,7):
             for b in np.linspace(-.13,.13,7):
@@ -582,6 +584,93 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(np.array_equal(legacy.quality()[legacy.active],model.quality()[np.flatnonzero(legacy.active)]))
         for corrupt in (raw[:-1],raw[:8]+struct.pack('<II',100001,2)+raw[16:]):
             self.assertRaises(ValueError,GaussianMap(1000).restore_surface,corrupt)
+
+    def test_overlapping_patch_borders_do_not_shatter_the_complete_preview(self):
+        import numpy as np
+        import shapely
+        from room_reconstruction.live_map import GaussianMap
+        points=[];faces=[]
+        # Each measured quad has private IDs, as overlapping observations do.
+        # Border locking alone cannot reduce this disconnected input mesh.
+        for y in range(20):
+            for x in range(24):
+                if 9<=x<14 and 7<=y<12:continue
+                start=len(points)
+                points.extend(((x*.05-.001,y*.05-.001,-2.),((x+1)*.05+.001,y*.05-.001,-2.),
+                               ((x+1)*.05+.001,(y+1)*.05+.001,-2.),(x*.05-.001,(y+1)*.05+.001,-2.)))
+                faces.extend(((start,start+1,start+2),(start,start+2,start+3)))
+        vertices=b''.join(struct.pack('<I3fB3x',i,*p,1) for i,p in enumerate(points))
+        triangles=np.asarray(faces,dtype='<u4')
+        raw=b'SFNPMR2\0'+struct.pack('<II',len(points),len(faces))+vertices+triangles.tobytes()
+        model=GaussianMap(1000);model.restore_surface(raw)
+        before=shapely.union_all(shapely.polygons(np.asarray(points,dtype=np.float32)[triangles][...,:2]))
+        snap=model.snapshot()
+        p=np.array([r[1:4] for r in struct.iter_unpack('<I3fB3x',base64.b64decode(snap['surface_vertices']))])
+        f=np.array(list(struct.iter_unpack('<3I',base64.b64decode(snap['surface_triangles']))))
+        after=shapely.union_all(shapely.polygons(p[f][...,:2]))
+        self.assertLessEqual(len(p),1000)
+        self.assertLess(float(shapely.area(shapely.symmetric_difference(before,after))),1e-6,
+                        'the complete observed area and its opening must survive the preview threshold')
+        self.assertEqual(len(shapely.get_parts(after)),len(shapely.get_parts(before)))
+        self.assertGreater(model.coarsenings,0)
+        self.assertFalse(model.capacity_limited)
+        with tempfile.TemporaryDirectory() as folder:
+            binding=Binding(session_id='00000000-0000-0000-0000-000000000001',
+                            origin_id='00000000-0000-0000-0000-000000000002',
+                            calibration_id='00000000-0000-0000-0000-000000000003',test_only=False)
+            reconstruction=PcReconstruction(binding,folder)
+            try:
+                reconstruction.accept({'event':'pc_model','sequence':1,**snap,
+                    'binding':{name:getattr(binding,name) for name in ('session_id','origin_id','calibration_id')}})
+                self.assertEqual(len(reconstruction.mesh().triangles),len(f))
+                self.assertEqual(reconstruction.surface_path.read_bytes()[:8],b'SFNPMR2\0')
+            finally:reconstruction.close()
+
+    def test_every_live_snapshot_keeps_early_coverage_and_adds_new_connected_regions(self):
+        import numpy as np
+        import shapely
+        from room_reconstruction.live_map import GaussianMap
+        h,w,f=64,96,100.;y,x=np.mgrid[:h,:w]
+        base=np.stack(((x-47.5)*2/f,-(y-31.5)*2/f,-np.full_like(x,2.)),-1)
+        normal=np.zeros_like(base);normal[...,2]=1
+        model=GaussianMap(1000)
+        for i in range(100):
+            camera=np.array((i*.12,0,0));points=base+camera
+            valid=~((abs(points[...,0]-2)<.15)&(abs(points[...,1])<.15))
+            model.integrate(points,normal,valid,np.full((h,w),2.),camera,f)
+            snap=model.snapshot()
+            p=np.array([r[1:4] for r in struct.iter_unpack('<I3fB3x',base64.b64decode(snap['surface_vertices']))])
+            triangles=np.array(list(struct.iter_unpack('<3I',base64.b64decode(snap['surface_triangles']))))
+            observed=shapely.union_all(shapely.polygons(p[triangles][...,:2]))
+            self.assertLessEqual(len(p),1000)
+            self.assertLessEqual(len(triangles),2000)
+            self.assertTrue(shapely.covers(observed,shapely.Point(0,0)),f'early surface lost at observation {i}')
+            self.assertTrue(shapely.covers(observed,shapely.Point(camera[0],.3)),f'new surface missing at observation {i}')
+            self.assertFalse(shapely.covers(observed,shapely.Point(2,0)),'a real unobserved opening was filled')
+            self.assertFalse(model.capacity_limited,f'ordinary connected room became irreducible at observation {i}')
+        self.assertGreater(model.coarsenings,2)
+        self.assertGreater(model.recycled,0)
+
+    def test_irreducible_capacity_keeps_the_last_complete_surface_instead_of_scattered_faces(self):
+        import numpy as np
+        from room_reconstruction.live_map import GaussianMap
+        h=w=8;f=80.;y,x=np.mgrid[:h,:w]
+        base=np.stack(((x-3.5)*2/f,-(y-3.5)*2/f,-np.full_like(x,2.)),-1)
+        normal=np.zeros_like(base);normal[...,2]=1
+        model=GaussianMap(1000)
+        model.integrate(base,normal,np.ones((h,w),bool),np.full((h,w),2.),np.zeros(3),f)
+        accepted=model.snapshot()
+        # Hundreds of truly disjoint measured patches cannot fit this small
+        # fixture budget without dropping real borders. Report capacity and
+        # retain the complete accepted surface, never sample single triangles.
+        for i in range(1,350):
+            camera=np.array((i*.5,0,0))
+            model.integrate(base+camera,normal,np.ones((h,w),bool),np.full((h,w),2.),camera,f)
+        held=model.snapshot()
+        self.assertTrue(model.capacity_limited)
+        for key in ('gaussians','surface_vertices','surface_triangles','face_count'):
+            self.assertEqual(held[key],accepted[key])
+        self.assertLessEqual(len(model.positions),model.capacity)
 
     def test_row_history_refuses_extrapolation_and_reflections(self):
         import numpy as np

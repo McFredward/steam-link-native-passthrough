@@ -129,6 +129,14 @@
       "url": "https://files.pythonhosted.org/packages/40/61/ca0fb284808f4f0f21f0a21cb05401fbed9f526ea93b1c7de0c2dcea1abc/pyfqmr-0.5.0-cp314-cp314-win_amd64.whl",
       "bytes": 114496,
       "sha256": "5868fabec5beb182e75038e780363713fc5f6242fd7c0ea22d3238f1950d0d79"
+    },
+    {
+      "name": "shapely",
+      "version": "2.1.2",
+      "filename": "shapely-2.1.2-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/74/d4/135684f342e909330e50d31d441ace06bf83c7dc0777e11043f99167b123/shapely-2.1.2-cp314-cp314-win_amd64.whl",
+      "bytes": 1773019,
+      "sha256": "a444e7afccdb0999e203b976adb37ea633725333e5b119ad40b1ca291ecf311c"
     }
   ],
   "model": {
@@ -150,6 +158,18 @@
     "PyFQMR.txt": {
       "bytes": 1065,
       "sha256": "019753f7a4b2227295475314251cd65bb29bd109e61f4a24cb6f5776e303db91"
+    },
+    "Shapely.txt": {
+      "bytes": 1583,
+      "sha256": "4a207eac9bf257ed286e1c6f0fce253d1abfdb134fc61ec855e37f5692a3f754"
+    },
+    "GEOS.txt": {
+      "bytes": 26786,
+      "sha256": "138b2c2f9450073d7c116abe397ca4382625671c752b7a9a5f320b33fc3f3f2a"
+    },
+    "Shapely-Windows.txt": {
+      "bytes": 1153,
+      "sha256": "2ad0ead5166d5d420bee57d045b0e38f54dec3979c8cb3fdbdcd3c47437468f9"
     }
   }
 }
