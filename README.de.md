@@ -32,7 +32,7 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.15** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.16** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
 ```powershell
@@ -53,7 +53,13 @@ und Verbindung zur Frame meldet der Installer **Room scanning is ready**.
 Fehler lassen sich mit Try again wiederholen; die bestätigte native
 Installation bleibt dabei erhalten.
 
-Installer 15 behält das transparente Raster und ergänzt eine dezente Farbwelle
+Installer 16 korrigiert die ausbleibenden Flächen bei weichen Bildstrukturen:
+Nur eine Tiefenkorrektur braucht ein scharfes lokales Bildvergleichsminimum;
+eine bereits bestätigte bilaterale Messung kann unverändert bleiben. Einzelne
+abgelehnte Nachbarpixel löschen nicht mehr die ganze Fläche. Echte unbekannte
+Lücken bleiben offen. Anweisungen haben eine eigene Textzeile und bleiben
+mindestens vier Sekunden lesbar.
+Das transparente Raster bleibt erhalten, ebenso die dezente Farbwelle
 sowie animierte Pfeile zu ungesehenen Richtungen und Bereichen ohne gute Tiefe.
 Langsames kontinuierliches Umsehen erweitert und verfeinert den Scan. Detaillierte
 Gauß-Teilkarten werden auf dem PC gesichert; die bisherige Grenze von 240.000

@@ -49,6 +49,8 @@ class Application:
         self.session = None
         self.page = "home"
         self.notice = ""
+        self.scan_instruction = ""
+        self.capture_hint_message = None
         self.draft = self.pending = None
         self.label = None
         self.furniture_depth = .8
@@ -77,6 +79,8 @@ class Application:
 
     def action(self, action):
         self.notice = ""
+        self.capture_hint_message = None
+        if action in ('new','close'):self.scan_instruction=''
         if (action in ("review", "add") and self.pc_relay and self.session
                 and self.session.reconstruction.status().get("gaussians", 0)
                 and not self.session.reconstruction.status().get('final_mesh',False)):
@@ -247,7 +251,7 @@ class Application:
     def event(self, event):
         require(type(event) is dict and type(event.get("event")) is str, "Invalid native event")
         kind = event["event"]
-        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable", "renderer_unavailable", "capture_hint", "depth", "stereo_observation", "pc_model", "pc_mesh", "pc_error", "pc_hint"):
+        if kind in ("camera_warming", "camera_ready", "camera_resumed", "camera_unavailable", "renderer_unavailable", "capture_hint", "scan_guidance", "depth", "stereo_observation", "pc_model", "pc_mesh", "pc_error", "pc_hint"):
             # A completion queued before closing must not reopen capture, even
             # if the user has already opened the window again.
             if event.get("capture_epoch", self.capture_epoch) != self.capture_epoch:
@@ -259,7 +263,12 @@ class Application:
         if kind == "pc_hint":
             if self.session and hasattr(self.session.reconstruction,'update_coverage') and 'coverage' in event:
                 self.session.reconstruction.update_coverage(event)
-            self.notice = "No consistent depth here yet. Look at an edge or textured surface, then move slowly to the side."
+            return
+        if kind=='scan_guidance':
+            if self.session and self.session.stage==Stage.SCANNING and not self.pc_pending_action:
+                message=event['message']
+                require(type(message)is str and len(message)<=180 and all(c.isprintable() for c in message),'Invalid scan instruction')
+                self.scan_instruction=message
             return
         if kind == "pc_error":
             if self.session and self.session.stage == Stage.SCANNING:
@@ -273,7 +282,8 @@ class Application:
             with self.pc_relay.lock:
                 self.session.reconstruction.accept(event)
             self.world_revision += 1
-            self.notice = "Keep looking around slowly. Follow the animated guide into unseen areas; your detailed scan is stored on the PC."
+            if self.notice==self.capture_hint_message:self.notice=''
+            self.capture_hint_message=None
             if kind == "pc_mesh" and self.pc_pending_action:
                 action, self.pc_pending_action = self.pc_pending_action, None
                 if action == "review":
@@ -361,6 +371,7 @@ class Application:
                 message = event["message"]
                 require(type(message) is str and len(message) <= 160 and all(c.isprintable() for c in message), "Invalid capture guidance")
                 self.notice = message
+                self.capture_hint_message = message
         elif kind == "depth":
             if self.session and self.session.stage == Stage.SCANNING:
                 b = event["binding"]
@@ -430,6 +441,7 @@ class Application:
             button("back", "Back", not self.starting)
         elif self.page == "scan":
             title, subtitle, step = "Discover your room", "Turquoise reveals new surfaces. Amber needs another view. Look into empty areas, then revisit them from the side.", 2
+            if self.scan_instruction:subtitle=self.scan_instruction
             active = self.session.stage == Stage.SCANNING
             button("review", "Continue", self.session.view(geometry=False)["can_review"], True)
             button("add", "Add furniture or surfaces", self.session.tracking_verified)
@@ -600,7 +612,7 @@ def run(root, incoming, outgoing):
                 apply_ms=(time.monotonic()-applied_at)*1000
                 if event.get("event") == "stereo_observation":
                     continue
-                if (event.get("event") in ("depth", "pc_model", "pc_mesh") and app.session and app.session.reconstruction
+                if (event.get("event") in ("depth", "pc_model", "pc_mesh", "pc_hint") and app.session and app.session.reconstruction
                         and time.monotonic()-last_report >= 5 and reports < 120):
                     reconstruction = app.session.reconstruction
                     status = reconstruction.status()
@@ -613,7 +625,9 @@ def run(root, incoming, outgoing):
                           f"map_points={status.get('map_points',0)} map_capacity={status.get('map_capacity',0)} "
                           f"recycled={status.get('recycled_points',0)} coarsenings={status.get('coarsenings',0)} "
                           f"apply_ms={apply_ms:.2f} regions={getattr(reconstruction,'tile_count',0)} "
-                          + ' '.join(f"{name}_ms={status.get('phase_ms',{}).get(name,0)}" for name in ('rectify','stereo','geometry','fusion','preview')), file=sys.stderr)
+                          + ' '.join(f"{name}_ms={event.get('phase_ms',status.get('phase_ms',{})).get(name,0)}" for name in ('rectify','stereo','geometry','fusion','preview'))
+                          + ' '+ ' '.join(f"{name}_pixels={value}" for name in ('optical','photometric','bilateral','metric','surface')
+                              if type(value:=event.get('depth_stats',{}).get(name))is int and 0<=value<=640*480), file=sys.stderr)
                     last_report, reports = time.monotonic(), reports+1
             except (RoomError, OSError, ValueError, KeyError, TypeError, StopIteration) as error:
                 if errors < 64:

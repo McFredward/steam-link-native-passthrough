@@ -132,9 +132,11 @@ def surface_normals(points, depth, valid, rays):
     every large first derivative at a grazing angle. Positions stay measured.
     """
     inverse = 1/np.maximum(depth, .01)
+    measured=valid.copy()
     for axis in (0, 1):
         predicted = 2/np.maximum(np.roll(inverse, 1, axis)+np.roll(inverse, -1, axis), 1e-12)
-        valid &= np.abs(depth-predicted) < .025+.015*depth
+        neighbours=np.roll(measured,1,axis)&np.roll(measured,-1,axis)
+        valid &= ~neighbours|(np.abs(depth-predicted) < .025+.015*depth)
     weight = gaussian_filter(valid.astype(np.float32), 1.5, truncate=2, mode='constant')
     local = np.stack([gaussian_filter(np.where(valid, points[..., i], 0).astype(np.float32), 1.5,
                                      truncate=2, mode='constant') for i in range(3)], -1)
@@ -144,13 +146,15 @@ def surface_normals(points, depth, valid, rays):
     norm = np.linalg.norm(normal, axis=-1)
     normal /= np.maximum(norm, 1e-12)[..., None]
     normal *= np.where(np.sum(normal*rays, axis=-1) > 0, -1, 1)[..., None]
-    valid = minimum_filter(valid.astype(np.uint8), size=7, mode='constant', cval=0).astype(bool)
-    valid &= (norm > 1e-7) & (weight > .9)
+    # Estimate orientation from supported neighbours without requiring every
+    # pixel of a 7x7 patch to pass independent confidence checks. Never turn
+    # an unmeasured centre into measured geometry or move its measured point.
+    valid &= (norm > 1e-7) & (weight > .75)
     valid &= np.abs(np.sum((points-local)*normal, axis=-1)) < .02+.003*depth
     return normal, valid
 
 
-def triangulate(disparities, masks, origins, rays, room, intrinsics, *, lr_tolerance=.85):
+def triangulate(disparities, masks, origins, rays, room, intrinsics, *, lr_tolerance=.85, diagnostics=None):
     left, right = disparities
     height, width = left.shape
     if right.shape != left.shape or not np.isfinite(left).all() or not np.isfinite(right).all():
@@ -163,6 +167,7 @@ def triangulate(disparities, masks, origins, rays, room, intrinsics, *, lr_toler
     rd = right[y, lo]*(1-t)+right[y, lo+1]*t
     valid = masks[0] & masks[1][y, lo] & masks[1][y, lo+1] & (ru >= 0) & (ru < width-1) & (left > .1)
     valid &= np.abs(left-rd) < lr_tolerance
+    if diagnostics is not None:diagnostics['bilateral']=int(valid.sum())
     a = rays / np.linalg.norm(rays, axis=-1)[..., None]
     b = sample(rays)
     b /= np.linalg.norm(b, axis=-1)[..., None]
@@ -176,5 +181,7 @@ def triangulate(disparities, masks, origins, rays, room, intrinsics, *, lr_toler
     local = np.einsum('...i,ij->...j',points-room[:,3],room[:,:3])
     depth = -local[..., 2]
     valid &= (ta > 0) & (tb > 0) & (depth >= .25) & (depth <= 6) & (np.linalg.norm(pa-pb, axis=-1) < .006)
+    if diagnostics is not None:diagnostics['metric']=int(valid.sum())
     normal, valid = surface_normals(points, depth, valid, a)
+    if diagnostics is not None:diagnostics['surface']=int(valid.sum())
     return points, normal, valid, depth

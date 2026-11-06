@@ -29,8 +29,13 @@ def refine_one(left,right,disparity,left_mask,right_mask):
     shift=np.zeros_like(disparity,dtype=np.float32)
     np.divide(.5*(aa-cc),curvature,out=shift,where=finite&(curvature>1e-5))
     correction=best.astype(np.float32)-2+np.clip(shift,-.5,.5)
-    valid=finite&(b<.65)&(curvature>.025)&(best>0)&(best<4)
-    return np.where(valid,disparity+correction,disparity).astype(np.float32),valid
+    refined=finite&(b<.65)&(curvature>.025)&(best>0)&(best<4)
+    # A sharp minimum is required to move a proposal, not to accept an
+    # already photometrically supported bilateral neural measurement. Broad
+    # real-world texture often has a flat local disparity cost curve.
+    supported=np.isfinite(costs[2])&(costs[2]<.65)
+    valid=supported|refined
+    return np.where(refined,disparity+correction,disparity).astype(np.float32),valid
 
 
 def refine_stereo(images,disparities,masks):

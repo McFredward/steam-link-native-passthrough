@@ -44,6 +44,21 @@ int main(){try{
     check(!instruction.empty()&&arrows.vertices.size()==144,"a live head-responsive guide exists before any depth is captured");
     const auto firstArrow=arrows.vertices.front();arrows.vertices.clear();guidance.append(arrows,Mat{},1.6);
     check(firstArrow.color[3]!=arrows.vertices.front().color[3],"the actual guide visibly pulses without camera or model updates");
+    auto previousInstruction=instruction;double changedAt=1;unsigned changes=0;
+    for(unsigned i=1;i<=1200;++i){const double now=1.6+double(i)*.01;
+        const auto angle=float(std::sin(now*4)*1.4);
+        const auto head=pose({0,0,0},{0,std::sin(angle*.5f),0,std::cos(angle*.5f)});
+        arrows.vertices.clear();const auto current=guidance.append(arrows,head,now);
+        if(current!=previousInstruction){check(now-changedAt>=4,"instructions remain readable for at least four seconds");
+            previousInstruction=current;changedAt=now;++changes;}}
+    check(changes<=3,"rapid head motion cannot flash through scan instructions");
+    ScanGuidance progress;std::vector<unsigned> qualified(72,100);qualified[0]=qualified[60]=0;
+    progress.configure({{"id","room-progress"},{"active",true},{"observed",empty},{"measured",qualified}});
+    arrows.vertices.clear();const auto ceilingInstruction=progress.append(arrows,Mat{},1);
+    check(ceilingInstruction.find("Look up")!=std::string::npos,"an unseen ceiling direction is explained");
+    qualified[60]=100;progress.configure({{"id","room-progress"},{"active",true},{"observed",empty},{"measured",qualified}});
+    arrows.vertices.clear();check(progress.append(arrows,Mat{},4.1)==ceilingInstruction,"a new target does not instantly replace readable text");
+    arrows.vertices.clear();check(progress.append(arrows,Mat{},5.1).find("Look down")!=std::string::npos,"stable new progress eventually updates the instruction");
     guidance.configure({{"id","room-a"},{"active",false},{"observed",empty},{"measured",empty}});
     arrows.vertices.clear();check(guidance.append(arrows,Mat{},2).empty()&&arrows.vertices.empty(),"paused scans hide the guide");
     std::puts("PASS native room vertices, reveal data, quality styles and semantic geometry");return 0;

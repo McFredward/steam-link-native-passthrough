@@ -481,3 +481,50 @@ wearer test. Installer 0.3.16-roomscan.15 carries Frame 0.3.12-roomscan.15;
 the native PC provider stays 0.3.12-roomscan.8. The model/wheel manifest and
 camera-reader helper binary are unchanged. Camera access remains session-only
 and inactive after reboot; no firmware, driver or XRService is replaced.
+
+### Candidate 16: prevent confidence starvation and instruction replacement
+
+The candidate-15 wearer report saw only the guide arrow and rapid instruction
+changes. Read-only logs from 2026-11-06 08:52:10--08:52:49 CET confirm the
+candidate-15 overlay/renderer hashes, 300 qualified camera observations, no
+motion or pose refusals, and 0--244 accepted depth pixels per reported PC update.
+The last reported model has 108 vertices and 56 faces after 37 outputs; the
+renderer remains aligned. Typical compute is about 813--822 ms, including
+255--258 ms rectification, 207 ms inference and 347--354 ms geometry. This is a
+PC depth-qualification failure, not evidence of a stopped camera or lost origin.
+No camera images were read and no device service was changed for this audit.
+
+The photometric test incorrectly used a sharp local minimum as both correction
+permission and acceptance permission. Broad visible texture can support an
+existing neural disparity without having enough local curvature to adjust it.
+A controlled 320x256 stereo pair with soft texture, gain/offset differences and
+known metric depth yields 94 photometrically qualified samples and zero final
+measurements in candidate 15; candidate 16 yields 45,697 qualified samples and
+41,203 final metric measurements. This synthetic reproduction does not establish
+installed camera accuracy or complete coverage of untextured ceilings.
+
+A well-qualified minimum still permits subpixel correction. Otherwise a
+photometrically supported proposal stays unchanged and must pass the unchanged
+0.35-pixel bilateral check, positive metric rays, 0.25--6 m range and 6 mm ray
+separation. Blank and unrelated images still fail qualification. Normal
+estimation uses measured neighbours with at least 75 percent Gaussian support
+and the existing local surface-error bound, without requiring every pixel of a
+7x7 patch to pass. An unmeasured centre always stays unmeasured; neither the
+normal calculation nor the live mesh fills a real unknown opening. Regressions
+cover soft texture, independently rejected samples, unchanged measured points,
+sloping ceiling correction, blank ceilings and unrelated stereo inputs.
+
+Native guidance now has its own event and the dashboard subtitle. Camera
+advice and depth updates cannot overwrite that instruction with their own
+status strings. The target is held for three seconds; text needs a stable
+candidate for 0.8 seconds and stays readable for at least four seconds. An
+actual native test drives rapid changing head poses for twelve seconds while
+checking caption dwell and the still-pulsing arrow geometry. X, controller
+rays, shader transparency and world registration retain their existing tests.
+
+Bounded metadata now reports optical, photometric, bilateral, metric and final
+surface counts every five seconds, including pc_hint outputs with no geometry.
+The camera reader, its API, exposure/pose proofs, model and runtime dependencies
+are unchanged. Installer 0.3.16-roomscan.16 carries Frame 0.3.13-roomscan.16 and
+the unchanged PC native provider 0.3.12-roomscan.8. Physical scan coverage,
+accuracy and readability still require the next wearer test.

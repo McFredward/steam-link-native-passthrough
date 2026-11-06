@@ -229,6 +229,7 @@ int main(int argc,char** argv){
         scene.originChanged=[&]{std::atomic_store(&origin,std::make_shared<const std::string>(randomId()));invalidate=true;originInvalid=true;spatial=false;};
         scene.exited=[&]{if(!restoreDashboard.empty())runtime.overlay->ShowDashboard(restoreDashboard.data());};
         scene.hint=[&](const std::string& message){backend.send({{"event","capture_hint"},{"capture_epoch",captureEpoch.load()},{"message",message}},true);};
+        scene.instruction=[&](const std::string& message){backend.send({{"event","scan_guidance"},{"capture_epoch",captureEpoch.load()},{"message",message}},true);};
         const auto action=[&](const std::string& text){
             if(text=="close"){
                 if(roomClosed.exchange(true))return;

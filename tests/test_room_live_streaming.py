@@ -41,6 +41,29 @@ def chunk(key='a'*32,shift=0):
 
 
 class StreamingTests(unittest.TestCase):
+    def test_depth_updates_and_camera_notices_do_not_replace_the_scan_instruction(self):
+        from types import SimpleNamespace
+        from room_scan.app import Application
+        from room_scan.store import RoomStore
+        with tempfile.TemporaryDirectory() as directory:
+            app=Application(RoomStore(Path(directory)/'rooms'),reconstruction_factory=lambda b:PcReconstruction(b,directory))
+            app.pc_relay=SimpleNamespace(lock=threading.Lock(),ready=True)
+            try:
+                app.action('new');app.event({'event':'camera_ready','binding':BINDING})
+                instruction='Look up along a ceiling edge. Keep looking around slowly.'
+                app.event({'event':'scan_guidance','capture_epoch':0,'message':instruction})
+                app.event({'event':'capture_hint','capture_epoch':0,'message':'Checking camera timing.'})
+                app.event({'event':'pc_hint','binding':BINDING,'coverage':{'observed':[0]*72,'measured':[0]*72}})
+                self.assertEqual(app.view()['subtitle'],instruction)
+                self.assertEqual(app.view()['notice'],'Checking camera timing.')
+                app.event({'event':'pc_model','binding':BINDING,'sequence':1,'chunks':[chunk()],
+                           'camera':[0,0,0],'map_points':3,'tile_count':1})
+                self.assertEqual(app.view()['subtitle'],instruction);self.assertEqual(app.view()['notice'],'')
+                app.event({'event':'scan_guidance','capture_epoch':99,'message':'Stale instruction'})
+                self.assertEqual(app.view()['subtitle'],instruction)
+                app.action('close');app.action('new');self.assertNotEqual(app.view()['subtitle'],instruction)
+            finally:app.close()
+
     @unittest.skipIf(os.name=='nt','The same-user Frame socket is tested on Linux')
     def test_capture_and_model_use_two_ssh_round_trips_instead_of_per_chunk_round_trips(self):
         from room_scan.pc_relay import PcRelay
@@ -128,6 +151,42 @@ class StreamingTests(unittest.TestCase):
 
 
 class DetailAndDepthTests(unittest.TestCase):
+    def test_soft_texture_accepts_supported_bilateral_depth_without_a_sharp_photo_minimum(self):
+        h,w,f,baseline=256,320,220.,.064;y,x=np.mgrid[:h,:w]
+        texture=np.clip(120+45*np.sin(x/19)+30*np.cos(y/17)+18*np.sin((x+y)/25),0,255)
+        truth=np.full((h,w),f*baseline/2)
+        left=texture.astype(np.uint8)
+        right=np.clip(map_coordinates(texture,[y,x+truth],order=1,mode='nearest')*1.12+13,0,255).astype(np.uint8)
+        masks=[np.ones((h,w),bool),np.ones((h,w),bool)];masks[0][90:120,130:160]=False
+        disparity,qualified=refine_stereo((left,right),(truth,truth),masks)
+        rays=np.stack(((x-159.5)/f,-(y-127.5)/f,-np.ones_like(x)),-1)
+        origins=[np.zeros_like(rays),np.broadcast_to((baseline,0,0),rays.shape)]
+        stats={};points,_,valid,_=triangulate(disparity,qualified,origins,rays,
+            np.column_stack((np.eye(3),np.zeros(3))),(f,f,159.5,127.5),lr_tolerance=.35,diagnostics=stats)
+        self.assertGreater(int(valid.sum()),30000)
+        self.assertLess(float(np.median(abs(points[valid,2]+2))),.01)
+        self.assertFalse(valid[90:120,130:160].any())
+        self.assertGreaterEqual(stats['bilateral'],stats['metric']);self.assertGreaterEqual(stats['metric'],stats['surface'])
+        self.assertEqual(stats['surface'],int(valid.sum()))
+
+    def test_sparse_rejected_samples_do_not_erase_a_measured_neighbourhood_or_fill_a_real_hole(self):
+        from room_reconstruction.live_geometry import surface_normals
+        rng=np.random.default_rng(161);h,w,f=96,160,120.;y,x=np.mgrid[:h,:w]
+        rays=np.stack(((x-79.5)/f,-(y-47.5)/f,-np.ones_like(x)),-1)
+        points=rays*2;before=points.copy();measured=rng.uniform(size=(h,w))>.1
+        measured[30:50,60:80]=False
+        normals,valid=surface_normals(points,np.full((h,w),2.),measured.copy(),rays)
+        self.assertGreater(int(valid.sum()),9000)
+        self.assertFalse(valid[~measured].any());self.assertFalse(valid[30:50,60:80].any())
+        self.assertTrue(np.array_equal(points,before));self.assertGreater(float(normals[valid,2].mean()),.999)
+
+    def test_unrelated_images_cannot_borrow_a_neural_proposal_to_create_a_surface(self):
+        rng=np.random.default_rng(162);h,w=96,160
+        images=[rng.integers(0,256,(h,w),dtype=np.uint8) for _ in range(2)]
+        disparity=np.full((h,w),8,np.float32);mask=np.ones((h,w),bool)
+        _,qualified=refine_stereo(images,(disparity,disparity),(mask,mask))
+        self.assertLess(int(qualified[0].sum()),h*w*.01)
+
     def test_pending_regions_drain_without_another_capture_and_survive_polygon_extraction(self):
         h,w,f=96,128,40.;y,x=np.mgrid[:h,:w]
         points=np.stack(((x-63.5)*2/f,-(y-47.5)*2/f,-np.full_like(x,2.)),-1)

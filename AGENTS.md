@@ -137,6 +137,16 @@
   Do not turn ambiguous passive stereo into a fabricated ceiling. Validate
   incremental backpressure, regional persistence, moving revisits and actual
   shader animations separately from installed headset speed and accuracy.
+- On 2026-11-06 the maintainer rejected candidate 15's arrow-only scan and
+  rapidly changing instructions. A read-only journal confirms healthy image
+  acquisition but just 0--244 accepted PC depth pixels per logged update and
+  56 measured faces after 37 outputs. Sharp local photometric minima may refine
+  a depth proposal; their absence alone must not discard an otherwise supported
+  bilateral measurement. Normal estimation must tolerate individually rejected
+  neighbours without inventing a valid centre or filling unknown holes. Keep
+  scan instructions separate from depth/camera notices and readable for at
+  least four seconds. Preserve existing camera/pose authority and record bounded
+  per-stage depth counts, including when no surface can be created.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

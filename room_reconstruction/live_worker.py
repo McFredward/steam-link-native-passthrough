@@ -110,23 +110,23 @@ def main():
             rectified_at=time.perf_counter()
             disparities = engine.disparity(images)
             stereo_at=time.perf_counter()
+            depth_stats={'optical':int(optical_support.sum())}
             disparities,masks=refine_stereo(images,disparities,masks)
-            points, normals, valid, depth = triangulate(disparities, masks, origins, rays, room, intrinsics,lr_tolerance=.35)
+            depth_stats['photometric']=int(masks[0].sum())
+            points, normals, valid, depth = triangulate(disparities, masks, origins, rays, room, intrinsics,
+                                                        lr_tolerance=.35,diagnostics=depth_stats)
             model.coverage=coverage.update(rays,optical_support,valid)
             geometry_at=time.perf_counter()
             model.integrate(points, normals, valid, depth, room[:, 3], intrinsics[0], room)
             fused_at=time.perf_counter()
             serial += 1
-            if not model.index:
-                emit({"event": "pc_hint", "binding": binding, "capture_epoch": epoch, "sequence": serial,'coverage':model.coverage})
-                continue
-            snapshot=model.snapshot();previewed_at=time.perf_counter()
+            snapshot=model.snapshot() if model.index else {};previewed_at=time.perf_counter()
             phases=dict(zip(("rectify","stereo","geometry","fusion","preview"),
                 [round((b-a)*1000,2) for a,b in zip((started,rectified_at,stereo_at,geometry_at,fused_at),
                                                                (rectified_at,stereo_at,geometry_at,fused_at,previewed_at))]))
-            emit({"event": "pc_model", "binding": binding, "capture_epoch": epoch, "sequence": serial,
+            emit({"event": "pc_model" if model.index else 'pc_hint', "binding": binding, "capture_epoch": epoch, "sequence": serial,
                   **snapshot, "phase_ms":phases,
-                  'coverage':model.coverage,
+                  'coverage':model.coverage,'depth_stats':depth_stats,
                   "compute_ms": round((time.perf_counter()-started)*1000, 2), "accepted_pixels": int(valid.sum())})
     except Exception as error:
         print("PC room reconstruction: "+type(error).__name__+": "+str(error)[:240], file=sys.stderr)
