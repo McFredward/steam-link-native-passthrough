@@ -151,6 +151,36 @@ class StreamingTests(unittest.TestCase):
 
 
 class DetailAndDepthTests(unittest.TestCase):
+    def test_low_contrast_context_preserves_metric_depth_without_filling_unobserved_centres(self):
+        rng=np.random.default_rng(171);h,w,f,baseline=128,192,200.,.06;y,x=np.mgrid[:h,:w]
+        texture=gaussian_filter(rng.normal(size=(h,w)),5)
+        texture=120+texture/texture.std()*8
+        truth=np.full((h,w),f*baseline/2,np.float32)
+        left=np.clip(texture+rng.normal(0,.4,texture.shape),0,255).astype(np.uint8)
+        right=np.clip(map_coordinates(texture,[y,x+truth],order=1,mode='nearest')*1.1+9
+                      +rng.normal(0,.4,texture.shape),0,255).astype(np.uint8)
+        mask=np.ones((h,w),bool);mask[40:60,80:100]=False
+        disparity,qualified=refine_stereo((left,right),(truth,truth),(mask,mask))
+        rays=np.stack(((x-(w-1)/2)/f,-(y-(h-1)/2)/f,-np.ones_like(x)),-1)
+        origins=[np.zeros_like(rays),np.broadcast_to((baseline,0,0),rays.shape)]
+        points,_,valid,_=triangulate(disparity,qualified,origins,rays,
+            np.column_stack((np.eye(3),np.zeros(3))),(f,f,(w-1)/2,(h-1)/2),lr_tolerance=.35)
+        self.assertGreater(int(valid.sum()),15000)
+        self.assertLess(float(np.quantile(abs(points[valid,2]+2),.99)),.01)
+        self.assertFalse(valid[~mask].any())
+        # Context is image evidence, not permission to bypass an independently
+        # contradictory matching direction or the metric triangulation checks.
+        bad,qualified=refine_stereo((left,right),(truth,truth+4),(mask,mask))
+        self.assertFalse(triangulate(bad,qualified,origins,rays,
+            np.column_stack((np.eye(3),np.zeros(3))),(f,f,(w-1)/2,(h-1)/2),lr_tolerance=.35)[2].any())
+
+    def test_brightness_ramp_cannot_supply_contextual_depth_evidence(self):
+        h,w=96,160;y,x=np.mgrid[:h,:w]
+        left=(60+x*.35).astype(np.uint8);right=(60+(x+2)*.35).astype(np.uint8)
+        proposal=np.full((h,w),8,np.float32);mask=np.ones((h,w),bool)
+        _,qualified=refine_stereo((left,right),(proposal,proposal),(mask,mask))
+        self.assertFalse(qualified[0].any());self.assertFalse(qualified[1].any())
+
     def test_soft_texture_accepts_supported_bilateral_depth_without_a_sharp_photo_minimum(self):
         h,w,f,baseline=256,320,220.,.064;y,x=np.mgrid[:h,:w]
         texture=np.clip(120+45*np.sin(x/19)+30*np.cos(y/17)+18*np.sin((x+y)/25),0,255)
