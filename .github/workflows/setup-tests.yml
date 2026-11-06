@@ -195,7 +195,7 @@ jobs:
         run: |
           $receipt = Get-Content distribution/steam-link-native-passthrough.zip.receipt.json -Raw | ConvertFrom-Json
           $source = Get-Content get.ps1 -Raw
-          if ($receipt.version -eq '0.3.16-roomscan.16' -and $source.Contains($receipt.archive.sha256)) {
+          if ($receipt.version -eq '0.3.16-roomscan.17' -and $source.Contains($receipt.archive.sha256)) {
             & tests/check_room_candidate.ps1 -Source (Join-Path $PWD 'get.ps1') -Archive (Join-Path $PWD 'distribution/steam-link-native-passthrough.zip') -StageRoot $env:RUNNER_TEMP
             if ($LASTEXITCODE -ne 0) { throw 'Published room candidate verification failed.' }
           }
