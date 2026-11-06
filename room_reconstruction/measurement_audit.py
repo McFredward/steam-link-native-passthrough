@@ -15,6 +15,7 @@ import numpy as np
 
 from .measurement import observation_cameras, epipolar_error_degrees, fit_track, measured_room_height
 from .calibration_audit import rotation_hypothesis
+from .rig_calibration_audit import rig_hypothesis, prediction_comparison
 
 
 def load_observations(path, maximum=256):
@@ -61,7 +62,7 @@ def build_tracks(cameras, maximum_features=3000):
             node = parents[node]
         return node
 
-    summaries, stereo_measurements = [], []
+    summaries, stereo_measurements, temporal_measurements = [], [], []
     for a in range(len(cameras)):
         for b in range(a+1, len(cameras)):
             # Bounded temporal window, plus every stereo pair. A full growing
@@ -83,6 +84,9 @@ def build_tracks(cameras, maximum_features=3000):
             error = epipolar_error_degrees(cameras[a], cameras[b], pa, pb)
             if cameras[a].frame == cameras[b].frame:
                 stereo_measurements.append({'a': a, 'b': b, 'pixels_a': pa, 'pixels_b': pb})
+            elif (cameras[a].eye == cameras[b].eye == 0
+                  and cameras[b].frame-cameras[a].frame == 1):
+                temporal_measurements.append({'a': a, 'b': b, 'pixels_a': pa, 'pixels_b': pb})
             summaries.append({'frames': [cameras[a].frame, cameras[b].frame],
                               'stereo': cameras[a].frame == cameras[b].frame,
                               'mutual_matches': len(matches), 'epipolar_error_degrees': distribution(error)})
@@ -105,16 +109,30 @@ def build_tracks(cameras, maximum_features=3000):
         if len(nodes) < 3 or len({cameras[i].frame for i in camera_ids}) < 2:
             continue
         tracks.append([(i, np.asarray(features[i][0][j].pt)) for i, j in sorted(nodes)])
-    return tracks, summaries, conflicts, stereo_measurements
+    return tracks, summaries, conflicts, stereo_measurements, temporal_measurements
 
 
-def audit(observations, reference_height_m=None):
-    started = time.perf_counter()
-    cameras = [camera for i, observation in enumerate(observations)
-               for camera in observation_cameras(observation, i)]
-    tracks, pairs, conflicts, stereo_measurements = build_tracks(cameras)
+def fit_tracks(cameras, tracks):
+    """Score unseen exposures before any selection that could see their errors."""
     points, fit_errors, held_out = [], [], []
+    training_accepted, prediction_failed = 0, 0
     for track in tracks:
+        frames = sorted({cameras[i].frame for i, _ in track})
+        if len(frames) >= 3:
+            # Neither eye of this exposure participates in point fitting or
+            # in the training-only residual gate. Bad unseen predictions stay
+            # in the score even if the later all-view point fit rejects them.
+            held_frame = frames[len(frames)//2]
+            training = [(i, p) for i, p in track if cameras[i].frame != held_frame]
+            predicted = fit_track(cameras, training)
+            if predicted is not None and np.quantile(predicted[1], .95) <= 1.5:
+                training_accepted += 1
+                for i, pixel in track:
+                    if cameras[i].frame == held_frame:
+                        pixel_prediction = cameras[i].project_at_observed_rows(predicted[0], [pixel])[0]
+                        held_out.append(float(np.linalg.norm(pixel_prediction-pixel)))
+            else:
+                prediction_failed += 1
         result = fit_track(cameras, track)
         if result is None:
             continue
@@ -123,19 +141,15 @@ def audit(observations, reference_height_m=None):
         if np.quantile(errors, .95) > 1.5:
             continue
         points.append(point)
-        frames = sorted({cameras[i].frame for i, _ in track})
-        if len(frames) < 3:
-            continue
-        # Both eyes of the held-out exposure stay out of its point fit.
-        held_frame = frames[len(frames)//2]
-        training = [(i, p) for i, p in track if cameras[i].frame != held_frame]
-        result = fit_track(cameras, training)
-        if result is not None:
-            for i, pixel in track:
-                if cameras[i].frame == held_frame:
-                    predicted = cameras[i].project_at_observed_rows(result[0], [pixel])[0]
-                    held_out.append(float(np.linalg.norm(predicted-pixel)))
-    points = np.asarray(points).reshape(-1, 3)
+    return np.asarray(points).reshape(-1, 3), fit_errors, held_out, training_accepted, prediction_failed
+
+
+def audit(observations, reference_height_m=None, *, compare_rig_predictions=False):
+    started = time.perf_counter()
+    cameras = [camera for i, observation in enumerate(observations)
+               for camera in observation_cameras(observation, i)]
+    tracks, pairs, conflicts, stereo_measurements, temporal_measurements = build_tracks(cameras)
+    points, fit_errors, held_out, training_accepted, prediction_failed = fit_tracks(cameras, tracks)
     height = measured_room_height(points)
     positions = np.asarray([np.asarray(o['reference_head']).reshape(3, 4)[:, 3] for o in observations])
     span = float(np.linalg.norm(positions[:, None]-positions[None], axis=-1).max())
@@ -166,12 +180,19 @@ def audit(observations, reference_height_m=None):
               'head_translation_span_m': span, 'matching_tracks': len(tracks), 'conflicting_tracks': conflicts,
               'joint_metric_points': len(points), 'fit_reprojection_pixels': distribution(fit_errors),
               'held_out_reprojection_pixels': holdout, 'pair_geometry': pairs,
+              'held_out_training_accepted_tracks': training_accepted,
+              'held_out_point_prediction_failures': prediction_failed,
+              'held_out_selection_uses_training_only': True,
               'room_height': height, 'independent_reference_height_m': reference_height_m,
               'room_height_absolute_error_m': error, 'audit_wall_seconds': time.perf_counter()-started,
               'scope': 'offline measurement audit; not live performance or installed scanner acceptance',
               'stereo_rotation_hypothesis': rotation_hypothesis(cameras, stereo_measurements),
+              'tracked_head_rig_hypothesis': rig_hypothesis(cameras, temporal_measurements),
               'accepted_for_live_installation': False, 'live_latency_verified': False,
               'poses_or_calibration_adjusted': False, 'reference_used_as_reconstruction_prior': False}
+    if compare_rig_predictions:
+        report['tracked_head_rig_prediction_comparison'] = prediction_comparison(
+            cameras, tracks, report['tracked_head_rig_hypothesis'])
     report['audit_wall_seconds'] = time.perf_counter()-started
     return report, points
 
@@ -181,13 +202,16 @@ def main():
     parser.add_argument('observations', type=Path)
     parser.add_argument('--output', type=Path, required=True, help='New private output directory')
     parser.add_argument('--reference-room-height', type=float)
+    parser.add_argument('--compare-rig-predictions', action='store_true',
+                        help='Also evaluate the offline rig hypothesis on unseen point projections')
     args = parser.parse_args()
     if args.reference_room_height is not None and not 1.8 <= args.reference_room_height <= 5:
         parser.error('Reference room height must be in metres, between 1.8 and 5')
     if args.output.exists():
         parser.error('Choose a new private output directory; existing evidence is preserved')
     observations = load_observations(args.observations)
-    report, points = audit(observations, args.reference_room_height)
+    report, points = audit(observations, args.reference_room_height,
+                          compare_rig_predictions=args.compare_rig_predictions)
     report['input_sha256'] = hashlib.sha256(args.observations.read_bytes()).hexdigest()
     args.output.mkdir(mode=0o700)
     (args.output/'report.json').write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
