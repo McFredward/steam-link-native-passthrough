@@ -4,6 +4,7 @@
 #include "trace_reader.h"
 #include "luma_layout.h"
 #include "capture_metadata.h"
+#include "stereo_copy_schedule.h"
 #include <grp.h>
 #include <linux/capability.h>
 #include <linux/dma-buf.h>
@@ -48,9 +49,10 @@ class BorrowedFrames {
     };
     struct Stream {
         Camera camera;Fd node;std::vector<Mapping> buffers;unsigned sequence=0,timingSequence=0;
-        std::uint64_t lastPublish=0,lastSof=0,lastBin=0;std::optional<std::size_t> metadataOffset;
+        std::uint64_t lastSof=0,lastBin=0;std::optional<std::size_t> metadataOffset;
     };
     Producer producer_;Fd pidfd_;std::vector<Stream> streams_;
+    StereoCopySchedule copySchedule_;
     std::map<std::string,std::uint64_t> counters_;
     static int queuedFd(const Stream& stream,unsigned index,unsigned plane=0){
         v4l2_buffer buffer{};std::array<v4l2_plane,VIDEO_MAX_PLANES> planes{};
@@ -152,7 +154,11 @@ public:
             if(!pixelsRequested)return std::nullopt;
             // Timing is observed for every actual frame. Pixel copies have no backlog.
             const auto bin=(timing?timing->sofRaw:event.dequeue)/100000000u;
-            if(bin==stream.lastBin){++counters_["rate_skips"];return std::nullopt;}
+            const int eye=stream.camera.role=="passthrough_left"?0:stream.camera.role=="passthrough_right"?1:-1;
+            const bool stereoScheduled=timing&&eye>=0;
+            if(stereoScheduled?!copySchedule_.wants(unsigned(eye),timing->sofRaw):bin==stream.lastBin){
+                ++counters_["rate_skips"];return std::nullopt;
+            }
             const auto read=[&](std::vector<std::uint8_t>& out,std::vector<std::uint8_t>& area,std::vector<std::uint8_t>& area2,bool examine){
                 dma_buf_sync sync{DMA_BUF_SYNC_START|DMA_BUF_SYNC_READ};
                 if(ioctl(mapping->descriptor.get(),DMA_BUF_IOCTL_SYNC,&sync))throw std::runtime_error("Arcturus read cache sync failed");
@@ -166,7 +172,8 @@ public:
             };
             read(first,firstArea,firstArea2,true);read(second,secondArea,secondArea2,false);readMetadata(metadataSecond);const auto end=monotonicNs();
             if(first!=second||firstArea!=secondArea||firstArea2!=secondArea2||metadataFirst!=metadataSecond||queuedFd(stream,event.index)!=mapping->owner){++counters_["unstable_copy"];return std::nullopt;}
-            stream.lastPublish=event.dequeue;stream.lastBin=bin;
+            if(stereoScheduled)copySchedule_.copied(unsigned(eye),timing->sofRaw);
+            else stream.lastBin=bin;
             ++counters_["published"];
             timespec raw{};const auto clockBefore=monotonicNs();clock_gettime(CLOCK_MONOTONIC_RAW,&raw);const auto clockAfter=monotonicNs();
             Json metadata={{"schema","sfnp-native-camera-frame-v1"},{"sensor",stream.camera.sensor},{"node",stream.camera.path},{"width",layout.width()},{"height",height},

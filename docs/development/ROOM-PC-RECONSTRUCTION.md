@@ -936,3 +936,39 @@ The larger image has less averaging and is not automatically a better dense
 depth input. A public OpenVR metadata query also reports zero cameras and no
 camera-to-head property; it provides no authoritative replacement geometry.
 That metadata-only probe was removed and native services were preserved.
+
+### Continuous stereo availability and measurement
+
+A separately coordinated 12-second diagnostic recorded 75 private, complete
+area-two stereo pairs over an 11.10-second accepted exposure span. The median
+interval is 100.02 ms; a two-second gap lowers the accepted average to 6.66 Hz.
+Snapshot tokens advance through that gap, so this particular gap is downstream
+of stereo publication. Exposure/clock admission refusals remain in the capture
+log. The reader and temporary MR view were stopped, owned temporary images and
+tools removed from the Frame, and SSH closed. Steam, SteamVR and Room Setup
+retained their service generations. No new camera capture is pending.
+
+The reader also had an independent scheduling defect: each eye chose its first
+image in an absolute 100 ms bin. Two valid eye times on opposite sides of a bin
+boundary can cause subsequent left and right copies to select different actual
+exposures. The immutable snapshot correctly refuses those mismatched copies,
+but availability can stall. `stereo_copy_schedule.h` now shares the selected
+hardware exposure between eyes. A successful stable copy consumes that eye's
+budget; its matching mate remains eligible across the boundary. Missing mates
+cannot cause full sensor-rate copying or block the next scheduled exposure.
+The separate 100 microsecond stereo proof, source/eye identity, copy stability,
+exposure history and historical pose checks are unchanged. A synthetic 60 Hz
+stream reproduces one published pair in ten seconds with independent bins,
+versus 101 exact pairs with the shared schedule, including the initial pair.
+Kernel/API tests and host/ARM builds pass. This source fix has not been installed
+on the Frame or substituted into the candidate-17 archive.
+
+The denser recording supports 2,560 training-qualified corner tracks using a
+training-only joint optical/head hypothesis and actual row-time cameras. The
+3,923 withheld pixel predictions have 0.66 pixel median and 1.82 pixel 95th
+percentile error. Both eyes of each prediction exposure remain outside
+calibration and point fitting. This is a different recording, so those counts
+are not a matched comparison against the earlier sparse input. It still fails
+the one-pixel audit gate and lacks independent floor/ceiling support. Neither
+the capture nor the scheduling regression establishes a qualified live scanner
+or a candidate-18 installer.
