@@ -25,7 +25,7 @@ try {
         if (-not (Test-Path -LiteralPath (Join-Path $target $name) -PathType Leaf)) { throw ('Missing room payload: ' + $name) }
     }
     $bundle = Get-Content -Raw -LiteralPath (Join-Path $target 'stream-bridge-bundle.json') | ConvertFrom-Json
-    if ($bundle.version -cne '0.3.16-roomscan.16') { throw 'Unexpected room candidate.' }
+    if ($bundle.version -cne '0.3.16-roomscan.17') { throw 'Unexpected room candidate.' }
     if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
         & (Join-Path $target $runtime) -I -B (Join-Path $target 'setup/steam_link_setup.py') --help
         if ($LASTEXITCODE -ne 0) { throw 'The actual packaged setup entry point failed.' }
