@@ -113,7 +113,9 @@ class SurfaceGaussianTests(unittest.TestCase):
         self.assertRaises(ValueError, SurfaceGaussians, [[0, 0, -2]], [[0, 0, 0]], [[.2, .2]], [[.5]])
         model = SurfaceGaussians([[0., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
         self.assertRaisesRegex(ValueError, 'budget', model.render, torch.zeros((1, 3)),
-                               torch.tensor([[0., 0., -1.]]), torch.zeros((1, 129), dtype=torch.int64))
+                               torch.tensor([[0., 0., -1.]]), torch.zeros((1, 513), dtype=torch.int64))
+        self.assertRaisesRegex(ValueError, 'budget', model.render, torch.zeros((1025, 3)),
+                               torch.tensor([[0., 0., -1.]]).repeat(1025, 1), torch.zeros((1025, 512), dtype=torch.int64))
         self.assertRaisesRegex(ValueError, 'index', model.render, torch.zeros((1, 3)),
                                torch.tensor([[0., 0., -1.]]), torch.tensor([[1]]))
 
@@ -170,6 +172,22 @@ class SurfaceGaussianTests(unittest.TestCase):
         with torch.no_grad():
             model.log_scales += .4
         self.assertFalse(result.covers(model, origin, directions))
+
+    def test_smaller_ray_batches_can_cover_dense_regions_without_truncating_them(self):
+        points = torch.zeros((200, 3)); points[:, 2] = -torch.linspace(1., 3., 200)
+        model = SurfaceGaussians(points, torch.tensor([[0., 0., 1.]]).repeat(200, 1),
+                                 torch.full((200, 2), .02), torch.full((200, 1), .5), .01)
+        origins = torch.zeros((2, 3)); directions = torch.tensor([[0., 0., -1.]]*2)
+        small = ray_candidates(model, origins, directions)
+        self.assertTrue(small.overflow.all())
+        complete = ray_candidates(model, origins, directions, capacity=256, point_chunk=37)
+        self.assertFalse(complete.overflow.any())
+        self.assertTrue(torch.equal(complete.counts, torch.tensor([200, 200])))
+        self.assertEqual(set(complete.indices[0].tolist()), set(range(200)) | {-1})
+        rendered = model.render(origins, directions, complete.indices)
+        self.assertAlmostEqual(rendered['alpha'][0].item(), 1-.99**200, places=5)
+        self.assertRaisesRegex(ValueError, 'bounded', ray_candidates, model, torch.zeros((1025, 3)),
+                               directions[:1].repeat(1025, 1), capacity=512)
 
     def test_noisy_ceiling_seed_is_corrected_using_training_images_only(self):
         from room_reconstruction.surface_control import run_planar_control

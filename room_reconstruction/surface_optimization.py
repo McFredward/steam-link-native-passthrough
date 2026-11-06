@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import math
 
 import torch
+from .surface_gaussians import bounded_ray_work
 
 
 @dataclass(frozen=True)
@@ -19,10 +20,10 @@ class RayTrainingView:
 
     def validate(self, model):
         p = len(self.origins)
-        if (not 0 < p <= 4096 or self.origins.shape != (p, 3) or self.directions.shape != (p, 3)
+        if (self.origins.shape != (p, 3) or self.directions.shape != (p, 3)
                 or self.colors.shape != (p, model.color_logits.shape[1])
                 or self.candidates.ndim != 2 or self.candidates.shape[0] != p
-                or not 0 < self.candidates.shape[1] <= 128 or self.candidates.dtype != torch.int64
+                or not bounded_ray_work(p, self.candidates.shape[1]) or self.candidates.dtype != torch.int64
                 or self.valid.shape != (p,) or self.overflow.shape != (p,)
                 or self.valid.dtype != torch.bool or self.overflow.dtype != torch.bool
                 or any(value.device != model.means.device for value in (

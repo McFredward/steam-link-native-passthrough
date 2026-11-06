@@ -736,6 +736,10 @@ searches actual world rays in bounded point/ray chunks. It does not allocate a
 growing points-by-pixels matrix. Per-ray capacity overflow stays explicit;
 truncated candidates cannot qualify a surface. Cached candidates invalidate
 before geometry, scale or camera-ray changes leave their motion margin.
+Dense regions may use up to 512 candidates with a smaller ray batch. The product
+of rays and candidates stays at most 524,288; increasing overlap capacity cannot
+silently increase the renderer's work-buffer budget. A dense-region test proves
+complete composition after the default 128-candidate search reports overflow.
 
 `surface_optimization.py` uses per-disk Adam counters and moments, updating only
 visible disks. An invisible room region cannot keep moving through old momentum
@@ -830,3 +834,9 @@ Further real replay uses the filtered input and peripheral virtual views while
 retaining exposure-disjoint evaluation and the independent room-height reference.
 The camera kernel/API suites now share the already prepared native CI toolchain;
 all seven actual guard/decoding suites and host/ARM builds remain required.
+
+A subsequent public OpenVR utility query confirms that the Frame's reported
+IMU-to-head matrix agrees with the static device head transform already used.
+This rules out that specific missing-transform explanation for the residual;
+it does not prove the physical camera mount or complete tracked calibration.
+The metadata-only probe was removed and native service generations preserved.
