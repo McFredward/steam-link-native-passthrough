@@ -840,3 +840,20 @@ IMU-to-head matrix agrees with the static device head transform already used.
 This rules out that specific missing-transform explanation for the residual;
 it does not prove the physical camera mount or complete tracked calibration.
 The metadata-only probe was removed and native service generations preserved.
+
+The optimizer can additionally use independent metric ray-depth constraints
+with explicit measured uncertainty. Suitable constraints come from qualified
+multi-view feature triangulation on training exposures, never from a neural
+proposal, the known room height, a previous model prediction or withheld data.
+Zero depth/uncertainty denotes an unknown sample and has exactly no effect.
+Incomplete, nonfinite or out-of-budget measurement/uncertainty pairs refuse the
+entire update before any parameter or optimizer state changes. A robust loss
+constrains rendered range in units of measurement uncertainty. A separate test
+corrects the otherwise unobservable depth of a constant-intensity ray.
+
+The real comparison keeps five complete stereo exposures outside initialization,
+rig fitting and optimization. An additional check triangulates features using
+only those withheld exposures and compares their ranges with Gaussian ray
+intersections. This remains a diagnostic consistency test, not external ground
+truth or proof of a calibrated live scanner. In particular, good photometric
+coverage is insufficient while metric discrepancies or unknown ceilings remain.

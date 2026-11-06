@@ -17,6 +17,8 @@ class RayTrainingView:
     valid: torch.Tensor
     overflow: torch.Tensor
     surface_neighbors: torch.Tensor | None = None
+    measured_depth: torch.Tensor | None = None
+    measured_sigma: torch.Tensor | None = None
 
     def validate(self, model):
         p = len(self.origins)
@@ -39,6 +41,15 @@ class RayTrainingView:
                     or links.dtype != torch.int64 or links.device != self.origins.device
                     or torch.any(links < 0) or torch.any(links >= p)):
                 raise ValueError('Invalid bounded measured-surface neighbour links')
+        if (self.measured_depth is None) != (self.measured_sigma is None):
+            raise ValueError('Metric depth constraints need their measured uncertainty')
+        if self.measured_depth is not None:
+            depth, sigma = self.measured_depth, self.measured_sigma
+            if (any(v.shape != (p,) or v.dtype != self.origins.dtype or v.device != self.origins.device
+                    or not torch.isfinite(v).all() for v in (depth, sigma))
+                    or torch.any(~(((depth == 0) & (sigma == 0))
+                                  | ((depth >= .2) & (depth <= 6.) & (sigma >= .005) & (sigma <= .1))))):
+                raise ValueError('Invalid measured metric depth constraints')
 
 
 class SurfaceOptimizer:
@@ -83,12 +94,14 @@ class SurfaceOptimizer:
         eligible = view.valid & ~view.overflow & (view.candidates >= 0).any(-1)
         if not eligible.any():
             return {'updated': False, 'disks_updated': 0, 'rays_used': 0,
+                    'metric_constraint_rays': 0,
                     'candidate_overflow_rays': int(view.overflow.sum())}
         self.model.zero_grad(set_to_none=True)
         rendered = self.model.render(view.origins[eligible], view.directions[eligible], view.candidates[eligible])
         ids = rendered['candidate_ids'][(rendered['weights'] > 1e-5) & (rendered['candidate_ids'] >= 0)].unique()
         if not len(ids):
             return {'updated': False, 'disks_updated': 0, 'rays_used': 0,
+                    'metric_constraint_rays': 0,
                     'candidate_overflow_rays': int(view.overflow.sum())}
         color = rendered['color']
         if self.random_background:
@@ -103,6 +116,18 @@ class SurfaceOptimizer:
         loss = (image_loss+.1*rendered['distortion'].mean()
                 +.01*rendered['normal_variance'].mean()+.01*(1-rendered['alpha']).mean()
                 +self.tangent_weight*tangent_shift.square().mean())
+        metric_rays = 0
+        if view.measured_depth is not None:
+            # These are independent metric observations from training exposures,
+            # e.g. qualified multi-view feature triangulation. The caller must
+            # not insert a neural proposal, a reference room dimension, held-out
+            # geometry or this model's previous prediction as a measurement.
+            measured, sigma = view.measured_depth[eligible], view.measured_sigma[eligible]
+            known = measured > 0
+            metric_rays = int(known.sum())
+            if metric_rays:
+                residual = (rendered['depth'][known]-measured[known])/sigma[known]
+                loss = loss+.01*(residual.square()+1e-5).sqrt().mean()
         if view.surface_neighbors is not None and self.steps >= 100:
             # Surface normals derived from the rendered metric depth must agree
             # with the disks' normals. Links come only from caller-qualified
@@ -159,5 +184,6 @@ class SurfaceOptimizer:
                 u, v, _ = self.model.basis(ids)
                 self.model.axes[ids] = torch.stack((u, v), 1)
         return {'updated': True, 'disks_updated': len(ids), 'rays_used': int(eligible.sum()),
+                'metric_constraint_rays': metric_rays,
                 'candidate_overflow_rays': int(view.overflow.sum()),
                 'photometric_loss': float(image_loss.detach()), 'loss': float(loss.detach())}
