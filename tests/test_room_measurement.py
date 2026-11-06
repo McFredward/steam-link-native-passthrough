@@ -52,6 +52,32 @@ class MeasurementTests(unittest.TestCase):
         self.assertTrue(valid.all())
         self.assertTrue(np.allclose(measured, rays/np.linalg.norm(rays, axis=1)[:, None], atol=1e-11))
 
+    def test_area_pixel_centers_recover_metric_depth_with_oppositely_rotated_sensors(self):
+        value = observation()
+        value['encoding'] = 'gray8-area4-step4'
+        value['sampling'] = {'step': 4, 'area': [4, 4], 'center_offset': [1.5, 1.5]}
+        # Arcturus' two sensor images have opposite roll. A forgotten half-cell
+        # center is therefore a stereo-depth bias, not a harmless shared shift.
+        lens = np.array(value['rig']['eyes'][1]['head_from_optical']).reshape(3, 4)
+        lens[:, :3] = np.diag((-1., 1., -1.))
+        value['rig']['eyes'][1]['head_from_optical'] = lens.ravel().tolist()
+        cameras = observation_cameras(value, 0)
+        expected = np.array((.2, 1.8, -2.4)); measurements = []
+        for i, camera in enumerate(cameras):
+            native = np.array(camera.lens['head_from_optical']).reshape(3, 4)
+            local = native[:, :3].T @ (expected-np.array((0, 1.5, 0))-native[:, 3])
+            pixel = (project_kb(local, np.array((1000., 1000., 1232., 1232.)), np.zeros(4))-1.5)/4
+            measurements.append((i, pixel))
+            _, ray, valid = camera.rays([pixel]); self.assertTrue(valid[0])
+            self.assertTrue(np.allclose(camera.project_at_observed_rows(expected, [pixel])[0], pixel, atol=1e-10))
+        point, error = fit_track(cameras, measurements)
+        self.assertTrue(np.allclose(point, expected, atol=1e-8))
+        self.assertLess(float(error.max()), 1e-8)
+        broken = copy.deepcopy(value); broken['sampling']['center_offset'] = [0, 0]
+        self.assertRaisesRegex(ValueError, 'centers', observation_cameras, broken, 0)
+        broken = copy.deepcopy(value); del broken['sampling']
+        self.assertRaisesRegex(ValueError, 'centers', observation_cameras, broken, 0)
+
     def test_multi_view_fit_recovers_known_world_point_while_head_and_rows_move(self):
         cameras = [camera for i, offset in enumerate((-.12, 0, .12))
                    for camera in observation_cameras(observation(offset, yaw=offset*.3, moving=True), i)]

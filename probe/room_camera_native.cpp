@@ -26,10 +26,12 @@ int main(int argc,char** argv){
             sealReadOnlyMappings();
             auto description=frames.describe();description["setup_privileges_dropped"]=true;description["reader_uid"]=getuid();
             description["manual_owner_monitored"]=owner.monitored();description["reader_pid"]=getpid();
+            description["sampling_modes"]={"point-step4","area4-step4"};
             if(!serve){std::puts(description.dump().c_str());return 0;}
             LocalApi api;description["abstract_socket"]=api.address();std::puts(description.dump().c_str());std::fflush(stdout);
             signal(SIGINT,stop);signal(SIGTERM,stop);signal(SIGHUP,stop);signal(SIGPIPE,SIG_IGN);
             StereoSnapshots<BorrowedFrames::Image> snapshots;
+            std::optional<BorrowedFrames::Image> areaReply;
             while(!stopped&&!api.stopping()&&frames.alive()&&owner.alive()){
                 const auto events=trace.read(producer.pid,0);exposure.read(exposureTrace,producer.pid);
                 for(const auto& event:events)if(auto image=frames.copy(event,api.framesRequested())){
@@ -39,7 +41,15 @@ int main(int argc,char** argv){
                     snapshots.add(std::move(*image));
                 }
                 api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},
-                    [&](const Json& request){return snapshots.latest(request,monotonicNs());},[&](){return snapshots.pair(monotonicNs());});
+                    [&](const Json& request)->const BorrowedFrames::Image*{
+                        const auto* image=snapshots.latest(request,monotonicNs());
+                        if(!image||request.value("command","")!="latest_area4")return image;
+                        if(image->metadata.value("encoding","")!="nv12-u8-luma-candidate"||image->area4Pixels.size()!=616*616)return nullptr;
+                        areaReply=BorrowedFrames::Image{image->metadata,image->area4Pixels,{}};
+                        areaReply->metadata["encoding"]="nv12-u8-area4-candidate";
+                        areaReply->metadata["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
+                        return &*areaReply;
+                    },[&](){return snapshots.pair(monotonicNs());});
                 api.wait();
             }
             return 0;

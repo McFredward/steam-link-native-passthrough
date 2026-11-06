@@ -47,14 +47,14 @@ public:
             ||out.metadata.value("height",0)!=616||pixels!=616*616))throw std::runtime_error("Room camera image geometry invalid");
         return out;
     }
-    std::array<Reply,2> pair(const std::string& previousToken=""){
+    std::array<Reply,2> pair(const std::string& previousToken="",bool area4=false){
         const auto snapshot=request({{"command","pair"}}).metadata;
         if(snapshot.value("status","")=="no-fresh-pair")return {};
         if(snapshot.at("schema")!="sfnp-native-camera-pair-v1"||snapshot.at("members").size()!=2)throw std::runtime_error("Invalid camera stereo snapshot");
         if(snapshot.at("pair_token")==previousToken)return {};
         std::array<Reply,2> out;
         for(unsigned i=0;i<2;++i){const auto& member=snapshot.at("members").at(i);
-            out[i]=request({{"command","latest"},{"sensor",member.at("sensor")},{"pair_token",snapshot.at("pair_token")}});
+            out[i]=request({{"command",area4?"latest_area4":"latest"},{"sensor",member.at("sensor")},{"pair_token",snapshot.at("pair_token")}});
             if(out[i].pixels.empty())return {}; // A replaced bounded snapshot is unavailable, never substituted.
             const auto& m=out[i].metadata;
             for(const auto* key:{"pair_token","source_session"})if(m.at(key)!=snapshot.at(key))throw std::runtime_error("Camera source snapshot changed");

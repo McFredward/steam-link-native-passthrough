@@ -19,6 +19,13 @@ int main(){try{
     check(t->lastRowCenter==1010827500ULL-4360-2602920ULL,"EOF-anchored last-row center");
     check(t->atRow(0)==t->firstRowCenter&&t->atRow(2463)==t->lastRowCenter,"raw rows retain their distinct exposure times");
     check(t->center<t->lastRowCenter&&t->center>t->firstRowCenter,"center never substitutes the dequeue timestamp");
+    auto filtered=frame;filtered["encoding"]="nv12-u8-area4-candidate";
+    filtered["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
+    check(arcturusSampleOffset(filtered)==1.5f&&arcturusTiming(filtered)->firstRowCenter==t->firstRowCenter,"area sampling retains physical row timing with its distinct pixel center");
+    filtered["sampling"]["center_offset"]={0,0};
+    check(!arcturusSampleOffset(filtered)&&!arcturusTiming(filtered),"wrong area center cannot reuse point-sampling geometry");
+    filtered=frame;filtered["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
+    check(!arcturusTiming(filtered),"point format cannot claim averaged pixels");
     frame["observed_exposure_registers"]["same_value_since_raw_ns"]=990000000ULL;
     check(!arcturusTiming(frame),"newly changed setting cannot attest current capture");
     frame=fixture();frame["observed_exposure_registers"]["unchanged_through_eof"]=false;

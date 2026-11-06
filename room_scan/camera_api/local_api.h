@@ -60,9 +60,9 @@ public:
             try{
                 const auto request=Json::parse(input.data(),input.data()+count);const auto command=request.at("command").get<std::string>();
                 if(command=="describe")output=packet(describe(),{});
-                else if((command=="pair"||command=="latest")&&it->controlOnly)output=packet({{"status","control-only-connection"}},{});
+                else if((command=="pair"||command=="latest"||command=="latest_area4")&&it->controlOnly)output=packet({{"status","control-only-connection"}},{});
                 else if(command=="pair"){it->frames=true;output=packet(pair(),{});}
-                else if(command=="latest"){
+                else if(command=="latest"||command=="latest_area4"){
                     it->frames=true;
                     const auto image=frame(request);
                     output=image?packet(image->metadata,image->pixels):packet({{"status","no-fresh-frame"},{"room_scan_ready",false}},{});

@@ -32,10 +32,13 @@ int main(){try{
         installReadOnlyPolicy();sealReadOnlyMappings();LocalApi api;
         FixtureImage image{{{"schema","sfnp-native-camera-frame-v1"},{"room_scan_ready",false},{"test_only",true},{"width",616},{"height",616}},std::vector<std::uint8_t>(616*616)};
         for(std::size_t i=0;i<image.pixels.size();++i)image.pixels[i]=std::uint8_t(i*13);
+        FixtureImage area=image;area.metadata["encoding"]="nv12-u8-area4-candidate";
+        area.metadata["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
+        for(auto& pixel:area.pixels)pixel=110;
         const auto announcement=api.address()+"\n";check(write(1,announcement.data(),announcement.size())==ssize_t(announcement.size()),"owned announcement");
         while(!api.stopping()){
             api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()}};},
-                [&](const Json& request){return request.at("sensor")=="fixture"?&image:nullptr;},
+                [&](const Json& request){return request.at("sensor")=="fixture"?(request.value("command","")=="latest_area4"?&area:&image):nullptr;},
                 [](){return Json{{"status","no-fresh-pair"}};});
             api.wait();
         }
@@ -50,6 +53,9 @@ int main(){try{
     check(!result.first.at("pixel_reads_active").get<bool>(),"opening and describing a session never requests pixels");
     result=request(socket.get(),R"({"command":"latest","sensor":"fixture"})");check(result.second.size()==616*616,"real socket carries the largest diagnostic image");
     for(std::size_t i=0;i<result.second.size();++i)check(result.second[i]==std::uint8_t(i*13),"exact pixel bytes survive transport");
+    result=request(socket.get(),R"({"command":"latest_area4","sensor":"fixture"})");
+    check(result.first.at("sampling").at("center_offset")==Json({1.5,1.5})&&result.second.size()==616*616,"area image retains its explicit sample center and unchanged extent");
+    for(auto pixel:result.second)check(pixel==110,"area bytes are never substituted with point-sampled pixels");
     check(request(socket.get(),R"({"command":"describe"})").first.at("pixel_reads_active").get<bool>(),"explicit image request enables only owned reader copies");
     check(request(socket.get(),R"({"command":"park"})").first.at("status")=="parked","consumer can park its own read interest");
     check(!request(socket.get(),R"({"command":"describe"})").first.at("pixel_reads_active").get<bool>(),"parking the last consumer stops pixel reads");
@@ -71,6 +77,7 @@ int main(){try{
     check(request(second.get(),R"({"command":"latest","sensor":"fixture"})").second.size()==616*616,"second image consumer receives its frame");
     auto control=connectTo(address);check(control.get()>=0,"reserved control slot");
     check(request(control.get(),R"({"command":"latest","sensor":"fixture"})").first.at("status")=="control-only-connection","reserved slot cannot start another image consumer");
+    check(request(control.get(),R"({"command":"latest_area4","sensor":"fixture"})").first.at("status")=="control-only-connection","area requests cannot bypass the reserved control slot");
     check(request(control.get(),R"({"command":"stop"})").first.at("status")=="stopping","Stop remains available with both image consumers connected");
     int status=0;check(waitpid(child,&status,0)==child&&WIFEXITED(status)&&!WEXITSTATUS(status),"manual helper stops cleanly");
     owned.pid=-1;
