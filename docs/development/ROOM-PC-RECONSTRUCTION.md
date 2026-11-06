@@ -719,3 +719,74 @@ the evaluator fits no ground-truth alignment, and training never receives the
 reference surfaces. This Intel-GPU control strengthens the need to qualify the
 surface-extraction method separately. Neither better camera alignment nor a
 high image score establishes an accurate Gaussian-derived mesh by itself.
+
+### Surface-Gaussian reconstruction prototype
+
+The next developer core represents oriented two-dimensional Gaussian disks and
+jointly optimizes their positions, orientation, scale, opacity and appearance
+against multiple captured views. `surface_gaussians.py` implements metric
+ray/disk intersection and front-to-back alpha composition, following the surface
+model of [2DGS](https://surfsplatting.github.io/). It is an independent PyTorch
+implementation, not a wrapper around the failed density-isosurface mesher.
+It operates on individual world-ray origins and directions, allowing the
+original fisheye and rolling-row camera model to remain explicit.
+
+`surface_candidates.py` conservatively bounds each disk with a sphere and
+searches actual world rays in bounded point/ray chunks. It does not allocate a
+growing points-by-pixels matrix. Per-ray capacity overflow stays explicit;
+truncated candidates cannot qualify a surface. Cached candidates invalidate
+before geometry, scale or camera-ray changes leave their motion margin.
+
+`surface_optimization.py` uses per-disk Adam counters and moments, updating only
+visible disks. An invisible room region cannot keep moving through old momentum
+while another region is optimized. Seed rays provide stronger transverse
+localization than depth: a soft centimetre-scale transverse prior lets an
+uncertain depth move along its measured camera ray without introducing a known
+room plane or dimension. Surface-normal/depth consistency uses only externally
+qualified local neighbour links; unknown boundaries get no link. Random training
+backgrounds discourage low opacity from hiding a mismatch on an opaque observed
+surface. `surface_mesh.py` connects neighbouring qualified ray intersections
+without bridging unknown samples or nearby parallel depth discontinuities.
+Rendering alpha is explicitly insufficient to qualify physical geometry.
+
+The first analytic image control starts a surface 12 cm from its actual depth,
+with noisy initial positions and directions. Seeds, seed colors and their rays
+come only from four training images. The fifth image and all reference geometry
+stay outside optimization. With 0.03-radian normal noise and free normal
+optimization, a ceiling-oriented control achieves about 5.6 mm median held-out
+depth error and 2.54 cm at the 95th percentile after 3,000 steps, with no capacity
+overflow. This is a small synthetic planar control, not a full-room comparison
+with the earlier Spirula run, real Frame accuracy or NVIDIA throughput. Earlier
+idealized controls and failing noisy controls are retained privately; their
+thresholds were not relaxed to obtain this pass.
+
+A separate Python 3.12 developer environment uses PyTorch `2.9.1+cpu`, NumPy
+`2.5.4` and SciPy `1.18.1`. It is not an installed dependency of candidate 17.
+Windows and Linux CI exercise metric intersections, derivatives against finite
+differences, candidate bounds/invalidation, invisible-region stability, unknown
+gaps, discontinuity boundaries and the actual held-out image optimization.
+
+```sh
+PYTHONPATH=. PRIVATE_DEVELOPER_PYTHON -B -m unittest discover -s tests -p test_room_surface_gaussians.py -v
+PYTHONPATH=. PRIVATE_DEVELOPER_PYTHON -B -m room_reconstruction.surface_control --orientation ceiling --normal-noise .03 --optimize-normals --output build/new-private-surface-control
+```
+
+The real-recording comparison retains ten exposure groups outside initialization
+and training. Neural stereo supplies provisional initialization, not accepted
+surfaces. A new read of camera images is not needed for that comparison.
+
+An additional field-of-view audit found that the existing neural path uses only
+a central rectified crop of the available fisheye images. Ceiling content can
+remain outside that crop even when present in the captured input. Rectification
+now supports virtual views rotated up/down about the stereo baseline and a
+bounded wider field of view. This preserves the horizontal baseline, original
+physical lenses and each sampled pixel's historical exposure pose. Default
+arguments retain the existing central view; the shipped worker is not switched
+to a new reconstruction path by these developer additions. Virtual-view tests
+also retain timing refusals and prove that the captured rig is not modified.
+
+These modules are reconstruction groundwork. They do not yet provide a complete
+streaming map, independently qualified live guidance, a Windows CUDA runtime
+package or a candidate-18 installer. The accepted local grid/pulse, X and normal
+installer remain integration requirements; candidate 17 is still the public
+installer payload.
