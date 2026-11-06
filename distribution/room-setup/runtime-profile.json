@@ -153,7 +153,7 @@
     },
     "VERSION": {
       "bytes": 19,
-      "sha256": "3bfb7e1a95d57585d0cd47d8c7d59303dc760d1dc9929dae0192b91e10a1c0fc"
+      "sha256": "d1c3fa8af29332bef2573ba97b6c2db10abbe9550a01e723c57a59aacbb83ef2"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -240,8 +240,8 @@
       "sha256": "a1e02d7f4aeef2e579be64ee3b3bde7a50b6477058ef54a421262e231331aa33"
     },
     "room_reconstruction/live_refine.py": {
-      "bytes": 2437,
-      "sha256": "7a9dec551db2b74eb47c25773afdb13cd2493da88e6ac0ff26a7128a9e3e94e2"
+      "bytes": 4776,
+      "sha256": "7aa76a83ba25cd4a46bf54ea859d02ce09667d39a11c21cc7567af21ff609850"
     },
     "room_reconstruction/live_surface.py": {
       "bytes": 5305,
@@ -780,5 +780,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "b62b06d4d909181f14bdee5571b29818e5554942"
+  "source_revision": "b56de96f9a8ed86b76bfa6ecf95344aed3f0046e"
 }
