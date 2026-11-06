@@ -891,3 +891,14 @@ degrees. Fixed-history pose hypotheses improve some offline reprojection checks
 but still fail qualification. The file's recent history does not by itself prove
 the exact effective transform at an earlier exposure. Neither a guessed history
 composition nor a transform chosen from the known room height is applied live.
+
+The filtered-input real replay is also not qualified after 6,000 optimization
+steps across 96 training views (both eyes and three virtual view directions).
+Against 63 separately triangulated withheld-view ray witnesses, its median
+range discrepancy is 7.6 cm and its 95th percentile is 46.4 cm. A 3,000-step
+variant with 183 training-only triangulated points/610 uncertain ray constraints
+has 12.2 cm median and 31.8 cm 95th-percentile discrepancy. These witnesses are
+an independent image-consistency check, not external surveyed ground truth;
+neither comparison establishes acceptable physical geometry. Both runs retain
+ambiguous horizontal layers and fail the room-height check. The reference height
+was not used during optimization, and visually plausible coverage is not a pass.
