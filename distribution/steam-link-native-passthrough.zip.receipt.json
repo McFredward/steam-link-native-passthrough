@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 23195517,
-    "sha256": "f7866f780f27a97842b9f498a3a8c9f7cee86c48d5e6cf854fa6e7074c165b08"
+    "bytes": 23196334,
+    "sha256": "66d9862ad3a4a74b848905b5ea5bdb6ee2891028c4706e8efc1fe03dff9dc5e6"
   },
   "artifacts": {
     "frame_layer": {
@@ -53,7 +53,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 28857,
-    "sha256": "52c8c3ebdf77478c78b6251ec34097004f0749400b0c0ee0104374b7160bc4c3"
+    "sha256": "e301bb263d827df4e609eb4409d11e140e56435836b8bd1e0098b6c406bee5f7"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -67,7 +67,7 @@
     },
     "VERSION": {
       "bytes": 19,
-      "sha256": "3bfb7e1a95d57585d0cd47d8c7d59303dc760d1dc9929dae0192b91e10a1c0fc"
+      "sha256": "d1c3fa8af29332bef2573ba97b6c2db10abbe9550a01e723c57a59aacbb83ef2"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -154,8 +154,8 @@
       "sha256": "a1e02d7f4aeef2e579be64ee3b3bde7a50b6477058ef54a421262e231331aa33"
     },
     "room_reconstruction/live_refine.py": {
-      "bytes": 2437,
-      "sha256": "7a9dec551db2b74eb47c25773afdb13cd2493da88e6ac0ff26a7128a9e3e94e2"
+      "bytes": 4776,
+      "sha256": "7aa76a83ba25cd4a46bf54ea859d02ce09667d39a11c21cc7567af21ff609850"
     },
     "room_reconstruction/live_surface.py": {
       "bytes": 5305,
@@ -694,7 +694,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "b62b06d4d909181f14bdee5571b29818e5554942",
+  "source_revision": "b56de96f9a8ed86b76bfa6ecf95344aed3f0046e",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -725,9 +725,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 26317,
-        "sha256": "50a54c74423f0011ebd5ec8a4f4d01bd58ef4f69f04db6c8efe27f71a185c050"
+        "sha256": "9b1a221074929635519d5aced898d7e39a41ebbb2321c38e76ee0fc9e7165ccb"
       }
     }
   ],
-  "version": "0.3.16-roomscan.16"
+  "version": "0.3.16-roomscan.17"
 }
