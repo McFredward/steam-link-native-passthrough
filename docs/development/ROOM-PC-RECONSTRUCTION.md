@@ -699,3 +699,23 @@ calibration and point prediction, unchanged camera data, gross descriptor
 outliers, stationary unobservability and a failed held-out prediction that must
 remain visible in the error score. These are developer measurement tools. The
 public installer and runtime still deliver candidate 17.
+
+The same rig estimate, fitted only to the new recording, also improves unseen
+point predictions in the earlier five-frame recording. Their factory rig
+descriptors are identical. Median error falls from 0.78 to 0.45 sampled pixels;
+the 95th percentile falls from 2.40 to 1.84 pixels. This supports investigating
+a persistent rig/head-frame mismatch, while remaining insufficient for physical
+room-height or surface acceptance. All six room CI jobs, including the 15
+measurement regressions on Windows and Linux, pass for source `9c6e254`.
+
+A separate native Gaussian control increases within-direction head translation
+to 0.5 m: three positions with the same 64 mm stereo baseline, 72 calibrated
+views, the same known 2.7 m synthetic room and biased/noisy seeds. The original
+24-view control mostly supplies only stereo parallax within each direction.
+After 4,000 actual optimization steps, the new control's extracted mesh still
+has a median surface error of 16.4 cm, a 95th percentile of 32.4 cm and only
+7.8 percent completeness within 8 cm. Mesh hole filling is explicitly disabled;
+the evaluator fits no ground-truth alignment, and training never receives the
+reference surfaces. This Intel-GPU control strengthens the need to qualify the
+surface-extraction method separately. Neither better camera alignment nor a
+high image score establishes an accurate Gaussian-derived mesh by itself.
