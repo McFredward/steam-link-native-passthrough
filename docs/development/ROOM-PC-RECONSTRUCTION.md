@@ -972,3 +972,37 @@ are not a matched comparison against the earlier sparse input. It still fails
 the one-pixel audit gate and lacks independent floor/ceiling support. Neither
 the capture nor the scheduling regression establishes a qualified live scanner
 or a candidate-18 installer.
+
+### Measured room edges
+
+`line_measurement.py` adds a separate geometric measurement primitive for room
+edges. Different views may observe different sections of an edge; their
+endpoints are not assumed to represent the same world points. Approximate
+backprojection planes initialize a four-parameter metric line. Refinement uses
+each sample's actual historical row camera and nearest projection on the
+distorted image curve. No room height, horizontal-plane prior, image synthesis
+or unseen surface hull participates in fitting.
+
+Each observation retains its own measured line interval. Conditional transverse
+position uncertainty is evaluated near the observed segment midpoint with a
+half-pixel line-noise assumption. Samples on one detected segment are correlated;
+adding more samples must not create more independent camera evidence. The
+covariance excludes the arbitrary parameter origin along an infinite line.
+Unobservable configurations, behind-camera fits and unbounded inputs are refused.
+Withheld scoring fits nothing and retains bad or impossible predictions.
+
+Seven analytic checks cover moving rolling rows, different observed intervals,
+both eyes withheld from point fitting, bad predictions, horizontal-baseline
+degeneracy, weak transverse parallax and correlated sampling. They run alongside
+the existing measurement tests on Windows and Linux. This primitive is offline
+groundwork; automatic image-line association, ceiling semantics and live surface
+generation are not granted by a successful line fit.
+
+An initial private edge-association experiment on the continuous recording
+finds some well-predicted floor and object edges. Wider virtual views retain more
+observations, but also include a wrong edge association despite low training
+error. Several apparent upper-room edges retain centimetres to decimetres of
+conditional uncertainty. An aggregate pixel percentile cannot hide an incorrect
+individual edge or establish a floor/ceiling plane. The independent room-height
+measurement remains unqualified. A separate bounded lens-correction experiment
+does not materially improve the joint audit and is not applied to live cameras.
