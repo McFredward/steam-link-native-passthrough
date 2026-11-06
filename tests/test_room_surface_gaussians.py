@@ -1,5 +1,6 @@
 """Independent metric intersections and optimization guards for the new core."""
 import copy
+from dataclasses import replace
 import unittest
 
 import numpy as np
@@ -108,6 +109,40 @@ class SurfaceGaussianTests(unittest.TestCase):
         for name, value in model.state_dict().items():
             self.assertTrue(torch.equal(value, original[name]))
         self.assertEqual(optimizer.counts.sum().item(), 0)
+
+    def test_independent_metric_observation_corrects_photometrically_ambiguous_depth(self):
+        # A constant-intensity ray alone cannot determine its surface range.
+        # An independent training measurement constrains depth, not a room plane.
+        model = SurfaceGaussians([[0., 0., -2.12]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        optimizer = SurfaceOptimizer(model)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[0., 0., -1.]]),
+            torch.tensor([[.7]]), torch.tensor([[0]]), torch.tensor([True]), torch.tensor([False]),
+            measured_depth=torch.tensor([2.]), measured_sigma=torch.tensor([.02]))
+        for _ in range(250):
+            result = optimizer.step(view)
+        self.assertEqual(result['metric_constraint_rays'], 1)
+        self.assertLess(abs(model.means[0, 2].item()+2), .003)
+
+    def test_unknown_metric_depth_is_neutral_and_invalid_uncertainty_refuses_an_update(self):
+        model = SurfaceGaussians([[0., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        other = copy.deepcopy(model)
+        left, right = SurfaceOptimizer(model), SurfaceOptimizer(other)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[.03, .01, -1.]]),
+            torch.tensor([[.2]]), torch.tensor([[0]]), torch.tensor([True]), torch.tensor([False]))
+        left.step(view)
+        result = right.step(replace(view, measured_depth=torch.tensor([0.]), measured_sigma=torch.tensor([0.])))
+        self.assertEqual(result['metric_constraint_rays'], 0)
+        for name, value in model.state_dict().items():
+            self.assertTrue(torch.equal(value, other.state_dict()[name]))
+        frozen = copy.deepcopy(model.state_dict()); count = left.counts.clone()
+        for depth, sigma in (([2.], None), ([2.], [0.]), ([0.], [.02]), ([float('nan')], [.02]),
+                             ([6.1], [.02]), ([2.], [.001]), ([2., 2.], [.02, .02])):
+            with self.assertRaisesRegex(ValueError, 'depth constraints|measured uncertainty'):
+                left.step(replace(view, measured_depth=torch.tensor(depth),
+                                  measured_sigma=None if sigma is None else torch.tensor(sigma)))
+            self.assertTrue(torch.equal(left.counts, count))
+            for name, value in model.state_dict().items():
+                self.assertTrue(torch.equal(value, frozen[name]))
 
     def test_ray_work_and_parameter_inputs_have_explicit_bounds(self):
         self.assertRaises(ValueError, SurfaceGaussians, [[0, 0, -2]], [[0, 0, 0]], [[.2, .2]], [[.5]])
