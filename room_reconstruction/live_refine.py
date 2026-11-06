@@ -3,6 +3,49 @@ import numpy as np
 from scipy.ndimage import uniform_filter,minimum_filter
 
 
+def context_support(left,right,disparity,left_mask,right_mask):
+    """Verify an unchanged proposal against observed, warped image context.
+
+    A five-pixel texture test mostly measures sensor noise on smooth room
+    surfaces. Larger windows can contain real structure even when the centre
+    is smooth. They verify the neural proposal; they never extrapolate a new
+    disparity or grant an unobserved centre. A completely blank window still
+    has no matching evidence.
+    """
+    h,w=left.shape;y,x=np.mgrid[:h,:w]
+    coordinate=x-disparity
+    # Centre intensities before the variance calculation to retain precision
+    # on low-contrast input. Warp before measuring correlation so a sloping
+    # measured plane does not need a constant disparity across the window.
+    l=left.astype(np.float32)-128
+    fields=[]
+    for offset in (0.,-4*w/320,4*w/320):
+        u=coordinate-offset
+        lo=np.clip(np.floor(u).astype(np.int32),0,w-2);t=np.clip(u-lo,0,1)
+        r=(right[y,lo]*(1-t)+right[y,lo+1]*t).astype(np.float32)-128
+        support=left_mask&right_mask[y,lo]&right_mask[y,lo+1]&(u>=0)&(u<w-1)
+        fields.append((support,np.where(support,l,0),np.where(support,r,0)))
+    centre=minimum_filter(fields[0][0].astype(np.uint8),5,mode='constant').astype(bool)
+    qualified=np.zeros((h,w),bool)
+    for size in (15,31):
+        window=max(5,int(round(size*w/320))|1)
+        average=lambda value:uniform_filter(value,window,mode='constant')
+        scores=[]
+        for support,a,b in fields:
+            weight=average(support.astype(np.float32))
+            denominator=np.maximum(weight,1e-6)
+            ml,mr=average(a)/denominator,average(b)/denominator
+            vl=np.maximum(0,average(a*a)/denominator-ml*ml)
+            vr=np.maximum(0,average(b*b)/denominator-mr*mr)
+            covariance=average(a*b)/denominator-ml*mr
+            correlation=covariance/np.maximum(np.sqrt(vl*vr),1e-6)
+            scores.append(np.where((weight>.95)&(np.minimum(vl,vr)>=2.5**2),correlation,-1))
+        # A gain/offset-normalized linear brightness ramp matches any depth.
+        # Require actual evidence against displaced alternatives as well.
+        qualified|=centre&(scores[0]>.85)&(scores[0]>np.maximum(scores[1],scores[2])+.01)
+    return qualified
+
+
 def refine_one(left,right,disparity,left_mask,right_mask):
     left=left.astype(np.float32);right=right.astype(np.float32)
     def normalized(image):
@@ -34,7 +77,7 @@ def refine_one(left,right,disparity,left_mask,right_mask):
     # already photometrically supported bilateral neural measurement. Broad
     # real-world texture often has a flat local disparity cost curve.
     supported=np.isfinite(costs[2])&(costs[2]<.65)
-    valid=supported|refined
+    valid=supported|refined|context_support(left,right,disparity,left_mask,right_mask)
     return np.where(refined,disparity+correction,disparity).astype(np.float32),valid
 
 

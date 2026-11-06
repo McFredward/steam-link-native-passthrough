@@ -528,3 +528,50 @@ The camera reader, its API, exposure/pose proofs, model and runtime dependencies
 are unchanged. Installer 0.3.16-roomscan.16 carries Frame 0.3.13-roomscan.16 and
 the unchanged PC native provider 0.3.12-roomscan.8. Physical scan coverage,
 accuracy and readability still require the next wearer test.
+
+## Candidate 17 contextual image verification
+
+Candidate 16's wearer still saw only the guidance arrow. The three synthetic
+reference surfaces, including both current translucent grid styles, were all
+visible through the unchanged installed renderer. The saved scan contained many
+small disconnected triangles; counting faces did not establish useful coverage.
+The wearer confirmed that candidate 16's instruction dwell was now readable.
+
+With the wearer's separate consent, eight private stereo observations were
+read. The first three were nearly static close-range views. The remaining five
+were captured while a temporary native MR reference stayed active, and show
+slow head movement through the room. Both temporary tests were closed, their
+Frame files removed and the original Room Setup PID/start time preserved.
+No camera or SteamVR service was restarted. Images and derived room data remain
+in ignored private diagnostics and are not included in the distribution.
+
+The five-pixel texture requirement in photometric verification rejected most
+neural proposals on smooth room surfaces. The unchanged model and its input
+normalization pass a separate known-disparity stereo reference check. Candidate
+17 also verifies an unchanged proposal with scale-adjusted 15- and 31-pixel
+image contexts. It warps the other image with the proposed disparity field
+before measuring gain/offset-invariant correlation, including on sloping planes.
+At least 95 percent observed context, actual contrast, correlation above 0.85
+and a 0.01 advantage over displaced alternatives are required. A blank patch or
+a brightness ramp cannot supply contextual depth evidence. A masked centre
+remains unknown. Existing sharp-minimum corrections, 0.35-pixel bilateral
+agreement, metric/ray limits and measured-neighbour normal checks are unchanged.
+
+Replaying the five private 320x256 observations produces 8,011--10,139 final
+surface samples per pair, versus 721--1,514 in candidate 16. Replaying one of
+those pairs at 640x480 yields 38,353 versus 2,296. The actual regional map and
+incremental previews grow throughout the five observations, ending at 22,328
+faces instead of 601. These counts establish an offline improvement on the
+same inputs, not physical accuracy, complete room coverage or NVIDIA throughput.
+The additional CPU verification cost on this development machine was about
+88 ms for the 640x480 pair. A controlled low-contrast stereo fixture with gain,
+offset, independent noise and an unknown opening yields over 15,000 metric
+samples within 1 cm of its known plane; contradictory matching directions,
+blank ceilings, unrelated images and brightness ramps remain rejected.
+
+Installer 0.3.16-roomscan.17 changes only the PC reconstruction source. Native
+PC and Frame versions stay at 0.3.12-roomscan.8 and 0.3.13-roomscan.16. The
+reader, model/runtime pins, renderer, accepted grid/pulse, instructions and X
+are unchanged. The reference-edge aliasing reported by the wearer is recorded
+but not resolved by this depth-verification change. Complete scan speed,
+physical accuracy and useful visible coverage require the next installed test.
