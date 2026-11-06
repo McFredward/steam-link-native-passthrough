@@ -644,3 +644,58 @@ uncertainty. The existing installer, reversible reader, tracked local MR grid,
 animations and room-only X remain integration components. The public installer
 still delivers candidate 17; these developer measurement tools do not constitute
 a candidate-18 release or an accepted live reconstruction replacement.
+
+### Continuous capture and tracked-head rig audit
+
+A separately coordinated 45-second measurement saved 49 qualified stereo
+observations spanning 41.81 seconds and 0.92 m of head translation. After a
+headset reboot, the experimental reader was inactive as required. The exact
+installed reader was checked and transiently rearmed for the measurement, then
+stopped again. The transparent capture view was closed, the dashboard restored
+and the owned temporary Frame files removed. Steam, SteamVR and Room Setup kept
+their existing service generations. The private images are not distributed.
+
+The original fixed-camera measurement fails its acceptance gate. There is no
+sufficiently supported floor/ceiling pair for an independent height measurement.
+The physical room dimension remains evaluation-only and is never used to set a
+ceiling, solve camera calibration or tune scale.
+
+`rig_calibration_audit.py` tests a constant camera-rig/tracked-head transform
+using temporal matches. Both eyes retain their relative factory geometry and
+metric baseline. Feature outliers are screened with an independently estimated
+essential matrix; fitting still evaluates the original exposure-row poses.
+Five folds exclude every held-out exposure, including its other eye, from the
+calibration fit. Bounded parameters, Jacobian rank and conditioning distinguish
+an observable hypothesis from stationary or degenerate motion. Nothing is
+written to factory calibration, capture settings or the live worker.
+
+On this sequence, the fitted rotation magnitude is about 1.8 degrees, with a
+roughly centimetre-scale translation. The estimate is consistent across the
+five folds. Separate time-shift experiments did not explain the errors nearly
+as well; those experiments extrapolate only for a private diagnostic and grant
+no live camera authority. The constant rig hypothesis predicts unseen temporal
+epipolar measurements substantially better, but does not alone establish metric
+surface accuracy or identify which physical/configuration component caused the
+original mismatch.
+
+The optional `--compare-rig-predictions` audit also excludes the predicted
+exposure from point fitting. Calibration uses that exposure's independent fold.
+It reports each method's training-qualified set and their exact shared tracks,
+so accepting more points cannot disguise a worse prediction. On 1,329 common
+predictions, the median image error falls from 1.48 to 0.67 sampled pixels and
+the 95th percentile from 4.78 to 2.61 pixels. The remaining error is still above
+the measurement gate; no new installed-scanner acceptance is claimed.
+
+Held-out scoring now precedes any all-view point-selection gate. Previously,
+rejecting a point using all images could hide a bad unseen-image prediction.
+Only training-image residuals may qualify a prediction. The report explicitly
+counts failed training point fits. Without this optimistic selection, the
+uncorrected sequence's 95th-percentile error is 5.04 sampled pixels, rather than
+the earlier 2.42-pixel diagnostic. The independent reference height remains
+unresolved in both reports.
+
+Analytic regressions cover a moving, misaligned stereo rig, exposure-disjoint
+calibration and point prediction, unchanged camera data, gross descriptor
+outliers, stationary unobservability and a failed held-out prediction that must
+remain visible in the error score. These are developer measurement tools. The
+public installer and runtime still deliver candidate 17.
