@@ -1,6 +1,6 @@
 {
   "actual_powershell_candidate_extraction": "PASS",
-  "actual_windows_candidate_check": "PENDING",
+  "actual_windows_candidate_check": "PASS",
   "all_archive_members_verified": true,
   "archive": {
     "bytes": 23195517,
@@ -18,6 +18,17 @@
   "core_commit": "47bddb6160e757e103a83b3e8460953e2791fc28",
   "current_source_matches_all_packaged_source_pins": true,
   "device_actions": false,
+  "final_delivery_ci": {
+    "actual_windows_candidate_archive_and_embedded_entry_points": "PASS",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "result": "success",
+    "revision": "47967d32e2d026265e69703024ec5a1c74fcf969",
+    "run": 42187172331
+  },
   "fixture_checks_skipped_on_linux": 1,
   "hardware_verified": false,
   "headset_test": false,
@@ -205,7 +216,21 @@
     "room_overlay",
     "room_renderer"
   ],
-  "result": "FINAL_DELIVERY_PENDING",
+  "remote_archive_download": {
+    "all_archive_members_verified": true,
+    "archive_commit": "43178405f8d3b90736f95bff7d2cdc53fa9c4664",
+    "bytes": 23195517,
+    "core_commit": "47bddb6160e757e103a83b3e8460953e2791fc28",
+    "current_source_matches_all_159_packaged_source_pins": true,
+    "device_actions": false,
+    "member_count": 1042,
+    "public_aliases_match_pinned_core": true,
+    "public_branch_bootstrap_and_immutable_core_match": true,
+    "result": "PASS",
+    "sha256": "f7866f780f27a97842b9f498a3a8c9f7cee86c48d5e6cf854fa6e7074c165b08",
+    "source_revision": "b62b06d4d909181f14bdee5571b29818e5554942"
+  },
+  "result": "PASS",
   "schema": "sfnp-room-bootstrap-validation-v1",
   "software_reproduction": {
     "accepted_translucent_grid_colour_pulse_alpha_and_depth_unchanged": true,
@@ -231,9 +256,12 @@
     "unknown_holes_and_unsupported_centres_stay_unknown": true
   },
   "source_ci": {
+    "all_packaged_source_pins_match_source_revision": true,
+    "revision": "b62b06d4d909181f14bdee5571b29818e5554942",
+    "room_result": "success",
     "room_run": 42186441709,
-    "setup_run": 42186441730,
-    "status": "PASS"
+    "setup_result": "success",
+    "setup_run": 42186441730
   },
   "source_pin_count": 159,
   "source_revision": "b62b06d4d909181f14bdee5571b29818e5554942",
