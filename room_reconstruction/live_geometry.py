@@ -9,9 +9,9 @@ from functools import lru_cache
 
 
 @lru_cache(maxsize=3)
-def image_grid(width,height):
+def image_grid(width,height,focal_ratio=220/320):
     y,x=np.mgrid[:height,:width]
-    focal=width*220/320
+    focal=width*focal_ratio
     rays=np.stack(((x-(width-1)/2)/focal,-(y-(height-1)/2)/focal,-np.ones_like(x)),axis=-1)
     for value in (x,y,rays):value.flags.writeable=False
     return y,x,rays
@@ -53,7 +53,13 @@ def project_kb(ray, intrinsics, k):
     return np.where((ray[..., 2] > 0)[..., None], uv, -100)
 
 
-def rectify(observation, width, height):
+def rectify(observation, width, height, *, view_pitch_radians=0., focal_ratio=220/320):
+    # Rotate a virtual rectified view about the physical stereo baseline.
+    # This preserves horizontal epipolar geometry while reaching peripheral
+    # ceiling/floor content. Physical lenses and exposure poses stay unchanged.
+    if (not np.isfinite(view_pitch_radians) or abs(view_pitch_radians) > .65
+            or not np.isfinite(focal_ratio) or not .5 <= focal_ratio <= 1.):
+        raise ValueError('Unsupported virtual stereo view')
     if (observation["schema"] != "sfnp-room-stereo-v1" or observation["encoding"] != "gray8-point-step4"
             or (observation["width"], observation["height"]) != (616, 616)
             or len(observation["images"]) != 2 or len(observation["timing"]) != 2):
@@ -61,12 +67,16 @@ def rectify(observation, width, height):
     reference = matrix(observation["reference_head"])
     rig = observation["rig"]
     rectified = matrix(rig["head_from_rectified"])
+    if view_pitch_radians:
+        cosine, sine = np.cos(view_pitch_radians), np.sin(view_pitch_radians)
+        pitch = np.array(((1., 0., 0.), (0., cosine, -sine), (0., sine, cosine)))
+        rectified = np.column_stack((rectified[:, :3] @ pitch, rectified[:, 3]))
     if not .03 <= rig["baseline_m"] <= .10 or len(rig["eyes"]) != 2:
         raise ValueError("Unverified stereo rig")
     room = np.column_stack((reference[:, :3] @ rectified[:, :3], reference[:, :3] @ rectified[:, 3]+reference[:, 3]))
-    focal = width*220/320
+    focal = width*focal_ratio
     cx, cy = (width-1)/2, (height-1)/2
-    y,x,rays=image_grid(width,height)
+    y,x,rays=image_grid(width,height,focal_ratio)
     world_rays = np.einsum('...j,ij->...i',rays,room[:,:3])
     head_rays = np.einsum('...i,ij->...j',world_rays,reference[:,:3])
     images, masks, origins = [], [], []

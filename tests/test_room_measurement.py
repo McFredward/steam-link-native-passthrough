@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 from room_reconstruction.measurement import (
     observation_cameras, fit_track, intersect_rays, measured_room_height, unproject_kb,
 )
-from room_reconstruction.live_geometry import project_kb
+from room_reconstruction.live_geometry import project_kb, rectify
 from room_reconstruction.calibration_audit import rotation_hypothesis
 from room_reconstruction.rig_calibration_audit import rig_hypothesis, prediction_comparison
 from room_reconstruction.mesh_metrics import box_metrics
@@ -106,6 +106,22 @@ class MeasurementTests(unittest.TestCase):
         self.assertRaises(ValueError, observation_cameras, wrong, 0)
         wrong = observation(); wrong['timing'][0]['uncertainty_ns'] = 3000000
         self.assertRaises(ValueError, observation_cameras, wrong, 0)
+
+    def test_virtual_ceiling_and_floor_views_preserve_the_metric_baseline_and_physical_rig(self):
+        value = observation(); previous = copy.deepcopy(value)
+        for degrees in (-35., 0., 35.):
+            images, masks, origins, rays, room, intrinsics = rectify(value, 33, 33,
+                view_pitch_radians=np.deg2rad(degrees), focal_ratio=.5)
+            angle = np.deg2rad(degrees)
+            self.assertTrue(np.allclose(rays[16, 16], (0, np.sin(angle), -np.cos(angle)), atol=1e-12))
+            self.assertAlmostEqual(np.linalg.norm(origins[1][16, 16]-origins[0][16, 16]), .064)
+            self.assertAlmostEqual(np.dot(room[:, 0], origins[1][16, 16]-origins[0][16, 16]), .064)
+            self.assertEqual(intrinsics, (16.5, 16.5, 16., 16.))
+            self.assertTrue(all(m[16, 16] for m in masks))
+        self.assertEqual(value, previous)
+        self.assertRaises(ValueError, rectify, value, 33, 33, view_pitch_radians=.8)
+        invalid = copy.deepcopy(value); invalid['timing'][0]['uncertainty_ns'] = 3000000
+        self.assertRaises(ValueError, rectify, invalid, 33, 33, view_pitch_radians=.6)
 
     def test_independent_height_detects_a_biased_ceiling_and_is_invariant_to_origin(self):
         x, z = np.mgrid[-1:1:9j, -1:1:9j]
