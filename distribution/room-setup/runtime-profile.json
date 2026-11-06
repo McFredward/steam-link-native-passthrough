@@ -26,11 +26,11 @@
     },
     "room_overlay": {
       "bytes": 2099704,
-      "sha256": "27798323c87c466f1eef18a9d5ebfb2b248ab8bc5425565b54b1f6b495eec8cb"
+      "sha256": "d2f77552c53ff95d943656bbf0c5994f6d7d4fca89ee507a4bab55ba8379ae3e"
     },
     "room_renderer": {
       "bytes": 1706512,
-      "sha256": "943da12b38ccf578df3ee735ea68120a77eec6790b2c561a0d241888efe3f058"
+      "sha256": "b474e9e65e65ace8d100b56c56e0a92f1adfa31c77626facc8c2d4a7c84d7884"
     },
     "room_vision": {
       "bytes": 2822872,
@@ -149,11 +149,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 103,
-      "sha256": "b0833bd3acf814a04b5b5d6e083be4d927048fa4457fe5e8fa2056ff4c936f3a"
+      "sha256": "8cc56dc29fd42ad0ad700b671fa8650299627bf9bd52d4908b3d3cdf0d5e2947"
     },
     "VERSION": {
       "bytes": 19,
-      "sha256": "0fdaf3ed2a95d6b78befc401cc8b7b184a2c1395cbdba4751165805fdd884e5d"
+      "sha256": "3bfb7e1a95d57585d0cd47d8c7d59303dc760d1dc9929dae0192b91e10a1c0fc"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -228,8 +228,8 @@
       "sha256": "ec4d8bf1d7e215b9255015b45fac94b64a99be01f5558a76cbcdecb6f27b121c"
     },
     "room_reconstruction/live_geometry.py": {
-      "bytes": 10264,
-      "sha256": "9ab5fbc6bbc24222c6f91b47cd1eada3edb87e953a9cd7a4eabc9cf13c727977"
+      "bytes": 10742,
+      "sha256": "185e047e57eed4f2e899d67e39feac443b0755eba0f28ca5ec9ad5e4e71b5bfc"
     },
     "room_reconstruction/live_inference.py": {
       "bytes": 4103,
@@ -240,8 +240,8 @@
       "sha256": "a1e02d7f4aeef2e579be64ee3b3bde7a50b6477058ef54a421262e231331aa33"
     },
     "room_reconstruction/live_refine.py": {
-      "bytes": 2137,
-      "sha256": "1fdf17ad678138e469579a151f1285b8f1edfb7b815a6588fb0e2bc01587232c"
+      "bytes": 2437,
+      "sha256": "7a9dec551db2b74eb47c25773afdb13cd2493da88e6ac0ff26a7128a9e3e94e2"
     },
     "room_reconstruction/live_surface.py": {
       "bytes": 5305,
@@ -252,8 +252,8 @@
       "sha256": "916849f9dd5ce445771e293e80a35ae7d6ef7c18d07ded7ac3279012ff8841a1"
     },
     "room_reconstruction/live_worker.py": {
-      "bytes": 7790,
-      "sha256": "0304d56539e9069da01f99d9479c07526221afc9fb5c9ba3e5bebb97eed4a039"
+      "bytes": 7882,
+      "sha256": "7d47fb6b8229ec8c994944ed94ba3e528dda706825bb59a7b9ede08cf6a452de"
     },
     "room_scan/__init__.py": {
       "bytes": 250,
@@ -264,8 +264,8 @@
       "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
     },
     "room_scan/app.py": {
-      "bytes": 37488,
-      "sha256": "22766182089d0ec3627a66c9880ae5fd215b829cb57f9f25bb27645fd3b8150b"
+      "bytes": 38307,
+      "sha256": "759b11e37038e1840ecb0ab0d5bc7fb928b58eacb53371c17909b9c312217267"
     },
     "room_scan/camera_api/buffer_source.h": {
       "bytes": 15452,
@@ -444,8 +444,8 @@
       "sha256": "5d8b4bd5503dfdf65afd3443e06c941997b41a54036101b0ad13b28366288229"
     },
     "room_scan/native_overlay.cpp": {
-      "bytes": 33346,
-      "sha256": "50c0a7af21fb94d08643335ec6144d47aedc790cd459c66bf26fc0a71391abc9"
+      "bytes": 33512,
+      "sha256": "3045538d898858130348cf640ed8442e820119a2d7f1849feb9d8ade0ee15abf"
     },
     "room_scan/native_pipe.h": {
       "bytes": 4337,
@@ -468,8 +468,8 @@
       "sha256": "1ffe307cac581f7077a9d8f17c39bd783f6ae1a3ff5b48ccdd92d35748a858ec"
     },
     "room_scan/native_scan_guidance.h": {
-      "bytes": 4048,
-      "sha256": "a4b0e1de108456adf08e11a5c4dae1083b47a37eda1593e82f13bc024f6dd97b"
+      "bytes": 4808,
+      "sha256": "ac45e9468f8bffb01bcfe0e06b4b4e8cb19f242291f82e460c392083e93c00ed"
     },
     "room_scan/native_scan_view.h": {
       "bytes": 3609,
@@ -480,8 +480,8 @@
       "sha256": "59a9ea566f8df9f3b65387a3abbf493217f02ad2c54b71ad0ed806087da84672"
     },
     "room_scan/native_scene_driver.h": {
-      "bytes": 7818,
-      "sha256": "56cd9ba404f2231d95e419c16b79c0d622d828fa45f50ff5372a9e1f2c7da0a1"
+      "bytes": 7889,
+      "sha256": "98b96fa4175c2733d81012026844341d41445d5cf6cce772215260e1f4d8504b"
     },
     "room_scan/native_scene_mesh.h": {
       "bytes": 3514,
@@ -780,5 +780,5 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c"
+  "source_revision": "b62b06d4d909181f14bdee5571b29818e5554942"
 }

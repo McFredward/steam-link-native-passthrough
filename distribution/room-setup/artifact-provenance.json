@@ -1,8 +1,8 @@
 {
   "baseline_receipt": {
     "archive": {
-      "bytes": 23158641,
-      "sha256": "8e5a08fd7e66ad232c3de722a1323f8398875dc59ee9410dabb75e14408f292e"
+      "bytes": 23194788,
+      "sha256": "511b8c41c7ccf82f354a7f08d9fe3584d43e7c19bbab82c9e53f2609b080d44d"
     },
     "artifacts": {
       "frame_layer": {
@@ -30,12 +30,12 @@
         "sha256": "30c18a0452376786492ec34aa6866a405cec8f836db3dd214b41d99912a5d89d"
       },
       "room_overlay": {
-        "bytes": 2165240,
-        "sha256": "59b3be346e89bda34ee1bb7cb4386550cb6321f7ef333f8f38c08f27213f62f2"
+        "bytes": 2099704,
+        "sha256": "27798323c87c466f1eef18a9d5ebfb2b248ab8bc5425565b54b1f6b495eec8cb"
       },
       "room_renderer": {
-        "bytes": 1640976,
-        "sha256": "8c98ff3c697330c68183fd3734c87a84dd82be4a50b7813c51ab2331ad1ab0d7"
+        "bytes": 1706512,
+        "sha256": "943da12b38ccf578df3ee735ea68120a77eec6790b2c561a0d241888efe3f058"
       },
       "room_vision": {
         "bytes": 2822872,
@@ -43,7 +43,7 @@
       }
     },
     "component_versions": {
-      "frame": "0.3.11-roomscan.13",
+      "frame": "0.3.12-roomscan.15",
       "pc": "0.3.12-roomscan.8"
     },
     "device_actions": false,
@@ -53,8 +53,8 @@
     "readiness": "release",
     "result": "PASS",
     "runtime_profile": {
-      "bytes": 28235,
-      "sha256": "bab4cb27b7cd63036fc52be4ad4a283b674968e6f7e279e6ff94740e299dca84"
+      "bytes": 28857,
+      "sha256": "569c7a8842584fd329ec4fa2a109206b723807eda18d8ba9c4222440b7c61ec8"
     },
     "schema": "sfnp-stream-bridge-packaging-result-v1",
     "source_pins": {
@@ -64,11 +64,11 @@
       },
       "PATCH_VERSIONS.json": {
         "bytes": 103,
-        "sha256": "b289d655c76075dec3c00e19e8f48e7caa08dc7c6959ad500469bd3ee541eaa6"
+        "sha256": "b0833bd3acf814a04b5b5d6e083be4d927048fa4457fe5e8fa2056ff4c936f3a"
       },
       "VERSION": {
         "bytes": 19,
-        "sha256": "00e8bad4b63f9fb2be5af786e88332c5c26d152f548ba51f7c03ab5c38f62eec"
+        "sha256": "0fdaf3ed2a95d6b78befc401cc8b7b184a2c1395cbdba4751165805fdd884e5d"
       },
       "packaging/mask-ffmpeg-patches.json": {
         "bytes": 1943,
@@ -138,25 +138,37 @@
         "bytes": 3937,
         "sha256": "a69348e10bb0c202f6b9d4b7e39c04d3f25f38251beac4956c85e58ea1735984"
       },
+      "room_reconstruction/live_coverage.py": {
+        "bytes": 1479,
+        "sha256": "ec4d8bf1d7e215b9255015b45fac94b64a99be01f5558a76cbcdecb6f27b121c"
+      },
       "room_reconstruction/live_geometry.py": {
-        "bytes": 9168,
-        "sha256": "bc74537e31ff209b78c598b09def63ab097eccc4694d5493a9b46fcba156fa6b"
+        "bytes": 10264,
+        "sha256": "9ab5fbc6bbc24222c6f91b47cd1eada3edb87e953a9cd7a4eabc9cf13c727977"
       },
       "room_reconstruction/live_inference.py": {
-        "bytes": 3315,
-        "sha256": "d511ff4cc7e59b469bf322e363737706875425b022d6d861c2fb5e6f0c2d4790"
+        "bytes": 4103,
+        "sha256": "755fd8a7a88a51eea366c58c13341a570fcf74ddb6d5abb2c3526976425c9d52"
       },
       "room_reconstruction/live_map.py": {
-        "bytes": 24527,
-        "sha256": "4434064fbf97fb9358c2fccb3e50300d98fcc359e513749f5961d065d2175def"
+        "bytes": 25385,
+        "sha256": "a1e02d7f4aeef2e579be64ee3b3bde7a50b6477058ef54a421262e231331aa33"
+      },
+      "room_reconstruction/live_refine.py": {
+        "bytes": 2137,
+        "sha256": "1fdf17ad678138e469579a151f1285b8f1edfb7b815a6588fb0e2bc01587232c"
       },
       "room_reconstruction/live_surface.py": {
         "bytes": 5305,
         "sha256": "665c65e983aad6bbe19614191f97eb8e29009ba46e62bcc42be13c501d6783c4"
       },
+      "room_reconstruction/live_tiles.py": {
+        "bytes": 15026,
+        "sha256": "916849f9dd5ce445771e293e80a35ae7d6ef7c18d07ded7ac3279012ff8841a1"
+      },
       "room_reconstruction/live_worker.py": {
-        "bytes": 6177,
-        "sha256": "653931ff795d7555ca42479b4cf03921a3e1428880d4285fe84b8eea55d27a5e"
+        "bytes": 7790,
+        "sha256": "0304d56539e9069da01f99d9479c07526221afc9fb5c9ba3e5bebb97eed4a039"
       },
       "room_scan/__init__.py": {
         "bytes": 250,
@@ -167,8 +179,8 @@
         "sha256": "f8b87ea9b3d18cf1ca5bd31f3e64430de67b8687b150369073ff4e0235d73190"
       },
       "room_scan/app.py": {
-        "bytes": 36219,
-        "sha256": "e000312b72357d027d4d3bcf3e95d096533ff143ad69d842069ec663830956f9"
+        "bytes": 37488,
+        "sha256": "22766182089d0ec3627a66c9880ae5fd215b829cb57f9f25bb27645fd3b8150b"
       },
       "room_scan/camera_api/buffer_source.h": {
         "bytes": 15452,
@@ -215,8 +227,8 @@
         "sha256": "3d9f5b07b00adcf7c2c68b2e1659952d0d6d4c97f94258e8c4fe31f2d3165ce8"
       },
       "room_scan/capture.py": {
-        "bytes": 11558,
-        "sha256": "a0a93db9b51d1c31f9af338594ebeee0597826695fba7e1384c367a5e6dd8e8c"
+        "bytes": 11642,
+        "sha256": "fbb3a4d76496e856da5fc7b326fd6c8444530efc61e4b813207e2eaaf7c74020"
       },
       "room_scan/capture_session.py": {
         "bytes": 14194,
@@ -295,12 +307,12 @@
         "sha256": "7e98e0282260ba550266d8c4ef7874930a0b12deced7f769e7c021f88f6f5304"
       },
       "room_scan/native_arcturus_source.h": {
-        "bytes": 11182,
-        "sha256": "54bcb415d55c955357777d9123471d95c6061a2f61555180102093a015d74de3"
+        "bytes": 11239,
+        "sha256": "b5e10f7a9844f2eeee1392a06f4dc42e934c836a8ab7ca0fee3078a7a2bc5828"
       },
       "room_scan/native_arcturus_timing.h": {
-        "bytes": 4344,
-        "sha256": "960c52a577e0f1135841868ea24ee3e9d346b1fc6b418d5c0f123497e570732b"
+        "bytes": 4555,
+        "sha256": "0d14821e7c81fcc8801655db73699eb9b68ce36b95fcb3b8994947c7a8e43972"
       },
       "room_scan/native_camera.h": {
         "bytes": 23151,
@@ -370,6 +382,10 @@
         "bytes": 1891,
         "sha256": "1ffe307cac581f7077a9d8f17c39bd783f6ae1a3ff5b48ccdd92d35748a858ec"
       },
+      "room_scan/native_scan_guidance.h": {
+        "bytes": 4048,
+        "sha256": "a4b0e1de108456adf08e11a5c4dae1083b47a37eda1593e82f13bc024f6dd97b"
+      },
       "room_scan/native_scan_view.h": {
         "bytes": 3609,
         "sha256": "d1aaeb1c5c47c02a857506d2770c57dcbbe28ae628f45e0feb13bb19892b6d07"
@@ -379,8 +395,8 @@
         "sha256": "59a9ea566f8df9f3b65387a3abbf493217f02ad2c54b71ad0ed806087da84672"
       },
       "room_scan/native_scene_driver.h": {
-        "bytes": 7327,
-        "sha256": "026906bad352f1315e58c5900b5ce2065cecc96a4263b0b5fbb69a30e310d955"
+        "bytes": 7818,
+        "sha256": "56cd9ba404f2231d95e419c16b79c0d622d828fa45f50ff5372a9e1f2c7da0a1"
       },
       "room_scan/native_scene_mesh.h": {
         "bytes": 3514,
@@ -391,16 +407,16 @@
         "sha256": "cecdbee812ad88b7be258985327e85f0ad1d7c42b3c1eff13ff2099b26e4b350"
       },
       "room_scan/native_scene_snapshots.h": {
-        "bytes": 4220,
-        "sha256": "ff3bdae902f2e58d8e160c46649ed7a5c1b42fb5afde02adee2bcfa438a7aad4"
+        "bytes": 5252,
+        "sha256": "6726dcc8daffe7a68f4c84236d19c61ea1a49f3d5039b31603019c30dc0033ed"
       },
       "room_scan/native_surface.h": {
         "bytes": 2950,
         "sha256": "b956d7ff225589c14a7d2706a3d65e6026341cacbcee35ca27a26f3ce3beafd5"
       },
       "room_scan/native_surface_preview.h": {
-        "bytes": 4401,
-        "sha256": "719c5e7b07ae68349e75844e715367e2a48fc704d1da2a870679faa3d7c92da2"
+        "bytes": 8208,
+        "sha256": "af5523535dd6bc8ba9b6635bf2f3cb03fdf5acb5914688fe8b6575e531266442"
       },
       "room_scan/native_triangulation.h": {
         "bytes": 801,
@@ -423,36 +439,36 @@
         "sha256": "dc170918155dd6d71eabe3e32383d8ca7246985d4d2e9066ad409caa399c3ac2"
       },
       "room_scan/native_xr_graphics.cpp": {
-        "bytes": 30512,
-        "sha256": "af6aa753d2180fe2e54ef2970f18bc0ee329d0f5b9fa58da2b95a360d8470983"
+        "bytes": 30691,
+        "sha256": "8aa45abcce451b4560d95d7d4d653635cf41ee62d63b4f61967f9fa8028045fa"
       },
       "room_scan/native_xr_graphics.h": {
-        "bytes": 1236,
-        "sha256": "dbc6d4b3b094ffe322c0f41d208b7362b54c25a6a47d30bdd1789d5b4864ad2c"
+        "bytes": 1273,
+        "sha256": "837a169a036b2c5fcf8a116a2aba15cc27ac90e7e860f8a19965e0c3a8f8858d"
       },
       "room_scan/native_xr_input.h": {
         "bytes": 5473,
         "sha256": "1ad4cdb4c0724f80fc295aecccbc60c42768f53ea8cecace83a2fb0d953c3196"
       },
       "room_scan/native_xr_renderer.cpp": {
-        "bytes": 16802,
-        "sha256": "1b53c78a62569cd36341d510c5dc10dd6cc5d0e067951ce0d7a00dd49a54a3db"
+        "bytes": 18067,
+        "sha256": "c11c8041ae8d64968f8364f50158a5daf2599666eb75683c05d946458c717be9"
       },
       "room_scan/pc_reconstruction.py": {
-        "bytes": 7618,
-        "sha256": "166239b4333bad22589ecbba23ae56941e2b3df82790a048ae9785a9132b7b46"
+        "bytes": 14973,
+        "sha256": "37b0492934a6509f7c1711ac5c945c41ab20bfc6c9a3608b9066a921e14aebb9"
       },
       "room_scan/pc_relay.py": {
-        "bytes": 10995,
-        "sha256": "3ade7f56e876e9cd85fcfc1615c86bdf6ebb89d2a551c0aa02d873b82faca590"
+        "bytes": 11055,
+        "sha256": "c4da66ae1e716a42a0536a397c99c0462fc1a9f5eecb2a41c2a9fd1790677978"
       },
       "room_scan/scene.frag": {
-        "bytes": 3126,
-        "sha256": "13cf53fe9cecbec858676b4a29088e370f3a2fd5468538e0f77e2fd4ef2a863a"
+        "bytes": 3596,
+        "sha256": "d5cbf97affcdf29dab3ea8248fa0d95ab3284402e679fe9431fa0879714791cc"
       },
       "room_scan/scene.vert": {
-        "bytes": 680,
-        "sha256": "3d2d6e4362e322bf37b0ed78abc7d13288ee5e2f8e091da357c57e2d0329a299"
+        "bytes": 840,
+        "sha256": "ad54884f7fdf2f06406a082de6a1228f1542eccd065d755ba732fb241280bed0"
       },
       "room_scan/store.py": {
         "bytes": 6838,
@@ -483,8 +499,8 @@
         "sha256": "215633c0f3ae29e2c6b152882344efa43906b1d6fa8adcad436d1bfbd2695491"
       },
       "room_scan/workflow.py": {
-        "bytes": 11958,
-        "sha256": "c697287fa223d868945d0eed5556923ad839df5ce1f780ab336b8bc739f9381b"
+        "bytes": 12023,
+        "sha256": "146fe7a3e8e3c2f45f96b6b75702ac35f1cfe144f7ae931e85e6596673f60906"
       },
       "setup/patch-steam-link.cmd": {
         "bytes": 1266,
@@ -535,12 +551,12 @@
         "sha256": "0138c8788920482cab1fd6d5ffeea1e921c32ff8c7dcafefa85043e7e7af5ee6"
       },
       "setup/steam_link_setup_room.py": {
-        "bytes": 19093,
-        "sha256": "dfbdba9b41f5d572a3da9b69f7148026a4a7cc0cbd601095b231852e12fe46a5"
+        "bytes": 23352,
+        "sha256": "2dd053e4f8c4eb83bafbbb295e6b54f97e55e60f2aa28f54adfeac3b403aedec"
       },
       "setup/steam_link_setup_session.py": {
-        "bytes": 18278,
-        "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
+        "bytes": 18315,
+        "sha256": "e61d84af428ba721d9c4e43e69c50c9e9bf61abfa61e9033db845b4702f1d358"
       },
       "setup/steam_link_setup_textual.py": {
         "bytes": 63170,
@@ -559,8 +575,8 @@
         "sha256": "1371e8b7b20fe344df58ed6dd22db8e89012a7f5f7a9816fe41b369a28721786"
       },
       "setup/stream_bridge_install.py": {
-        "bytes": 197965,
-        "sha256": "457c5d005c9ecdd599329286ab036b012132cd1dcfac00dd90f57a4be61249da"
+        "bytes": 197987,
+        "sha256": "f8920a5f2e334e6a358a20d53a1f04f98088207c4b17b74441c26c6bfa59d529"
       },
       "third_party/ffmpeg/COPYING.LGPLv2.1": {
         "bytes": 26517,
@@ -615,8 +631,8 @@
         "sha256": "89c789e09d30b8ed6a7b836208a3b1bad9d1d48d6d98ca34f8e052e0f9cf6913"
       },
       "tools/check_room_pc_runtime.py": {
-        "bytes": 2924,
-        "sha256": "b493081a235a34a57177c34da9815cc38a9628c81780a4606d4934e298022e5d"
+        "bytes": 2960,
+        "sha256": "053152ff2424fadadc9418dc548ae102d15cee939049ce7f8631c029af33bb74"
       },
       "tools/compositor_startup_health.py": {
         "bytes": 89190,
@@ -679,7 +695,7 @@
         "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
       }
     },
-    "source_revision": "91e737b4388d2b7dbad190d5201a14a5867c5d44",
+    "source_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c",
     "temporary_contract_tree_removed": true,
     "validation_receipts": [
       {
@@ -709,19 +725,48 @@
         ],
         "hardware_verified": false,
         "pin": {
-          "bytes": 25695,
-          "sha256": "45df18e3404bdecc53b02c8edc8048559f2de81a3992304d45380cb16fa4043c"
+          "bytes": 26317,
+          "sha256": "55bea1c3b93a02e89939c2204f13182a3baa037e995359c2221fb158eb0e70d5"
         }
       }
     ],
-    "version": "0.3.16-roomscan.14"
+    "version": "0.3.16-roomscan.15"
   },
-  "change_scope": "Continuous qualified stereo capture with corrected exposure-centre uncertainty and unchanged spatial error limits; batched authenticated SSH transfer with lossless incremental backpressure; private spatial Gaussian checkpoints and complete observed local preview parts; head-responsive GPU budgeting and animated directional guidance; photometric proposal verification and subpixel ceiling refinement; actual colour pulse at unchanged grid alpha and metric depth.",
+  "change_scope": "Retain photometrically supported bilateral neural measurements without requiring a sharp minimum unless adjusting disparity. Estimate normals from qualified measured neighbours without deleting a neighbourhood for one rejected sample or filling an unknown centre. Separate scan guidance from camera/model status, hold targets for three seconds and readable captions for at least four seconds. Log bounded per-stage depth counts even without surfaces.",
   "current_software_checks": {
     "app.log": {
       "bytes": 117,
-      "sha256": "a52391774597f00a2a6d125560e14c6ff08e564d325cf2b80cfe58cde2c3b1de"
+      "sha256": "18fb3b8febb9f4cc344daa996e2ad69020be8dcfb249173ec3a0b60d9938a157"
     },
+    "guidance.log": {
+      "bytes": 77,
+      "sha256": "2a53da55260f02d1aa38d0ddc9e4d2b42e923a6c723732ec405da8992585b391"
+    },
+    "native-build.log": {
+      "bytes": 2824,
+      "sha256": "d6b8613760236d6caee2b6ccbb7ce7e36e0d542dff6d0a2c9d585e15bf2473f6"
+    },
+    "package.log": {
+      "bytes": 117,
+      "sha256": "a98e2c4daf0dfcc5771d9b73ac215356065e4e154a6a509c24e2927e587ea532"
+    },
+    "pc-live.log": {
+      "bytes": 124,
+      "sha256": "702f66f61b25d7c9be6330bbb0682039f33a49ee09f371842f5ebd0fce6a2bc9"
+    },
+    "pc-only.log": {
+      "bytes": 4412,
+      "sha256": "b8d23e0fb50d60212cfeb04aac9746bb5850eff4904313435991a98f08f22f19"
+    },
+    "streaming.log": {
+      "bytes": 113,
+      "sha256": "6246b861019996dffb3286e901ec22cac445a96d8b38ffc6fe033351d5a3a916"
+    }
+  },
+  "device_actions": false,
+  "hardware_verified": false,
+  "headset_test": false,
+  "inherited_source_unchanged_checks": {
     "checkpoint.log": {
       "bytes": 104,
       "sha256": "5345a48bb6d6070c42f4193a3122f7bef24c9a6f594ad4268d837b2bd7036407"
@@ -738,26 +783,6 @@
       "bytes": 119,
       "sha256": "15ec123381eda2fa9a1b3caf7737290233c5055f5e1a4db862cc8069e9ec534a"
     },
-    "native-build-first.log": {
-      "bytes": 2799,
-      "sha256": "a843322e17b7c1b8de660abdd3fb5f1c92cd4864df9edbe118fe6c43cef3e951"
-    },
-    "native-pipe.log": {
-      "bytes": 347,
-      "sha256": "53890c42dead8ac5cd0c9b1709ef77e27e0abab8733c14642315207ce98cfa12"
-    },
-    "package.log": {
-      "bytes": 117,
-      "sha256": "abaa4a540020c0961c9f3c299add96251f6848522fc4d330ee6a568581c8f94f"
-    },
-    "pc-live.log": {
-      "bytes": 124,
-      "sha256": "0797794caa4885602088a46c99b10e864a4dcd708a7dc23c228589ea71015c14"
-    },
-    "pc-only.log": {
-      "bytes": 4413,
-      "sha256": "1156a879ade56f51b23bc8c9de7d58c6c998e528459f434df502c3b3186c5739"
-    },
     "reconstruction.log": {
       "bytes": 106,
       "sha256": "2ce7f7464c687d191bcc05ad77b5cdb669484e8f2450ae2c8817ffce30a1e2ba"
@@ -769,10 +794,6 @@
     "session.log": {
       "bytes": 117,
       "sha256": "7e77be02e99f5653472136125bba0075ed0b4ff58473ff542117b56d39a603f2"
-    },
-    "streaming.log": {
-      "bytes": 109,
-      "sha256": "c34b80cee4d31c5139cf2f54011fb824a1ccea2cb721d067c1edbef9bef8e3e1"
     },
     "textual.log": {
       "bytes": 741,
@@ -787,203 +808,214 @@
       "sha256": "ef8d2fd6800977b5c21d0dfb2a419af9b9cf8ff9cb9199855a0f9dc6e636b0f1"
     }
   },
-  "device_actions": false,
-  "hardware_verified": false,
-  "headset_test": false,
   "limits": [
-    "Installed visual quality, continuous room speed and physical ceiling accuracy require the next wearer test.",
-    "Synthetic geometry checks exclude inference, network transport and headset display; CPU model execution does not measure NVIDIA throughput.",
-    "Gaussian mapping remains geometric rather than an optimized photometric radiance field; blank, reflective and transparent surfaces can remain unknown.",
-    "Detailed geometry checkpoints live on the paired PC. The bounded Frame review/save interaction mesh is a proxy, not a full-resolution export.",
-    "Complete local preview parts are selected within the Frame GPU budget; acquisition has independent bounded regional storage.",
-    "Original stereo identity, calibration, exposure history, 0.5 mm / 0.5 mrad uncertainty limits, private file ownership and epoch checks remain required.",
-    "Only Room Setup files change on the Frame; unchanged native Steam/SteamVR components retain room-only update/recovery.",
-    "Camera access is session-only and inactive after reboot. No firmware, camera driver or XRService is replaced; keep the current installer open during scanning."
+    "Installed surface coverage, physical accuracy, performance and instruction readability still require the next wearer test.",
+    "The 320x256 reproduction uses generated soft texture and known depth, not camera imagery or NVIDIA throughput.",
+    "The camera reader and point-sampled input encoding are unchanged; textureless, reflective or strongly aliased image regions can remain unknown.",
+    "No photometrically unsupported neural proposal becomes measured; bilateral/ray checks and the measured-centre requirement remain mandatory.",
+    "Detailed PC regional checkpoints remain separate from the bounded Frame interaction/save mesh and whole-part display budget.",
+    "Only Room Setup files change on the Frame. Its camera reader, exposure/pose authority and installed native Steam/SteamVR components are unchanged.",
+    "Camera access stays session-only and inactive after reboot. No firmware, camera driver or XRService is replaced; keep the current installer open during scanning."
   ],
   "maintainer_log_observation": {
-    "coarsenings": 0,
-    "exposure_refusals_dominated": true,
-    "head_motion_refusals_rare": true,
-    "late_preview_faces": 104288,
-    "late_preview_vertices": 59833,
-    "map_capacity": 240000,
-    "maximum_compute_ms": 6085.35,
-    "maximum_preview_ms": 4904.62,
-    "raw_images_read": false
+    "accepted_pixels_max": 244,
+    "accepted_pixels_min": 0,
+    "camera_observations": 300,
+    "device_actions": false,
+    "headset_test": false,
+    "installed_candidate": 15,
+    "last_reported_faces": 56,
+    "last_reported_outputs": 37,
+    "motion_refusals": 0,
+    "pose_refusals": 0,
+    "raw_images_read": false,
+    "scan_log_samples": [
+      {
+        "accepted_pixels": 52,
+        "apply_ms": 0.52,
+        "coarsenings": 0,
+        "compute_ms": 1130.51,
+        "frames": 1,
+        "fusion_ms": 4.66,
+        "gaussians": 4,
+        "geometry_ms": 346.86,
+        "map_capacity": 0,
+        "map_points": 18,
+        "preview_ms": 0.44,
+        "rectify_ms": 263.23,
+        "recycled": 0,
+        "regions": 5,
+        "reliable": 0,
+        "stereo_ms": 515.31,
+        "triangles": 2,
+        "uncertain": 4,
+        "vertices": 4
+      },
+      {
+        "accepted_pixels": 9,
+        "apply_ms": 0.44,
+        "coarsenings": 0,
+        "compute_ms": 818.25,
+        "frames": 7,
+        "fusion_ms": 0.13,
+        "gaussians": 21,
+        "geometry_ms": 354.46,
+        "map_capacity": 0,
+        "map_points": 187,
+        "preview_ms": 0.03,
+        "rectify_ms": 256.54,
+        "recycled": 0,
+        "regions": 13,
+        "reliable": 0,
+        "stereo_ms": 207.07,
+        "triangles": 11,
+        "uncertain": 21,
+        "vertices": 21
+      },
+      {
+        "accepted_pixels": 244,
+        "apply_ms": 3.64,
+        "coarsenings": 0,
+        "compute_ms": 817.02,
+        "frames": 13,
+        "fusion_ms": 6.57,
+        "gaussians": 82,
+        "geometry_ms": 347.15,
+        "map_capacity": 0,
+        "map_points": 361,
+        "preview_ms": 1.3,
+        "rectify_ms": 254.96,
+        "recycled": 0,
+        "regions": 28,
+        "reliable": 0,
+        "stereo_ms": 207.02,
+        "triangles": 44,
+        "uncertain": 82,
+        "vertices": 82
+      },
+      {
+        "accepted_pixels": 28,
+        "apply_ms": 0.07,
+        "coarsenings": 0,
+        "compute_ms": 821.59,
+        "frames": 19,
+        "fusion_ms": 4.01,
+        "gaussians": 100,
+        "geometry_ms": 354.41,
+        "map_capacity": 0,
+        "map_points": 419,
+        "preview_ms": 0.08,
+        "rectify_ms": 255.79,
+        "recycled": 0,
+        "regions": 31,
+        "reliable": 0,
+        "stereo_ms": 207.29,
+        "triangles": 50,
+        "uncertain": 100,
+        "vertices": 100
+      },
+      {
+        "accepted_pixels": 0,
+        "apply_ms": 0.29,
+        "coarsenings": 0,
+        "compute_ms": 812.48,
+        "frames": 25,
+        "fusion_ms": 0.13,
+        "gaussians": 108,
+        "geometry_ms": 347.8,
+        "map_capacity": 0,
+        "map_points": 458,
+        "preview_ms": 0.06,
+        "rectify_ms": 257.69,
+        "recycled": 0,
+        "regions": 37,
+        "reliable": 0,
+        "stereo_ms": 206.78,
+        "triangles": 56,
+        "uncertain": 108,
+        "vertices": 108
+      },
+      {
+        "accepted_pixels": 66,
+        "apply_ms": 0.05,
+        "coarsenings": 0,
+        "compute_ms": 817.27,
+        "frames": 31,
+        "fusion_ms": 5.43,
+        "gaussians": 108,
+        "geometry_ms": 348.0,
+        "map_capacity": 0,
+        "map_points": 483,
+        "preview_ms": 0.12,
+        "rectify_ms": 255.85,
+        "recycled": 0,
+        "regions": 39,
+        "reliable": 0,
+        "stereo_ms": 207.86,
+        "triangles": 56,
+        "uncertain": 108,
+        "vertices": 108
+      },
+      {
+        "accepted_pixels": 3,
+        "apply_ms": 0.07,
+        "coarsenings": 0,
+        "compute_ms": 812.7,
+        "frames": 37,
+        "fusion_ms": 0.13,
+        "gaussians": 108,
+        "geometry_ms": 348.36,
+        "map_capacity": 0,
+        "map_points": 488,
+        "preview_ms": 0.07,
+        "rectify_ms": 256.83,
+        "recycled": 0,
+        "regions": 39,
+        "reliable": 0,
+        "stereo_ms": 207.29,
+        "triangles": 56,
+        "uncertain": 108,
+        "vertices": 108
+      }
+    ],
+    "services_unchanged": true
   },
   "prior_artifact_provenance": {
-    "bytes": 44282,
-    "sha256": "b6cb5493d609686aae9ce2d43c4cffb38946faddac9ad6f6acd787787872179e"
+    "bytes": 37741,
+    "sha256": "7d248f8885b8d4c5fcb7be5f0209783c60a235194e0e152814d414ca905a20b4"
   },
   "private_runtime_change": {
     "existing_download_cache_reused": true,
-    "maximum_cuda_arena_mb": 8192,
-    "model_and_all_wheel_pins_unchanged": true,
-    "sequential_bilateral_inference_on_smaller_profiles": true
+    "model_and_all_wheel_pins_unchanged": true
   },
   "rebuilt_native_artifacts": [
     "room_overlay",
     "room_renderer"
   ],
   "software_reproduction": {
-    "actual_shader_pulse_changes_rgb_only": true,
-    "blank_ceiling_not_fabricated": true,
-    "changed_checkpoint_preserved": true,
-    "dynamic_pinned_model": {
-      "actual_pinned_model": true,
-      "batch": 2,
-      "hardware_performance": false,
-      "provider": "CPUExecutionProvider",
-      "result": "PASS",
-      "seconds": 15.075
+    "accepted_translucent_grid_colour_pulse_alpha_and_depth_unchanged": true,
+    "all_existing_continuous_region_capacity_persistence_queue_and_mesh_checks_pass": true,
+    "blank_and_unrelated_stereo_inputs_remain_refused": true,
+    "gain_and_offset_differences_in_stereo_fixture": true,
+    "guidance_cannot_be_overwritten_by_camera_or_pc_results": true,
+    "metric_bilateral_ray_and_calibration_limits_unchanged": true,
+    "native_caption_minimum_read_seconds": 4,
+    "new_stable_guidance_eventually_replaces_its_predecessor": true,
+    "soft_texture_after": {
+      "metric": 41203,
+      "optical": 81920,
+      "photo": 45697
     },
-    "eviction_persistence": true,
-    "guide_independent_of_new_camera_or_pc_frame": true,
-    "malformed_batch_refused_before_adoption": true,
-    "occluded_background_preserved": true,
-    "old_x_menu_ray_tracking_and_shaders_regressions": true,
-    "pending_previews_drain_before_final_mesh": true,
-    "production_resolution_geometry_replay": {
-      "all_updates_strict_frame_reader": true,
-      "frames": [
-        {
-          "faces": 52318,
-          "frame": 1,
-          "frame_reader_ms": 588.96,
-          "fusion_ms": 459.48,
-          "parts": 64,
-          "pending": true,
-          "points": 88064,
-          "preview_ms": 365.81
-        },
-        {
-          "faces": 98230,
-          "frame": 2,
-          "frame_reader_ms": 641.99,
-          "fusion_ms": 360.02,
-          "parts": 128,
-          "pending": true,
-          "points": 89344,
-          "preview_ms": 255.03
-        },
-        {
-          "faces": 144612,
-          "frame": 3,
-          "frame_reader_ms": 312.68,
-          "fusion_ms": 620.92,
-          "parts": 192,
-          "pending": true,
-          "points": 90624,
-          "preview_ms": 330.98
-        },
-        {
-          "faces": 175076,
-          "frame": 4,
-          "frame_reader_ms": 365.65,
-          "fusion_ms": 371.45,
-          "parts": 234,
-          "pending": true,
-          "points": 91904,
-          "preview_ms": 290.55
-        },
-        {
-          "faces": 175076,
-          "frame": 5,
-          "frame_reader_ms": 311.53,
-          "fusion_ms": 345.85,
-          "parts": 234,
-          "pending": true,
-          "points": 93184,
-          "preview_ms": 261.81
-        },
-        {
-          "faces": 184848,
-          "frame": 6,
-          "frame_reader_ms": 331.47,
-          "fusion_ms": 365.38,
-          "parts": 247,
-          "pending": true,
-          "points": 94720,
-          "preview_ms": 270.31
-        },
-        {
-          "faces": 184962,
-          "frame": 7,
-          "frame_reader_ms": 297.93,
-          "fusion_ms": 353.56,
-          "parts": 247,
-          "pending": true,
-          "points": 96000,
-          "preview_ms": 274.29
-        },
-        {
-          "faces": 184962,
-          "frame": 8,
-          "frame_reader_ms": 353.19,
-          "fusion_ms": 370.19,
-          "parts": 247,
-          "pending": true,
-          "points": 97280,
-          "preview_ms": 464.36
-        },
-        {
-          "faces": 185196,
-          "frame": 9,
-          "frame_reader_ms": 363.56,
-          "fusion_ms": 360.35,
-          "parts": 247,
-          "pending": true,
-          "points": 98560,
-          "preview_ms": 295.04
-        },
-        {
-          "faces": 189497,
-          "frame": 10,
-          "frame_reader_ms": 333.7,
-          "fusion_ms": 372.01,
-          "parts": 247,
-          "pending": true,
-          "points": 99840,
-          "preview_ms": 293.36
-        },
-        {
-          "faces": 201936,
-          "frame": 11,
-          "frame_reader_ms": 353.4,
-          "fusion_ms": 354.37,
-          "parts": 260,
-          "pending": true,
-          "points": 101120,
-          "preview_ms": 332.23
-        },
-        {
-          "faces": 208349,
-          "frame": 12,
-          "frame_reader_ms": 391.75,
-          "fusion_ms": 375.94,
-          "parts": 260,
-          "pending": true,
-          "points": 102400,
-          "preview_ms": 320.86
-        }
-      ],
-      "inference_network_and_headset_excluded": true,
-      "resolution": [
-        640,
-        480
-      ],
-      "result": "PASS"
+    "soft_texture_before": {
+      "metric": 0,
+      "optical": 81920,
+      "photo": 94
     },
-    "queue_full_retries_without_dropping_regions": true,
-    "regional_capacity_grows_beyond_240000": true,
-    "repeated_cross_region_depth_conflict_retires_old_foreground": true,
-    "stable_region_paths": true,
-    "synthetic_ceiling_error_p95_below_m": 0.04,
-    "synthetic_ceiling_median_error_after_m": 0.013723,
-    "synthetic_ceiling_median_error_before_m": 0.319637,
-    "synthetic_sloping_ceiling_degrees": 50
+    "sparse_rejected_samples_preserve_other_measured_centres": true,
+    "twelve_seconds_of_rapid_head_motion_limits_instruction_changes": true,
+    "unknown_holes_and_unsupported_centres_stay_unknown": true
   },
-  "source_revision": "030ceac520ae7ac30dbca747efd31669c8ea288c",
+  "source_revision": "b62b06d4d909181f14bdee5571b29818e5554942",
   "unchanged_compiled_source_paths": [
     "layer",
     "receiver",
