@@ -12,7 +12,7 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial import cKDTree
 
-from .live_geometry import matrix, project_kb, rectify, row_poses, sampling_offset
+from .live_geometry import matrix, project_kb, rectify, row_poses, sampling_profile
 
 
 def unproject_kb(pixels, intrinsics, coefficients):
@@ -61,15 +61,15 @@ class ObservationCamera:
         self.intrinsics = np.asarray(self.lens['intrinsics'], dtype=np.float64)
         self.coefficients = np.asarray(self.lens['k'], dtype=np.float64)
         self.timing = self.observation['timing'][self.eye]
-        self.sample_offset = sampling_offset(self.observation)
+        self.sample_step, self.sample_offset, self.extent = sampling_profile(self.observation)
         self.image = np.frombuffer(base64.b64decode(
-            self.observation['images'][self.eye], validate=True), np.uint8).reshape(616, 616)
+            self.observation['images'][self.eye], validate=True), np.uint8).reshape(self.extent, self.extent)
 
     def row_transforms(self, pixels):
         pixels = np.asarray(pixels, dtype=np.float64).reshape(-1, 2)
-        if not np.isfinite(pixels).all() or np.any(pixels < 0) or np.any(pixels > 615):
+        if not np.isfinite(pixels).all() or np.any(pixels < 0) or np.any(pixels > self.extent-1):
             raise ValueError('Measurement pixels lie outside their source image')
-        rows = pixels[:, 1]*4+self.sample_offset
+        rows = pixels[:, 1]*self.sample_step+self.sample_offset
         times = self.timing['first_row_ns']+np.rint(rows*4360).astype(np.int64)
         rotation, translation = row_poses(self.observation['poses'], times)
         optical_rotation = np.einsum('nij,jk->nik', rotation, self.optical[:, :3])
@@ -78,7 +78,7 @@ class ObservationCamera:
 
     def rays(self, pixels):
         pixels = np.asarray(pixels, dtype=np.float64).reshape(-1, 2)
-        local, valid = unproject_kb(pixels*4+self.sample_offset, self.intrinsics, self.coefficients)
+        local, valid = unproject_kb(pixels*self.sample_step+self.sample_offset, self.intrinsics, self.coefficients)
         rotation, origin = self.row_transforms(pixels)
         return origin, np.einsum('nij,nj->ni', rotation, local), valid
 
@@ -88,7 +88,7 @@ class ObservationCamera:
         points = np.broadcast_to(np.asarray(points, dtype=np.float64), (len(pixels), 3))
         rotation, origin = self.row_transforms(pixels)
         local = np.einsum('nji,nj->ni', rotation, points-origin)
-        return (project_kb(local, self.intrinsics, self.coefficients)-self.sample_offset)/4
+        return (project_kb(local, self.intrinsics, self.coefficients)-self.sample_offset)/self.sample_step
 
 
 def observation_cameras(observation, frame):
@@ -153,14 +153,14 @@ def fit_track(cameras, measurements):
         rotation, _ = cameras[camera_id].row_transforms([pixel])
         camera = cameras[camera_id]
         factors.append((rotation[0], origin[0], camera.intrinsics, camera.coefficients,
-                        np.asarray(pixel), camera.sample_offset))
+                        np.asarray(pixel), camera.sample_offset, camera.sample_step))
     initial = intersect_rays(origins, rays)
     if initial is None:
         return None
 
     def residual(point):
-        return np.concatenate([(project_kb(rotation.T @ (point-origin), intrinsics, k)-offset)/4-pixel
-                               for rotation, origin, intrinsics, k, pixel, offset in factors])
+        return np.concatenate([(project_kb(rotation.T @ (point-origin), intrinsics, k)-offset)/step-pixel
+                               for rotation, origin, intrinsics, k, pixel, offset, step in factors])
 
     result = least_squares(residual, initial, loss='huber', f_scale=1., max_nfev=30)
     if not result.success or not np.isfinite(result.x).all():

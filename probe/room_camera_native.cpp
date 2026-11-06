@@ -26,7 +26,7 @@ int main(int argc,char** argv){
             sealReadOnlyMappings();
             auto description=frames.describe();description["setup_privileges_dropped"]=true;description["reader_uid"]=getuid();
             description["manual_owner_monitored"]=owner.monitored();description["reader_pid"]=getpid();
-            description["sampling_modes"]={"point-step4","area4-step4"};
+            description["sampling_modes"]={"point-step4","area4-step4","area2-step2-tiled"};
             if(!serve){std::puts(description.dump().c_str());return 0;}
             LocalApi api;description["abstract_socket"]=api.address();std::puts(description.dump().c_str());std::fflush(stdout);
             signal(SIGINT,stop);signal(SIGTERM,stop);signal(SIGHUP,stop);signal(SIGPIPE,SIG_IGN);
@@ -34,18 +34,29 @@ int main(int argc,char** argv){
             std::optional<BorrowedFrames::Image> areaReply;
             while(!stopped&&!api.stopping()&&frames.alive()&&owner.alive()){
                 const auto events=trace.read(producer.pid,0);exposure.read(exposureTrace,producer.pid);
-                for(const auto& event:events)if(auto image=frames.copy(event,api.framesRequested())){
+                for(const auto& event:events)if(auto image=frames.copy(event,api.framesRequested(),api.highResolutionRequested())){
                     image->metadata["source_session"]=api.address();
                     const auto& timing=image->metadata.at("capture_metadata");
                     if(timing.is_object())image->metadata["observed_exposure_registers"]=exposure.settings(image->metadata.at("role"),timing.at("sof_raw_ns"),timing.at("eof_raw_ns"),timing.at("previous_sof_raw_ns"));
                     snapshots.add(std::move(*image));
                 }
-                api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},
+                api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["high_resolution_reads_active"]=api.highResolutionRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},
                     [&](const Json& request)->const BorrowedFrames::Image*{
                         const auto* image=snapshots.latest(request,monotonicNs());
-                        if(!image||request.value("command","")!="latest_area4")return image;
+                        if(!image)return nullptr;
+                        if(request.value("command","")=="latest_area2_tile"){
+                            if(request.value("pair_token","").empty()||!request.at("tile").is_number_unsigned())throw std::runtime_error("A high-resolution tile requires an immutable exposure token and tile index");
+                            const auto tile=request.at("tile").get<unsigned>();
+                            if(image->area2Pixels.empty())return nullptr;
+                            areaReply=BorrowedFrames::Image{image->metadata,area2Tile(image->area2Pixels,tile),{},{}};
+                            areaReply->metadata["encoding"]="nv12-u8-area2-tile-candidate";
+                            areaReply->metadata["sampling"]={{"step",2},{"area",{2,2}},{"center_offset",{.5,.5}}};
+                            areaReply->metadata["tile"]={{"index",tile},{"origin",{(tile%2)*616,(tile/2)*616}},{"full_extent",{1232,1232}}};
+                            return &*areaReply;
+                        }
+                        if(request.value("command","")!="latest_area4")return image;
                         if(image->metadata.value("encoding","")!="nv12-u8-luma-candidate"||image->area4Pixels.size()!=616*616)return nullptr;
-                        areaReply=BorrowedFrames::Image{image->metadata,image->area4Pixels,{}};
+                        areaReply=BorrowedFrames::Image{image->metadata,image->area4Pixels,{},{}};
                         areaReply->metadata["encoding"]="nv12-u8-area4-candidate";
                         areaReply->metadata["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
                         return &*areaReply;

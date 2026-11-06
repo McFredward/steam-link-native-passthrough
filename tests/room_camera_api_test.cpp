@@ -35,10 +35,14 @@ int main(){try{
         FixtureImage area=image;area.metadata["encoding"]="nv12-u8-area4-candidate";
         area.metadata["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
         for(auto& pixel:area.pixels)pixel=110;
+        FixtureImage tile=area;tile.metadata["encoding"]="nv12-u8-area2-tile-candidate";
+        tile.metadata["sampling"]={{"step",2},{"area",{2,2}},{"center_offset",{.5,.5}}};
+        tile.metadata["tile"]={{"index",0u},{"origin",{0,0}},{"full_extent",{1232,1232}}};
+        for(auto& pixel:tile.pixels)pixel=203;
         const auto announcement=api.address()+"\n";check(write(1,announcement.data(),announcement.size())==ssize_t(announcement.size()),"owned announcement");
         while(!api.stopping()){
-            api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()}};},
-                [&](const Json& request){return request.at("sensor")=="fixture"?(request.value("command","")=="latest_area4"?&area:&image):nullptr;},
+            api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()},{"high_resolution_reads_active",api.highResolutionRequested()}};},
+                [&](const Json& request){return request.at("sensor")=="fixture"?(request.value("command","")=="latest_area4"?&area:request.value("command","")=="latest_area2_tile"?&tile:&image):nullptr;},
                 [](){return Json{{"status","no-fresh-pair"}};});
             api.wait();
         }
@@ -56,9 +60,15 @@ int main(){try{
     result=request(socket.get(),R"({"command":"latest_area4","sensor":"fixture"})");
     check(result.first.at("sampling").at("center_offset")==Json({1.5,1.5})&&result.second.size()==616*616,"area image retains its explicit sample center and unchanged extent");
     for(auto pixel:result.second)check(pixel==110,"area bytes are never substituted with point-sampled pixels");
+    check(!request(socket.get(),R"({"command":"describe"})").first.at("high_resolution_reads_active").get<bool>(),"ordinary point and area-four consumers do not request larger source copies");
+    result=request(socket.get(),R"({"command":"latest_area2_tile","sensor":"fixture","pair_token":"fixture","tile":0})");
+    check(result.second.size()==616*616&&result.first.at("sampling").at("step")==2&&result.first.at("tile").at("full_extent")==Json({1232,1232}),"high-resolution tiles retain the original packet budget and full-image coordinates");
+    for(auto pixel:result.second)check(pixel==203,"tiled high-resolution payload is not substituted with another sampling");
+    check(request(socket.get(),R"({"command":"describe"})").first.at("high_resolution_reads_active").get<bool>(),"high-resolution capture needs explicit image-consumer interest");
     check(request(socket.get(),R"({"command":"describe"})").first.at("pixel_reads_active").get<bool>(),"explicit image request enables only owned reader copies");
     check(request(socket.get(),R"({"command":"park"})").first.at("status")=="parked","consumer can park its own read interest");
     check(!request(socket.get(),R"({"command":"describe"})").first.at("pixel_reads_active").get<bool>(),"parking the last consumer stops pixel reads");
+    check(!request(socket.get(),R"({"command":"describe"})").first.at("high_resolution_reads_active").get<bool>(),"parking releases larger-source read interest");
     check(request(socket.get(),R"({"command":"latest","sensor":"missing"})").first.at("status")=="no-fresh-frame","unavailable frame stays unavailable");
     check(request(socket.get(),R"({"command":"set-camera-format"})").first.at("status")=="unknown-command","API has no camera-setting command");
     check(request(socket.get(),"{").first.at("status")=="invalid-request","malformed input remains bounded");
@@ -78,6 +88,7 @@ int main(){try{
     auto control=connectTo(address);check(control.get()>=0,"reserved control slot");
     check(request(control.get(),R"({"command":"latest","sensor":"fixture"})").first.at("status")=="control-only-connection","reserved slot cannot start another image consumer");
     check(request(control.get(),R"({"command":"latest_area4","sensor":"fixture"})").first.at("status")=="control-only-connection","area requests cannot bypass the reserved control slot");
+    check(request(control.get(),R"({"command":"latest_area2_tile","sensor":"fixture","tile":0})").first.at("status")=="control-only-connection","high-resolution requests cannot bypass the reserved control slot");
     check(request(control.get(),R"({"command":"stop"})").first.at("status")=="stopping","Stop remains available with both image consumers connected");
     int status=0;check(waitpid(child,&status,0)==child&&WIFEXITED(status)&&!WEXITSTATUS(status),"manual helper stops cleanly");
     owned.pid=-1;

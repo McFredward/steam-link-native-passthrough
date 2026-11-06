@@ -26,6 +26,13 @@ int main(){try{
     check(!arcturusSampleOffset(filtered)&&!arcturusTiming(filtered),"wrong area center cannot reuse point-sampling geometry");
     filtered=frame;filtered["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
     check(!arcturusTiming(filtered),"point format cannot claim averaged pixels");
+    for(unsigned tile=0;tile<4;++tile){
+        filtered=fixture();filtered["encoding"]="nv12-u8-area2-tile-candidate";
+        filtered["sampling"]={{"step",2},{"area",{2,2}},{"center_offset",{.5,.5}}};
+        filtered["tile"]={{"index",tile},{"origin",{(tile%2)*616,(tile/2)*616}},{"full_extent",{1232,1232}}};
+        check(arcturusSampleOffset(filtered)==.5f&&arcturusTiming(filtered)->firstRowCenter==t->firstRowCenter,"every high-resolution tile retains the same native exposure and explicit center");
+        filtered["tile"]["origin"]={0,1};check(!arcturusTiming(filtered),"unverified tile coordinates cannot reuse exposure proof");
+    }
     frame["observed_exposure_registers"]["same_value_since_raw_ns"]=990000000ULL;
     check(!arcturusTiming(frame),"newly changed setting cannot attest current capture");
     frame=fixture();frame["observed_exposure_registers"]["unchanged_through_eof"]=false;

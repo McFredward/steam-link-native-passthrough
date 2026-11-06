@@ -102,8 +102,8 @@ public:
             {"producer_start_ticks",producer_.start},{"boot_changes",false},{"maps_read_only",true},{"eye_identity_verified",false},
             {"pixel_layout_verified",false},{"exposure_pose_verified",false},{"room_scan_ready",false},{"counters",counters_}};
     }
-    struct Image {Json metadata;std::vector<std::uint8_t> pixels,area4Pixels;};
-    std::optional<Image> copy(const Completion& event,bool pixelsRequested=true){
+    struct Image {Json metadata;std::vector<std::uint8_t> pixels,area4Pixels,area2Pixels;};
+    std::optional<Image> copy(const Completion& event,bool pixelsRequested=true,bool highResolutionRequested=false){
         for(auto& stream:streams_){
             if(stream.camera.minor!=event.minor)continue;
             ++counters_["color_events"];
@@ -120,7 +120,7 @@ public:
             constexpr unsigned height=616,pitch=3328;
             if(mapping->bytes<std::size_t(pitch)*2464)throw std::runtime_error("Arcturus luma extent is short");
             std::vector<std::uint8_t> first,second;first.reserve(616*616);second.reserve(616*616);const auto begin=monotonicNs();LumaLayout layout;
-            std::vector<std::uint8_t> firstArea,secondArea;
+            std::vector<std::uint8_t> firstArea,secondArea,firstArea2,secondArea2;
             std::vector<std::uint8_t> metadataFirst,metadataSecond;
             const std::size_t metadataOffset=stream.metadataOffset.value_or(0);
             const std::size_t metadataLength=stream.metadataOffset?1248:mapping->metadataBytes;
@@ -153,18 +153,19 @@ public:
             // Timing is observed for every actual frame. Pixel copies have no backlog.
             const auto bin=(timing?timing->sofRaw:event.dequeue)/100000000u;
             if(bin==stream.lastBin){++counters_["rate_skips"];return std::nullopt;}
-            const auto read=[&](std::vector<std::uint8_t>& out,std::vector<std::uint8_t>& area,bool examine){
+            const auto read=[&](std::vector<std::uint8_t>& out,std::vector<std::uint8_t>& area,std::vector<std::uint8_t>& area2,bool examine){
                 dma_buf_sync sync{DMA_BUF_SYNC_START|DMA_BUF_SYNC_READ};
                 if(ioctl(mapping->descriptor.get(),DMA_BUF_IOCTL_SYNC,&sync))throw std::runtime_error("Arcturus read cache sync failed");
                 const auto* data=static_cast<const std::uint8_t*>(mapping->data);
                 if(examine)layout=examineLuma(data,mapping->bytes);
                 copyLuma(data,mapping->bytes,layout,out);
                 if(!layout.packed10)copyArea4Luma(data,mapping->bytes,layout,area);
+                if(!layout.packed10&&highResolutionRequested)copyAreaLuma(data,mapping->bytes,layout,area2,2);
                 sync.flags=DMA_BUF_SYNC_END|DMA_BUF_SYNC_READ;
                 if(ioctl(mapping->descriptor.get(),DMA_BUF_IOCTL_SYNC,&sync))throw std::runtime_error("Arcturus read cache sync end failed");
             };
-            read(first,firstArea,true);read(second,secondArea,false);readMetadata(metadataSecond);const auto end=monotonicNs();
-            if(first!=second||firstArea!=secondArea||metadataFirst!=metadataSecond||queuedFd(stream,event.index)!=mapping->owner){++counters_["unstable_copy"];return std::nullopt;}
+            read(first,firstArea,firstArea2,true);read(second,secondArea,secondArea2,false);readMetadata(metadataSecond);const auto end=monotonicNs();
+            if(first!=second||firstArea!=secondArea||firstArea2!=secondArea2||metadataFirst!=metadataSecond||queuedFd(stream,event.index)!=mapping->owner){++counters_["unstable_copy"];return std::nullopt;}
             stream.lastPublish=event.dequeue;stream.lastBin=bin;
             ++counters_["published"];
             timespec raw{};const auto clockBefore=monotonicNs();clock_gettime(CLOCK_MONOTONIC_RAW,&raw);const auto clockAfter=monotonicNs();
@@ -182,7 +183,7 @@ public:
                     {"previous_sof_raw_ns",previousSof},{"capture_clock","CLOCK_MONOTONIC_RAW"},
                     {"v4l_timestamp_matches",true},{"sensor_metadata_hex",sensorMetadataHex(*timing)}};
             }else metadata["capture_metadata"]=nullptr;
-            return Image{std::move(metadata),std::move(first),std::move(firstArea)};
+            return Image{std::move(metadata),std::move(first),std::move(firstArea),std::move(firstArea2)};
         }
         return std::nullopt;
     }
