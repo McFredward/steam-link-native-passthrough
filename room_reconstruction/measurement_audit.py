@@ -49,7 +49,7 @@ def distribution(values):
             'p90': float(np.quantile(values, .9)), 'p95': float(np.quantile(values, .95))}
 
 
-def build_tracks(cameras, maximum_features=3000):
+def build_tracks(cameras, maximum_features=3000, *, both_temporal_eyes=False):
     import cv2
     sift = cv2.SIFT_create(nfeatures=maximum_features, contrastThreshold=.008)
     features = [sift.detectAndCompute(camera.image, None) for camera in cameras]
@@ -85,7 +85,7 @@ def build_tracks(cameras, maximum_features=3000):
             error = epipolar_error_degrees(cameras[a], cameras[b], pa, pb)
             if cameras[a].frame == cameras[b].frame:
                 stereo_measurements.append({'a': a, 'b': b, 'pixels_a': pa, 'pixels_b': pb})
-            elif (cameras[a].eye == cameras[b].eye == 0
+            elif (cameras[a].eye == cameras[b].eye and (cameras[a].eye == 0 or both_temporal_eyes)
                   and cameras[b].frame-cameras[a].frame == 1):
                 temporal_measurements.append({'a': a, 'b': b, 'pixels_a': pa, 'pixels_b': pb})
             summaries.append({'frames': [cameras[a].frame, cameras[b].frame],

@@ -71,6 +71,8 @@ jobs:
         run: python -B -m unittest discover -s tests -p test_room_reconstruction.py -q
       - name: Check independent metric measurements and held-out exposure validation
         run: python -B -m unittest discover -s tests -p test_room_measurement.py -q
+      - name: Check joint optical and head calibration with unchanged baseline and withheld exposures
+        run: python -B -m unittest discover -s tests -p test_room_stereo_rig_audit.py -q
       - name: Load the private Windows CUDA libraries and execute the actual model on CPU
         if: runner.os == 'Windows'
         run: python -B tools/check_room_pc_runtime.py --cache "${{ runner.temp }}/room-pc-runtime"
