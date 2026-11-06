@@ -53,9 +53,17 @@ class MeasurementTests(unittest.TestCase):
         self.assertTrue(np.allclose(measured, rays/np.linalg.norm(rays, axis=1)[:, None], atol=1e-11))
 
     def test_area_pixel_centers_recover_metric_depth_with_oppositely_rotated_sensors(self):
+        self.check_area_pixel_centers(4, 1.5, 616)
+
+    def test_high_resolution_area_centers_recover_metric_depth_with_rotated_sensors(self):
+        self.check_area_pixel_centers(2, .5, 1232)
+
+    def check_area_pixel_centers(self, step, offset, extent):
         value = observation()
-        value['encoding'] = 'gray8-area4-step4'
-        value['sampling'] = {'step': 4, 'area': [4, 4], 'center_offset': [1.5, 1.5]}
+        value['encoding'] = f'gray8-area{step}-step{step}'
+        value['sampling'] = {'step': step, 'area': [step, step], 'center_offset': [offset, offset]}
+        value['width'] = value['height'] = extent
+        value['images'] = [base64.b64encode(bytes([116])*(extent*extent)).decode()]*2
         # Arcturus' two sensor images have opposite roll. A forgotten half-cell
         # center is therefore a stereo-depth bias, not a harmless shared shift.
         lens = np.array(value['rig']['eyes'][1]['head_from_optical']).reshape(3, 4)
@@ -66,7 +74,7 @@ class MeasurementTests(unittest.TestCase):
         for i, camera in enumerate(cameras):
             native = np.array(camera.lens['head_from_optical']).reshape(3, 4)
             local = native[:, :3].T @ (expected-np.array((0, 1.5, 0))-native[:, 3])
-            pixel = (project_kb(local, np.array((1000., 1000., 1232., 1232.)), np.zeros(4))-1.5)/4
+            pixel = (project_kb(local, np.array((1000., 1000., 1232., 1232.)), np.zeros(4))-offset)/step
             measurements.append((i, pixel))
             _, ray, valid = camera.rays([pixel]); self.assertTrue(valid[0])
             self.assertTrue(np.allclose(camera.project_at_observed_rows(expected, [pixel])[0], pixel, atol=1e-10))
@@ -120,6 +128,26 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(accepted, 1); self.assertEqual(failed, 0)
         self.assertEqual(len(errors), 2)
         self.assertTrue(np.allclose(errors, 7., atol=1e-8))
+
+    def test_high_resolution_centers_keep_fractional_native_row_exposure_poses(self):
+        value = observation(.1, yaw=.03, moving=True)
+        value.update(encoding='gray8-area2-step2', width=1232, height=1232,
+                     sampling={'step': 2, 'area': [2, 2], 'center_offset': [.5, .5]})
+        value['images'] = [base64.b64encode(bytes([116])*(1232*1232)).decode()]*2
+        camera = observation_cameras(value, 0)[0]
+        pixels = np.array(((300.25, 100.125), (600.75, 1000.375)))
+        origins, rays, valid = camera.rays(pixels)
+        self.assertTrue(valid.all())
+        for i, pixel in enumerate(pixels):
+            native = pixel*2+.5
+            t = np.rint(native[1]*4360)/(4360*2463)
+            rotation = Rotation.from_euler('y', .03).as_matrix() @ Rotation.from_euler('x', t*.005).as_matrix()
+            xy = (native-1232)/1000; theta = np.linalg.norm(xy)
+            optical_ray = np.r_[xy*np.sin(theta)/theta, np.cos(theta)]
+            expected_origin = rotation @ np.array((-.032, 0, 0))+np.array((.1+t*.001, 1.5, 0))
+            expected_ray = rotation @ np.diag((1., -1., -1.)) @ optical_ray
+            self.assertTrue(np.allclose(origins[i], expected_origin, atol=1e-9, rtol=0))
+            self.assertTrue(np.allclose(rays[i], expected_ray, atol=1e-8, rtol=0))
 
     def test_missing_parallax_and_points_behind_cameras_are_not_metric_measurements(self):
         self.assertIsNone(intersect_rays(((0, 0, 0), (.1, 0, 0)), ((0, 0, -1), (0, 0, -1))))

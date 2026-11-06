@@ -18,7 +18,7 @@ def rotation_hypothesis(cameras, pairs):
         oa, da, va = a.rays(pa)
         ob, _, vb = b.rays(pb)
         rb, _ = b.row_transforms(pb)
-        local, valid = unproject_kb(pb*4+b.sample_offset, b.intrinsics, b.coefficients)
+        local, valid = unproject_kb(pb*b.sample_step+b.sample_offset, b.intrinsics, b.coefficients)
         normal = np.cross(ob-oa, da)
         norm = np.linalg.norm(normal, axis=1)
         normal /= np.maximum(norm, 1e-15)[:, None]
@@ -26,7 +26,7 @@ def rotation_hypothesis(cameras, pairs):
         error = np.arcsin(np.clip(np.sum(normal*current, axis=1), -1, 1))
         usable = va & vb & valid & (norm > 1e-9) & (abs(error) < np.deg2rad(1.))
         if usable.sum() >= 8:
-            factors.append((a.frame, normal[usable], rb[usable], local[usable], float(b.intrinsics[:2].mean()/4)))
+            factors.append((a.frame, normal[usable], rb[usable], local[usable], float(b.intrinsics[:2].mean()/b.sample_step)))
     frames = sorted({f[0] for f in factors})
     if len(frames) < 3:
         return {'status': 'insufficient_independent_exposures', 'applied': False}

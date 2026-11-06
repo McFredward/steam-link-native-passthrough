@@ -8,23 +8,33 @@ from scipy.spatial.transform import Rotation
 from functools import lru_cache
 
 
-def sampling_offset(observation):
+def sampling_profile(observation):
     encoding = observation.get('encoding')
     if encoding == 'gray8-point-step4':
-        offset, area = 0., 1
+        offset, area, step, extent = 0., 1, 4, 616
         if 'sampling' not in observation:
-            return offset
+            if (observation.get('width'), observation.get('height')) != (extent, extent):
+                raise ValueError('Stereo sampling extent changed')
+            return step, offset, extent
     elif encoding == 'gray8-area4-step4':
-        offset, area = 1.5, 4
+        offset, area, step, extent = 1.5, 4, 4, 616
+    elif encoding == 'gray8-area2-step2':
+        offset, area, step, extent = .5, 2, 2, 1232
     else:
         raise ValueError('Unsupported stereo pixel sampling')
     sampling = observation.get('sampling')
-    expected = {'step': 4, 'area': [area, area], 'center_offset': [offset, offset]}
+    expected = {'step': step, 'area': [area, area], 'center_offset': [offset, offset]}
     if (sampling != expected or type(sampling['step']) is not int
             or any(type(v) is not int for v in sampling['area'])
             or any(type(v) not in (int, float) for v in sampling['center_offset'])):
         raise ValueError('Stereo pixel centers are not verified')
-    return offset
+    if (observation.get('width'), observation.get('height')) != (extent, extent):
+        raise ValueError('Stereo sampling extent changed')
+    return step, offset, extent
+
+
+def sampling_offset(observation):
+    return sampling_profile(observation)[1]
 
 
 @lru_cache(maxsize=3)
@@ -79,9 +89,8 @@ def rectify(observation, width, height, *, view_pitch_radians=0., focal_ratio=22
     if (not np.isfinite(view_pitch_radians) or abs(view_pitch_radians) > .65
             or not np.isfinite(focal_ratio) or not .5 <= focal_ratio <= 1.):
         raise ValueError('Unsupported virtual stereo view')
-    sample_offset = sampling_offset(observation)
+    sample_step, sample_offset, extent = sampling_profile(observation)
     if (observation["schema"] != "sfnp-room-stereo-v1"
-            or (observation["width"], observation["height"]) != (616, 616)
             or len(observation["images"]) != 2 or len(observation["timing"]) != 2):
         raise ValueError("Unsupported stereo observation")
     reference = matrix(observation["reference_head"])
@@ -102,15 +111,15 @@ def rectify(observation, width, height, *, view_pitch_radians=0., focal_ratio=22
     images, masks, origins = [], [], []
     for index, eye in enumerate(rig["eyes"]):
         raw = base64.b64decode(observation["images"][index], validate=True)
-        if len(raw) != 616*616:
+        if len(raw) != extent*extent:
             raise ValueError("Stereo image extent changed")
-        image = np.frombuffer(raw, dtype=np.uint8).reshape(616, 616)
+        image = np.frombuffer(raw, dtype=np.uint8).reshape(extent, extent)
         lens = matrix(eye["head_from_optical"])
         intrinsics, k = np.asarray(eye["intrinsics"]), np.asarray(eye["k"])
         if (intrinsics.shape != (4,) or k.shape != (4,) or not np.isfinite(k).all()
                 or not np.isfinite(intrinsics).all() or np.any(intrinsics[:2] < 500)):
             raise ValueError("Unverified optical calibration")
-        uv = (project_kb(np.einsum('...i,ij->...j',head_rays,lens[:,:3]), intrinsics, k)-sample_offset)/4
+        uv = (project_kb(np.einsum('...i,ij->...j',head_rays,lens[:,:3]), intrinsics, k)-sample_offset)/sample_step
         timing = observation["timing"][index]
         if timing["line_ns"] != 4360 or not 0 < timing["integration_ns"] < 40000000:
             raise ValueError("Unsupported row timing")
@@ -139,17 +148,17 @@ def rectify(observation, width, height, *, view_pitch_radians=0., focal_ratio=22
                 raise ValueError('Exposure interval has too much spatial uncertainty')
         rotations, translations = row_poses(observation["poses"], timing["first_row_ns"]+np.arange(2464, dtype=np.int64)*4360)
         for _ in range(2):
-            rows = np.clip((uv[..., 1]*4+sample_offset+.5).astype(np.int32), 0, 2463)
+            rows = np.clip((uv[..., 1]*sample_step+sample_offset+.5).astype(np.int32), 0, 2463)
             at_head = np.einsum("...ji,...j->...i", rotations[rows], world_rays)
-            uv = (project_kb(np.einsum('...i,ij->...j',at_head,lens[:,:3]), intrinsics, k)-sample_offset)/4
-        valid = np.isfinite(uv).all(axis=-1) & (uv[..., 0] >= 0) & (uv[..., 1] >= 0) & (uv[..., 0] < 615) & (uv[..., 1] < 615)
-        safe = np.clip(uv, 0, 614.999)
+            uv = (project_kb(np.einsum('...i,ij->...j',at_head,lens[:,:3]), intrinsics, k)-sample_offset)/sample_step
+        valid = np.isfinite(uv).all(axis=-1) & (uv[..., 0] >= 0) & (uv[..., 1] >= 0) & (uv[..., 0] < extent-1) & (uv[..., 1] < extent-1)
+        safe = np.clip(uv, 0, extent-1.001)
         ix, iy = safe[..., 0].astype(int), safe[..., 1].astype(int)
         a, b = safe[..., 0]-ix, safe[..., 1]-iy
         pixels = (1-b)*((1-a)*image[iy, ix]+a*image[iy, ix+1])+b*((1-a)*image[iy+1, ix]+a*image[iy+1, ix+1])
         images.append(np.where(valid, pixels, 0).astype(np.uint8))
         masks.append(minimum_filter(valid.astype(np.uint8), size=7, mode="constant", cval=0).astype(bool))
-        rows = np.clip((safe[..., 1]*4+sample_offset+.5).astype(np.int32), 0, 2463)
+        rows = np.clip((safe[..., 1]*sample_step+sample_offset+.5).astype(np.int32), 0, 2463)
         origins.append(np.einsum("...ij,j->...i", rotations[rows], lens[:, 3])+translations[rows])
     return images, masks, origins, world_rays, room, (focal, focal, cx, cy)
 

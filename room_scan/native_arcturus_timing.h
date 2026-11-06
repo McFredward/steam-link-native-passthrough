@@ -14,6 +14,13 @@ inline std::optional<float> arcturusSampleOffset(const Json& frame){
     }
     if(encoding=="nv12-u8-area4-candidate"&&frame.contains("sampling")
         &&frame.at("sampling")==Json({{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}}))return 1.5f;
+    if(encoding=="nv12-u8-area2-tile-candidate"&&frame.contains("sampling")&&frame.contains("tile")
+        &&frame.at("sampling")==Json({{"step",2},{"area",{2,2}},{"center_offset",{.5,.5}}})){
+        const auto& tile=frame.at("tile");
+        if(!tile.is_object()||!tile.contains("index")||!tile.at("index").is_number_unsigned())return std::nullopt;
+        const auto index=tile.at("index").get<unsigned>();
+        if(index<4&&tile==Json({{"index",index},{"origin",{(index%2)*616,(index/2)*616}},{"full_extent",{1232,1232}}}))return .5f;
+    }
     return std::nullopt;
 }
 struct ArcturusTiming {

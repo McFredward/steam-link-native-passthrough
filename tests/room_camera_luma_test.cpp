@@ -12,10 +12,20 @@ int main(){try{
     copyLuma(raw.data(),raw.size(),layout,image);check(image.front()==20&&image.back()==20,"point sampling aliases the checkerboard");
     copyArea4Luma(raw.data(),raw.size(),layout,image);
     for(auto byte:image)check(byte==110,"area sampling retains mean energy at every phase");
+    copyAreaLuma(raw.data(),raw.size(),layout,image,2);
+    check(image.size()==1232*1232,"two-pixel area sampling preserves twice the measured resolution");
+    for(auto byte:image)check(byte==110,"two-pixel sampling retains every checkerboard phase");
+    for(unsigned y=0;y<1232;++y)for(unsigned x=0;x<1232;++x)image[std::size_t(y)*1232+x]=std::uint8_t((x*7+y*11)%251);
+    for(unsigned tile=0;tile<4;++tile){const auto part=area2Tile(image,tile);
+        for(unsigned y=0;y<616;++y)for(unsigned x=0;x<616;++x)
+            check(part[std::size_t(y)*616+x]==image[std::size_t((tile/2)*616+y)*1232+(tile%2)*616+x],"tiles preserve exact full-image coordinates without blending boundaries");}
+    bool badTile=false;try{area2Tile(image,4);}catch(const std::runtime_error&){badTile=true;}
+    check(badTile,"out-of-image tile cannot be read");
     std::fill(raw.begin(),raw.end(),0);raw[0]=255;raw[std::size_t(height-1)*pitch+2463]=255;
     copyArea4Luma(raw.data(),raw.size(),layout,image);
     check(image.front()==16&&image.back()==16,"area sampling includes all sixteen pixels and final row/column");
     check(image[1]==0&&image[616]==0,"area sampling does not blend neighbouring output cells");
+    copyAreaLuma(raw.data(),raw.size(),layout,image,2);check(image.front()==64&&image.back()==64,"two-pixel area sampling includes first and last native photosites");
     for(const auto* source:{raw.data(),static_cast<std::uint8_t*>(nullptr)}){
         bool rejected=false;try{copyArea4Luma(source,10,layout,image);}catch(const std::runtime_error&){rejected=true;}
         check(rejected,"area sampling refuses incomplete or missing source storage");

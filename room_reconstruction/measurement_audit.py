@@ -19,13 +19,14 @@ from .rig_calibration_audit import rig_hypothesis, prediction_comparison
 
 
 def load_observations(path, maximum=256):
-    observations = []
+    observations = []; total_bytes = 0
     with Path(path).open('r', encoding='utf-8') as source:
         while True:
-            line = source.readline(1100001)
+            line = source.readline(5*1024*1024+1)
             if not line:
                 break
-            if len(line) > 1100000 or len(observations) >= maximum:
+            total_bytes += len(line)
+            if len(line) > 5*1024*1024 or total_bytes > 512*1024*1024 or len(observations) >= maximum:
                 raise ValueError('Measurement dataset exceeds its explicit budget')
             value = json.loads(line)
             if observations:

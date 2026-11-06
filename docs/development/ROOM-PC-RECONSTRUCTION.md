@@ -857,3 +857,37 @@ only those withheld exposures and compares their ranges with Gaussian ray
 intersections. This remains a diagnostic consistency test, not external ground
 truth or proof of a calibrated live scanner. In particular, good photometric
 coverage is insufficient while metric discrepancies or unknown ceilings remain.
+
+### Higher-resolution input preparation
+
+A separate developer-only `latest_area2_tile` path retains 1,232-square filtered
+luma images. It averages two-by-two native photosites with a native center offset
+of `(0.5, 0.5)`. Four 616-square tiles carry one immutable image through the
+existing local packet limit. Each tile retains source, sensor, exposure token,
+timing, copy generation and explicit full-image coordinates. A comparison reader
+must verify all of these before assembling an image. Missing/replaced tiles do
+not grant a partial frame or permission to use another exposure.
+
+Larger source copies require explicit high-resolution consumer interest. Normal
+point/area-four consumers do not incur them; parking or disconnecting the last
+requesting consumer releases that interest. Both complete high-resolution copies
+must match each other, the metadata copies and queue ownership. The control-only
+socket slot cannot start these reads. No camera settings or native services are
+changed. The ordinary native scan source still uses its existing image profiles.
+
+Offline projection and measurement tools understand the declared step-two
+profile, including its fractional native row times, and refuse wrong sampling
+centers or extents. Dataset parsing permits these larger records with explicit
+per-record and total-data budgets. Software checks cover exact image/tile
+boundaries, opposite sensor rolls, metric triangulation, moving exposure rows,
+packet/control limits and parked read interest. The temporary hardware comparison
+is prepared but requires new wearer readiness before any further images are read.
+This preparation is not a candidate-18 installer or a validated accuracy gain.
+
+A read-only native-log audit also found a versioned color-camera alignment
+history, beyond the static EEPROM. Its stereo correction preserves the physical
+baseline but differs from the factory relative camera rotation by about 0.26
+degrees. Fixed-history pose hypotheses improve some offline reprojection checks
+but still fail qualification. The file's recent history does not by itself prove
+the exact effective transform at an earlier exposure. Neither a guessed history
+composition nor a transform chosen from the known room height is applied live.
