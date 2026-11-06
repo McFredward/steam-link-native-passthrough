@@ -32,7 +32,7 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.15**, use
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.16**, use
 the separate `arcturus-room-setup` branch installer:
 
 ```powershell
@@ -51,7 +51,12 @@ reader, downloads/prepares the PC runtime, warms the model and connects to the
 Frame before reporting **Room scanning is ready**. A failed room phase offers
 Try again and preserves the committed native installation.
 
-Installer 15 retains the translucent grid and adds a subtle colour pulse and
+Installer 16 fixes depth starvation on softly textured surfaces: a sharp local
+image-match minimum is needed to adjust depth, while an already supported
+bilateral measurement may remain unchanged. Neighbourhood normals tolerate
+rejected samples without filling unmeasured holes. Scan instructions have their
+own display line and stay readable for at least four seconds.
+It retains the translucent grid and a subtle colour pulse and
 animated arrows towards unseen directions, then areas needing better depth.
 Slow continuous looking around extends and revisits the scan. Detailed Gaussian
 submaps are checkpointed on the PC; the former 240,000-point whole-room limit

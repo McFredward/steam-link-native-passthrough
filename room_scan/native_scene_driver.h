@@ -51,6 +51,7 @@ public:
     std::array<Controller,2> controllers;
     std::function<void()> unavailable,originChanged,exited;
     std::function<void(const std::string&)> hint;
+    std::function<void(const std::string&)> instruction;
     RoomSceneDriver(VR_IVRSystem_FnTable* system,std::string executable,std::string loader)
         :system_(system),executable_(std::move(executable)),loader_(std::move(loader)){}
     bool available()const{return trustedSceneExecutable(executable_);}
@@ -89,7 +90,7 @@ public:
                 else if(kind=="guidance"){
                     const auto message=packet->at("message").get<std::string>();
                     if(message.size()>180||message.find('\n')!=std::string::npos)throw std::runtime_error("Invalid scan instruction");
-                    if(registration_.ready()&&hint)hint(message);
+                    if(registration_.ready()&&instruction)instruction(message);
                 }
                 else if(kind=="origin_changed"){registration_.reset();if(originChanged)originChanged();}
                 else if(kind=="origin_probe"){
