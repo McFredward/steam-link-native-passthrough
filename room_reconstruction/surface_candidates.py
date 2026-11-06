@@ -11,6 +11,7 @@ import math
 
 import torch
 from torch.nn import functional as F
+from .surface_gaussians import bounded_ray_work
 
 
 @dataclass(frozen=True)
@@ -40,8 +41,8 @@ class RayCandidateSet:
 def ray_candidates(model, origins, directions, *, capacity=128, ray_chunk=256, point_chunk=512,
                    motion_margin_m=.04, near=.2, far=6.):
     p = len(origins); n = len(model.means)
-    if (origins.shape != (p, 3) or directions.shape != (p, 3) or not 0 < p <= 4096
-            or not 0 < capacity <= 128 or not 0 < ray_chunk <= 512 or not 0 < point_chunk <= 1024
+    if (origins.shape != (p, 3) or directions.shape != (p, 3) or not bounded_ray_work(p, capacity)
+            or not 0 < ray_chunk <= 512 or not 0 < point_chunk <= 1024
             or not 0 <= motion_margin_m <= .1 or not .01 <= near < far <= 100
             or origins.device != model.means.device or directions.device != model.means.device
             or origins.dtype != model.means.dtype or directions.dtype != model.means.dtype

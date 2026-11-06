@@ -15,6 +15,15 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+MAX_RAYS = 4096
+MAX_CANDIDATES = 512
+MAX_RAY_CANDIDATE_PAIRS = 524288
+
+
+def bounded_ray_work(p, k):
+    """Trade batch size for overlap capacity without growing tensor memory."""
+    return 0 < p <= MAX_RAYS and 0 < k <= MAX_CANDIDATES and p*k <= MAX_RAY_CANDIDATE_PAIRS
+
 
 def tangent_basis(normals):
     normals = F.normalize(normals, dim=-1)
@@ -65,7 +74,7 @@ class SurfaceGaussians(nn.Module):
         or virtual room plane substitutes for a missing surface intersection.
         """
         p, k = candidates.shape
-        if (not 0 < p <= 4096 or not 0 < k <= 128 or candidates.dtype != torch.int64
+        if (not bounded_ray_work(p, k) or candidates.dtype != torch.int64
                 or origins.shape != (p, 3) or directions.shape != (p, 3)
                 or not .01 <= near < far <= 100):
             raise ValueError('Ray/surface rendering exceeds its explicit batch budget')
