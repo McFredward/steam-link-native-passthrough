@@ -147,6 +147,19 @@
   scan instructions separate from depth/camera notices and readable for at
   least four seconds. Preserve existing camera/pose authority and record bounded
   per-stage depth counts, including when no surface can be created.
+- After rejecting candidate 17's slow, fragmented and inaccurate surfaces, the
+  maintainer approved rebuilding the reconstruction core. Start with independent
+  metric calibration/pose checks and a continuous captured-sequence comparison.
+  Keep an externally measured room dimension out of reconstruction and use it
+  only for evaluation. Point counts, a pleasing render and synthetic backend
+  execution do not establish useful coverage or physical accuracy. Test actual
+  multi-view Gaussian optimization and surface extraction before selecting a
+  replacement; keep bounded live preview independent of detailed optimization.
+  Spatial uncertainty must drive guidance. Retain the accepted local MR grid,
+  camera reversibility, installer and room-only X. The new measurement tools are
+  developer groundwork, not a candidate-18 installer or accepted live scanner.
+  Coordinate any new private image capture with the wearer; never infer readiness
+  from an unanswered question or restart native services for these measurements.
 - The second scan test exposed unusable in-room buttons and a wrong laser angle.
   The HUD must use SteamVR's native interactive mouse overlay and mouse events.
   World tools must resolve the runtime's controller tip rather than the tracked

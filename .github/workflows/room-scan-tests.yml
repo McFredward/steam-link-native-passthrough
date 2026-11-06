@@ -45,13 +45,15 @@ jobs:
         with:
           python-version: '3.14'
       - name: Install the exact PC numerical test dependencies
-        run: python -m pip install numpy==2.5.4 scipy==1.18.1 pyfqmr==0.5.0 shapely==2.1.2
+        run: python -m pip install numpy==2.5.4 scipy==1.18.1 pyfqmr==0.5.0 shapely==2.1.2 opencv-python-headless==5.0.0.93
       - name: Check metric rays, real gaps, revisit refinement and bounded transport
         run: python -B -m unittest discover -s tests -p test_room_pc_live.py -q
       - name: Check continuous detailed regions, incremental delivery and ceiling refinement
         run: python -B -m unittest discover -s tests -p test_room_live_streaming.py -q
       - name: Check the offline Gaussian trainer adapter separately
         run: python -B -m unittest discover -s tests -p test_room_reconstruction.py -q
+      - name: Check independent metric measurements and held-out exposure validation
+        run: python -B -m unittest discover -s tests -p test_room_measurement.py -q
       - name: Load the private Windows CUDA libraries and execute the actual model on CPU
         if: runner.os == 'Windows'
         run: python -B tools/check_room_pc_runtime.py --cache "${{ runner.temp }}/room-pc-runtime"

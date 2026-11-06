@@ -575,3 +575,72 @@ reader, model/runtime pins, renderer, accepted grid/pulse, instructions and X
 are unchanged. The reference-edge aliasing reported by the wearer is recorded
 but not resolved by this depth-verification change. Complete scan speed,
 physical accuracy and useful visible coverage require the next installed test.
+
+## Reconstruction rebuild after candidate 17
+
+The maintainer rejected candidate 17's sporadic, fragmented, slow surfaces and
+ineffective guidance, and approved rebuilding the reconstruction core. The
+installed log has a median reported compute time of 2.67 seconds and a maximum
+of 7.21 seconds. At its end, 98.9 percent of preview points remain uncertain
+under the implementation's own revisit heuristic. That heuristic is not a
+ground-truth accuracy measurement. The current live worker accumulates local
+depth-derived Gaussian surfels and triangle connectivity; it does not jointly
+optimize a photometric Gaussian scene over multiple captured images.
+
+The rebuild starts with independent measurement tools, not another change to
+live confidence thresholds. `measurement.py` inverts the factory KB lens on its
+monotonic forward branch, preserves point-step-four pixel centres, and computes
+each ray from its own historical exposure-row pose. Multi-view point fitting
+keeps the original metric cameras and baseline fixed. Neither similarity
+alignment to a reference room nor a current-pose substitution is allowed.
+
+`measurement_audit.py` builds mutually matched feature tracks and evaluates
+reprojection on exposures excluded from point fitting. Both eyes of an excluded
+exposure stay out of its fit. Its rotation-calibration hypothesis uses separate
+training/excluded exposure groups, reports conditioning and never applies a
+change to the factory rig. The externally measured room height is used only
+after reconstruction. Floor/ceiling support needs measured horizontal local
+surface orientation and two-dimensional extent; horizontal slices through
+vertical walls and lines along a picture frame cannot establish room planes.
+Insufficient or ambiguous support stays explicitly unresolved.
+
+Developer dependencies are private and separate from the installed runtime:
+
+```sh
+uv venv --python 3.12 build/room-measurement-env
+uv pip install --python build/room-measurement-env/bin/python numpy==2.5.4 scipy==1.18.1 opencv-python-headless==5.0.0.93
+PYTHONPATH=. build/room-measurement-env/bin/python -B -m unittest discover -s tests -p test_room_measurement.py -v
+PYTHONPATH=. build/room-measurement-env/bin/python -B -m room_reconstruction.measurement_audit PRIVATE_OBSERVATIONS.jsonl --output build/new-private-audit --reference-room-height MEASURED_HEIGHT_IN_METRES
+```
+
+Input observations must retain their original binding, source, ordered exposure
+timestamps, calibrated rig, images and historical poses. An audit does not read
+new camera images or contact a headset. Its pass/fail report is measurement
+evidence only; it never grants live-installation acceptance or claims NVIDIA
+throughput. Capture of a new sequence remains a separately coordinated wearer
+operation. Private recordings and derived room geometry stay out of Git.
+
+The comparison also scores surface geometry rather than rendered appearance.
+`metric_fixture.py` generates a synthetic room of known dimensions, with a
+deliberately biased ceiling seed and noisy initial points. It is never eligible
+as captured room data. `mesh_metrics.py` checks distances to the bounded known
+surfaces and completeness against independently retained observed surface
+samples, without fitting an alignment that could hide scale or position errors.
+Known geometry is not supplied to the optimizer.
+
+A first native Spirula control used the existing pinned Vulkan binary and
+24 synthetic 128x96 views. At 1,200 steps, its image PSNR reached 36 dB, but the
+extracted mesh's median surface error was about 22 cm and observed-surface
+completeness within 8 cm was about 6 percent. Resuming the same optimizer to
+6,000 steps preserved the original checkpoint and did not resolve that mesh
+error. This bounded control neither establishes the quality of every Gaussian
+method nor selects a replacement backend. It demonstrates why image quality,
+successful training and a nonempty mesh cannot serve as our acceptance test.
+These runs used an Intel development GPU, not the target NVIDIA PC.
+
+The intended next stages are a geometrically qualified multi-view core,
+bounded GPU work with independent live preview, and guidance from actual spatial
+uncertainty. The existing installer, reversible reader, tracked local MR grid,
+animations and room-only X remain integration components. The public installer
+still delivers candidate 17; these developer measurement tools do not constitute
+a candidate-18 release or an accepted live reconstruction replacement.
