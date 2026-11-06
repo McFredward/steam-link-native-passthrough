@@ -880,9 +880,14 @@ profile, including its fractional native row times, and refuse wrong sampling
 centers or extents. Dataset parsing permits these larger records with explicit
 per-record and total-data budgets. Software checks cover exact image/tile
 boundaries, opposite sensor rolls, metric triangulation, moving exposure rows,
-packet/control limits and parked read interest. The temporary hardware comparison
-is prepared but requires new wearer readiness before any further images are read.
-This preparation is not a candidate-18 installer or a validated accuracy gain.
+packet/control limits and parked read interest. The coordinated hardware comparison
+is complete: 23 physical stereo exposures were captured in both profiles over a
+15.7-second accepted span. All 46 larger images reduce to their matching area-four
+images within one byte, as expected from the two rounding stages. This verifies
+tile ordering and full-image coordinates as well. The reader was stopped, the
+test scene closed, owned temporary Frame files removed and SSH closed; native
+service generations stayed unchanged. Capture/stop/removal works, but this is
+not a candidate-18 installer or a qualified physical room scan.
 
 A read-only native-log audit also found a versioned color-camera alignment
 history, beyond the static EEPROM. Its stereo correction preserves the physical
@@ -902,3 +907,32 @@ an independent image-consistency check, not external surveyed ground truth;
 neither comparison establishes acceptable physical geometry. Both runs retain
 ambiguous horizontal layers and fail the room-height check. The reference height
 was not used during optimization, and visually plausible coverage is not a pass.
+
+### Joint optical/head calibration diagnostic
+
+The higher-resolution recording confirms that image resolution alone does not
+resolve the geometric mismatch. `stereo_rig_audit.py` separately estimates a
+common rigid camera-rig/head correction and a small relative optical rotation
+of the left camera. Both camera centers relative to the rig, the measured
+baseline, lens coefficients, original tracking poses and exposure clocks remain
+fixed. Stereo correspondences and temporal correspondences in both eyes provide
+distinct constraints. Spatially stratified feature selection limits domination
+by one feature-rich display. The gross descriptor-outlier filter compensates
+each feature's actual historical row rotation before estimating its essential
+matrix; it does not replace rolling-row geometry with a current pose.
+
+Five exposure-disjoint folds withhold both eyes from calibration. Point fitting
+also excludes the prediction exposure, and scoring retains bad unseen predictions.
+The independent analytic control recovers separate known head/optical errors;
+repeated stationary views cannot certify the head correction. Every hypothesis
+remains explicitly diagnostic. No live calibration or installer setting changes.
+
+On the new area-two capture the relative optical rotation is consistently about
+0.2--0.3 degrees across folds. A training-only joint fit improves held-out point
+prediction, but its 95th percentile remains about 2.84 area-two pixels. This does
+not pass the existing one-pixel audit gate, and no room-height measurement is
+qualified. Neural replay at 640 by 480 still lacks supported ceiling coverage.
+The larger image has less averaging and is not automatically a better dense
+depth input. A public OpenVR metadata query also reports zero cameras and no
+camera-to-head property; it provides no authoritative replacement geometry.
+That metadata-only probe was removed and native services were preserved.

@@ -138,6 +138,20 @@ def prediction_comparison(cameras, tracks, hypothesis):
     exactly the same tracks as well as each method's training-qualified set.
     Unknown or poorly observed tracks are counted, never filled with a plane.
     """
+    def model_for_fold(fold):
+        rotation = Rotation.from_rotvec(np.deg2rad(fold['rotation_vector_degrees'])).as_matrix()
+        shift = np.asarray(fold['translation_m'])
+        values = []
+        for camera in cameras:
+            value = copy.copy(camera)
+            value.optical = np.column_stack((rotation @ camera.optical[:, :3],
+                                             rotation @ camera.optical[:, 3]+shift))
+            values.append(value)
+        return values
+    return _prediction_comparison(cameras, tracks, hypothesis, model_for_fold)
+
+
+def _prediction_comparison(cameras, tracks, hypothesis, model_for_fold):
     base = {'applied_to_live_scanner': False, 'room_height_verified': False,
             'accepted_for_live_installation': False, 'factory_baseline_changed': False,
             'reference_height_used': False,
@@ -148,14 +162,7 @@ def prediction_comparison(cameras, tracks, hypothesis):
     for fold in hypothesis['folds']:
         if set(fold['held_out_frames']).intersection(fold['training_frames']):
             raise ValueError('Rig fit reused a prediction exposure')
-        rotation = Rotation.from_rotvec(np.deg2rad(fold['rotation_vector_degrees'])).as_matrix()
-        shift = np.asarray(fold['translation_m'])
-        values = []
-        for camera in cameras:
-            value = copy.copy(camera)
-            value.optical = np.column_stack((rotation @ camera.optical[:, :3],
-                                             rotation @ camera.optical[:, 3]+shift))
-            values.append(value)
+        values = model_for_fold(fold)
         for frame in fold['held_out_frames']:
             if frame in fold_for_frame:
                 raise ValueError('Rig prediction groups overlap')
