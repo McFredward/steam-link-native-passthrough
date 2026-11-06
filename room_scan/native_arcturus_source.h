@@ -41,7 +41,7 @@ class NativeArcturusSource {
     CaptureStats stats_;
     Json hint(const std::string& value)const{return {{"event","capture_hint"},{"message",value}};}
 public:
-    VR_IVRSystem_FnTable* system=nullptr;Json binding,diagnostics;std::string status,visionLibrary;bool pcMode=false;
+    VR_IVRSystem_FnTable* system=nullptr;Json binding,diagnostics;std::string status,visionLibrary;bool pcMode=false,areaSampling=false;
     std::function<Json()> sessionRecord=manualCameraSession;
     ~NativeArcturusSource(){stop();}
     bool active()const{return active_;}
@@ -58,17 +58,22 @@ public:
                 ||description_.at("reader_uid")!=getuid()||!description_.at("maps_read_only").get<bool>()
                 ||description_.at("camera_settings_changed").get<bool>()||description_.at("boot_changes").get<bool>())
                 throw std::runtime_error("room-capture-contract-invalid");
+            if(areaSampling&&(!description_.contains("sampling_modes")||!description_.at("sampling_modes").is_array()
+                ||std::find(description_.at("sampling_modes").begin(),description_.at("sampling_modes").end(),Json("area4-step4"))==description_.at("sampling_modes").end()))
+                throw std::runtime_error("Update the room camera reader to use filtered capture.");
             const auto& streams=description_.at("streams");std::array<bool,2> roles{};
             if(streams.size()!=2)throw std::runtime_error("room-stereo-inventory-invalid");
             for(const auto& stream:streams){const auto role=stream.at("role").get<std::string>();const int eye=role=="passthrough_left"?0:role=="passthrough_right"?1:-1;
                 if(eye<0||roles[unsigned(eye)]||!stream.at("kernel_role_verified").get<bool>())throw std::runtime_error("room-camera-eye-unverified");
                 roles[unsigned(eye)]=true;}
-            geometry_.configure(arcturusFactoryRig(),boundedJson("/persist/device_config.json"));
             poseHistory_.start(system);
             const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
-            do{prefetched_=client_.pair();if(!prefetched_[0].pixels.empty())break;std::this_thread::sleep_for(std::chrono::milliseconds(10));}
+            do{prefetched_=client_.pair("",areaSampling);if(!prefetched_[0].pixels.empty())break;std::this_thread::sleep_for(std::chrono::milliseconds(10));}
             while(std::chrono::steady_clock::now()<deadline);
             if(prefetched_[0].pixels.empty())throw std::runtime_error("room-camera-no-live-pair");
+            for(const auto& eye:prefetched_){const auto offset=arcturusSampleOffset(eye.metadata);
+                if(!offset||*offset!=(areaSampling?1.5f:0.f))throw std::runtime_error("Room pixel sampling is not verified.");}
+            geometry_.configure(arcturusFactoryRig(),boundedJson("/persist/device_config.json"),areaSampling?1.5f:0.f);
             binding={{"session_id",session},{"origin_id",origin},{"calibration_id",stableId(geometry_.descriptor.dump()+"eof-imx616-4360ns-v2-bounded-exposure")}};
             active_=true;sequence_=lastExposure_=0;status="manual-arcturus-stereo-ready";
             diagnostics["baseline_m"]=geometry_.baseline;diagnostics["reason"]=status;return true;
@@ -80,10 +85,12 @@ public:
         if(parked_)poseHistory_.start(system);
         parked_=false;
         auto eyes=std::move(prefetched_);prefetched_={};
-        {CaptureStats::Measure cost{stats_.costs[CaptureStats::PairRead]};if(eyes[0].pixels.empty())eyes=client_.pair(lastToken_);}
+        {CaptureStats::Measure cost{stats_.costs[CaptureStats::PairRead]};if(eyes[0].pixels.empty())eyes=client_.pair(lastToken_,areaSampling);}
         if(eyes[0].pixels.empty()){attempt.result=CaptureStats::NoPair;return {};}
         lastToken_=eyes[0].metadata.at("pair_token");
         for(const auto& eye:eyes){const auto& m=eye.metadata;
+            const auto offset=arcturusSampleOffset(m);
+            if(!offset||*offset!=geometry_.sourceSampleOffset)throw std::runtime_error("Room pixel sampling changed; arm capture again.");
             if(m.at("source_session")!=address_||m.at("producer_pid")!=description_.at("producer_pid")
                 ||m.at("producer_start_ticks")!=description_.at("producer_start_ticks"))throw std::runtime_error("Room camera producer changed; arm capture again");}
         const std::array<std::optional<ArcturusTiming>,2> timing{arcturusTiming(eyes[0].metadata),arcturusTiming(eyes[1].metadata)};
@@ -114,7 +121,9 @@ public:
             attempt.result=CaptureStats::Accepted;lastExposure_=center;++sequence_;
             return {{"event","stereo_observation"},{"schema","sfnp-room-stereo-v1"},{"binding",binding},{"sequence",sequence_},
                 {"exposure_ticks",center},{"pair_token",lastToken_},{"source_session",address_},{"width",616},{"height",616},
-                {"encoding","gray8-point-step4"},{"rig",geometry_.exportRig()},{"timing",times},{"poses",poses.exportSamples()},
+                {"encoding",areaSampling?"gray8-area4-step4":"gray8-point-step4"},
+                {"sampling",{{"step",4},{"area",{areaSampling?4:1,areaSampling?4:1}},{"center_offset",{geometry_.sourceSampleOffset,geometry_.sourceSampleOffset}}}},
+                {"rig",geometry_.exportRig()},{"timing",times},{"poses",poses.exportSamples()},
                 {"reference_head",reference},{"images",{cameraBase64(eyes[0].pixels),cameraBase64(eyes[1].pixels)}}};
         }
         std::array<ArcturusRectification::RectifiedImage,2> rectified;

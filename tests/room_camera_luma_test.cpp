@@ -8,10 +8,24 @@ int main(){try{
     auto layout=examineLuma(raw.data(),raw.size());check(!layout.packed10,"smooth NV12 bytes have no packed low-bit byte");
     copyLuma(raw.data(),raw.size(),layout,image);check(image.size()==616*616,"NV12 uses the entire 2464-pixel image");
     for(unsigned y=0;y<616;++y)for(unsigned x=0;x<616;++x)check(image[y*616+x]==raw[std::size_t(y*4)*pitch+x*4],"NV12 pixel and stride mapping");
+    for(unsigned y=0;y<height;++y)for(unsigned x=0;x<2464;++x)raw[std::size_t(y)*pitch+x]=((x+y)&1)?200:20;
+    copyLuma(raw.data(),raw.size(),layout,image);check(image.front()==20&&image.back()==20,"point sampling aliases the checkerboard");
+    copyArea4Luma(raw.data(),raw.size(),layout,image);
+    for(auto byte:image)check(byte==110,"area sampling retains mean energy at every phase");
+    std::fill(raw.begin(),raw.end(),0);raw[0]=255;raw[std::size_t(height-1)*pitch+2463]=255;
+    copyArea4Luma(raw.data(),raw.size(),layout,image);
+    check(image.front()==16&&image.back()==16,"area sampling includes all sixteen pixels and final row/column");
+    check(image[1]==0&&image[616]==0,"area sampling does not blend neighbouring output cells");
+    for(const auto* source:{raw.data(),static_cast<std::uint8_t*>(nullptr)}){
+        bool rejected=false;try{copyArea4Luma(source,10,layout,image);}catch(const std::runtime_error&){rejected=true;}
+        check(rejected,"area sampling refuses incomplete or missing source storage");
+    }
     for(unsigned y=0;y<height;++y)for(unsigned x=0;x<2464;x+=5){
         auto* p=raw.data()+std::size_t(y)*pitch+x;for(unsigned i=0;i<4;++i)p[i]=100;p[4]=((x/5+y)&1)?0:255;
     }
     layout=examineLuma(raw.data(),raw.size());check(layout.packed10,"packed low bits produce a distinct periodic signature");
+    bool areaRejected=false;try{copyArea4Luma(raw.data(),raw.size(),layout,image);}catch(const std::runtime_error&){areaRejected=true;}
+    check(areaRejected,"area sampling cannot reinterpret packed RAW10 as NV12");
     copyLuma(raw.data(),raw.size(),layout,image);check(image.size()==493*616,"RAW10 diagnostic has its own extent");
     for(auto byte:image)check(byte==100,"RAW10 high bytes survive exactly");
     bool rejected=false;try{copyLuma(raw.data(),10,layout,image);}catch(const std::runtime_error&){rejected=true;}

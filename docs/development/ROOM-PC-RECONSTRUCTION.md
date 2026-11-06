@@ -790,3 +790,43 @@ streaming map, independently qualified live guidance, a Windows CUDA runtime
 package or a candidate-18 installer. The accepted local grid/pulse, X and normal
 installer remain integration requirements; candidate 17 is still the public
 installer payload.
+
+### Matched filtered-input diagnostic
+
+The original reader decimates the native NV12 luma image by selecting one pixel
+from each 4-by-4 cell. A new `latest_area4` local API command averages all sixteen
+pixels of that same cell instead. Both samplings are copied twice from the same
+read-only source buffer, together with unchanged metadata and queue ownership
+checks. The existing immutable stereo snapshot and its exposure token identify
+both versions. RAW10, incomplete buffers, mixed sampling and missing or incorrect
+pixel-center declarations are refused. No camera settings or producer are changed.
+
+Area samples have native coordinates `(4*x + 1.5, 4*y + 1.5)`, whereas legacy
+point samples have `(4*x, 4*y)`. This difference is explicit in the native
+projection, historical row lookup, observation encoding, binding and Python
+measurement tools. Treating both versions as the same pixel center would bias
+depth, especially with the two differently rolled physical camera images.
+The native source still defaults to point sampling; these additions do not
+silently change the shipped candidate-17 scanner.
+
+A coordinated temporary Frame diagnostic recorded 21 physical stereo exposures
+over 19.1 seconds, with both samplings of each exact exposure. Images remain
+private. The temporary reader was stopped, owned files removed and its SSH
+connection closed. Steam, SteamVR and Room Setup service generations remained
+unchanged. The capture, stop and removal checks passed without boot integration.
+
+Using the same 16 training exposures, fixed neural model, training-only rig
+hypothesis and unchanged bilateral/photometric gates, filtered input increases
+the median qualifying stereo-pixel count from 7,842 to 28,537. This comparison
+does not establish physical surface accuracy. The factory-geometry audit still
+fails its held-out reprojection and floor/ceiling-support gates; no qualified
+room-height estimate is available. The separately estimated common rig transform
+remains a private diagnostic hypothesis and is not applied by the installer.
+
+The first real-recording surface-Gaussian replay also remains unqualified:
+held-out views have insufficient coverage and no measured floor/ceiling pair.
+A small synthetic planar pass must not be presented as a successful room scan.
+Further real replay uses the filtered input and peripheral virtual views while
+retaining exposure-disjoint evaluation and the independent room-height reference.
+The camera kernel/API suites now share the already prepared native CI toolchain;
+all seven actual guard/decoding suites and host/ARM builds remain required.

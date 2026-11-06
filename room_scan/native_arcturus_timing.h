@@ -4,6 +4,18 @@
 #include "native_camera.h"
 #include <optional>
 namespace room_native {
+inline std::optional<float> arcturusSampleOffset(const Json& frame){
+    if(frame.value("width",0)!=616||frame.value("height",0)!=616
+        ||frame.value("source_pitch_bytes",0)!=3328||frame.value("source_height",0)!=2464)return std::nullopt;
+    const auto encoding=frame.value("encoding","");
+    if(encoding=="nv12-u8-luma-candidate"){
+        if(frame.contains("sampling")&&frame.at("sampling")!=Json({{"step",4},{"area",{1,1}},{"center_offset",{0.,0.}}}))return std::nullopt;
+        return 0.f;
+    }
+    if(encoding=="nv12-u8-area4-candidate"&&frame.contains("sampling")
+        &&frame.at("sampling")==Json({{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}}))return 1.5f;
+    return std::nullopt;
+}
 struct ArcturusTiming {
     std::uint64_t firstRowCenter=0,lastRowCenter=0,center=0,integration=0,line=4360,uncertainty=0,minimumIntegration=0,maximumIntegration=0;
     std::uint64_t atRow(float row)const{
@@ -12,7 +24,7 @@ struct ArcturusTiming {
     }
 };
 inline std::optional<ArcturusTiming> arcturusTiming(const Json& frame){
-    if(frame.value("encoding","")!="nv12-u8-luma-candidate"||frame.value("width",0)!=616||frame.value("height",0)!=616
+    if(!arcturusSampleOffset(frame)||frame.value("width",0)!=616||frame.value("height",0)!=616
         ||frame.value("source_pitch_bytes",0)!=3328||frame.value("source_height",0)!=2464
         ||!frame.value("queue_mapping_exact",false)||!frame.value("copy_stable",false)||!frame.value("kernel_role_verified",false))return std::nullopt;
     if(!frame.contains("capture_metadata")||!frame["capture_metadata"].is_object()

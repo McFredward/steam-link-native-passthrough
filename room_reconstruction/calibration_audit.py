@@ -18,7 +18,7 @@ def rotation_hypothesis(cameras, pairs):
         oa, da, va = a.rays(pa)
         ob, _, vb = b.rays(pb)
         rb, _ = b.row_transforms(pb)
-        local, valid = unproject_kb(pb*4, b.intrinsics, b.coefficients)
+        local, valid = unproject_kb(pb*4+b.sample_offset, b.intrinsics, b.coefficients)
         normal = np.cross(ob-oa, da)
         norm = np.linalg.norm(normal, axis=1)
         normal /= np.maximum(norm, 1e-15)[:, None]

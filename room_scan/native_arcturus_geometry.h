@@ -13,7 +13,7 @@ class ArcturusRectification {
     std::array<Lens,2> lenses_{};std::array<std::vector<Pixel>,2> maps_;
 public:
     struct RectifiedImage {std::vector<std::uint8_t> pixels,support;std::vector<V3> origins;};
-    Mat headFromRectified;float baseline=0;Json descriptor;
+    Mat headFromRectified;float baseline=0,sourceSampleOffset=0;Json descriptor;
     std::array<std::vector<std::uint8_t>,2> support;
     Json exportRig()const{
         const auto matrix=[](const Mat& m){Json out=Json::array();for(unsigned r=0;r<3;++r)for(unsigned c=0;c<4;++c)out.push_back(m.m[r][c]);return out;};
@@ -28,11 +28,14 @@ public:
         const float scale=r>1e-8f?distorted/r:1.f/ray.z;
         return {in[0]*ray.x*scale+in[2],in[1]*ray.y*scale+in[3]};
     }
-    void configure(const Json& rig,const Json& device){
+    void configure(const Json& rig,const Json& device,float sampleOffset=0){
+        if(sampleOffset!=0&&sampleOffset!=1.5f)throw std::runtime_error("Unsupported camera sampling center");
+        sourceSampleOffset=sampleOffset;
         const auto& cameras=rig.at("cameras");
         if(!cameras.is_array()||cameras.size()>8)throw std::runtime_error("Unsupported Arcturus calibration inventory");
         const Mat headFromCad=inverse(factoryPose(device.at("head"),1));std::array<bool,2> found{};
         descriptor={{"source_extent",{2464,2464}},{"sample_step",4},{"source_pitch",3328},{"rectified_extent",{320,240}},
+            {"sample_center_offset",{sourceSampleOffset,sourceSampleOffset}},
             {"rectified_intrinsics",{220.,220.,159.5,119.5}},{"cameras",Json::array()},{"head",device.at("head")}};
         for(const auto& camera:cameras){
             const auto role=camera.at("sourceCamera").get<std::string>();const int index=role=="passthrough_left"?0:role=="passthrough_right"?1:-1;
@@ -63,7 +66,7 @@ public:
                 const V3 ray=x*((float(u)-159.5f)/220)+down*((float(v)-119.5f)/220)+z;
                 const V3 c={dot(column(lens.optical,0),ray),dot(column(lens.optical,1),ray),dot(column(lens.optical,2),ray)};
                 const auto uv=project({lens.fx,lens.fy,lens.cx,lens.cy},lens.k,c);
-                const float a=uv[0]/4,b=uv[1]/4;
+                const float a=(uv[0]-sourceSampleOffset)/4,b=(uv[1]-sourceSampleOffset)/4;
                 if(a>=0&&b>=0&&a<615&&b<615)map[v*320+u]={a,b};
             }
             support[eye].assign(320*240,0);
@@ -95,16 +98,16 @@ public:
                 +column(headFromRectified,1)*(-(float(v)-119.5f)/220)+column(headFromRectified,2)*(-1);
             const V3 world=transform(reference,ray)-position(reference);
             for(unsigned iteration=0;iteration<2;++iteration){
-                const Mat& row=rowPoses[unsigned(std::clamp(uv.v*4+.5f,0.f,2463.f))];
+                const Mat& row=rowPoses[unsigned(std::clamp(uv.v*4+sourceSampleOffset+.5f,0.f,2463.f))];
                 const V3 head={dot(column(row,0),world),dot(column(row,1),world),dot(column(row,2),world)};
                 const V3 optical={dot(column(lens.optical,0),head),dot(column(lens.optical,1),head),dot(column(lens.optical,2),head)};
-                const auto next=project({lens.fx,lens.fy,lens.cx,lens.cy},lens.k,optical);uv={next[0]/4,next[1]/4};
+                const auto next=project({lens.fx,lens.fy,lens.cx,lens.cy},lens.k,optical);uv={(next[0]-sourceSampleOffset)/4,(next[1]-sourceSampleOffset)/4};
                 if(uv.u<0||uv.v<0||uv.u>=615||uv.v>=615)break;
             }
             if(uv.u<0||uv.v<0||uv.u>=615||uv.v>=615)continue;
             const unsigned x=unsigned(uv.u),y=unsigned(uv.v);const float a=uv.u-x,b=uv.v-y;const auto p=std::size_t(y)*616+x;
             out.pixels[index]=std::uint8_t(std::clamp((1-b)*((1-a)*input[p]+a*input[p+1])+b*((1-a)*input[p+616]+a*input[p+617]),0.f,255.f));valid[index]=1;
-            out.origins[index]=transform(rowPoses[unsigned(std::clamp(uv.v*4+.5f,0.f,2463.f))],position(lens.optical));
+            out.origins[index]=transform(rowPoses[unsigned(std::clamp(uv.v*4+sourceSampleOffset+.5f,0.f,2463.f))],position(lens.optical));
         }
         for(int v=3;v<237;++v)for(int u=3;u<317;++u){bool supported=true;
             for(int dy=-3;dy<=3&&supported;++dy)for(int dx=-3;dx<=3;++dx)if(!valid[std::size_t(v+dy)*320+u+dx]){supported=false;break;}

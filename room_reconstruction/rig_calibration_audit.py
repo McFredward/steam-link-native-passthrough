@@ -22,7 +22,7 @@ def _distribution(values):
 
 
 def _camera_factors(camera, pixels):
-    local, valid = unproject_kb(pixels*4, camera.intrinsics, camera.coefficients)
+    local, valid = unproject_kb(pixels*4+camera.sample_offset, camera.intrinsics, camera.coefficients)
     optical_rotation, origin = camera.row_transforms(pixels)
     head_rotation = optical_rotation @ camera.optical[:, :3].T
     head_position = origin-np.einsum('nij,j->ni', head_rotation, camera.optical[:, 3])
