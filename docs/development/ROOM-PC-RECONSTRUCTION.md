@@ -1163,3 +1163,22 @@ this primitive neither evicts a region nor declares an unseen hole measured.
 Four new analytic controls exercise metric correction against a wrong prior,
 growth followed by training another region, atomic refusal and neutral unknown
 priors. They run with the existing surface controls on Windows and Linux.
+
+### Preparing larger private PC dependencies
+
+The current runtime preparer now extracts verified wheel members in 1 MiB
+chunks and hashes each completed file while writing. It no longer allocates an
+entire CUDA DLL in memory. Identical namespace members can be shared within the
+same owned staging directory; conflicting inputs cannot overwrite an earlier
+completed member. Cancellation is checked between chunks. Failure removes only
+owned preparation files, preserving any previously complete runtime.
+
+The ordinary inference manifest, archive limits and readiness conditions remain
+unchanged. The helper exposes explicit extraction budgets for a future separate
+Gaussian runtime. The inspected Windows Torch wheel includes a 903 MB DLL and
+expands to 4.51 GB; neither fits the old inference profile. A separate manifest,
+disk budget, process/library isolation and actual warmup are still required.
+Torch has not been added to the normal installer. Five archive controls cover
+bounded reads, distinct profile budgets, duplicate conflicts, unsafe members
+and cancellation without changing an existing runtime. The current Windows
+inference runtime also retains its actual DLL-load/model-execution CI check.
