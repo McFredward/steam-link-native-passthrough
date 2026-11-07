@@ -6,6 +6,7 @@
 #include "room_scan/camera_api/stereo_snapshot.h"
 #include "room_scan/camera_api/exposure_registers.h"
 #include "room_scan/camera_api/owner_lifetime.h"
+#include "room_scan/camera_api/metadata_observations.h"
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -27,20 +28,30 @@ int main(int argc,char** argv){
             auto description=frames.describe();description["setup_privileges_dropped"]=true;description["reader_uid"]=getuid();
             description["manual_owner_monitored"]=owner.monitored();description["reader_pid"]=getpid();
             description["sampling_modes"]={"point-step4","area4-step4","area2-step2-tiled"};
+            description["diagnostic_metadata_available"]=true;
             if(!serve){std::puts(description.dump().c_str());return 0;}
             LocalApi api;description["abstract_socket"]=api.address();std::puts(description.dump().c_str());std::fflush(stdout);
             signal(SIGINT,stop);signal(SIGTERM,stop);signal(SIGHUP,stop);signal(SIGPIPE,SIG_IGN);
             StereoSnapshots<BorrowedFrames::Image> snapshots;
+            MetadataObservations metadataObservations;
             std::optional<BorrowedFrames::Image> areaReply;
             while(!stopped&&!api.stopping()&&frames.alive()&&owner.alive()){
                 const auto events=trace.read(producer.pid,0);exposure.read(exposureTrace,producer.pid);
-                for(const auto& event:events)if(auto image=frames.copy(event,api.framesRequested(),api.highResolutionRequested())){
+                for(const auto& event:events){
+                    Json observation;
+                    auto image=frames.copy(event,api.framesRequested(),api.highResolutionRequested(),api.metadataRequested()?&observation:nullptr);
+                    if(observation.is_object()){
+                        observation["source_session"]=api.address();const auto& timing=observation.at("capture_metadata");
+                        if(timing.is_object())observation["observed_exposure_registers"]=exposure.settings(observation.at("role"),timing.at("sof_raw_ns"),timing.at("eof_raw_ns"),timing.at("previous_sof_raw_ns"));
+                        metadataObservations.add(std::move(observation),monotonicNs());
+                    }
+                    if(!image)continue;
                     image->metadata["source_session"]=api.address();
                     const auto& timing=image->metadata.at("capture_metadata");
                     if(timing.is_object())image->metadata["observed_exposure_registers"]=exposure.settings(image->metadata.at("role"),timing.at("sof_raw_ns"),timing.at("eof_raw_ns"),timing.at("previous_sof_raw_ns"));
                     snapshots.add(std::move(*image));
                 }
-                api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["high_resolution_reads_active"]=api.highResolutionRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},
+                api.poll([&](){auto current=description;current["pixel_reads_active"]=api.framesRequested();current["high_resolution_reads_active"]=api.highResolutionRequested();current["diagnostic_metadata_reads_active"]=api.metadataRequested();current["counters"]=frames.describe()["counters"];current["exposure_trace"]=exposure.diagnostics();current["completion_trace"]=trace.diagnostics();return current;},
                     [&](const Json& request)->const BorrowedFrames::Image*{
                         const auto* image=snapshots.latest(request,monotonicNs());
                         if(!image)return nullptr;
@@ -60,7 +71,8 @@ int main(int argc,char** argv){
                         areaReply->metadata["encoding"]="nv12-u8-area4-candidate";
                         areaReply->metadata["sampling"]={{"step",4},{"area",{4,4}},{"center_offset",{1.5,1.5}}};
                         return &*areaReply;
-                    },[&](){return snapshots.pair(monotonicNs());});
+                    },[&](){return snapshots.pair(monotonicNs());},
+                    [&](std::uint64_t after){return metadataObservations.next(after,monotonicNs());});
                 api.wait();
             }
             return 0;

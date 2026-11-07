@@ -6,8 +6,20 @@
 namespace room_camera_api {
 class ExposureRegisters {
     struct Transfer {unsigned address=0;std::vector<std::uint8_t> bytes;std::uint64_t started=0;};
-    struct Setting {std::uint64_t released=0,stableSince=0;unsigned coarse=0;};
-    struct Anchor {std::uint64_t released=0;unsigned minimum=0,maximum=0;};
+    struct Setting {std::uint64_t released=0,earliest=0,stableSince=0;unsigned coarse=0;};
+    struct Anchor {
+        struct Bound {std::uint64_t earliest;unsigned minimum,maximum;};
+        std::uint64_t released=0;std::deque<Bound> history;
+        void add(std::uint64_t earliest,unsigned coarse){
+            const auto minimum=history.empty()?coarse:std::min(history.back().minimum,coarse);
+            const auto maximum=history.empty()?coarse:std::max(history.back().maximum,coarse);
+            history.push_back({earliest,minimum,maximum});if(history.size()>128)history.pop_front();
+        }
+        const Bound* at(std::uint64_t eof)const{
+            const Bound* found=nullptr;for(const auto& value:history)if(value.earliest<=eof)found=&value;
+            return found;
+        }
+    };
     struct Eye {bool hold=false;unsigned mask=0,coarse=0;std::deque<Setting> history;std::deque<Anchor> anchors;};
     std::map<unsigned,Transfer> pending_;std::array<Eye,2> eyes_{};
     std::uint64_t successful_=0,failed_=0;
@@ -25,8 +37,8 @@ class ExposureRegisters {
                     eye.hold=false;
                     if(eye.mask!=3||!eye.coarse){eye.history.clear();eye.anchors.clear();continue;}
                     const auto stable=eye.history.empty()||eye.history.back().coarse!=eye.coarse?end:eye.history.back().stableSince;
-                    for(auto& anchor:eye.anchors){anchor.minimum=std::min(anchor.minimum,eye.coarse);anchor.maximum=std::max(anchor.maximum,eye.coarse);}
-                    eye.history.push_back({end,stable,eye.coarse});if(eye.history.size()>128)eye.history.pop_front();
+                    for(auto& anchor:eye.anchors)anchor.add(transfer.started,eye.coarse);
+                    eye.history.push_back({end,transfer.started,stable,eye.coarse});if(eye.history.size()>128)eye.history.pop_front();
                 }else eye=Eye{};
             }else if(reg==0x0202||reg==0x0203){
                 if(!eye.hold){eye=Eye{};continue;}
@@ -71,14 +83,21 @@ public:
         const Setting* selected=nullptr;for(const auto& s:history)if(s.released<sof)selected=&s;
         if(!selected)return nullptr;
         bool unchanged=true;unsigned groups=0;
-        for(const auto& s:history)if(s.released>=selected->stableSince&&s.released<=eof){++groups;if(s.coarse!=selected->coarse)unchanged=false;}
+        for(const auto& s:history)if(s.released>=selected->stableSince){
+            if(s.released<=eof)++groups;
+            if(s.earliest<=eof&&s.coarse!=selected->coarse)unchanged=false;
+        }
         Json result={{"coarse_integration_lines",selected->coarse},{"group_release_raw_ns",selected->released},
+            {"group_release_start_raw_ns",selected->earliest},
             {"same_value_since_raw_ns",selected->stableSince},{"same_value_group_count",groups},
             {"unchanged_through_eof",unchanged},{"successful_i2c_result",true},
             {"frame_latch_verified",false}};
         // An earlier settled cohort establishes a known sensor state. During
         // auto-exposure, retain every successfully written value since that
-        // anchor. Their envelope bounds the exposure without claiming which
+        // anchor through this frame's EOF. A later write cannot affect an
+        // earlier image. Include a release transfer that starts before EOF
+        // even if its completion is later; its exact latch time is unknown.
+        // This envelope bounds the exposure without claiming which
         // group latched to this frame. Unknown/failed/mode-changing writes have
         // already cleared this history; no earlier authority survives them.
         if(previous&&previous<sof&&sof-previous>=14000000u&&sof-previous<=40000000u){
@@ -89,14 +108,15 @@ public:
                 if(i-first>=2&&candidate.released-history[first].released>=2*period)anchor=&candidate;
             }
             if(anchor&&(eye.anchors.empty()||anchor->released>eye.anchors.back().released)){
-                Anchor known{anchor->released,anchor->coarse,anchor->coarse};
-                for(const auto& s:history)if(s.released>=known.released){known.minimum=std::min(known.minimum,s.coarse);known.maximum=std::max(known.maximum,s.coarse);}
+                Anchor known{anchor->released,{}};
+                for(const auto& s:history)if(s.released>=known.released)known.add(s.earliest,s.coarse);
                 eye.anchors.push_back(known);while(eye.anchors.size()>8)eye.anchors.pop_front();
             }
             const Anchor* known=nullptr;for(const auto& item:eye.anchors)if(item.released<sof)known=&item;
-            if(known&&selected->released<sof&&sof-selected->released<=2*period){
+            const auto* bound=known?known->at(eof):nullptr;
+            if(bound&&selected->released<sof&&sof-selected->released<=2*period){
                 result["envelope_verified"]=true;result["envelope_anchor_raw_ns"]=known->released;
-                result["envelope_min_coarse"]=known->minimum;result["envelope_max_coarse"]=known->maximum;
+                result["envelope_min_coarse"]=bound->minimum;result["envelope_max_coarse"]=bound->maximum;
             }
         }
         return result;
