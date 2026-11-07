@@ -168,8 +168,10 @@ class SurfaceOptimizer:
                     'metric_constraint_rays': 0,
                     'candidate_overflow_rays': int(view.overflow.sum())}
         self.model.zero_grad(set_to_none=True)
-        rendered = self.model.render(view.origins[eligible], view.directions[eligible], view.candidates[eligible])
-        ids = rendered['candidate_ids'][(rendered['weights'] > 1e-5) & (rendered['candidate_ids'] >= 0)].unique()
+        rendered = self.model.render(view.origins[eligible], view.directions[eligible], view.candidates[eligible],
+                                     minimum_training_transmittance=.01)
+        ids = rendered['candidate_ids'][(rendered['weights'] > 1e-5) & (rendered['transmittance'] >= .01)
+                                        & (rendered['candidate_ids'] >= 0)].unique()
         if not len(ids):
             return {'updated': False, 'disks_updated': 0, 'rays_used': 0,
                     'metric_constraint_rays': 0,

@@ -65,7 +65,8 @@ class SurfaceGaussians(nn.Module):
         v = F.normalize(axes[..., 1, :]-(axes[..., 1, :]*u).sum(-1, keepdim=True)*u, dim=-1)
         return u, v, torch.linalg.cross(u, v)
 
-    def render(self, origins, directions, candidates, *, near=.2, far=6., background=0.):
+    def render(self, origins, directions, candidates, *, near=.2, far=6., background=0.,
+               minimum_training_transmittance=0.):
         """Composite exact ray/disk intersections, in per-ray depth order.
 
         Candidate -1 means no disk. Truncation/overflow must be reported by the
@@ -76,7 +77,7 @@ class SurfaceGaussians(nn.Module):
         p, k = candidates.shape
         if (not bounded_ray_work(p, k) or candidates.dtype != torch.int64
                 or origins.shape != (p, 3) or directions.shape != (p, 3)
-                or not .01 <= near < far <= 100):
+                or not .01 <= near < far <= 100 or not 0 <= minimum_training_transmittance <= .05):
             raise ValueError('Ray/surface rendering exceeds its explicit batch budget')
         if candidates.device != self.means.device or origins.device != self.means.device or directions.device != self.means.device:
             raise ValueError('Ray/surface tensors must share their selected device')
@@ -105,6 +106,15 @@ class SurfaceGaussians(nn.Module):
         facing = facing.gather(1, order[..., None].expand(-1, -1, 3))
         transparency = 1-alpha
         prefix = torch.cat((torch.ones_like(alpha[:, :1]), transparency[:, :-1]), 1).cumprod(1)
+        if minimum_training_transmittance and torch.is_grad_enabled():
+            # Stop hidden ray/disk pairs from training geometry or appearance.
+            # A disk can remain visible in a different ray in this same batch;
+            # a per-disk update mask alone cannot isolate these gradients.
+            visible = (prefix.detach() >= minimum_training_transmittance).to(alpha.dtype)
+            for value in (alpha, depth, color, facing):
+                if value.requires_grad:
+                    mask = visible[..., None] if value.ndim == 3 else visible
+                    value.register_hook(lambda gradient, mask=mask: gradient*mask)
         weights = prefix*alpha
         coverage = weights.sum(1)
         rendered = (weights[..., None]*color).sum(1)+(1-coverage)[:, None]*background
@@ -124,4 +134,5 @@ class SurfaceGaussians(nn.Module):
                 'median_depth': median_depth, 'normal': normal,
                 'distortion': distortion, 'normal_variance': normal_variance,
                 'weights': weights, 'intersection_depth': depth,
+                'transmittance': prefix,
                 'candidate_ids': candidates.gather(1, order)}
