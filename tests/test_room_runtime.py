@@ -27,7 +27,14 @@ class RuntimeExtractionTests(unittest.TestCase):
         path = self.root/name
         with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
             for filename, data in members:
-                archive.writestr(filename, data)
+                # ZipInfo normalizes the local separator on Windows. Preserve
+                # the exact hostile archive name so both platforms test it.
+                member = filename
+                if isinstance(filename, str):
+                    member = zipfile.ZipInfo('fixture')
+                    member.filename = filename
+                    member.compress_type = zipfile.ZIP_DEFLATED
+                archive.writestr(member, data)
         return path
 
     def test_streaming_large_members_and_identical_namespace_duplicates(self):
