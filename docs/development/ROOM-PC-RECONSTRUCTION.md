@@ -1288,3 +1288,12 @@ reliably remove the conflicting foreground. Next work needs source-consistent
 association and retirement of contradicted provisional geometry, while keeping
 independently accepted regions and real unknown gaps intact. More points or a
 new model alone is not a demonstrated fix.
+
+A subsequent support audit retains all 28 comparison witnesses: 13 have a
+direct left/right pair, and just one has direct pairs in at least two
+exposures. The worst comparison point uses three temporal observations from
+only the right eye. Its low reprojection residual does not establish an
+independent physical point on an occluding furniture edge. Keep that failure
+in reports, but do not treat it as survey truth or fit away the disagreement
+without another physical reference. The measured room height remains held
+out; an additional real object dimension has been requested for validation.
