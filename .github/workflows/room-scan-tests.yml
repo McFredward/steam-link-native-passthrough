@@ -33,6 +33,22 @@ on:
 permissions:
   contents: read
 jobs:
+  surface-windows-runtime:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/room-surface-runtime
+          key: windows-private-surface-${{ hashFiles('packaging/room-surface-runtime.json') }}
+      - name: Verify the complete private CUDA wheel in an isolated Gaussian process
+        run: python -B tools/check_room_surface_runtime.py --cache "${{ runner.temp }}/room-surface-runtime" --cpu-development
+      - name: Remove owned CI download duplicates before saving the prepared runtime
+        run: Remove-Item -LiteralPath "${{ runner.temp }}/room-surface-runtime/downloads" -Recurse -Force
   surface-gaussian-reference:
     strategy:
       matrix:
