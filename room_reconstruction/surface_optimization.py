@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import math
 
 import torch
-from .surface_gaussians import bounded_ray_work
+from .surface_gaussians import SurfaceGaussians, bounded_ray_work
 
 
 @dataclass(frozen=True)
@@ -62,13 +62,16 @@ class SurfaceOptimizer:
     """
 
     def __init__(self, model, *, max_displacement_m=.3, optimize_normals=True, random_background=True,
-                 seed_directions=None):
-        if not .01 <= max_displacement_m <= .5:
-            raise ValueError('Invalid surface optimization displacement budget')
+                 seed_directions=None, seed_position_sigma_m=None, seed_position_weight=.05,
+                 metric_weight=.01):
+        if (not .01 <= max_displacement_m <= .5 or not 0 <= seed_position_weight <= 1.
+                or not 0 < metric_weight <= 1.):
+            raise ValueError('Invalid surface optimization budget or loss weights')
         self.model = model
         self.seed_means = model.means.detach().clone()
         self.seed_normals = model.basis()[2].detach().clone()
         self.seed_directions = self.seed_normals
+        self._ray_seeded = seed_directions is not None
         self.tangent_weight = .01
         if seed_directions is not None:
             value = torch.as_tensor(seed_directions, dtype=model.means.dtype, device=model.means.device)
@@ -79,6 +82,14 @@ class SurfaceOptimizer:
             # lateral localization is much stronger evidence than its depth;
             # retain a soft one-centimetre transverse uncertainty, not a plane.
             self.tangent_weight = 100.
+        # A proposal's position prior is a regularizer, not a measured depth,
+        # a confidence estimate or permission to publish physical geometry.
+        # Its uncertainty never shrinks merely because more images were fitted.
+        self.seed_position_sigma_m = self._position_sigmas(model, seed_position_sigma_m)
+        if torch.any(self.seed_position_sigma_m > 0) and not self._ray_seeded:
+            raise ValueError('Position priors require actual source-ray directions')
+        self.seed_position_weight = seed_position_weight
+        self.metric_weight = metric_weight
         self.max_displacement_m = max_displacement_m
         self.optimize_normals = optimize_normals
         self.random_background = random_background
@@ -88,6 +99,66 @@ class SurfaceOptimizer:
         self.rates = {'means': .002, 'axes': .0005, 'log_scales': .001,
                       'color_logits': .02, 'opacity_logits': .005}
         self.moments = {name: (torch.zeros_like(p), torch.zeros_like(p)) for name, p in model.named_parameters()}
+
+    @staticmethod
+    def _position_sigmas(model, value):
+        if value is None:
+            return torch.zeros(len(model.means), dtype=model.means.dtype, device=model.means.device)
+        try:
+            value = torch.as_tensor(value, dtype=model.means.dtype, device=model.means.device)
+            value = torch.broadcast_to(value, (len(model.means),)).detach().clone()
+        except (RuntimeError, TypeError, ValueError) as error:
+            raise ValueError('Invalid seed position prior extent') from error
+        if (not torch.isfinite(value).all()
+                or torch.any(~((value == 0) | ((value >= .005) & (value <= .5))))):
+            raise ValueError('Invalid seed position prior uncertainty')
+        return value
+
+    @torch.no_grad()
+    def extend(self, addition, *, seed_directions=None, seed_position_sigma_m=None):
+        """Return a grown model with stable old IDs and unchanged optimizer state.
+
+        The caller admits observations, bounds its active region and invalidates
+        candidate caches on this shape change. This inserts no inferred hull,
+        retires no old disk and does not qualify the new disks as measurements.
+        All validation and allocations precede replacing the current model.
+        """
+        old = self.model
+        if (not isinstance(addition, SurfaceGaussians) or len(old.means)+len(addition.means) > 200000
+                or addition.means.device != old.means.device or addition.means.dtype != old.means.dtype
+                or addition.color_logits.shape[1] != old.color_logits.shape[1]
+                or (seed_directions is not None) != self._ray_seeded):
+            raise ValueError('New disks disagree with the active surface model')
+        normal = addition.basis()[2].detach()
+        direction = normal
+        if seed_directions is not None:
+            direction = torch.as_tensor(seed_directions, dtype=old.means.dtype, device=old.means.device)
+            if (direction.shape != addition.means.shape or not torch.isfinite(direction).all()
+                    or torch.any(torch.linalg.vector_norm(direction, dim=-1) < .9)):
+                raise ValueError('Invalid added source-ray directions')
+            direction = torch.nn.functional.normalize(direction, dim=-1).detach().clone()
+        sigma = self._position_sigmas(addition, seed_position_sigma_m)
+        if torch.any(sigma > 0) and not self._ray_seeded:
+            raise ValueError('Position priors require actual source-ray directions')
+        grown = SurfaceGaussians(torch.cat((old.means, addition.means)),
+            torch.cat((old.basis()[2], normal)),
+            torch.cat((old.log_scales.exp(), addition.log_scales.exp())),
+            torch.cat((old.color_logits.sigmoid(), addition.color_logits.sigmoid())),
+            torch.cat((old.opacity_logits.sigmoid(), addition.opacity_logits.sigmoid())))
+        for name, parameter in grown.named_parameters():
+            parameter.copy_(torch.cat((getattr(old, name), getattr(addition, name))))
+        seed_means = torch.cat((self.seed_means, addition.means.detach()))
+        seed_normals = torch.cat((self.seed_normals, normal))
+        directions = torch.cat((self.seed_directions, direction))
+        sigmas = torch.cat((self.seed_position_sigma_m, sigma))
+        counts = torch.cat((self.counts, torch.zeros(len(addition.means), dtype=self.counts.dtype, device=self.counts.device)))
+        moments = {name: tuple(torch.cat((value, torch.zeros_like(getattr(addition, name)))) for value in pair)
+                   for name, pair in self.moments.items()}
+        self.model = grown
+        self.seed_means, self.seed_normals = seed_means, seed_normals
+        self.seed_directions, self.seed_position_sigma_m = directions, sigmas
+        self.counts, self.moments = counts, moments
+        return grown
 
     def step(self, view):
         view.validate(self.model)
@@ -127,7 +198,7 @@ class SurfaceOptimizer:
             metric_rays = int(known.sum())
             if metric_rays:
                 residual = (rendered['depth'][known]-measured[known])/sigma[known]
-                loss = loss+.01*(residual.square()+1e-5).sqrt().mean()
+                loss = loss+self.metric_weight*(residual.square()+1e-5).sqrt().mean()
         if view.surface_neighbors is not None and self.steps >= 100:
             # Surface normals derived from the rendered metric depth must agree
             # with the disks' normals. Links come only from caller-qualified
@@ -146,6 +217,10 @@ class SurfaceOptimizer:
                 predicted_normal = torch.nn.functional.normalize(rendered['normal'][links[usable, 0]], dim=-1)
                 if len(normal):
                     loss = loss+.05*(1-abs((normal*predicted_normal).sum(-1))).clamp_min(0).mean()
+        prior = self.seed_position_sigma_m[ids] > 0
+        if self.seed_position_weight and prior.any():
+            axial = (shift[prior]*self.seed_directions[ids[prior]]).sum(-1)
+            loss = loss+self.seed_position_weight*(axial/self.seed_position_sigma_m[ids[prior]]).square().mean()
         loss.backward()
         # No partial parameter/momentum update is allowed after invalid gradients.
         if not torch.isfinite(loss) or any(p.grad is not None and not torch.isfinite(p.grad[ids]).all()

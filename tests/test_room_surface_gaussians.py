@@ -144,6 +144,103 @@ class SurfaceGaussianTests(unittest.TestCase):
             for name, value in model.state_dict().items():
                 self.assertTrue(torch.equal(value, frozen[name]))
 
+    def test_metric_depth_overcomes_a_wrong_neural_position_prior(self):
+        model = SurfaceGaussians([[0., 0., -2.12]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        optimizer = SurfaceOptimizer(model, seed_directions=[[0., 0., -1.]],
+                                     seed_position_sigma_m=.10, metric_weight=.1)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[0., 0., -1.]]),
+            torch.tensor([[.7]]), torch.tensor([[0]]), torch.tensor([True]), torch.tensor([False]))
+        original_sigma = optimizer.seed_position_sigma_m.clone()
+        for _ in range(10):
+            result = optimizer.step(view)
+        self.assertEqual(result['metric_constraint_rays'], 0)
+        self.assertAlmostEqual(model.means[0, 2].item(), -2.12, places=6)
+        measured = replace(view, measured_depth=torch.tensor([2.]), measured_sigma=torch.tensor([.02]))
+        for _ in range(250):
+            result = optimizer.step(measured)
+        self.assertEqual(result['metric_constraint_rays'], 1)
+        self.assertLess(abs(model.means[0, 2].item()+2), .004)
+        self.assertTrue(torch.equal(optimizer.seed_position_sigma_m, original_sigma))
+
+    def test_extension_preserves_old_parameters_momentum_clocks_and_candidate_ids(self):
+        model = SurfaceGaussians([[0., 0., -2.12]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        optimizer = SurfaceOptimizer(model, seed_directions=[[0., 0., -1.]],
+                                     seed_position_sigma_m=.10, metric_weight=.1)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[0., 0., -1.]]),
+            torch.tensor([[.7]]), torch.tensor([[0]]), torch.tensor([True]), torch.tensor([False]),
+            measured_depth=torch.tensor([2.]), measured_sigma=torch.tensor([.02]))
+        for _ in range(105):
+            optimizer.step(view)
+        original = copy.deepcopy(model.state_dict())
+        moments = copy.deepcopy(optimizer.moments)
+        count, steps = optimizer.counts.clone(), optimizer.steps
+        rng = optimizer.generator.get_state().clone()
+        seeds = optimizer.seed_means.clone()
+        cache = ray_candidates(model, view.origins, view.directions, capacity=8)
+        addition = SurfaceGaussians([[1., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.6]], .8)
+        grown = optimizer.extend(addition, seed_directions=[[0., 0., -1.]], seed_position_sigma_m=.08)
+        self.assertIs(grown, optimizer.model)
+        self.assertEqual(len(grown.means), 2)
+        self.assertFalse(cache.covers(grown, view.origins, view.directions))
+        self.assertEqual(optimizer.steps, steps)
+        self.assertTrue(torch.equal(optimizer.generator.get_state(), rng))
+        self.assertTrue(torch.equal(optimizer.seed_means[:1], seeds))
+        self.assertTrue(torch.equal(optimizer.counts, torch.cat((count, torch.tensor([0])))))
+        for name, value in grown.state_dict().items():
+            self.assertTrue(torch.equal(value[:1], original[name]), name)
+            self.assertTrue(torch.equal(model.state_dict()[name], original[name]), name)
+            for actual, expected in zip(optimizer.moments[name], moments[name]):
+                self.assertTrue(torch.equal(actual[:1], expected), name)
+                self.assertEqual(torch.count_nonzero(actual[1:]).item(), 0)
+        other = replace(view, origins=torch.tensor([[1., 0., 0.]]), candidates=torch.tensor([[1]]),
+                        directions=torch.tensor([[.03, .01, -1.]]))
+        for _ in range(20):
+            optimizer.step(other)
+        # A nonzero prior displacement on the old region must not pull it back
+        # while the newly inserted region trains.
+        for name, value in grown.state_dict().items():
+            self.assertTrue(torch.equal(value[:1], original[name]), name)
+            for actual, expected in zip(optimizer.moments[name], moments[name]):
+                self.assertTrue(torch.equal(actual[:1], expected), name)
+        self.assertEqual(optimizer.counts[0], count[0])
+        self.assertEqual(optimizer.counts[1].item(), 20)
+        optimizer.step(view)
+        self.assertEqual(optimizer.counts[0], count[0]+1)
+
+    def test_rejected_extension_leaves_the_entire_active_model_untouched(self):
+        model = SurfaceGaussians([[0., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        optimizer = SurfaceOptimizer(model, seed_directions=[[0., 0., -1.]], seed_position_sigma_m=.1)
+        original = copy.deepcopy(model.state_dict())
+        addition = SurfaceGaussians([[1., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.5]], .8)
+        bad_channels = SurfaceGaussians([[1., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.5, .5, .5]], .8)
+        for value, direction, sigma in ((bad_channels, [[0., 0., -1.]], .1),
+                (addition, None, .1), (addition, [[0., 0., 0.]], .1),
+                (addition, [[0., 0., -1.]], float('nan')), (addition, [[0., 0., -1.]], [.1, .1])):
+            with self.assertRaises(ValueError):
+                optimizer.extend(value, seed_directions=direction, seed_position_sigma_m=sigma)
+            self.assertIs(optimizer.model, model)
+            self.assertEqual(optimizer.counts.sum().item(), 0)
+            self.assertEqual(optimizer.steps, 0)
+            for name, parameter in model.state_dict().items():
+                self.assertTrue(torch.equal(parameter, original[name]), name)
+                self.assertTrue(all(torch.count_nonzero(v).item() == 0 for v in optimizer.moments[name]))
+
+    def test_position_priors_need_source_rays_and_keep_unknown_priors_neutral(self):
+        model = SurfaceGaussians([[0., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        with self.assertRaisesRegex(ValueError, 'source-ray'):
+            SurfaceOptimizer(model, seed_position_sigma_m=.1)
+        for sigma in (-.1, .001, .6, float('inf')):
+            with self.subTest(sigma=sigma), self.assertRaises(ValueError):
+                SurfaceOptimizer(model, seed_directions=[[0., 0., -1.]], seed_position_sigma_m=sigma)
+        other = copy.deepcopy(model)
+        a = SurfaceOptimizer(model, seed_directions=[[0., 0., -1.]])
+        b = SurfaceOptimizer(other, seed_directions=[[0., 0., -1.]], seed_position_sigma_m=0.)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[.03, .01, -1.]]),
+            torch.tensor([[.2]]), torch.tensor([[0]]), torch.tensor([True]), torch.tensor([False]))
+        a.step(view); b.step(view)
+        for name, value in model.state_dict().items():
+            self.assertTrue(torch.equal(value, other.state_dict()[name]), name)
+
     def test_ray_work_and_parameter_inputs_have_explicit_bounds(self):
         self.assertRaises(ValueError, SurfaceGaussians, [[0, 0, -2]], [[0, 0, 0]], [[.2, .2]], [[.5]])
         model = SurfaceGaussians([[0., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
