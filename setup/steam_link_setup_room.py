@@ -140,13 +140,16 @@ def _extract_runtime_wheel(wheel, staging, records, expanded, cancelled, *,
         for member in archive.infolist():
             if cancelled():
                 raise InterruptedError('Room runtime extraction cancelled')
-            name = PurePosixPath(member.filename)
-            if member.is_dir():
-                continue
-            if (not name.parts or name.is_absolute() or '..' in name.parts
-                    or '\\' in member.filename or ':' in member.filename
+            # ZipInfo normalizes local separators and truncates NULs when it
+            # reads an archive. Validate the original name before using it.
+            raw_name = member.orig_filename
+            name = PurePosixPath(raw_name)
+            if (raw_name != member.filename or not name.parts or name.is_absolute() or '..' in name.parts
+                    or '\\' in raw_name or ':' in raw_name or '\0' in raw_name
                     or stat.S_ISLNK(member.external_attr >> 16) or member.file_size > member_limit):
                 raise ValueError('Unsafe runtime wheel member')
+            if member.is_dir():
+                continue
             expanded += member.file_size
             if expanded > expanded_limit:
                 raise ValueError('Private room runtime exceeds budget')
@@ -184,6 +187,34 @@ def _extract_runtime_wheel(wheel, staging, records, expanded, cancelled, *,
     return expanded
 
 
+def _completed_runtime(runtime, pin, *, schema=None, required=()):
+    receipt = runtime/'complete.json'
+    if not receipt.is_file():
+        return None
+    record = json.loads(receipt.read_text())
+    files = record.get('files', {})
+    okay = (record.get('manifest') == pin and type(files) is dict and 0 < len(files) < 20000
+            and (schema is None or record.get('schema') == schema) and set(required).issubset(files))
+    if okay:
+        for name, expected in files.items():
+            relative = PurePosixPath(name)
+            if (not relative.parts or relative.is_absolute() or '..' in relative.parts
+                    or '\\' in name or ':' in name):
+                okay = False
+                break
+            path = runtime/name
+            if path.is_symlink() or not path.is_file() or path.stat().st_size != expected['bytes']:
+                okay = False
+                break
+            with path.open('rb') as stream:
+                if hashlib.file_digest(stream, 'sha256').hexdigest() != expected['sha256']:
+                    okay = False
+                    break
+    if not okay:
+        raise ValueError('Private room runtime changed. Remove its cache and retry.')
+    return runtime
+
+
 def prepare_runtime(manifest_path, root, cancelled=lambda: False):
     """Private CUDA libraries only. No pip, system packages or driver changes."""
     manifest_raw = Path(manifest_path).read_bytes()
@@ -195,23 +226,8 @@ def prepare_runtime(manifest_path, root, cancelled=lambda: False):
     runtime, cache = root/pin[:16], root/"downloads"
     root.mkdir(parents=True, exist_ok=True)
     cache.mkdir(exist_ok=True)
-    receipt = runtime/"complete.json"
-    if receipt.is_file():
-        record = json.loads(receipt.read_text())
-        if record.get("manifest") == pin and 0 < len(record.get("files", {})) < 20000:
-            okay = True
-            for name, expected in record["files"].items():
-                path = runtime/name
-                if (path.is_symlink() or not path.is_file() or path.stat().st_size != expected["bytes"]):
-                    okay = False
-                    break
-                with path.open("rb") as stream:
-                    if hashlib.file_digest(stream, "sha256").hexdigest() != expected["sha256"]:
-                        okay = False
-                        break
-            if okay:
-                return runtime
-        raise ValueError("Private room runtime changed. Remove its cache and retry.")
+    if _completed_runtime(runtime, pin):
+        return runtime
     if shutil.disk_usage(root).free < 5*1024**3:
         raise ValueError("PC reconstruction needs 5 GB of free disk space")
     staging = Path(tempfile.mkdtemp(prefix=".room-runtime-", dir=root))
@@ -233,6 +249,51 @@ def prepare_runtime(manifest_path, root, cancelled=lambda: False):
             destination.write_bytes(raw)
             records["licenses/"+name] = expected
         (staging/"complete.json").write_text(json.dumps({"manifest": pin, "files": records}, separators=(",", ":")))
+        os.replace(staging, runtime)
+        return runtime
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging)
+
+
+def prepare_surface_runtime(manifest_path, root, cancelled=lambda: False):
+    """Stage a separate pinned Torch runtime; never load it into the ORT process.
+
+    A successful preparation is not GPU readiness. A fresh child process must
+    validate its modules and execute a warmup before the companion can use it.
+    This function does not change services, boot settings or the normal worker.
+    """
+    raw = Path(manifest_path).read_bytes()
+    manifest = json.loads(raw)
+    if (manifest.get('schema') != 'sfnp-room-surface-runtime-v1' or manifest.get('python') != '3.14'
+            or manifest.get('platform') != 'win_amd64' or manifest.get('backend') != 'torch-cuda'
+            or manifest.get('torch_version') != '2.9.1+cu128' or manifest.get('cuda_version') != '12.8'
+            or type(manifest.get('wheels')) is not list or not 1 <= len(manifest['wheels']) <= 32):
+        raise ValueError('Unknown private Gaussian runtime')
+    pin = hashlib.sha256(raw).hexdigest()
+    root = Path(root)
+    runtime, cache = root/pin[:16], root/'downloads'
+    root.mkdir(parents=True, exist_ok=True)
+    cache.mkdir(exist_ok=True)
+    required = ('vendor/torch/__init__.py', 'vendor/torch/_C.cp314-win_amd64.pyd',
+                'vendor/torch/lib/torch_cuda.dll', 'vendor/numpy/__init__.py',
+                'vendor/torch-2.9.1+cu128.dist-info/LICENSE', 'vendor/torch-2.9.1+cu128.dist-info/NOTICE')
+    if _completed_runtime(runtime, pin, schema='sfnp-room-surface-cache-v1', required=required):
+        return runtime
+    if shutil.disk_usage(root).free < 10*1024**3:
+        raise ValueError('Private Gaussian preparation needs 10 GB of free disk space')
+    staging = Path(tempfile.mkdtemp(prefix='.surface-runtime-', dir=root))
+    try:
+        records, expanded = {}, 0
+        for item in manifest['wheels']:
+            wheel = _download(item, cache, cancelled)
+            expanded = _extract_runtime_wheel(wheel, staging, records, expanded, cancelled,
+                member_limit=1024**3, expanded_limit=6*1024**3)
+        if not set(required).issubset(records):
+            raise ValueError('Private Gaussian runtime is missing required modules or notices')
+        (staging/'complete.json').write_text(json.dumps({'schema': 'sfnp-room-surface-cache-v1',
+            'manifest': pin, 'torch_version': manifest['torch_version'],
+            'cuda_version': manifest['cuda_version'], 'files': records}, separators=(',', ':')))
         os.replace(staging, runtime)
         return runtime
     finally:

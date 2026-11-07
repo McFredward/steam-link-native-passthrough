@@ -1182,3 +1182,38 @@ Torch has not been added to the normal installer. Five archive controls cover
 bounded reads, distinct profile budgets, duplicate conflicts, unsafe members
 and cancellation without changing an existing runtime. The current Windows
 inference runtime also retains its actual DLL-load/model-execution CI check.
+
+### Separate Windows Gaussian runtime validation
+
+`room-surface-runtime.json` now pins the Windows Python 3.14 Torch 2.9.1 CUDA
+12.8 wheel and its ten required dependency wheels. Preparation uses a separate
+cache, a 10 GB free-space requirement and explicit 1 GiB/member and 6 GiB
+expanded limits. It hashes the complete downloads and every extracted file,
+retains Torch's LICENSE/NOTICE and publishes its completion receipt only after
+all inputs succeed. An interrupted preparation removes only its owned staging;
+it never repairs a changed cache by overwriting files in place.
+
+`surface_runtime.warmup_command()` describes a fresh Python process with
+`-I -S -B`, an explicit source path and private vendor/DLL directories. It
+removes inherited Python, CUDA toolkit and inference DLL search paths. The child
+verifies the prepared files before importing Torch or NumPy, checks their
+private origins and exact Torch/CUDA versions, then exercises actual metric
+ray rendering, 250 gradient updates and state-preserving growth. No native
+Frame service, camera API, driver installation or system Python modification
+is involved. This is dependency and execution validation, not live worker
+integration or room accuracy acceptance.
+
+The default probe requires a compatible NVIDIA GPU; an unavailable GPU cannot
+silently fall back to CPU or grant readiness. The explicit `--cpu-development`
+mode lets Windows CI load and execute the actual CUDA wheel without a GPU.
+Its result always reports `gpu_ready: false` and does not measure NVIDIA
+performance. The installer still uses the existing inference runtime and
+candidate 17; this new preparation is not yet activated by its normal worker.
+Four additional archive/process controls verify complete-cache reuse, modified
+file refusal, failure isolation, required notices, disk budget and a real child
+that ignores injected Python/DLL paths. The original five archive controls
+remain in the same Windows/Linux suite.
+
+The Windows archive check also exposed `ZipInfo` normalizing backslashes while
+reading, in addition to fixture creation. Extraction now validates each original
+archive name before accepting its normalized path, including embedded NULs.

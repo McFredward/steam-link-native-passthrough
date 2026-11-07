@@ -1,0 +1,98 @@
+{
+  "schema": "sfnp-room-surface-runtime-v1",
+  "python": "3.14",
+  "platform": "win_amd64",
+  "backend": "torch-cuda",
+  "torch_version": "2.9.1+cu128",
+  "cuda_version": "12.8",
+  "wheels": [
+    {
+      "name": "torch",
+      "version": "2.9.1+cu128",
+      "filename": "torch-2.9.1+cu128-cp314-cp314-win_amd64.whl",
+      "url": "https://download-r2.pytorch.org/whl/cu128/torch-2.9.1%2Bcu128-cp314-cp314-win_amd64.whl",
+      "bytes": 2880837074,
+      "sha256": "7bcd40cbffac475b478d6ce812f03da84e9a4894956efb89c3b7bcca5dbd4f91"
+    },
+    {
+      "name": "filelock",
+      "version": "3.20.0",
+      "filename": "filelock-3.20.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/76/91/7216b27286936c16f5b4d0c530087e4a54eead683e6b0b73dd0c64844af6/filelock-3.20.0-py3-none-any.whl",
+      "bytes": 16054,
+      "sha256": "339b4732ffda5cd79b13f4e2711a31b0365ce445d95d243bb996273d072546a2"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.15.0",
+      "filename": "typing_extensions-4.15.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl",
+      "bytes": 44614,
+      "sha256": "f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548"
+    },
+    {
+      "name": "networkx",
+      "version": "3.5",
+      "filename": "networkx-3.5-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/eb/8d/776adee7bbf76365fdd7f2552710282c79a4ead5d2a46408c9043a2b70ba/networkx-3.5-py3-none-any.whl",
+      "bytes": 2034406,
+      "sha256": "0030d386a9a06dee3565298b4a734b68589749a544acbb6c412dc9e2489ec6ec"
+    },
+    {
+      "name": "jinja2",
+      "version": "3.1.6",
+      "filename": "jinja2-3.1.6-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl",
+      "bytes": 134899,
+      "sha256": "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+    },
+    {
+      "name": "fsspec",
+      "version": "2025.9.0",
+      "filename": "fsspec-2025.9.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/47/71/70db47e4f6ce3e5c37a607355f80da8860a33226be640226ac52cb05ef2e/fsspec-2025.9.0-py3-none-any.whl",
+      "bytes": 199289,
+      "sha256": "530dc2a2af60a414a832059574df4a6e10cce927f6f4a78209390fe38955cfb7"
+    },
+    {
+      "name": "setuptools",
+      "version": "80.9.0",
+      "filename": "setuptools-80.9.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/a3/dc/17031897dae0efacfea57dfd3a82fdd2a2aeb58e0ff71b77b87e44edc772/setuptools-80.9.0-py3-none-any.whl",
+      "bytes": 1201486,
+      "sha256": "062d34222ad13e0cc312a4c02d73f059e86a4acbfbdea8f8f76b28c99f306922"
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "filename": "markupsafe-3.0.3-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/28/52/182836104b33b444e400b14f797212f720cbc9ed6ba34c800639d154e821/markupsafe-3.0.3-cp314-cp314-win_amd64.whl",
+      "bytes": 15341,
+      "sha256": "bdc919ead48f234740ad807933cdf545180bfbe9342c2bb451556db2ed958581"
+    },
+    {
+      "name": "numpy",
+      "version": "2.5.4",
+      "filename": "numpy-2.5.4-cp314-cp314-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/52/9a/e1e512ebc948d5b9dd33b08736760f0ebbed2848fd4eda1f553088a6dcee/numpy-2.5.4-cp314-cp314-win_amd64.whl",
+      "bytes": 12703552,
+      "sha256": "2ca144f15135b6212a5c47b1e2aeca6e412f102f95a2d5d88d8aec77eb255de3"
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "filename": "sympy-1.14.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl",
+      "bytes": 6299353,
+      "sha256": "e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "filename": "mpmath-1.3.0-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/43/e3/7d92a15f894aa0c9c4b49b8ee9ac9850d6e63b03c9c32c0367a13ae62209/mpmath-1.3.0-py3-none-any.whl",
+      "bytes": 536198,
+      "sha256": "a0b2b9fe80bbcd81a6647ff13108738cfb482d481d826cc0e02f5b35e5c88d2c"
+    }
+  ]
+}
