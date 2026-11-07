@@ -73,6 +73,7 @@ def _activate(runtime, manifest_path):
 
 def _exercise(torch, device):
     """Use the actual renderer and optimizer, including backward and growth."""
+    from .surface_candidates import ray_candidates
     from .surface_gaussians import SurfaceGaussians
     from .surface_optimization import RayTrainingView, SurfaceOptimizer
     def tensor(value, dtype=torch.float32):
@@ -84,6 +85,22 @@ def _exercise(torch, device):
     if (abs(result['depth'].item()-4/3) > 2e-5 or abs(result['alpha'].item()-.75) > 2e-5
             or not torch.allclose(result['color'], tensor([[.5, 0., .25]]), atol=2e-5, rtol=0)):
         raise RuntimeError('Private Gaussian ray-render warmup failed')
+    # Exercise the selected device's chunked candidate search as well. An
+    # independent plane gives an exact intersection; the outside ray must stay
+    # empty. Package import or a hand-built one-ray candidate list is not enough.
+    axis = torch.linspace(-.35, .35, 8, device=device)
+    xy = torch.cartesian_prod(axis, axis)
+    means = torch.cat((xy, torch.full((len(xy), 1), -2., device=device)), -1)
+    plane = SurfaceGaussians(means, tensor([[0., 0., 1.]]).expand(len(xy), -1),
+        tensor([[.04, .04]]).expand(len(xy), -1), tensor([[.7]]).expand(len(xy), -1), .8)
+    directions = torch.cat((means.detach(), tensor([[5., 5., -2.]])))
+    origins = torch.zeros_like(directions)
+    candidates = ray_candidates(plane, origins, directions, capacity=32)
+    rendered = plane.render(origins, directions, candidates.indices)
+    expected = torch.linalg.vector_norm(directions[:-1], dim=-1)
+    if (candidates.overflow.any() or not torch.allclose(rendered['depth'][:-1], expected, atol=2e-5, rtol=0)
+            or torch.any(rendered['alpha'][:-1] < .7) or rendered['alpha'][-1].item() != 0.):
+        raise RuntimeError('Private Gaussian candidate-search or unknown-ray warmup failed')
     model = SurfaceGaussians(tensor([[0., 0., -2.12]]), [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
     optimizer = SurfaceOptimizer(model, seed_directions=tensor([[0., 0., -1.]]),
                                  seed_position_sigma_m=.1, metric_weight=.1)
@@ -134,6 +151,7 @@ def main():
         'torch_version': torch.__version__, 'cuda_version': torch.version.cuda, 'device': device,
         'private_dll_directories': len(handles), 'isolated_process': True,
         'actual_gaussian_render_and_backward': True, 'metric_control_error_m': error,
+        'bounded_world_ray_candidates_and_unknown_gap': True,
         'incremental_state_preserved': True, 'gpu_ready': device == 'cuda',
         'nvidia_gpu_performance_verified': False, 'headset_test': False,
         'wall_seconds': time.monotonic()-started}, allow_nan=False), flush=True)
