@@ -54,6 +54,13 @@ class BorrowedFrames {
     Producer producer_;Fd pidfd_;std::vector<Stream> streams_;
     StereoCopySchedule copySchedule_;
     std::map<std::string,std::uint64_t> counters_;
+    static Json captureDescription(const CaptureMetadata& timing,std::uint64_t previous){
+        return {{"offset_bytes",timing.offset},{"sof_raw_ns",timing.sofRaw},{"eof_raw_ns",timing.eofRaw},
+                {"sof_isr_raw_ns",timing.sofInterruptRaw},{"eof_isr_raw_ns",timing.eofInterruptRaw},
+                {"isp_to_raw_ns",timing.ispToRaw},{"previous_sof_raw_ns",previous},
+                {"capture_clock","CLOCK_MONOTONIC_RAW"},{"v4l_timestamp_matches",true},
+                {"sensor_metadata_hex",sensorMetadataHex(timing)}};
+    }
     static int queuedFd(const Stream& stream,unsigned index,unsigned plane=0){
         v4l2_buffer buffer{};std::array<v4l2_plane,VIDEO_MAX_PLANES> planes{};
         buffer.index=index;buffer.type=stream.camera.type;buffer.memory=V4L2_MEMORY_DMABUF;
@@ -105,7 +112,8 @@ public:
             {"pixel_layout_verified",false},{"exposure_pose_verified",false},{"room_scan_ready",false},{"counters",counters_}};
     }
     struct Image {Json metadata;std::vector<std::uint8_t> pixels,area4Pixels,area2Pixels;};
-    std::optional<Image> copy(const Completion& event,bool pixelsRequested=true,bool highResolutionRequested=false){
+    std::optional<Image> copy(const Completion& event,bool pixelsRequested=true,bool highResolutionRequested=false,Json* observation=nullptr){
+        if(observation)*observation=nullptr;
         for(auto& stream:streams_){
             if(stream.camera.minor!=event.minor)continue;
             ++counters_["color_events"];
@@ -121,7 +129,7 @@ public:
             if(stat(producerBuffer.c_str(),&current)||current.st_ino!=mapping->inode)throw std::runtime_error("Arcturus producer replaced its buffer");
             constexpr unsigned height=616,pitch=3328;
             if(mapping->bytes<std::size_t(pitch)*2464)throw std::runtime_error("Arcturus luma extent is short");
-            std::vector<std::uint8_t> first,second;first.reserve(616*616);second.reserve(616*616);const auto begin=monotonicNs();LumaLayout layout;
+            std::vector<std::uint8_t> first,second;const auto begin=monotonicNs();LumaLayout layout;
             std::vector<std::uint8_t> firstArea,secondArea,firstArea2,secondArea2;
             std::vector<std::uint8_t> metadataFirst,metadataSecond;
             const std::size_t metadataOffset=stream.metadataOffset.value_or(0);
@@ -151,6 +159,22 @@ public:
                     &&timing->sofRaw-stream.lastSof<100000000u)previousSof=stream.lastSof;
                 stream.lastSof=timing->sofRaw;stream.timingSequence=event.sequence;
             }else {stream.lastSof=0;stream.timingSequence=0;}
+            if(observation){
+                // Only the separate metadata mapping is read here. The image
+                // mapping is not read until the explicit pixel path below.
+                readMetadata(metadataSecond);
+                if(timing&&metadataFirst==metadataSecond&&queuedFd(stream,event.index)==mapping->owner){
+                    *observation={{"schema","sfnp-native-camera-metadata-v1"},{"sensor",stream.camera.sensor},
+                        {"role",stream.camera.role},{"node",stream.camera.path},{"kernel_role_verified",!stream.camera.role.empty()},
+                        {"producer_pid",producer_.pid},{"producer_start_ticks",producer_.start},{"sequence",event.sequence},
+                        {"capture_ticks",event.capture},{"dequeue_monotonic_ns",event.dequeue},
+                        {"metadata_copy_begin_ns",begin},{"metadata_copy_end_ns",monotonicNs()},
+                        {"queue_mapping_exact",true},{"metadata_copy_stable",true},
+                        {"pixel_copy_requested",pixelsRequested},{"contains_image_data",false},{"room_scan_ready",false},
+                        {"capture_metadata",captureDescription(*timing,previousSof)}};
+                    ++counters_["metadata_published"];
+                }else ++counters_["unstable_metadata_copy"];
+            }
             if(!pixelsRequested)return std::nullopt;
             // Timing is observed for every actual frame. Pixel copies have no backlog.
             const auto bin=(timing?timing->sofRaw:event.dequeue)/100000000u;
@@ -159,6 +183,7 @@ public:
             if(stereoScheduled?!copySchedule_.wants(unsigned(eye),timing->sofRaw):bin==stream.lastBin){
                 ++counters_["rate_skips"];return std::nullopt;
             }
+            first.reserve(616*616);second.reserve(616*616);
             const auto read=[&](std::vector<std::uint8_t>& out,std::vector<std::uint8_t>& area,std::vector<std::uint8_t>& area2,bool examine){
                 dma_buf_sync sync{DMA_BUF_SYNC_START|DMA_BUF_SYNC_READ};
                 if(ioctl(mapping->descriptor.get(),DMA_BUF_IOCTL_SYNC,&sync))throw std::runtime_error("Arcturus read cache sync failed");
@@ -184,12 +209,7 @@ public:
                 {"capture_ticks",event.capture},{"dequeue_monotonic_ns",event.dequeue},{"copy_begin_ns",begin},{"copy_end_ns",end},{"v4l2_flags",event.flags},
                 {"clock_sample",{{"monotonic_before_ns",clockBefore},{"raw_ns",std::uint64_t(raw.tv_sec)*1000000000u+std::uint64_t(raw.tv_nsec)},{"monotonic_after_ns",clockAfter}}},
                 {"queue_mapping_exact",true},{"copy_stable",true},{"eye_identity_verified",!stream.camera.role.empty()},{"pixel_layout_verified",false},{"exposure_pose_verified",false},{"room_scan_ready",false}};
-            if(timing){
-                metadata["capture_metadata"]={{"offset_bytes",timing->offset},{"sof_raw_ns",timing->sofRaw},{"eof_raw_ns",timing->eofRaw},
-                    {"sof_isr_raw_ns",timing->sofInterruptRaw},{"eof_isr_raw_ns",timing->eofInterruptRaw},{"isp_to_raw_ns",timing->ispToRaw},
-                    {"previous_sof_raw_ns",previousSof},{"capture_clock","CLOCK_MONOTONIC_RAW"},
-                    {"v4l_timestamp_matches",true},{"sensor_metadata_hex",sensorMetadataHex(*timing)}};
-            }else metadata["capture_metadata"]=nullptr;
+            metadata["capture_metadata"]=timing?captureDescription(*timing,previousSof):Json(nullptr);
             return Image{std::move(metadata),std::move(first),std::move(firstArea),std::move(firstArea2)};
         }
         return std::nullopt;

@@ -42,6 +42,34 @@ int main(){try{
     const auto changing=adaptive.settings("passthrough_left",sof,eof,sof-period);
     check(changing.at("envelope_min_coarse")==1194&&changing.at("envelope_max_coarse")==1200
         &&!changing.at("unchanged_through_eof").get<bool>()&&!changing.at("frame_latch_verified").get<bool>(),"bounded changes do not pretend exact latch proof");
+    auto withFuture=adaptive;group(withFuture,5000,eof+1000000u);
+    check(withFuture.settings("passthrough_left",sof,eof,sof-period)==changing,
+          "later exposure writes cannot change an earlier frame's envelope during delayed processing");
+    ExposureRegisters delayed;
+    group(delayed,1194,sof-3*period);group(delayed,1194,sof-2*period);group(delayed,1194,sof-period);
+    group(delayed,1200,sof+1000000u);group(delayed,5000,eof+1000000u);
+    const auto delayedFirst=delayed.settings("passthrough_left",sof,eof,sof-period);
+    check(delayedFirst.at("envelope_min_coarse")==1194&&delayedFirst.at("envelope_max_coarse")==1200,
+          "first query after later writes still builds a frame-specific causal envelope");
+    ExposureRegisters straddled;
+    group(straddled,1194,sof-3*period);group(straddled,1194,sof-2*period);group(straddled,1194,sof-period);
+    group(straddled,1200,eof-30500u); // Release starts 500 ns before EOF; result is 500 ns after it.
+    const auto crossing=straddled.settings("passthrough_left",sof,eof,sof-period);
+    check(!crossing.at("unchanged_through_eof").get<bool>()&&crossing.at("same_value_group_count")==3
+        &&crossing.at("envelope_max_coarse")==1200&&!crossing.at("frame_latch_verified").get<bool>(),
+          "a release that overlaps EOF remains uncertain even when its successful result arrives later");
+    ExposureRegisters heldPast;
+    group(heldPast,1194,sof-3*period);group(heldPast,1194,sof-2*period);group(heldPast,1194,sof-period);
+    group(heldPast,1200,eof-20000u); // Register writes cross EOF, but hold release starts afterwards.
+    const auto held=heldPast.settings("passthrough_left",sof,eof,sof-period);
+    check(held.at("unchanged_through_eof").get<bool>()&&held.at("envelope_min_coarse")==1194
+        &&held.at("envelope_max_coarse")==1194,"a held value cannot affect an image before the release transfer begins");
+    ExposureRegisters tooOld;
+    group(tooOld,1194,sof-3*period);group(tooOld,1194,sof-2*period);group(tooOld,1194,sof-period);
+    check(tooOld.settings("passthrough_left",sof,eof,sof-period).value("envelope_verified",false),"old-history fixture starts with authority");
+    for(unsigned i=1;i<=150;++i)group(tooOld,1194+i%2,eof+i*period);
+    check(tooOld.settings("passthrough_left",sof,eof,sof-period).is_null(),
+          "evicted register history cannot invent timing for an old frame");
     for(unsigned i=1;i<=150;++i){const auto time=sof+i*period;group(adaptive,1194+i%2,time-1000000u);
         check(adaptive.settings("passthrough_left",time,time+11000000u,time-period).value("envelope_verified",false),"small continuous automatic adjustments preserve bounded authority beyond history retention");}
     const auto later=sof+151*period;

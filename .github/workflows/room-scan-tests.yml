@@ -160,6 +160,7 @@ jobs:
           ctest --test-dir build/room-core --output-on-failure
       - name: Verify installer transactions and optional dashboard package
         run: |
+          python3 -B -m unittest discover -s tests -p test_room_camera_metadata_capture.py -q
           python3 -B -m unittest discover -s tests -p test_room_capture_session.py -q
           python3 -B -m unittest discover -s tests -p test_stream_bridge_install.py -q
           python3 -B -m unittest discover -s tests -p test_package_stream_bridge.py -q

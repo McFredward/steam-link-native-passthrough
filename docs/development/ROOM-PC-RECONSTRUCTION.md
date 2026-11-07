@@ -1006,3 +1006,45 @@ conditional uncertainty. An aggregate pixel percentile cannot hide an incorrect
 individual edge or establish a floor/ceiling plane. The independent room-height
 measurement remains unqualified. A separate bounded lens-correction experiment
 does not materially improve the joint audit and is not applied to live cameras.
+
+### Frame-specific exposure bounds and metadata-only diagnostics
+
+The retained exposure anchor previously accumulated every later register value
+available at processing time. Delayed processing could therefore widen an old
+image's exposure interval with writes that began after its EOF. This affects
+availability even when the image and historical poses are valid. Each anchor
+now keeps a bounded cumulative history and answers through the queried image's
+EOF. A hold-release transfer that starts before EOF and completes afterwards
+remains included: its actual effect could precede its completion notification.
+The same overlap also prevents claiming an exactly unchanged setting. Completed
+group counts, settled anchors, clock identity, row timing and spatial uncertainty
+gates remain in force. No particular sensor latch delay is assumed.
+
+Regression controls cover delayed first queries, queries before and after future
+writes, release transfers straddling EOF, held values released after EOF, long
+adaptive sequences, and evicted histories. These are software controls; they do
+not establish the physical improvement on the maintainer's Frame.
+
+The manual API can independently publish diagnostic metadata with
+`metadata_next` and an explicit unsigned cursor. This activates no image consumer,
+calls no image provider and reads no image mapping. Its separate metadata mapping
+is copied twice with the queue binding checked. The bounded history retains 32
+records, reports eviction/expiry and cannot grant room-scan authority. Producer
+and source identity remain fixed. Parking or disconnecting releases the client's
+interest; the reserved control connection can still read diagnostics or stop.
+
+`python3 -B -m probe.capture_room_metadata ADDRESS PRIVATE_OUTPUT` reads only
+this diagnostic route for a bounded manual measurement. It refuses active image
+consumers, unexpected pixel payloads, changed identities, mismatched native
+timestamps and missing history. Its output is private and exclusive; it does
+not start a reader, modify a camera or restart services. The embedded sensor
+payload is retained for investigating exact exposure association. A correlation
+alone is not a validated sensor decoder or permission to tighten timing proof.
+The prepared hardware measurement remains inactive pending fresh coordination.
+The normal installer remains candidate 17.
+
+A further private focal-length/principal-point diagnostic recovers independent
+synthetic perturbations, but does not improve the actual withheld room points.
+On the same 3,677 predictions its 95th-percentile error is 1.82 pixels versus
+1.80 with the nine-parameter rig hypothesis; floor/ceiling support still fails.
+Those extra intrinsic degrees of freedom are not applied to the live cameras.

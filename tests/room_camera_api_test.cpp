@@ -39,11 +39,14 @@ int main(){try{
         tile.metadata["sampling"]={{"step",2},{"area",{2,2}},{"center_offset",{.5,.5}}};
         tile.metadata["tile"]={{"index",0u},{"origin",{0,0}},{"full_extent",{1232,1232}}};
         for(auto& pixel:tile.pixels)pixel=203;
+        unsigned imageProviderCalls=0;
         const auto announcement=api.address()+"\n";check(write(1,announcement.data(),announcement.size())==ssize_t(announcement.size()),"owned announcement");
         while(!api.stopping()){
-            api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()},{"high_resolution_reads_active",api.highResolutionRequested()}};},
-                [&](const Json& request){return request.at("sensor")=="fixture"?(request.value("command","")=="latest_area4"?&area:request.value("command","")=="latest_area2_tile"?&tile:&image):nullptr;},
-                [](){return Json{{"status","no-fresh-pair"}};});
+            api.poll([&](){return Json{{"schema","sfnp-native-camera-api-v1"},{"room_scan_ready",false},{"test_only",true},{"pixel_reads_active",api.framesRequested()},{"high_resolution_reads_active",api.highResolutionRequested()},
+                    {"diagnostic_metadata_reads_active",api.metadataRequested()},{"image_provider_calls",imageProviderCalls}};},
+                [&](const Json& request){++imageProviderCalls;return request.at("sensor")=="fixture"?(request.value("command","")=="latest_area4"?&area:request.value("command","")=="latest_area2_tile"?&tile:&image):nullptr;},
+                [](){return Json{{"status","no-fresh-pair"}};},
+                [](std::uint64_t after){return Json{{"status","fixture-metadata"},{"after",after},{"contains_image_data",false},{"room_scan_ready",false}};});
             api.wait();
         }
         _exit(0);
@@ -55,6 +58,20 @@ int main(){try{
     auto socket=connectTo(address);check(socket.get()>=0,"same-user API connection");
     auto result=request(socket.get(),R"({"command":"describe"})");check(!result.first.at("room_scan_ready").get<bool>()&&result.second.empty(),"capability handshake cannot invent scan readiness");
     check(!result.first.at("pixel_reads_active").get<bool>(),"opening and describing a session never requests pixels");
+    result=request(socket.get(),R"({"command":"metadata_next","after":0})");
+    check(result.first.at("status")=="fixture-metadata"&&result.second.empty(),"metadata response has zero image payload");
+    result=request(socket.get(),R"({"command":"describe"})");
+    check(result.first.at("diagnostic_metadata_reads_active").get<bool>()&&!result.first.at("pixel_reads_active").get<bool>()
+        &&!result.first.at("high_resolution_reads_active").get<bool>()&&result.first.at("image_provider_calls")==0,"metadata cannot request images or call their provider");
+    request(socket.get(),R"({"command":"park"})");
+    check(!request(socket.get(),R"({"command":"describe"})").first.at("diagnostic_metadata_reads_active").get<bool>(),"parking clears metadata interest too");
+    for(const auto* invalid:{R"({"command":"metadata_next","after":-1})",R"({"command":"metadata_next"})",R"({"command":"metadata_next","after":0.5})"})
+        check(request(socket.get(),invalid).first.at("status")=="invalid-request","metadata needs an exact bounded unsigned cursor");
+    check(!request(socket.get(),R"({"command":"describe"})").first.at("diagnostic_metadata_reads_active").get<bool>(),"invalid metadata requests cannot enable reads");
+    {auto metadataPeer=connectTo(address);check(metadataPeer.get()>=0,"independent metadata consumer");
+        check(request(metadataPeer.get(),R"({"command":"metadata_next","after":0})").second.empty(),"second metadata consumer receives no pixels");}
+    result=request(socket.get(),R"({"command":"describe"})");
+    check(!result.first.at("diagnostic_metadata_reads_active").get<bool>()&&!result.first.at("pixel_reads_active").get<bool>(),"disconnect releases metadata interest without touching images");
     result=request(socket.get(),R"({"command":"latest","sensor":"fixture"})");check(result.second.size()==616*616,"real socket carries the largest diagnostic image");
     for(std::size_t i=0;i<result.second.size();++i)check(result.second[i]==std::uint8_t(i*13),"exact pixel bytes survive transport");
     result=request(socket.get(),R"({"command":"latest_area4","sensor":"fixture"})");
@@ -89,6 +106,7 @@ int main(){try{
     check(request(control.get(),R"({"command":"latest","sensor":"fixture"})").first.at("status")=="control-only-connection","reserved slot cannot start another image consumer");
     check(request(control.get(),R"({"command":"latest_area4","sensor":"fixture"})").first.at("status")=="control-only-connection","area requests cannot bypass the reserved control slot");
     check(request(control.get(),R"({"command":"latest_area2_tile","sensor":"fixture","tile":0})").first.at("status")=="control-only-connection","high-resolution requests cannot bypass the reserved control slot");
+    check(request(control.get(),R"({"command":"metadata_next","after":0})").first.at("status")=="fixture-metadata","reserved control slot may read diagnostics without becoming an image consumer");
     check(request(control.get(),R"({"command":"stop"})").first.at("status")=="stopping","Stop remains available with both image consumers connected");
     int status=0;check(waitpid(child,&status,0)==child&&WIFEXITED(status)&&!WEXITSTATUS(status),"manual helper stops cleanly");
     owned.pid=-1;
