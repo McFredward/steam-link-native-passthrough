@@ -1040,11 +1040,85 @@ timestamps and missing history. Its output is private and exclusive; it does
 not start a reader, modify a camera or restart services. The embedded sensor
 payload is retained for investigating exact exposure association. A correlation
 alone is not a validated sensor decoder or permission to tighten timing proof.
-The prepared hardware measurement remains inactive pending fresh coordination.
-The normal installer remains candidate 17.
+The coordinated 12-second metadata-only hardware measurement is complete: 1,198
+records, 599 per eye, no native sequence gaps and zero image copies. The reader
+and transparent view were stopped, the private transfer was verified and all
+owned temporary Frame files were removed. Native service generations remained
+unchanged. All 1,208 embedded sensor bytes were zero in every record, so this
+payload supplies no applied-exposure decoder. Even with the frame-specific
+causal bounds, 102 of 599 frames per eye exceed the existing 1.5 ms exposure
+centre uncertainty cap. Do not repeat the same capture hoping to decode zeros,
+assume a maximum latch delay or relax the spatial admission gates. No fresh
+wearer coordination or image capture is pending. The normal installer remains
+candidate 17.
 
 A further private focal-length/principal-point diagnostic recovers independent
 synthetic perturbations, but does not improve the actual withheld room points.
 On the same 3,677 predictions its 95th-percentile error is 1.82 pixels versus
 1.80 with the nine-parameter rig hypothesis; floor/ceiling support still fails.
 Those extra intrinsic degrees of freedom are not applied to the live cameras.
+
+### Fixed factory polar-spline model
+
+`polar_lens.py` implements the additional factory KB4/polar-spline distortion as
+an offline measurement model. The five-by-five radial/tangential coefficient
+grid has two preceding zero radial rings. Bicubic interpolation wraps angular
+samples, clamps radial samples and rotates the resulting radial/tangential pixel
+displacement into Cartesian image coordinates after KB4 projection. Inversion
+must converge and remain on the monotonic forward KB branch. This module does
+not select live calibration or change any source/eye/exposure/pose admission.
+
+Private arithmetic verification compared both eyes at 536 coordinates each,
+including angular wraps and radial boundaries, against an inspected arithmetic
+leaf in an offline CPU emulator. The maximum difference was below 0.000001
+native pixel. The emulated leaf made no system calls; vendor application startup
+and constructors were not invoked. No Frame access or instrumentation occurred.
+Proprietary artifacts and actual device coefficients
+remain private. Six public analytic controls cover KB equivalence, radial and
+tangential axes, angular continuity, metric stereo, invalid inverse branches and
+malformed input. These checks establish lens arithmetic, not room accuracy.
+
+On the existing continuous recording, all factory lens parameters remain fixed
+while the same nine-parameter rig/head diagnostic is fitted using disjoint
+exposures. Both eyes of every prediction exposure stay out of calibration and
+point fitting. On 2,026 predictions shared by all three compared models, base KB
+has median/p95 errors of 0.643/1.824 pixels, alternate KB without its spline has
+0.759/2.322, and the complete alternate polar model has 0.558/1.737. Each method's
+complete training-qualified prediction set is also retained. The improvement is
+small; no supported floor/ceiling pair or qualified room height results. Do not
+describe this as a solved scanner or deploy the alternate KB coefficients
+without their corresponding spline.
+
+### Larger stereo proposals and the ceiling admission bottleneck
+
+A private CPU comparison uses NVIDIA's published FoundationStereo small v2
+dynamic ONNX alongside C-Fast-FoundationStereo on the same continuous-recording
+images and training-only rig hypothesis. The model is pinned to 346,531,163
+bytes and SHA256 `a001a7bc0512a0bc3b3218194e924784e58b20656c6f1ea2c151024e555cfd64`.
+The official NGC API's actual filename includes `_v2.0`, unlike the filename in
+its descriptive digest attribute. Input normalization was checked against the
+pinned TAO source; this is a different model, not a resolution-only experiment.
+No larger model or changed profile has been installed in the ordinary worker.
+
+At one withheld sofa view, 25 identical training-derived range witnesses have
+median/p95 errors of 5.67/10.83 cm with the fast model and 4.16/8.83 cm with the
+larger model after existing photometric qualification. These are conditional
+multi-view witnesses with at most 3 cm range sigma, not independent survey truth.
+The proposal-only error tail is worse with the larger model. Do not select a
+replacement from point counts or the improved subset alone.
+
+In the floor and ceiling views, independently selected dominant horizontal
+proposal patches imply 2.502 m with the fast model and 2.520 m with the larger
+model, versus the externally measured 2.535 m. That reference was consulted
+only after candidate extraction; no room height or floor-origin constraint was
+used for fitting. Candidate identity, uncertainty, tilted patches and complete
+room coverage are not qualified by this single scalar comparison. The larger
+model's ceiling proposals in two views have median heights of 2.547 and 2.565 m,
+but the existing qualified output has no spatially supported ceiling plane.
+The smooth-ceiling proposal/qualified counts are 286,779/375 pixels with the
+larger model, compared with 150,816/914 for the fast model. Thus richer proposals
+alone do not fix the live scan. The next reconstruction work must distinguish
+provisional neural support from physically verified multi-view surfaces, retain
+unknown gaps and refine actual Gaussian geometry. None of these private CPU
+measurements establishes NVIDIA throughput, a candidate-18 installer or a
+complete accepted scanner.
