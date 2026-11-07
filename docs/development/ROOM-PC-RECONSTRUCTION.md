@@ -1239,7 +1239,7 @@ gradient isolation and a wholly missing foreground. Existing wrong-seed
 correction and optimizer-state controls remain required; the combined surface
 suite now has 22 tests.
 
-The same 8,033-disk continuous-recording replay now supports 20/28 independent
+At revision `6d582ee`, the same 8,033-disk continuous-recording replay supports 20/28 independent
 held-image witnesses. On the same original 17 supported witnesses, median/p95
 range errors are 2.26/16.49 cm, compared with the initial 4.31/20.07 cm and the
 previous public bound objective's 3.57/19.64 cm. Overall support, all supported
@@ -1256,3 +1256,35 @@ ray-aware insertion trial adds 113 training-derived points only where no
 retained view offers a compatible existing intersection inside the motion
 budget. That trial supports 22/28 witnesses, but has no known measured normals
 or qualified room height and is not yet a selected live admission strategy.
+
+### Isolating hidden ray contributions during optimization
+
+The optimizer now stops gradients from ray/disk pairs whose incoming
+transmittance is below 1%. A tiny residual background weight could previously
+advance that disk's Adam clock and move it despite an opaque foreground. A
+per-disk update mask alone is insufficient: the same background disk may also
+be visible in another ray of the same training batch. Optional renderer gradient
+guards isolate depth, opacity, color and normal contributions for each pair;
+inactive disk parameters, moments and clocks stay unchanged. The default
+renderer retains its original differentiable objective and finite-difference
+control. This optimization cutoff grants no camera or surface confidence.
+
+Two additional controls cover existing background momentum and a mixed
+visible/occluded batch. All 24 surface controls pass locally. In the private
+continuous replay, 20/28 held-image witnesses remain supported; the same
+original 17 have 2.36/16.63 cm median/p95 error. Sparse witness agreement still
+does not establish physical room accuracy or sufficient coverage.
+
+Further initializer trials are retained as failures: three extra training
+proposal views raise support to 25/28 but leave the worst error at 37.65 cm.
+Doubling spatial seed density and halving/capping disk scales yields 43,722
+disks, 24/28 support and 6.70/18.04 cm median/p95 error across that support.
+The worst error remains 29.54 cm. These changed support sets are not substitutes
+for the original paired comparisons. At the inspected edge, the new training
+view's neural proposal differs from the conditional witness by 7.30 cm, while
+foreground splats make the rendered surface about 38 cm too close. Reducing
+footprints alone creates missing support; unrestricted image fitting does not
+reliably remove the conflicting foreground. Next work needs source-consistent
+association and retirement of contradicted provisional geometry, while keeping
+independently accepted regions and real unknown gaps intact. More points or a
+new model alone is not a demonstrated fix.

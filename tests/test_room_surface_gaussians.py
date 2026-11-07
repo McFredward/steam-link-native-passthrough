@@ -98,6 +98,47 @@ class SurfaceGaussianTests(unittest.TestCase):
         optimizer.step(view(0))
         self.assertEqual(optimizer.counts[0], count+1)
 
+    def test_occluded_disks_keep_geometry_appearance_and_existing_momentum(self):
+        model = SurfaceGaussians([[0., 0., -2.], [0., 0., -4.]], [[0, 0, 1]]*2,
+                                 [[.1, .1]]*2, [[.7], [.5]], [.9999, .8])
+        optimizer = SurfaceOptimizer(model, random_background=False)
+        visible = RayTrainingView(torch.tensor([[2., 0., 0.]]), torch.tensor([[-1.97, 0., -4.]]),
+            torch.tensor([[.2]]), torch.tensor([[0, 1]]), torch.tensor([True]), torch.tensor([False]))
+        for _ in range(5):
+            optimizer.step(visible)
+        self.assertGreater(optimizer.moments['means'][0][1].abs().sum().item(), 0.)
+        frozen = {name: value[1].detach().clone() for name, value in model.named_parameters()}
+        momentum = {name: (a[1].clone(), b[1].clone()) for name, (a, b) in optimizer.moments.items()}
+        count = optimizer.counts[1].clone()
+        occluded = replace(visible, origins=torch.zeros((1, 3)), directions=torch.tensor([[0., 0., -1.]]),
+                           colors=torch.tensor([[.7]]))
+        for _ in range(30):
+            optimizer.step(occluded)
+        self.assertEqual(optimizer.counts[1], count)
+        for name, value in model.named_parameters():
+            self.assertTrue(torch.equal(value[1], frozen[name]), name)
+            self.assertTrue(torch.equal(optimizer.moments[name][0][1], momentum[name][0]), name)
+            self.assertTrue(torch.equal(optimizer.moments[name][1][1], momentum[name][1]), name)
+
+    def test_occluded_ray_cannot_train_a_disk_visible_in_another_ray_in_the_same_batch(self):
+        model = SurfaceGaussians([[0., 0., -2.], [0., 0., -4.]], [[0, 0, 1]]*2,
+                                 [[.1, .1]]*2, [[.7], [.5]], [.9999, .8])
+        baseline = copy.deepcopy(model)
+        visible = RayTrainingView(torch.tensor([[2., 0., 0.]]), torch.tensor([[-1.97, 0., -4.]]),
+            torch.tensor([[.2]]), torch.tensor([[0, 1]]), torch.tensor([True]), torch.tensor([False]))
+        mixed = replace(visible, origins=torch.cat((torch.zeros((1, 3)), visible.origins)),
+            directions=torch.cat((torch.tensor([[0., 0., -1.]]), visible.directions)),
+            colors=torch.tensor([[.7], [.2]]), candidates=torch.tensor([[0, 1], [0, 1]]),
+            valid=torch.tensor([True, True]), overflow=torch.tensor([False, False]))
+        SurfaceOptimizer(model, random_background=False).step(mixed)
+        SurfaceOptimizer(baseline, random_background=False).step(visible)
+        for name, parameter in model.named_parameters():
+            other = dict(baseline.named_parameters())[name]
+            # The additional foreground ray changes the mean's denominator,
+            # but contributes no background gradient in any parameter family.
+            self.assertTrue(torch.allclose(parameter.grad[1]*2, other.grad[1], atol=2e-6, rtol=2e-5), name)
+        self.assertGreater(model.means.grad[1].abs().sum().item(), 0.)
+
     def test_unknown_and_overflow_views_cannot_update_geometry_or_optimizer_state(self):
         model = SurfaceGaussians([[0., 0., -2.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
         optimizer = SurfaceOptimizer(model)
