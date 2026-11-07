@@ -127,6 +127,63 @@ def _download(item, cache, cancelled):
     return destination
 
 
+def _extract_runtime_wheel(wheel, staging, records, expanded, cancelled, *,
+                           member_limit=700*1024**2, expanded_limit=4*1024**3,
+                           file_limit=19900):
+    """Stream a verified wheel into owned staging, without activating it.
+
+    Separate runtimes may pass their own explicit archive budgets. Memory use
+    stays independent of a CUDA DLL's size. The caller removes owned staging
+    after any failure and publishes its receipt only after every input passes.
+    """
+    with zipfile.ZipFile(wheel) as archive:
+        for member in archive.infolist():
+            if cancelled():
+                raise InterruptedError('Room runtime extraction cancelled')
+            name = PurePosixPath(member.filename)
+            if member.is_dir():
+                continue
+            if (not name.parts or name.is_absolute() or '..' in name.parts
+                    or '\\' in member.filename or ':' in member.filename
+                    or stat.S_ISLNK(member.external_attr >> 16) or member.file_size > member_limit):
+                raise ValueError('Unsafe runtime wheel member')
+            expanded += member.file_size
+            if expanded > expanded_limit:
+                raise ValueError('Private room runtime exceeds budget')
+            relative = 'vendor/'+member.filename
+            target = staging/relative
+            previous = records.get(relative)
+            if (target.is_symlink() or previous is None and target.exists()
+                    or previous is not None and not target.is_file()):
+                raise ValueError('Conflicting runtime wheel members')
+            if previous is None and len(records) >= file_limit:
+                raise ValueError('Private room runtime exceeds file budget')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            digest, copied = hashlib.sha256(), 0
+            output = None
+            try:
+                if previous is None:
+                    output = target.open('xb')
+                with archive.open(member) as source:
+                    while chunk := source.read(1024*1024):
+                        if cancelled():
+                            raise InterruptedError('Room runtime extraction cancelled')
+                        copied += len(chunk)
+                        if copied > member.file_size:
+                            raise ValueError('Runtime wheel member exceeds declared size')
+                        digest.update(chunk)
+                        if output is not None:
+                            output.write(chunk)
+            finally:
+                if output is not None:
+                    output.close()
+            record = {'bytes': copied, 'sha256': digest.hexdigest()}
+            if copied != member.file_size or previous is not None and previous != record:
+                raise ValueError('Conflicting runtime wheel members')
+            records[relative] = record
+    return expanded
+
+
 def prepare_runtime(manifest_path, root, cancelled=lambda: False):
     """Private CUDA libraries only. No pip, system packages or driver changes."""
     manifest_raw = Path(manifest_path).read_bytes()
@@ -162,25 +219,7 @@ def prepare_runtime(manifest_path, root, cancelled=lambda: False):
         records, expanded = {}, 0
         for item in manifest["wheels"]:
             wheel = _download(item, cache, cancelled)
-            with zipfile.ZipFile(wheel) as archive:
-                for member in archive.infolist():
-                    name = PurePosixPath(member.filename)
-                    if member.is_dir():
-                        continue
-                    if (name.is_absolute() or ".." in name.parts or "\\" in member.filename or ":" in member.filename
-                            or stat.S_ISLNK(member.external_attr >> 16) or member.file_size > 700*1024**2):
-                        raise ValueError("Unsafe runtime wheel member")
-                    expanded += member.file_size
-                    if expanded > 4*1024**3:
-                        raise ValueError("Private room runtime exceeds budget")
-                    raw = archive.read(member)
-                    relative = "vendor/"+member.filename
-                    target = staging/relative
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    if target.exists() and target.read_bytes() != raw:
-                        raise ValueError("Conflicting runtime wheel members")
-                    target.write_bytes(raw)
-                    records[relative] = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+            expanded = _extract_runtime_wheel(wheel, staging, records, expanded, cancelled)
         model = _download(manifest["model"], cache, cancelled)
         shutil.copyfile(model, staging/"c-fast-foundationstereo.onnx")
         records["c-fast-foundationstereo.onnx"] = {key: manifest["model"][key] for key in ("bytes", "sha256")}
