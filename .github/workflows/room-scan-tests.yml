@@ -75,6 +75,8 @@ jobs:
         run: python -B -m unittest discover -s tests -p test_room_stereo_rig_audit.py -q
       - name: Check measured room edges with rolling rows and withheld exposures
         run: python -B -m unittest discover -s tests -p test_room_line_measurement.py -q
+      - name: Check offline factory polar-spline lens geometry and invalid inverses
+        run: python -B -m unittest discover -s tests -p test_room_polar_lens.py -q
       - name: Load the private Windows CUDA libraries and execute the actual model on CPU
         if: runner.os == 'Windows'
         run: python -B tools/check_room_pc_runtime.py --cache "${{ runner.temp }}/room-pc-runtime"
