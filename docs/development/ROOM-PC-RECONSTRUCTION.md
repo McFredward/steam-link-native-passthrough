@@ -1198,7 +1198,8 @@ it never repairs a changed cache by overwriting files in place.
 removes inherited Python, CUDA toolkit and inference DLL search paths. The child
 verifies the prepared files before importing Torch or NumPy, checks their
 private origins and exact Torch/CUDA versions, then exercises actual metric
-ray rendering, 250 gradient updates and state-preserving growth. No native
+ray rendering, bounded candidate search with a real empty ray, 250 gradient
+updates and state-preserving growth. No native
 Frame service, camera API, driver installation or system Python modification
 is involved. This is dependency and execution validation, not live worker
 integration or room accuracy acceptance.
@@ -1246,3 +1247,12 @@ errors and unresolved horizontal plane ambiguity are retained. These sparse
 conditional witnesses do not establish whole-room physical accuracy. The
 large remaining errors and lack of a qualified floor/ceiling pair still
 preclude presenting this as an accepted live scanner or candidate 18.
+
+The worst supported witness remains worse than initialization: 37.69 cm versus
+30.47 cm. A private source-image inspection places it at a furniture edge; its
+conditional multi-view fit remains consistent at 0.255 pixels. It is retained
+as a failure, rather than removed from the comparison. A further private
+ray-aware insertion trial adds 113 training-derived points only where no
+retained view offers a compatible existing intersection inside the motion
+budget. That trial supports 22/28 witnesses, but has no known measured normals
+or qualified room height and is not yet a selected live admission strategy.
