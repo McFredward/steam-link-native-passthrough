@@ -197,8 +197,27 @@ class SurfaceOptimizer:
             known = measured > 0
             metric_rays = int(known.sum())
             if metric_rays:
-                residual = (rendered['depth'][known]-measured[known])/sigma[known]
-                loss = loss+self.metric_weight*(residual.square()+1e-5).sqrt().mean()
+                # Opposite depth errors cannot cancel in an expected depth.
+                # Treat the current ray contributions as fixed associations;
+                # geometry must improve, rather than moving opacity/footprints
+                # to hide the metric residual. An opaque measurement censors
+                # farther geometry: do not attract an occluded background to
+                # the observed foreground. This uses conditional input sigmas,
+                # and does not establish physical camera/surface confidence.
+                distance = rendered['intersection_depth'][known]-measured[known, None]
+                residual = distance/sigma[known, None]
+                weights = rendered['weights'][known].detach()
+                present = weights > 1e-5
+                near = (present & (abs(residual) <= 3.)).any(-1)
+                # Without a nearby modeled surface, the first farther seed
+                # inside the explicit motion budget may be corrected. This
+                # repairs a wrong proposal without attracting a remote actual
+                # background or using two wrong layers as a depth average.
+                repair = present & (residual > 3.) & (distance <= self.max_displacement_m)
+                repair &= (repair.cumsum(-1) == 1) & ~near[:, None]
+                residual = torch.where((residual > 3.) & ~repair, 3., residual)
+                loss = loss+self.metric_weight*((weights*(residual.square()+1e-5).sqrt()).sum(-1)
+                    /rendered['alpha'][known].detach().clamp_min(1e-8)).mean()
         if view.surface_neighbors is not None and self.steps >= 100:
             # Surface normals derived from the rendered metric depth must agree
             # with the disks' normals. Links come only from caller-qualified

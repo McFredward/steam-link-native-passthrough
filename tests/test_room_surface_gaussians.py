@@ -144,6 +144,58 @@ class SurfaceGaussianTests(unittest.TestCase):
             for name, value in model.state_dict().items():
                 self.assertTrue(torch.equal(value, frozen[name]))
 
+    def test_opposite_surface_errors_cannot_cancel_in_a_metric_mean(self):
+        # Ray weights are .5 and .25. Their expected depth is exactly 2 m,
+        # although neither terminating surface is at the measured 2 m.
+        model = SurfaceGaussians([[0., 0., -1.8], [0., 0., -2.4]], [[0, 0, 1]]*2,
+                                 [[.2, .2]]*2, [[.7]]*2, .5)
+        baseline = copy.deepcopy(model)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[0., 0., -1.]]),
+            torch.tensor([[.7]]), torch.tensor([[0, 1]]), torch.tensor([True]), torch.tensor([False]))
+        before = model.render(view.origins, view.directions, view.candidates)
+        self.assertAlmostEqual(before['depth'].item(), 2., places=5)
+        self.assertGreater(abs(before['median_depth'].item()-2.), .19)
+        measured = SurfaceOptimizer(model, metric_weight=.1).step(replace(view,
+            measured_depth=torch.tensor([2.]), measured_sigma=torch.tensor([.02])))
+        unmeasured = SurfaceOptimizer(baseline, metric_weight=.1).step(view)
+        # The foreground costs ten sigma; the censored background costs three.
+        self.assertAlmostEqual(measured['loss']-unmeasured['loss'], .1*(.5*10+.25*3)/.75, places=4)
+        self.assertGreater((model.means.grad-baseline.means.grad)[0, 2].item(), 0.)
+
+    def test_a_foreground_metric_ray_does_not_pull_occluded_background_geometry(self):
+        model = SurfaceGaussians([[0., 0., -1.98], [0., 0., -4.]], [[0, 0, 1]]*2,
+                                 [[.2, .2]]*2, [[.7]]*2, .5)
+        baseline = copy.deepcopy(model)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[0., 0., -1.]]),
+            torch.tensor([[.7]]), torch.tensor([[0, 1]]), torch.tensor([True]), torch.tensor([False]))
+        SurfaceOptimizer(model, metric_weight=.1).step(replace(view,
+            measured_depth=torch.tensor([2.]), measured_sigma=torch.tensor([.02])))
+        SurfaceOptimizer(baseline, metric_weight=.1).step(view)
+        gradient = model.means.grad-baseline.means.grad
+        self.assertGreater(gradient[0, 2].item(), 0.)
+        self.assertTrue(torch.allclose(gradient[1], torch.zeros(3), atol=1e-7, rtol=0))
+        # Metric error cannot be reduced by changing the background's opacity,
+        # footprint, normal or color instead of correcting the foreground.
+        for name in ('axes', 'log_scales', 'opacity_logits', 'color_logits'):
+            a, b = dict(model.named_parameters())[name], dict(baseline.named_parameters())[name]
+            self.assertTrue(torch.allclose(a.grad[1], b.grad[1], atol=1e-7, rtol=0), name)
+
+    def test_a_missing_foreground_does_not_repurpose_a_remote_background(self):
+        model = SurfaceGaussians([[0., 0., -4.]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
+        baseline = copy.deepcopy(model)
+        view = RayTrainingView(torch.zeros((1, 3)), torch.tensor([[0., 0., -1.]]),
+            torch.tensor([[.7]]), torch.tensor([[0]]), torch.tensor([True]), torch.tensor([False]))
+        measured = SurfaceOptimizer(model, metric_weight=.1).step(replace(view,
+            measured_depth=torch.tensor([2.]), measured_sigma=torch.tensor([.02])))
+        unmeasured = SurfaceOptimizer(baseline, metric_weight=.1).step(view)
+        self.assertGreater(measured['loss']-unmeasured['loss'], .29)
+        for name, parameter in model.named_parameters():
+            other = dict(baseline.named_parameters())[name]
+            self.assertTrue(torch.equal(parameter.grad, other.grad), name)
+            self.assertTrue(torch.equal(parameter, other), name)
+        # A new measured surface needs caller admission; the absent foreground
+        # cannot be manufactured by dragging this background toward the camera.
+
     def test_metric_depth_overcomes_a_wrong_neural_position_prior(self):
         model = SurfaceGaussians([[0., 0., -2.12]], [[0, 0, 1]], [[.2, .2]], [[.7]], .8)
         optimizer = SurfaceOptimizer(model, seed_directions=[[0., 0., -1.]],
