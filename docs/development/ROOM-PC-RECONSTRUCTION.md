@@ -1217,3 +1217,32 @@ remain in the same Windows/Linux suite.
 The Windows archive check also exposed `ZipInfo` normalizing backslashes while
 reading, in addition to fixture creation. Extraction now validates each original
 archive name before accepting its normalized path, including embedded NULs.
+
+### Preventing metric depth cancellation and background attraction
+
+Metric constraints now act on the individual contributing ray/surface
+intersections. Their rendered mean could previously match a measured distance
+while the visible terminating surface remained wrong. Intersection association
+weights and their normalization are detached from this geometric loss, so
+changing opacity or footprint cannot conceal a residual during its gradient
+update. Image optimization still trains those parameters independently.
+
+An opaque foreground observation censors attraction of farther background
+geometry beyond three conditional input sigmas. If no nearby surface is
+modeled, the first farther contributing seed inside the existing explicit
+motion budget may instead be corrected. A remote background remains in place;
+admitting a new missing foreground is a separate caller operation. The loss
+does not turn a proposal or conditional uncertainty into measured confidence.
+Three analytic controls cover cancelling layers, foreground/background
+gradient isolation and a wholly missing foreground. Existing wrong-seed
+correction and optimizer-state controls remain required; the combined surface
+suite now has 22 tests.
+
+The same 8,033-disk continuous-recording replay now supports 20/28 independent
+held-image witnesses. On the same original 17 supported witnesses, median/p95
+range errors are 2.26/16.49 cm, compared with the initial 4.31/20.07 cm and the
+previous public bound objective's 3.57/19.64 cm. Overall support, all supported
+errors and unresolved horizontal plane ambiguity are retained. These sparse
+conditional witnesses do not establish whole-room physical accuracy. The
+large remaining errors and lack of a qualified floor/ceiling pair still
+preclude presenting this as an accepted live scanner or candidate 18.

@@ -123,4 +123,5 @@ class SurfaceGaussians(nn.Module):
         return {'color': rendered, 'alpha': coverage, 'depth': expected_depth,
                 'median_depth': median_depth, 'normal': normal,
                 'distortion': distortion, 'normal_variance': normal_variance,
-                'weights': weights, 'candidate_ids': candidates.gather(1, order)}
+                'weights': weights, 'intersection_depth': depth,
+                'candidate_ids': candidates.gather(1, order)}
