@@ -40,12 +40,13 @@ auch bei Teiltransparenz; das Kamerabild bleibt auf der Brille.
 
 ## Unterstützte Spiele
 
-| Spiel | Benötigte Mod | Mindestversion |
+| Spiel | Benötigte Integration | Mindestversion |
 |---|---|---|
 | Gloomhaven Digital | [GloomhavenVR](https://github.com/McFredward/GloomhavenVR) | **1.2.0** |
 | Demeo | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
 | Demeo Battles | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
 | Demeo Battlemarked | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
+| Kompatible Quest-MR-Spiele | [Venture](https://github.com/Villagers654/Venture) — Quest-Emulator für PC-VR | **0.2.0** |
 
 Andere Spiele benötigen eine Integration; der Patch allein reicht nicht aus.
 
