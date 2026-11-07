@@ -1122,3 +1122,44 @@ provisional neural support from physically verified multi-view surfaces, retain
 unknown gaps and refine actual Gaussian geometry. None of these private CPU
 measurements establishes NVIDIA throughput, a candidate-18 installer or a
 complete accepted scanner.
+
+### Geometric binding and incremental Gaussian optimizer state
+
+The next private continuous-recording experiment uses 8,033 provisional disks
+from five larger-model training views, actual raw source-pixel row cameras in
+46 image views, and a fixed training-only rig hypothesis. Fifteen exposures,
+including both eyes, remain outside initialization and training. A separate
+metric audit constructs 28 conditional geometry witnesses only from those
+withheld images. Neither point fitting nor Gaussian training sees the measured
+room height. Rendered support and bad witness errors are retained in the report.
+
+Free photometric optimization worsens the same 17 supported witnesses from
+4.31/20.07 cm median/p95 range error to 14.45/34.76 cm. A separate detection and
+matching pass uses only training images to obtain 1,063 triangulated points and
+4,491 correlated ray constraints. Adding those constraints and an explicitly
+provisional 10 cm seed-position regularizer improves the median. The public
+optimizer replay reaches 3.57/19.64 cm on those same 17 witnesses, with 18/28
+witnesses supported overall. A private arithmetic variant reached 2.44 cm
+median, but small floating-point differences alter the optimization trajectory.
+These variants remain unqualified: the large error tail, sparse coverage and
+conditional calibration cannot be hidden by the improved median. A naive extra
+point-insertion variant also creates competing support and is not selected as
+a live strategy. No ordinary worker or installer has switched to these models.
+
+`SurfaceOptimizer` now exposes separate proposal-position regularization and
+metric constraint weighting. Proposal sigmas require actual source-ray
+directions; zero omits the prior. Their values do not shrink during image
+optimization, enter `measured_depth` or grant physical confidence. Existing
+defaults retain the previous reference objective. Real metric observations can
+override a wrong neural seed instead of treating that seed as ground truth.
+
+`extend()` stages a larger bounded model and optimizer state before committing
+the change. Old disk IDs, parameter values, initial seeds, Adam moments, per-disk
+clocks, global step and random state remain intact. New disks start with empty
+moments and their own warmup. Candidate caches invalidate on the new shape;
+invalid additions leave the active model untouched. Admission, observation
+association, regional paging and complete previews remain the caller's job;
+this primitive neither evicts a region nor declares an unseen hole measured.
+Four new analytic controls exercise metric correction against a wrong prior,
+growth followed by training another region, atomic refusal and neutral unknown
+priors. They run with the existing surface controls on Windows and Linux.
