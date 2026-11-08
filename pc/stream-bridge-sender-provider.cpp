@@ -178,10 +178,46 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
     vr::IVRDriverContext* context_=nullptr;vr::IVRDriverLog* log_=nullptr;
     stream_bridge::sender::SenderRuntime runtime_{boundary()};stream_bridge::ControlRequest request_{};
     stream_bridge::sender::SenderCoverage coverage_{directMode(),boundary(),runtime_.control()};
-    stream_bridge::sender::SourceIpcServer sourceIpc_{[](std::uint32_t pid,void* context){return static_cast<Provider*>(context)->coverage_.ready(pid);},this,
+    stream_bridge::sender::SourceIpcServer sourceIpc_{[](std::uint32_t pid,void* context){return static_cast<Provider*>(context)->sourceReady(pid);},this,
         [](std::uint32_t pid,bool budget,void* context)noexcept{static_cast<Provider*>(context)->coverage_.sourceProcess(pid,budget);}};
     void** directSlots_=nullptr;std::array<void*,8> directOriginal_{},directWrapped_{};
     void report(const char* status,stream_bridge::logging::Level level=stream_bridge::logging::Level::Important){if(log_&&stream_bridge::logging::enabled(level)){char text[stream_bridge::sender::RgbOutputLogBytes+64]{};std::snprintf(text,sizeof text,"Steam Link Native Passthrough: %s",status);log_->Log(text);}}
+    std::uint32_t admissionPid_=0;ULONGLONG nextAdmissionReport_=0;
+    bool sourceReady(std::uint32_t pid){
+        const bool ready=coverage_.ready(pid); // The original admission check.
+        if(ready)return true;
+        const auto now=GetTickCount64();
+        if(pid==admissionPid_&&now<nextAdmissionReport_)return false;
+        admissionPid_=pid;nextAdmissionReport_=now+5000;
+        const auto source=coverage_.readiness();const auto direct=directMode().diagnostics(pid);
+        const auto cleanup=directMode().cleanupStats();
+        using D=stream_bridge::sender::DirectDiagnostic;
+        const auto n=[&](D value){return static_cast<unsigned long long>(direct.count(value));};
+        char text[1700]{};
+        std::snprintf(text,sizeof text,"source admission pending: client-pid=%u; coverage enabled/prepared=%u/%u, prepared/captured-pid=%u/%u; direct-enabled=%u, client-swaps=%d (-1=registry busy); approximate diagnostics, not frame proof",
+            pid,unsigned(source.enabled),unsigned(source.prepared),source.preparedPid,source.capturedPid,unsigned(direct.enabled),direct.processSwaps);report(text);
+        std::snprintf(text,sizeof text,"direct admission refusals: create shape/handles/duplicate/capacity/lock=%llu/%llu/%llu/%llu/%llu; submit unknown/geometry/pid/overflow/lock=%llu/%llu/%llu/%llu/%llu; component-capacity=%llu; present empty/tainted/lock=%llu/%llu/%llu; callback no-scope/unknown/epoch/disabled=%llu/%llu/%llu/%llu; destroy-lock=%llu; counts include background callbacks, not frames",
+            n(D::CreateShape),n(D::CreateHandles),n(D::CreateDuplicate),n(D::CreateCapacity),n(D::CreateLock),
+            n(D::SubmitUnknown),n(D::SubmitGeometry),n(D::SubmitPid),n(D::SubmitOverflow),n(D::SubmitLock),
+            n(D::ComponentCapacity),n(D::PresentEmpty),n(D::PresentTainted),n(D::PresentLock),n(D::NoScope),n(D::UnknownSource),n(D::StaleEpoch),n(D::Disabled),static_cast<unsigned long long>(cleanup.lockMisses));report(text);
+        if(direct.contextAvailable&&direct.create.reason!=D::None){const auto& e=direct.create;
+            std::snprintf(text,sizeof text,"last rejected direct create: reason=%s pid=%u size=%ux%u format=%u packed-samples=%u; diagnostic metadata only",
+                stream_bridge::sender::directDiagnosticName(e.reason),e.pid,e.width,e.height,e.format,e.packedSamples);report(text);}
+        if(direct.contextAvailable&&direct.submit.reason!=D::None){const auto& e=direct.submit;
+            std::snprintf(text,sizeof text,"last rejected direct submit: reason=%s known-pid=%u layers=%u bounds=[%.7g,%.7g,%.7g,%.7g]; no handles or poses recorded",
+                stream_bridge::sender::directDiagnosticName(e.reason),e.pid,e.layers,e.bounds[0],e.bounds[1],e.bounds[2],e.bounds[3]);report(text);}
+        const auto gates=coverage_.gateStats();
+        std::snprintf(text,sizeof text,"source admission coverage: hook/native/source/eye/pairs=%llu/%llu/%llu/%llu/%llu; last-refusal=%s; last-source=%ux%u format=%u; context readable/stable/hooks/original/facade/mutations=%u/%u/%u/%u/%u/%u",
+            static_cast<unsigned long long>(gates.hookDraws),static_cast<unsigned long long>(gates.nativeDraws),static_cast<unsigned long long>(gates.sourceFrames),
+            static_cast<unsigned long long>(gates.eyeDraws),static_cast<unsigned long long>(gates.completePairs),stream_bridge::sender::coverageGateName(gates.lastRefusal),
+            gates.lastSourceWidth,gates.lastSourceHeight,gates.lastSourceFormat,unsigned(gates.contextTableReadable),unsigned(gates.contextTableStable),
+            gates.contextHookSlots,gates.contextOriginalSlots,gates.contextFacadeSlots,gates.nativeDispatchMutations);report(text);
+        for(unsigned i=1;i<gates.refusals.size();++i)if(gates.refusals[i]){
+            std::snprintf(text,sizeof text,"source admission coverage refusal: %s=%llu; approximate callbacks including other clients, not frame proof",
+                stream_bridge::sender::coverageGateName(static_cast<stream_bridge::sender::CoverageGate>(i)),static_cast<unsigned long long>(gates.refusals[i]));report(text);
+        }
+        return false;
+    }
     bool configure(){
         vr::EVRInitError error=vr::VRInitError_None;
         auto* settings=static_cast<vr::IVRSettings*>(context_->GetGenericInterface(vr::IVRSettings_Version,&error));

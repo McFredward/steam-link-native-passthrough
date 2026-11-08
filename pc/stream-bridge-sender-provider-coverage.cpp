@@ -697,6 +697,10 @@ void SenderCoverage::stop()noexcept{
     s.facade.restore();
     // No COM or staging release while a cached callback/borrowed AU can exist.
 }
+SenderCoverage::Readiness SenderCoverage::readiness()const noexcept{
+    return {impl_->enabled.load(std::memory_order_relaxed),impl_->prepared.load(std::memory_order_relaxed),
+            impl_->preparedPid.load(std::memory_order_relaxed),impl_->lastPid.load(std::memory_order_relaxed)};
+}
 bool SenderCoverage::ready(std::uint32_t pid)const noexcept{return impl_->enabled&&impl_->prepared&&impl_->preparedPid==pid&&impl_->direct.ownsProcess(pid);}
 bool SenderCoverage::operational(std::uint32_t pid)const noexcept{return ready(pid)&&impl_->lastPid==pid;}
 CoverageGateStats SenderCoverage::gateStats()const noexcept{
