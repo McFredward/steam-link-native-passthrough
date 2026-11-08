@@ -224,7 +224,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $pin = Get-Content packaging/setup-python.json -Raw | ConvertFrom-Json
           $archive = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
-          & curl.exe --fail --silent --show-error --proto '=https' --max-time 60 --max-filesize 16777216 --output $archive $pin.source_url
+          & curl.exe --fail --retry 2 --retry-delay 2 --retry-max-time 120 --silent --show-error --proto '=https' --max-time 60 --max-filesize 16777216 --output $archive $pin.source_url
           if ($LASTEXITCODE -ne 0 -or (Get-Item $archive).Length -ne $pin.bytes -or (Get-FileHash $archive).Hash.ToLowerInvariant() -cne $pin.sha256) { throw 'Official Python pin differs.' }
           # Only the public Python archive: compare actual Win32 stat/fstat fields
           # when diagnosing runtime-specific file identity representations.
@@ -240,7 +240,7 @@ jobs:
           $package = Join-Path $env:RUNNER_TEMP 'setup-inspection.zip'
           $sshPin = Get-Content packaging/setup-openssh.json -Raw | ConvertFrom-Json
           $sshArchive = Join-Path $env:RUNNER_TEMP 'openssh-portable.zip'
-          & curl.exe --fail --location --silent --show-error --proto '=https' --proto-redir '=https' --max-time 60 --max-filesize 16777216 --output $sshArchive $sshPin.source_url
+          & curl.exe --fail --retry 2 --retry-delay 2 --retry-max-time 120 --location --silent --show-error --proto '=https' --proto-redir '=https' --max-time 60 --max-filesize 16777216 --output $sshArchive $sshPin.source_url
           if ($LASTEXITCODE -ne 0 -or (Get-Item $sshArchive).Length -ne $sshPin.bytes -or (Get-FileHash $sshArchive).Hash.ToLowerInvariant() -cne $sshPin.sha256) { throw 'Official OpenSSH pin differs.' }
           python -B tools/package_setup_inspection.py --python-zip $archive --openssh-zip $sshArchive --textual-wheels (Join-Path $env:RUNNER_TEMP 'textual-wheels') --output $package
           if ($LASTEXITCODE -ne 0) { throw 'Inspection packaging failed.' }
