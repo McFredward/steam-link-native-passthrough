@@ -16,7 +16,7 @@ _DEBUG = frozenset((0, 2, 3, 4, 5, 6, 7, 8, 317, 330))
 def normalize(raw, stage='fragment'):
     """Select by actual logic, independently of the installed runtime version."""
     first_error = None
-    for key in (stage, stage + '_beta'):
+    for key in (stage, stage + '_beta', stage + '_achromatic_beta'):
         if key not in _METADATA:
             continue
         try:

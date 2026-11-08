@@ -1,6 +1,7 @@
 #include "layer/pixel_ssbo_definition_journal.h"
 #include "layer/pixel_ssbo_profile_transform.h"
 #include "layer/native_presenter_pipeline.h"
+#include "layer/stream_bridge_coverage_transform.h"
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -266,6 +267,8 @@ void sampledNative(const std::vector<std::uint32_t>& vs,const std::vector<std::u
     require(frame_native_presenter::inspectCompletedPipeline(object<VkDevice>(1),VK_API_VERSION_1_1,VK_SUCCESS,
             f.graphics,object<VkPipeline>(0x60),ready.recipe).reason==frame_native_presenter::Reason::None,
             "sampled device with native density capabilities passes cold production pipeline inspection");
+    require(stream_bridge_coverage_transform::pairedStages(ready.recipe.vertex,ready.recipe.fragment),
+            "actual reviewed stage pair also passes the varying-interface compatibility gate");
     require(ready.recipe.feature.complete&&!ready.recipe.feature.enabled&&ready.recipe.feature.raw==VK_FALSE,
             "disabled storage remains disabled in the complete sampled recipe");
     require(!ready.nativeAuthority&&!ready.recipe.nativeCompatibilityProven&&!ready.recipe.runtimeActivationAuthorized,

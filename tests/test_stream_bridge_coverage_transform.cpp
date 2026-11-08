@@ -64,15 +64,23 @@ void replay(const char* vertex,const char* fragment,const std::filesystem::path&
 }
 }
 int main(int argc,char** argv){try{
-    check(argc==1||argc==6,"optional stableVS stablePS currentVS currentPS privateOutputDirectory");
+    check(argc==1||argc==6||argc==7,"optional stableVS stablePS currentVS currentPS privateOutputDirectory rejectedLayeredVS");
     c::ShaderDefinition absent;t::Fragment output;
     check(!t::transform(absent,false,output)&&!output.bytes,"missing source refuses");
     absent.complete=true;absent.bytes=6620;absent.words[0]=0x07230203;
     check(!t::transform(absent,false,output)&&!output.bytes,"plausible source header is no executable proof");
     check(!t::pairedStages(absent,absent),"matching caller flags cannot attest native stages");
-    if(argc==6){std::filesystem::create_directories(argv[5]);
+    if(argc>=6){std::filesystem::create_directories(argv[5]);
         replay(argv[1],argv[2],argv[5],"stable");replay(argv[3],argv[4],argv[5],"current");
         replay(argv[1],argv[2],argv[5],"stable-return");
+    }
+    if(argc==7){
+        const auto wrong=capture(load(argv[6]),c::ShaderRole::Vertex),fragment=capture(load(argv[4]),c::ShaderRole::Fragment);
+        stream_bridge_shader_interface::Interface outputs,inputs;
+        check(stream_bridge_shader_interface::capture(wrong.words.data(),wrong.bytes,true,outputs)&&
+              stream_bridge_shader_interface::capture(fragment.words.data(),fragment.bytes,false,inputs),"actual layered and achromatic interface facts captured");
+        check(!stream_bridge_shader_interface::compatible(outputs,inputs),"previously selected layered beta vertex has incompatible fragment varyings");
+        check(!t::pairedStages(wrong,fragment),"known individual shader hashes cannot authorize the mismatched stage pair");
     }
     std::cout<<"coverage transform: "<<checks<<" checks PASS; headset_test=false\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

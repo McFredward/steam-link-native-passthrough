@@ -224,6 +224,10 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPI
         target_include_directories(test_stream_bridge_sampled_device PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${SFNP_COVERAGE_VULKAN_HEADERS})
         target_compile_options(test_stream_bridge_sampled_device PRIVATE -Wall -Wextra -Wpedantic -Werror -Wno-missing-field-initializers)
         add_test(NAME stream_bridge_sampled_device COMMAND test_stream_bridge_sampled_device)
+        add_executable(test_stream_bridge_shader_interface tests/test_stream_bridge_shader_interface.cpp)
+        target_include_directories(test_stream_bridge_shader_interface PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+        target_compile_options(test_stream_bridge_shader_interface PRIVATE -Wall -Wextra -Wpedantic -Werror)
+        add_test(NAME stream_bridge_shader_interface COMMAND test_stream_bridge_shader_interface)
     endif()
     find_package(Vulkan QUIET)
     if(Vulkan_FOUND)
@@ -237,6 +241,11 @@ if(BUILD_TESTING AND CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_CROSSCOMPI
         target_compile_options(test_native_stream_coverage_current_gpu PRIVATE
             -Wall -Wextra -Wno-unused-function -Wno-missing-field-initializers)
         target_link_libraries(test_native_stream_coverage_current_gpu PRIVATE Vulkan::Vulkan)
+        add_executable(test_native_stream_stages_gpu EXCLUDE_FROM_ALL
+            tests/native-fragment-stream-coverage-gpu/native-stages.cpp)
+        target_compile_options(test_native_stream_stages_gpu PRIVATE
+            -Wall -Wextra -Wno-unused-function -Wno-missing-field-initializers)
+        target_link_libraries(test_native_stream_stages_gpu PRIVATE Vulkan::Vulkan)
         # Requires private installed shader inputs and active validation.
         # No public fixture can establish an actual selected-video lease.
     endif()

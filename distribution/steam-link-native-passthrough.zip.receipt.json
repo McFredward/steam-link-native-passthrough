@@ -1,12 +1,12 @@
 {
   "archive": {
-    "bytes": 20230937,
-    "sha256": "ec121f1443a688114380ef9caacd17e9ffcef8382fe140d908ae9b3a3f6316d8"
+    "bytes": 20232006,
+    "sha256": "decdcade5552d7d94b9decac08ceac0fb31b4da33ffeb62dc0aadc320cc4106f"
   },
   "artifacts": {
     "frame_layer": {
-      "bytes": 3725936,
-      "sha256": "2c8bd6f31c4980ba4e998a5bb967dc27607c1c397a8d4ed9e5f0aa210d6dc357"
+      "bytes": 3725848,
+      "sha256": "6253c6a8e9e26919d961fffd1b0e7d0252b53bff66b9ac0862d5ceb4b8ec3621"
     },
     "frame_selector": {
       "bytes": 73360,
@@ -26,7 +26,7 @@
     }
   },
   "component_versions": {
-    "frame": "0.3.9",
+    "frame": "0.3.10",
     "pc": "0.3.13"
   },
   "device_actions": false,
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11549,
-    "sha256": "ed86edc99398b0b2c7a616cae6d9aad77b78db083545b8f7c2ecd6d5a86131ba"
+    "sha256": "947d3d4efea0d046d70f8c14325a32be56eecf987d063e4fa7a9e08b057d3df4"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -46,12 +46,12 @@
       "sha256": "24ebef98fe102a76cf28832d3361debfbc9b1de6513256d6617bb31d79776240"
     },
     "PATCH_VERSIONS.json": {
-      "bytes": 79,
-      "sha256": "679fdf5878f9aca9b52db90dafa8269e2b02db5c0df8e18aecc71a8822ba2a05"
+      "bytes": 80,
+      "sha256": "52bfd6b3135ab48ef13bd36d7335c16ed4da9a62cdc4bacc086367b892a1632e"
     },
     "VERSION": {
       "bytes": 7,
-      "sha256": "1487b09a4ef69a50a27e19da4e292a6a75ea9f75014cf9e9c177be9fc8491c0f"
+      "sha256": "9e27a09767c99778014e21dbe4d49135cec06082115f48187ed9bc813ba71ed1"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -202,12 +202,12 @@
       "sha256": "c4ee8bd9981d8573f02094d304461463c611b03a3f832071de05962c850e32f4"
     },
     "tools/native_shader_contract.json": {
-      "bytes": 20549,
-      "sha256": "5bfc8bfa1ffc9b55471cc71803cf30bf7e0236cd55ed8208ba0cba4a970ec559"
+      "bytes": 23480,
+      "sha256": "d014d417649cb8016f57142551d15b2170f5cadbd552f0b0c0f203f9339c03cb"
     },
     "tools/native_shader_contract.py": {
-      "bytes": 3450,
-      "sha256": "b4f529e9d1fc3d90a268e3b28f76accba604634670e0ee4799c2076f11b5cd3a"
+      "bytes": 3478,
+      "sha256": "a801b3ad4babb70eeab48f0654b10c4c2ced96bab93e73ab87bef9882fc139b5"
     },
     "tools/package_setup_dependencies.py": {
       "bytes": 7369,
@@ -234,7 +234,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "8b8bac0812c268ada7a814c85d2f9d35ee3340e1",
+  "source_revision": "6d4289433ecabc3466638bea5a79ae3dfb6bd6c2",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -252,9 +252,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8585,
-        "sha256": "c397115de56258b4e444a0625e434368a638e6b574092ef8bd1eea78e37f0b4c"
+        "sha256": "f7b5ef3fa0e411e2592929e272bc8482816d2ea06f04ee57587646fa326ccd42"
       }
     }
   ],
-  "version": "0.3.23"
+  "version": "0.3.24"
 }

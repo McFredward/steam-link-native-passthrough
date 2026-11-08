@@ -1,5 +1,8 @@
 # Frame0.3.9: native density-map feature declarations
 
+The next headset test confirms this device gate now passes. Its subsequent
+shader-stage rejection is addressed in [Frame0.3.10](FRAME-ACTIVE-VERTEX.md).
+
 ## Observed failure
 
 The new PC log starts SteamVR2.19.2 at23:22 local on2026-11-08. The current
