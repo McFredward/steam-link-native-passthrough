@@ -22,18 +22,26 @@
 
 Play supported PC VR games in your real room over Steam Link.
 
-**Latest release: [0.3.15](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15) · Published October 30, 2026**
+**Latest release: [0.3.18](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.18) · Published November 8, 2026**
 
 | Component | Release version |
 |---|---|
-| Installer | **0.3.15** |
-| PC sender | **0.3.11** |
+| Installer | **0.3.18** |
+| PC sender | **0.3.13** |
 | Frame receiver | **0.3.5** |
 
 The installation command below installs this release from `main` with normal logging.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.16**, use
+PC0.3.13 fixes a native texture-edge rounding error that could leave passthrough
+black in Venture. The fix was confirmed on Steam Frame. Updating an intact
+Frame0.3.5 installation changes only the PC patch and does not restart the Frame.
+
+For the **experimental Arcturus room setup candidate 0.3.16-roomscan.17**, use
 the separate `arcturus-room-setup` branch installer:
+
+The development source is rebased on stable 0.3.18, including the PC 0.3.13
+texture-edge fix. The command below still delivers the frozen roomscan.17
+archive; it does not yet install that fix or the reconstruction rebuild.
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
@@ -122,12 +130,13 @@ partial transparency; the camera image stays on the headset.
 
 ## Supported games
 
-| Game | Required mod | Minimum version |
+| Game | Required integration | Minimum version |
 |---|---|---|
 | Gloomhaven Digital | [GloomhavenVR](https://github.com/McFredward/GloomhavenVR) | **1.2.0** |
 | Demeo | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
 | Demeo Battles | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
 | Demeo Battlemarked | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
+| Compatible Quest MR games | [Venture](https://github.com/Villagers654/Venture) — Quest emulator for PC VR | **0.2.0** |
 
 Other games need an integration; installing the patch alone is not enough.
 

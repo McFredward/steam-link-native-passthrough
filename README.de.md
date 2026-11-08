@@ -22,18 +22,28 @@
 
 Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
-**Aktuelles Release: [0.3.15](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15) · Veröffentlicht am 30. Oktober 2026**
+**Aktuelles Release: [0.3.18](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.18) · Veröffentlicht am 8. November 2026**
 
 | Komponente | Release-Version |
 |---|---|
-| Installer | **0.3.15** |
-| PC-Sender | **0.3.11** |
+| Installer | **0.3.18** |
+| PC-Sender | **0.3.13** |
 | Frame-Empfänger | **0.3.5** |
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.16** gibt es den
+PC0.3.13 behebt einen Rundungsfehler an nativen Texturgrenzen, durch den
+Passthrough in Venture schwarz bleiben konnte. Die Korrektur wurde auf Steam
+Frame bestätigt. Bei intakter Frame0.3.5-Installation wird nur der PC-Patch
+aktualisiert; die Frame wird dabei nicht neu gestartet.
+
+Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.17** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
+
+Der Entwicklungsstand basiert auf Stable 0.3.18 einschließlich des
+Texturgrenzen-Fixes aus PC 0.3.13. Der folgende Befehl liefert weiterhin das
+eingefrorene roomscan.17-Archiv; der Fix und der Neuaufbau der Rekonstruktion
+sind darin noch nicht enthalten.
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
@@ -130,12 +140,13 @@ auch bei Teiltransparenz; das Kamerabild bleibt auf der Brille.
 
 ## Unterstützte Spiele
 
-| Spiel | Benötigte Mod | Mindestversion |
+| Spiel | Benötigte Integration | Mindestversion |
 |---|---|---|
 | Gloomhaven Digital | [GloomhavenVR](https://github.com/McFredward/GloomhavenVR) | **1.2.0** |
 | Demeo | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
 | Demeo Battles | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
 | Demeo Battlemarked | [Demeo Mixed Reality](https://github.com/McFredward/Demeo_GreenScreen) | **2.0.0** |
+| Kompatible Quest-MR-Spiele | [Venture](https://github.com/Villagers654/Venture) — Quest-Emulator für PC-VR | **0.2.0** |
 
 Andere Spiele benötigen eine Integration; der Patch allein reicht nicht aus.
 

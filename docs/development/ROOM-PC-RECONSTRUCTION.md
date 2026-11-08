@@ -1297,3 +1297,20 @@ independent physical point on an occluding furniture edge. Keep that failure
 in reports, but do not treat it as survey truth or fit away the disagreement
 without another physical reference. The measured room height remains held
 out; an additional real object dimension has been requested for validation.
+
+
+### Stable 0.3.18 source rebase
+
+On 2026-11-08, the room development branch was rebased onto stable 0.3.18
+(`694d132`), including the general PC 0.3.13 texture-edge rounding correction.
+The PC, bridge and layer sources match that stable base; room capture,
+reconstruction, setup and runtime-preparation sources retain their previous
+contents. This is source integration, not a new reconstruction acceptance result.
+
+The normal branch bootstrap still pins the original `6102646b` roomscan.17
+archive, SHA256 `66d9862ad3a4a74b848905b5ea5bdb6ee2891028c4706e8efc1fe03dff9dc5e6`.
+It does not deliver PC 0.3.13 or the reconstruction rebuild. Keep its historical
+installer/component versions and receipts intact. The next package must include
+the verified PC 0.3.13 binary, update installer/PC version metadata and validation
+pins, and preserve the unchanged Frame component version. No candidate 18 has
+been packaged or installed by this rebase.
