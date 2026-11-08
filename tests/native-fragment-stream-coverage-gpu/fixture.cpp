@@ -48,6 +48,7 @@ struct CoverageGpu:OutputGpu {
     std::array<std::uint32_t,4> drawMasked(const Case& c,float enabled=1,float recovery=0,bool bindMask=true){const std::array<float,4> values{{enabled,recovery,0,0}};std::memcpy(buffers[control].mapped,values.data(),sizeof values);flush(control);metadata(c);startPass();if(bindMask)vkCmdBindDescriptorSets(command,VK_PIPELINE_BIND_POINT_GRAPHICS,pipelineLayout,1,1,&maskSet,0,nullptr);vkCmdBindDescriptorSets(command,VK_PIPELINE_BIND_POINT_GRAPHICS,pipelineLayout,2,1,&controlSet,0,nullptr);raster(probe,c.u);return readPass();}
 };
 }
+#ifndef SFNP_COVERAGE_FIXTURE_NO_MAIN
 int main(int argc,char** argv){try{
     require(argc==4||argc==5||argc==6,"usage: stream-coverage-fixture VERTEX ORIGINAL COVERAGE [1|3] [CAMERA_ONLY]");
     const unsigned descriptorCount=argc>=5?unsigned(std::stoul(argv[4])):3;
@@ -84,3 +85,4 @@ int main(int argc,char** argv){try{
     require(zeroEmission>0,"actual E>0/A0 is preserved");require(validationErrors.load()==0,"zero Vulkan validation errors");
     std::cout<<"{\"schema\":\"sfnp-native-stream-coverage-gpu-v1\",\"cases\":"<<count<<",\"checks\":"<<checks<<",\"rgb_bit_identical\":true,\"validation_errors\":"<<validationErrors.load()<<",\"native_source_selected_binding_proven\":false}\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
+#endif

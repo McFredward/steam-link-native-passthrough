@@ -1,5 +1,10 @@
 # Tested versions and evidence
 
+Development candidate0.3.20 adds the new Frame beta shader path alongside the
+previous path in one Frame0.3.7 library. Its software tests and remaining headset
+test are documented in [runtime compatibility](development/FRAME-RUNTIME-COMPATIBILITY.md).
+The table below continues to describe successful headset tests.
+
 ## Successfully tested versions
 
 | Component | Current paired route |

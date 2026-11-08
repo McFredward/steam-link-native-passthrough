@@ -18,7 +18,7 @@
 namespace frame_pixel_ssbo_clone {
 constexpr std::size_t MaxBindings=32, MaxArray=16, MaxPushRanges=8, MaxVertexBindings=16;
 constexpr std::size_t MaxAttributes=32, MaxViewports=4, MaxAttachments=8, MaxDynamics=64, MaxDependencies=8;
-constexpr std::size_t MaxChain=32, ShaderBytes=9460, MaxSubpasses=8;
+constexpr std::size_t MaxChain=32, ShaderBytes=12288, MaxSubpasses=8;
 enum class Reason : std::uint8_t {
     None, NativeCreationFailed, Type, Extension, Bounds, NullArray, Identity,
     FeatureAbsent, FeatureDisabled, FeatureValue, FeatureConflict, ChainCycle, DuplicateNode, LoaderFunction,
@@ -82,6 +82,17 @@ public:
     static constexpr const char* OriginalVertexSha256="94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5";
     static constexpr const char* OriginalFragmentSha256="f28dd5d22a570cbee64057da03d0418b80aee88a8eeed988b2f776e8d9a513f2";
     bool sameProfile(ProbeInterface other) const noexcept{return kind_==other.kind_;}
+    // Both reviewed native fragments access only descriptor0 of binding9.
+    // This authorizes that descriptor extent, without constructing an unused
+    // SSBO probe or borrowing a shader from a previous runtime installation.
+    static bool nativeCount1(const std::uint32_t* words,std::size_t bytes,
+                             ProbeInterface& out,Refusal& why) noexcept {
+        out={};why={};
+        if(!pinned(words,bytes,6620,OriginalFragmentSha256)&&
+           !pinned(words,bytes,4532,"a42daff46b5a155bc66ba53361face163fb1bd39260cb374430c1732c0ecfd1f"))
+            return refuse(why,Reason::ShaderPin);
+        out.kind_=5;return true;
+    }
     static constexpr std::size_t Count1Bytes=9864;
     static constexpr const char* Count1Sha256="6d666c261114f93436e48c1f52793fe18afbce9552e07b53d4212654c4560020";
     static constexpr std::size_t FirstCoveredBytes=9616;
@@ -119,6 +130,7 @@ public:
     }
     bool matches(const std::uint32_t* words,std::size_t bytes) const noexcept {
         if(!kind_)return true; // Historical array3 artifact transport contract.
+        if(kind_==5){ProbeInterface verified;Refusal why;return nativeCount1(words,bytes,verified,why);}
         if(compatibleSet0Mirror())return pinned(words,bytes,MirrorSparse32Bytes,MirrorSparse32Sha256);
         ProbeInterface verified;Refusal why;return count1(words,bytes,verified,why) && verified.kind_==kind_;
     }
@@ -603,21 +615,28 @@ struct ShaderDefinition {
 inline bool captureShader(const VkShaderModuleCreateInfo& in,ShaderRole role,ShaderDefinition& out,Refusal& why) noexcept {
     out={};why={};if(!ordinary(in,VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,why))return false;
     if(role!=ShaderRole::Vertex && role!=ShaderRole::Fragment)return refuse(why,Reason::ShaderProfile);
-    const std::size_t expected=role==ShaderRole::Vertex?9460:6620;
     if(in.flags || in.codeSize<20 || in.codeSize>65536 || in.codeSize%4 || !in.pCode || in.pCode[0]!=0x07230203u)
         return refuse(why,Reason::ShaderProfile);
     frame_receiver::Sha256 hash;hash.update(in.pCode,in.codeSize);out.sha256=hash.finish();
-    const char* pin=role==ShaderRole::Vertex?"94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5":
-        "f28dd5d22a570cbee64057da03d0418b80aee88a8eeed988b2f776e8d9a513f2";
-    if(in.codeSize==expected&&digestMatches(out.sha256,pin)){
-        out.bytes=static_cast<std::uint32_t>(in.codeSize);std::memcpy(out.words.data(),in.pCode,in.codeSize);out.complete=true;return true;
+    namespace contract=stream_bridge_shader_contract;
+    const bool vertex=role==ShaderRole::Vertex;
+    const std::size_t sizes[2]{vertex?9460u:6620u,vertex?9508u:4532u};
+    const char* pins[2]{vertex?"94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5":ProbeInterface::OriginalFragmentSha256,
+        vertex?"8b503f9b741b8f8e4460cff089f94ebc24e546fc6d39cb44206ccd5b17356b50":
+               "a42daff46b5a155bc66ba53361face163fb1bd39260cb374430c1732c0ecfd1f"};
+    const contract::Contract profiles[2]{vertex?contract::vertex():contract::fragment(),
+                                       vertex?contract::vertexBeta():contract::fragmentBeta()};
+    for(unsigned n=0;n<2;++n){
+        if(in.codeSize==sizes[n]&&digestMatches(out.sha256,pins[n])){
+            out.bytes=static_cast<std::uint32_t>(in.codeSize);std::memcpy(out.words.data(),in.pCode,in.codeSize);out.complete=true;return true;
+        }
+        std::size_t used=0;
+        if(!contract::normalize(in.pCode,in.codeSize,profiles[n],out.words.data(),out.words.size(),used)||used*4!=sizes[n])continue;
+        frame_receiver::Sha256 canonical;canonical.update(out.words.data(),used*4);const auto digest=canonical.finish();
+        if(!digestMatches(digest,pins[n]))continue;
+        out.sha256=digest;out.bytes=static_cast<std::uint32_t>(used*4);out.complete=true;return true;
     }
-    namespace contract=stream_bridge_shader_contract;std::size_t used=0;
-    const auto profile=role==ShaderRole::Vertex?contract::vertex():contract::fragment();
-    if(!contract::normalize(in.pCode,in.codeSize,profile,out.words.data(),out.words.size(),used)||used*4!=expected)return refuse(why,in.codeSize==expected?Reason::ShaderPin:Reason::ShaderProfile);
-    frame_receiver::Sha256 canonical;canonical.update(out.words.data(),used*4);out.sha256=canonical.finish();
-    if(!digestMatches(out.sha256,pin))return refuse(why,Reason::ShaderPin);
-    out.bytes=static_cast<std::uint32_t>(used*4);out.complete=true;return true;
+    out={};return refuse(why,(in.codeSize==sizes[0]||in.codeSize==sizes[1])?Reason::ShaderPin:Reason::ShaderProfile);
 }
 
 } // namespace frame_pixel_ssbo_clone

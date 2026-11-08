@@ -14,7 +14,20 @@ _DEBUG = frozenset((0, 2, 3, 4, 5, 6, 7, 8, 317, 330))
 
 
 def normalize(raw, stage='fragment'):
-    profile = _METADATA[stage]
+    """Select by actual logic, independently of the installed runtime version."""
+    first_error = None
+    for key in (stage, stage + '_beta'):
+        if key not in _METADATA:
+            continue
+        try:
+            return _normalize(raw, _METADATA[key])
+        except ValueError as error:
+            if first_error is None:
+                first_error = error
+    raise first_error or ValueError('unsupported native shader stage')
+
+
+def _normalize(raw, profile):
     if hashlib.sha256(raw).hexdigest() == profile['sha256']:
         return raw
     if len(raw) < 20 or len(raw) > 65536 or len(raw) % 4:

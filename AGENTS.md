@@ -109,6 +109,11 @@
   current frame/eye/source proof cannot be established. READMEs list successful
   tested versions, not hard version compatibility limits (2026-10-21).
   Keep native ABI/shader/frame correctness checks and preserve removal/recovery.
+  On2026-11-08 the maintainer explicitly required one patch to retain both
+  previous and newer Frame runtime paths, and the same policy on PC. Select
+  reviewed logic/interfaces from the current process rather than SteamVR version
+  strings or installation-time generated shaders. Keep previous paths and test
+  switching back. New semantics still require the same frame/eye/source proof.
 - PC SteamVR must remain closed after Apply, failure recovery and Undo. Never
   relaunch it to restore its historical running state (2026-10-21). A fresh run
   may reconcile an old stop-only journal using freshly verified Valve images;
