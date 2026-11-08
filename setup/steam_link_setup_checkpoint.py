@@ -16,7 +16,11 @@ import secrets
 import stat
 
 SCHEMA='sfnp-setup-checkpoint-v1'
-LIMIT=64*1024*1024
+# A checkpoint embeds the old receipt and both pending/committed new receipts,
+# themselves containing base64 payloads. The shipped room group needs about
+# 115 MiB during an update, and a retained continuation can add another copy.
+# Keep this separate from the unchanged 32 MiB ordinary-file limit.
+LIMIT=192*1024*1024
 
 
 class Checkpoint:

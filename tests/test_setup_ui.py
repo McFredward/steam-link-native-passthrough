@@ -174,6 +174,15 @@ class DiscoveryRetry(unittest.TestCase):
         return ui.find_frame(validate,presenter=p,sources=source,
                              connector=lambda *_:True,**kwargs)
 
+    def test_answering_frame_validation_error_is_not_treated_as_missing_device(self):
+        error=ValueError('Unknown Frame component scope preserved.')
+        error._sfnp_remote_refusal=True
+        def validate(*args,**kwargs):raise error
+        p,choices=self.scripted(['3'])
+        with self.assertRaises(ValueError) as raised:
+            self.find(validate,p,Sources(lan=None,named=['192.168.5.30']))
+        self.assertIs(raised.exception,error);self.assertEqual(choices,[])
+
     def test_failure_offers_retry_manual_pc_only_and_exit_before_an_ip_prompt(self):
         p,choices=self.scripted(['3'])
         source=Sources(lan=None)

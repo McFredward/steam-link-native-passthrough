@@ -59,7 +59,7 @@ class System:
             stdout=subprocess.PIPE if argv[2] == 'show' else subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, timeout=5, check=False, shell=False)
         unit, action = argv[-1], argv[2]
-        assert unit in frame.UNITS
+        assert unit in (*frame.UNITS,frame.ROOM_UNIT)
         if self.command_error:
             return subprocess.CompletedProcess(argv, 9, stdout=b'PRIVATE_UNTRUSTED_ERROR')
         if action == 'show':
@@ -119,6 +119,59 @@ class LifecycleTests(unittest.TestCase):
 
     def record(self):
         return engine.parse(engine.read(self.journal, private=True))
+
+    def room_scope(self):
+        self.system.units[frame.ROOM_UNIT]=self.system.value(frame.ROOM_UNIT,40)
+        self.lifecycle.prepare_room_update('a3'*32)
+
+    def test_room_only_update_preserves_steam_login_and_runtime_and_replays_once(self):
+        self.room_scope();before=json.loads(json.dumps({u:self.system.units[u] for u in frame.UNITS}))
+        result=self.instance().restart()
+        self.assertTrue(result['runtime_preserved']);self.assertNotIn('health_receipt',result)
+        self.assertEqual(self.system.actions,[('restart',frame.ROOM_UNIT)])
+        self.assertEqual(before,{u:self.system.units[u] for u in frame.UNITS})
+        self.instance().restart();self.assertEqual(len(self.system.actions),1)
+        self.instance().restored(health_ok=True);self.assertFalse(self.journal.exists())
+
+    def test_lost_room_restart_reply_is_observed_without_another_restart(self):
+        self.room_scope();self.system.lost_reply_after=('restart',frame.ROOM_UNIT)
+        with self.assertRaises(engine.SetupError):self.instance().restart()
+        self.assertTrue(self.instance().restart()['runtime_preserved'])
+        self.assertEqual(self.system.actions,[('restart',frame.ROOM_UNIT)])
+
+    def test_room_undo_refreshes_only_the_owned_app(self):
+        self.room_scope();self.instance().restart();self.instance().restart(restoring=True)
+        self.assertEqual(self.system.actions,[('restart',frame.ROOM_UNIT)]*2)
+        self.instance().restart(restoring=True);self.assertEqual(len(self.system.actions),2)
+
+    def test_room_activation_refuses_a_changed_native_invocation(self):
+        self.room_scope();self.system.fresh('steamvr.service')
+        with self.assertRaisesRegex(engine.SetupError,'preserved Steam runtime changed'):self.instance().restart()
+        self.assertEqual(self.system.actions,[])
+
+    def test_room_file_undo_after_reboot_preserves_the_new_running_steam_session(self):
+        self.room_scope();self.instance().restart()
+        for unit in frame.UNITS:self.system.fresh(unit)
+        current=json.loads(json.dumps({u:self.system.units[u] for u in frame.UNITS}))
+        self.instance().restart(restoring=True)
+        self.assertEqual(self.system.actions,[('restart',frame.ROOM_UNIT)]*2)
+        self.assertEqual(current,{u:self.system.units[u] for u in frame.UNITS})
+        self.assertTrue(self.instance().preserved_running())
+        self.instance().restored(health_ok=True);self.assertFalse(self.journal.exists())
+
+    def test_room_undo_recovers_an_already_failed_native_runtime_with_full_health_authority(self):
+        self.room_scope();self.instance().restart()
+        self.system.units['steamvr.service'].update(ActiveState='failed',SubState='failed',MainPID='0',Result='signal')
+        health={'baseline':{'native':'failed'},'checkpoint':{}}
+        result=self.instance().restart(restoring=True,health_receipt=health)
+        self.assertFalse(result['runtime_preserved']);self.assertEqual(result['health_receipt'],health)
+        self.assertEqual(self.system.actions[-4:],[('stop','steam.service'),('reset-failed','steamvr.service'),('start','steamvr.service'),('start','steam.service')])
+
+    def test_room_scope_continuation_and_explicit_native_update_remain_distinct(self):
+        self.room_scope();self.instance().restart();self.instance().continue_prepared('a4'*16)
+        self.instance().restart();self.assertEqual(self.system.actions,[('restart',frame.ROOM_UNIT)]*2)
+        self.instance().require_full_restart();self.instance().restart()
+        self.assertEqual(self.system.actions[-3:],[('stop','steam.service'),('restart','steamvr.service'),('start','steam.service')])
 
     def test_continuation_keeps_original_undo_baseline_without_intermediate_restart(self):
         self.lifecycle.restart(health_receipt={'baseline':{'old':'before'},'checkpoint':{}})

@@ -16,10 +16,11 @@ import time
 SCHEMA = 'sfnp-frame-lifecycle-v1'
 SNAPSHOT = 'sfnp-frame-runtime-v1'
 UNITS = ('steam.service', 'steamvr.service')
+ROOM_UNIT = 'sfnp-room-setup.service'
 PROPERTIES = ('Id', 'LoadState', 'ActiveState', 'SubState', 'InvocationID',
               'ActiveEnterTimestampMonotonic', 'MainPID', 'Result')
 PHASES = frozenset(('prepared', 'stopping-steam', 'refreshing-vr', 'starting-steam',
-                    'restarting-steam', 'restarting-vr', 'awaiting-health'))
+                    'restarting-steam', 'restarting-vr', 'restarting-room', 'awaiting-health'))
 ACTIVE = frozenset(('active', 'inactive', 'failed', 'activating', 'deactivating',
                     'reloading', 'maintenance'))
 SUBSTATES = frozenset(('dead', 'condition', 'start-pre', 'start', 'start-post',
@@ -124,22 +125,31 @@ class FrameLifecycle:
             return None
         raw = self.e.read(self.path, 128 * 1024, private=True)
         value = self.e.parse(raw)
-        self.e.require(set(value) in ({'schema', 'baseline', 'restart_steam', 'phase'},
-                                   {'schema', 'baseline', 'restart_steam', 'phase', 'activation'}) and
-                       value['schema'] == SCHEMA and value['restart_steam'] is True and
+        self.e.require(set(value)-{'activation','room'} == {'schema', 'baseline', 'restart_steam', 'phase'} and
+                       value['schema'] == SCHEMA and type(value['restart_steam']) is bool and
+                       (value['restart_steam'] is True and 'room' not in value or
+                        value['restart_steam'] is False and type(value.get('room')) is dict) and
                        type(value['phase']) is str and value['phase'] in PHASES and type(value['baseline']) is dict and
                        set(value['baseline']) == set(UNITS),
                        'Unknown Frame lifecycle recovery record preserved.')
         for unit in UNITS:
             self._validate_unit(value['baseline'][unit], unit)
+        if not value['restart_steam']:
+            self.e.require(set(value['room']) == {'baseline','target'} and
+                           type(value['room']['target']) is str and re.fullmatch('[0-9a-f]{64}',value['room']['target']),
+                           'Unknown room update scope preserved.')
+            self._validate_unit(value['room']['baseline'],ROOM_UNIT)
         if 'activation' in value:
             activation = value['activation']
-            self.e.require(type(activation) is dict and set(activation)-{'health','continuation'} == {'kind', 'baseline'} and
+            self.e.require(type(activation) is dict and set(activation)-{'health','continuation','room_unit'} == {'kind', 'baseline'} and
                            activation['kind'] in ('prepared', 'original') and
                            type(activation['baseline']) is dict and set(activation['baseline']) == set(UNITS),
                            'Unknown Frame activation recovery record preserved.')
             for unit in UNITS:
                 self._validate_unit(activation['baseline'][unit], unit)
+            self.e.require(('room_unit' in activation) == (not value['restart_steam']),
+                           'The Frame activation scope changed; recovery records were kept.')
+            if 'room_unit' in activation:self._validate_unit(activation['room_unit'],ROOM_UNIT)
             if 'health' in activation:
                 self._health_receipt(activation['health'])
             if 'continuation' in activation:
@@ -180,7 +190,9 @@ class FrameLifecycle:
         if prior and prior.get('activation',{}).get('continuation')==identity:
             return self._result(before)
         value=dict(prior) if prior else {'schema':SCHEMA,'baseline':before,'restart_steam':True}
-        value.update(phase='prepared',activation=self._activation('prepared',before,None,identity))
+        activation=self._activation('prepared',before,None,identity)
+        if not value['restart_steam']:activation['room_unit']=self._show(ROOM_UNIT)
+        value.update(phase='prepared',activation=activation)
         self._save(value)
         return self._result(before)
 
@@ -226,18 +238,92 @@ class FrameLifecycle:
             if stopping:
                 raise self.e.SetupError('Frame Steam did not stop. Recovery details were kept.')
             raise self.e.SetupError('Frame Steam did not restart. Recovery details were kept.')
+        if unit == ROOM_UNIT:
+            raise self.e.SetupError('Room Setup did not restart. Steam was left running; recovery details were kept.')
         raise self.e.SetupError('Frame SteamVR did not restart. Recovery details were kept.')
 
     def _result(self, units, *, complete=False, healthy=False):
         result = {'schema':SNAPSHOT, 'units':units, 'running':all(self._running(v) for v in units.values()),
                 'pending':self._value is not None, 'phase':self._value['phase'] if self._value else None,
                 'complete':complete, 'healthy':healthy, 'needs_health_check':not healthy}
+        result['runtime_preserved'] = bool(self._value and not self._value['restart_steam'])
         activation = self._value.get('activation', {}) if self._value else {}
         if 'health' in activation:result['health_receipt'] = self._health_receipt(activation['health'])
         return result
 
     def snapshot(self):
         self._load()
+        return self._result(self._units())
+
+    def prepare_room_update(self, target):
+        """Called only after the exact changed-file set proves a room-only update."""
+        self._load()
+        before=self._units();room=self._show(ROOM_UNIT)
+        self.e.require(all(self._running(v) for v in before.values()),'The existing Frame runtime must be running for a room-only update.')
+        self.e.require(type(target)is str and re.fullmatch('[0-9a-f]{64}',target),'A checked room update target is required.')
+        if self._value is not None:
+            self.e.require(not self._value['restart_steam'] and self._value['phase']=='prepared',
+                           'Existing Frame activation must be recovered before a room-only update.')
+        value={'schema':SCHEMA,'baseline':before,'restart_steam':False,'phase':'prepared',
+               'room':{'baseline':room,'target':target}}
+        self._save(value)
+
+    def can_preserve_room(self):
+        self._load()
+        if self._value and (self._value['restart_steam'] or self._value['phase']!='prepared'):return False
+        try:return all(self._running(v) for v in self._units().values()) and self._show(ROOM_UNIT)['LoadState']=='loaded'
+        except self.e.SetupError:return False
+
+    def require_full_restart(self):
+        self._load()
+        if self._value and not self._value['restart_steam']:
+            self._save({'schema':SCHEMA,'baseline':self._units(),'restart_steam':True,'phase':'prepared'})
+
+    def preserved_running(self):
+        self._load()
+        if not self._value or self._value['restart_steam']:return False
+        before=self._value.get('activation',{}).get('baseline',self._value['baseline']);now=self._units()
+        self.e.require(all(self._running(now[u]) and all(now[u][k]==before[u][k]
+                       for k in ('InvocationID','MainPID','ActiveEnterTimestampMonotonic')) for u in UNITS),
+                       'The preserved Steam runtime changed. Recovery details were kept.')
+        activation=self._value.get('activation')
+        return bool(activation and self._value['phase']=='awaiting-health' and
+                    self._fresh_running(self._show(ROOM_UNIT),activation['room_unit']))
+
+    def _restart_room(self, restoring, health):
+        before=self._units();prior=self._value;kind='original' if restoring else 'prepared'
+        if restoring and not all(self._running(v) for v in before.values()):
+            # Exact app Undo must not strand an already failed native UI.
+            # Healthy room updates never take this full-recovery path.
+            self.require_full_restart()
+            return self.restart(restoring=True,health_receipt=health)
+        baseline=prior.get('activation',{}).get('baseline',prior['baseline'])
+        unchanged=all(self._running(before[u]) and all(before[u][k]==baseline[u][k]
+                      for k in ('InvocationID','MainPID','ActiveEnterTimestampMonotonic')) for u in UNITS)
+        if not unchanged:
+            # Exact app-file Undo remains possible after a reboot or an
+            # external native restart. Observe the currently running runtime
+            # for this recovery; never try to restore obsolete process IDs.
+            self.e.require(restoring and all(self._running(v) for v in before.values()),
+                           'The preserved Steam runtime changed. Recovery details were kept.')
+            value=dict(prior);value.update(phase='prepared',activation={
+                **self._activation(kind,before,None),'room_unit':self._show(ROOM_UNIT)})
+            self._save(value);prior=self._value
+        if prior.get('activation',{}).get('kind')!=kind:
+            value=dict(prior);value['activation']={**self._activation(kind,before,None),'room_unit':self._show(ROOM_UNIT)}
+            value['phase']='prepared';self._save(value)
+        baseline=self._value['activation']['room_unit'];room=self._show(ROOM_UNIT)
+        if self._value['phase']!='awaiting-health' and not self._fresh_running(room,baseline):
+            if self._value['phase']=='restarting-room':
+                # A lost reply does not authorize replaying a restart.
+                self._wait(ROOM_UNIT,lambda v:self._fresh_running(v,baseline),self.clock()+self.timeout)
+            else:
+                self._phase('restarting-room')
+                if room['ActiveState']=='failed':self._run(['reset-failed',ROOM_UNIT])
+                self._run(['restart' if self._running(room) else 'start','--no-block',ROOM_UNIT])
+                self._wait(ROOM_UNIT,lambda v:self._fresh_running(v,baseline),self.clock()+self.timeout)
+        self._phase('awaiting-health')
+        self.e.require(self.preserved_running(),'The updated Room Setup application is not running. Recovery details were kept.')
         return self._result(self._units())
 
     @classmethod
@@ -266,6 +352,8 @@ class FrameLifecycle:
         self.e.require(type(restoring) is bool, 'An exact Frame activation intent is required.')
         health = self._health_receipt(health_receipt) if health_receipt is not None else None
         self._load()
+        if self._value and not self._value['restart_steam']:
+            return self._restart_room(restoring,health)
         before = self._units()
         kind = 'original' if restoring else 'prepared'
         prior = self._value
@@ -377,6 +465,8 @@ class FrameLifecycle:
         if not health_ok:
             return self._result(units)
         if self._value is not None:
+            if not self._value['restart_steam']:
+                self.e.require(self.preserved_running(),'Room Setup is not ready; recovery details were kept.')
             self.e.require(self._value['phase'] == 'awaiting-health',
                            'Frame recovery is not ready for its final health confirmation.')
             self.e.remove_owned(self.path, self._raw)

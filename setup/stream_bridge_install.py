@@ -21,8 +21,10 @@ import shlex
 import shutil
 import socket
 import stat
+import struct
 import sys
 import tempfile
+import time
 
 
 def fixed_checks(*sources):
@@ -84,6 +86,9 @@ TOOLS = frozenset('frame/tools/'+name+'.py' for name in (
 PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
+# Read/removal compatibility for the optional room-scan installation.
+ROOM_UNIT = 'sfnp-room-setup.service'
+ROOM_HOOK = '90-sfnp-room-setup.conf'
 MASK_CODEC_FILES = frozenset({'frame/libavcodec-sfnp-mask.so.62','frame/libavutil-sfnp-mask.so.60'})
 GENERATED = {'coverage.spv': {'bytes':7420,'sha256':'37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3'},
              'camera-only.spv': {'bytes':7072,'sha256':'a8f7c2a375abb3f8d5188fdf129c00b2a2a1b13f3f3d8e7620b0a833510ea8ee'}}
@@ -134,6 +139,16 @@ def version_fields(value):
 
 def blocked_version_update(target,current):
     return current is not None and (target is None or older_version(target,current))
+
+
+def version_consent(bundle,target,current):
+    return {'bundle':bundle.pin,'installed_version':current,'target_version':target}
+
+
+def require_version_change(engine,bundle,target,current,consent):
+    if blocked_version_update(target,current):
+        engine.require(target is not None and consent==version_consent(bundle,target,current),
+            'Replacing a newer installed patch requires confirmation of the installed and target versions.')
 
 
 def version_status(state,target):
@@ -458,14 +473,13 @@ class LocalInstall:
         return helper.Checkpoint(self.e,self.local.root/'setup-restore.json',allowed,
             lambda p:helper.read_value(self.e,p),lambda p,old,new:helper.replace_value(self.e,p,old,new))
 
-    def install(self,bundle,pc,pair,address,port,*,backup=False,runtime_consent=None):
+    def install(self,bundle,pc,pair,address,port,*,backup=False,runtime_consent=None,version_approval=None):
         e=self.e;bundle.admit(self.local.system)
         snapshot=self.snapshot(bundle,pc);runtime_active=runtime_admission(e,bundle,'pc',snapshot,runtime_consent)
         e.require(not self.local.runner.runtime_running(),'Close SteamVR on this PC before installing or updating the connection.')
         e.require(type(port)is int and 1024<=port<=65535,'Invalid connection port.')
         old=self.state();planned={name:bundle.files[name] for name in bundle.pc['files']}
-        e.require(not blocked_version_update(bundle.pc.get('version'),old.get('version') if old else None),
-                  'The installed PC patch is newer or the package is unversioned; downgrade was not applied.')
+        require_version_change(e,bundle,bundle.pc.get('version'),old.get('version') if old else None,version_approval)
         tool_pin=bundle.pc['runtime_files']['vrpathreg'];tool=None
         if runtime_active:
             observed=snapshot['vrpathreg'];e.require(observed['format_valid'],'The SteamVR registration tool is missing or damaged.')
@@ -478,7 +492,7 @@ class LocalInstall:
         if old:
             if old['bundle']!=bundle.pin or old.get('activation_mode','active')!=('active' if runtime_active else 'inactive'):
                 e.require(backup,'Updating a different checked package requires the confirmed recoverable workflow.')
-                return self.update(bundle,pc,pair,address,port,old,tool,runtime_active=runtime_active,tool_pin=tool_pin)
+                return self.update(bundle,pc,pair,address,port,old,tool,runtime_active=runtime_active,tool_pin=tool_pin,version_approval=version_approval)
             missing=[]
             for name,pin in old['files'].items():
                 path=self.local.root/e.relative(name)
@@ -534,11 +548,10 @@ class LocalInstall:
             raise
         return {'reason':'installed','changed':True,'automatic_restart':False}
 
-    def update(self,bundle,pc,pair,address,port,old,tool,*,runtime_active=True,tool_pin=None):
+    def update(self,bundle,pc,pair,address,port,old,tool,*,runtime_active=True,tool_pin=None,version_approval=None):
         """Retain the initial uninstall baseline and checkpoint this update."""
         e=self.e;helper=load_helper(e,'steam_link_setup_checkpoint')
-        e.require(not blocked_version_update(bundle.pc.get('version'),old.get('version')),
-                  'The installed PC patch is newer or the package is unversioned; downgrade was not applied.')
+        require_version_change(e,bundle,bundle.pc.get('version'),old.get('version'),version_approval)
         e.require(old['pair']==pair['pair_id'],'The existing connection pairing must be preserved during an update.')
         e.require(e.parse(e.read(self.local.root/'pairings/active.json',4096,private=True))==
                   {'schema':e.ACTIVE,'pair_id':old['pair']},'The active connection changed; it was preserved.')
@@ -657,6 +670,80 @@ class LocalInstall:
         return {'reason':'uninstalled','automatic_restart':False}
 
 
+def _room_directory(root=None, *, create=False):
+    path = Path(root) if root is not None else Path("/run/user")/str(os.getuid())/"sfnp-room-camera"
+    if not path.is_absolute() or os.getuid() == 0:
+        raise ValueError("A private user camera-session directory is required")
+    if create:
+        try:
+            path.mkdir(mode=0o700)
+        except FileExistsError:
+            pass
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077:
+        raise ValueError("The camera-session directory is not private")
+    return path
+
+def _room_record(root=None):
+    try:
+        path = _room_directory(root)/"session.json"
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return None
+    with os.fdopen(fd, "rb") as file:
+        info = os.fstat(file.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o077 or not 0 < info.st_size <= 4096:
+            raise ValueError("The camera-session descriptor is not private")
+        data = json.loads(file.read(4097))
+    if (type(data) is not dict or data.get("schema") != "sfnp-room-camera-session-v1" or data.get("state") != "armed"
+            or not re.fullmatch(r"sfnp\.room\.camera\."+str(os.getuid())+r"\.[0-9a-f]{32}", data.get("abstract_socket", ""))
+            or type(data.get("helper_pid")) is not int or not 1 < data["helper_pid"] < 2**31
+            or not re.fullmatch("[0-9a-f]{64}", data.get("helper_sha256", ""))):
+        raise ValueError("The camera-session descriptor is invalid")
+    return data
+
+def _room_request(address, command, *, expected_pid=None):
+    if command not in ("describe", "stop") or not re.fullmatch(
+            r"sfnp\.room\.camera\."+str(os.getuid())+r"\.[0-9a-f]{32}", address):
+        raise ValueError("Invalid camera-session request")
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
+        peer.settimeout(3)
+        peer.connect("\0"+address)
+        identity = struct.unpack("3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+        if identity[1] != os.getuid() or expected_pid is not None and identity[0] != expected_pid:
+            raise ValueError("The camera session belongs to another process")
+        request = json.dumps({"command": command}, separators=(",", ":")).encode()
+        if peer.send(request) != len(request):
+            raise OSError("Incomplete camera-session request")
+        packet, _, flags, _ = peer.recvmsg(16392)
+        if len(packet) < 8 or flags & socket.MSG_TRUNC:
+            raise ValueError("Invalid camera-session response")
+        count, images = struct.unpack_from("<II", packet)
+        if count > 16384 or images or len(packet) != 8+count:
+            raise ValueError("Unexpected camera-session response extent")
+        return json.loads(packet[8:]), identity[0]
+
+def stop_room_capture(root=None):
+    data = _room_record(root)
+    if data is None:
+        return {"state": "inactive"}
+    try:
+        reply, _ = _room_request(data["abstract_socket"], "stop", expected_pid=data["helper_pid"])
+    except (FileNotFoundError, ConnectionRefusedError):
+        return {"state": "inactive"}
+    if reply.get("status") != "stopping":
+        raise ValueError("The camera reader did not confirm Stop")
+    deadline = time.monotonic()+5
+    while time.monotonic() < deadline:
+        current = _room_record(root)
+        if current is not None and current["abstract_socket"] != data["abstract_socket"]:
+            raise ValueError("The room camera session changed; close Room Setup and retry")
+        if current is None:
+            return {"state": "inactive"}
+        time.sleep(.025)
+    raise ValueError("Camera Stop was requested; its session cleanup is still pending")
+
+
 class FrameTransaction:
     """Durable exact-predecessor journal; no service start/stop/restart command."""
     def __init__(self, engine, home, root, settings_path):
@@ -695,7 +782,9 @@ class FrameTransaction:
                  self.home/'.config/SteamFrameNativePassthrough/control.json',
                  Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'vulkan/implicit_layer.d'/MANIFEST,
                  Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
-                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steamvr.service.d'/CAMERA_HOOK}
+                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steamvr.service.d'/CAMERA_HOOK,
+                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user'/ROOM_UNIT,
+                 Path(os.environ.get('XDG_CONFIG_HOME') or self.home/'.config')/'systemd/user/steamvr.service.d'/ROOM_HOOK}
         allowed_settings={self.settings_path(),self.home/'.local/share/Steam/config/steamvr.vrsettings'}
         e.require(Path(v['settings'].get('path','')) in allowed_settings,
                   'The recorded camera settings path is not owned by this installation.')
@@ -884,6 +973,32 @@ class FrameInstall:
             source=local_camera_source()
         return load_module(source,'sfnp_camera_'+self.e.sha(source)[:16])
 
+    def lifecycle(self):
+        def run(args,**options):
+            code,raw=self.run(args,timeout=options['timeout'])
+            return subprocess.CompletedProcess(args,code,stdout=raw)
+        return load_helper(self.e,'steam_link_setup_frame').FrameLifecycle(self.e,self.root,runner=run)
+
+    def quiesce_room_setup(self,state,checkpoint=None):
+        """Stop only an exactly recorded room service before replacing its files."""
+        unit=self.config/'systemd/user'/ROOM_UNIT
+        records=[]
+        if state:records.extend(state['operations'])
+        if checkpoint:records.extend(checkpoint['operations'])
+        room_owned=bool(state and any(Path(op['path']).is_relative_to(self.root/'room-setup') and op['after'] is not None for op in state['operations']))
+        unit_recorded=any(op['path']==str(unit) for op in records)
+        if not unit_recorded and not room_owned:return
+        observed=self.tx.current(unit) if unit_recorded else None
+        owned=False
+        for op in records:
+            if op['path']!=str(unit):continue
+            values=[op['before'],*(op['after'] if isinstance(op['after'],list) else [op['after']])]
+            if observed is not None and any(value is not None and
+                    {key:item for key,item in value.items() if key!='mode'}==observed for value in values):owned=True
+        if owned:self.system('stop',ROOM_UNIT)
+        if (owned or room_owned) and self.home==Path.home():
+            stop_room_capture()
+
     def settings_path(self):
         try:path=self.camera_helper().resolve_settings(home=self.home)
         except Exception as error:
@@ -911,7 +1026,8 @@ class FrameInstall:
                   self.home/'.config/SteamFrameNativePassthrough/control.json',
                   self.config/'vulkan/implicit_layer.d'/MANIFEST,
                   self.config/'systemd/user/steam.service.d/85-steam-link-native-passthrough.conf',
-                  self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK}
+                  self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK,
+                  self.config/'systemd/user'/ROOM_UNIT,self.config/'systemd/user/steamvr.service.d'/ROOM_HOOK}
         names={LIBRARY,'libsfnp_stream_launch.so','coverage.spv','camera-only.spv','receiver.conf','launch.conf',
                'receiver.enable','pairings/active.json','install.json',CAMERA_CONFIG,'camera-session.pause',LOG_DEFAULT}|{n.removeprefix('frame/') for n in TOOLS|PROFILES|MASK_CODEC_FILES}|RETIRED_FRAME_FILES
         def allowed(path):
@@ -919,7 +1035,7 @@ class FrameInstall:
             if legacy_helper.allowed(self.home,path):return True
             if not path.is_relative_to(self.root):return False
             name=path.relative_to(self.root).as_posix()
-            return name in names or re.fullmatch('pairings/[0-9a-f]{32}[.]json',name) is not None
+            return name in names or path.is_relative_to(self.root/'room-setup') or re.fullmatch('pairings/[0-9a-f]{32}[.]json',name) is not None
         def current(path):self.tx.owned(path);return helper.read_value(self.e,path)
         def replace(path,old,new):self.tx.owned(path);return helper.replace_value(self.e,path,old,new)
         owner=self
@@ -927,6 +1043,7 @@ class FrameInstall:
             def restore(checkpoint):
                 value=checkpoint.value()
                 if value is None:return super().restore()
+                owner.quiesce_room_setup(owner.tx.state(),value)
                 owner.camera_checkpoint_preflight(checkpoint,value)
                 state=owner.camera_state(value)
                 if state and owner.camera_cleanup_mode(state)=='offline':
@@ -1031,7 +1148,8 @@ class FrameInstall:
                 if operations.get(str(self.root/Path(name).relative_to('frame'))) is not None}
             target_masks=set(bundle.value['files'])&MASK_CODEC_FILES
             mask_pair_current=recorded_masks==target_masks
-            patch_current=patch_current and mask_pair_current
+            room_group_current=not any(Path(path).is_relative_to(self.root/'room-setup') and value is not None for path,value in operations.items())
+            patch_current=patch_current and mask_pair_current and room_group_current
             pins.update({name.removeprefix('frame/'):bundle.value['files'][name] for name in target_masks})
             if state.get('activation_mode','active')=='active':pins.update(bundle.frame['generated'])
             for name,pin in pins.items():
@@ -1530,12 +1648,11 @@ class FrameInstall:
         operations.append(self.tx.operation(self.config/'systemd/user/steamvr.service.d'/CAMERA_HOOK,self.camera_dropin()))
         return operations,receipt,(before,before)
 
-    def install(self,bundle,pair,address,port,*,backup=False,live=False,runtime_consent=None):
+    def install(self,bundle,pair,address,port,*,backup=False,live=False,runtime_consent=None,version_approval=None):
         e=self.e;current=self.tx.state()
         bundle.admit('Windows');snapshot=self.snapshot(bundle)
         runtime_active=runtime_admission(e,bundle,'frame',snapshot,runtime_consent)
-        e.require(not blocked_version_update(bundle.frame.get('version'),current.get('version') if current else None),
-                  'The installed Frame patch is newer or the package is unversioned; downgrade was not applied.')
+        require_version_change(e,bundle,bundle.frame.get('version'),current.get('version') if current else None,version_approval)
         if current:
             e.require(current['phase']=='installed' and current['pair']==pair['pair_id'],
                       'Repair or remove the previous Frame transaction before replacing it.')
@@ -1546,7 +1663,7 @@ class FrameInstall:
                 base64.b64decode(config['bytes'],validate=True)!=expected)
             if current['bundle']!=bundle.pin or provider_changed or current.get('activation_mode','active')!=('active' if runtime_active else 'inactive'):
                 e.require(backup and live,'Updating a different Frame package requires the confirmed recoverable workflow.')
-                return self.update(bundle,pair,address,port,current,runtime_consent=runtime_consent)
+                return self.update(bundle,pair,address,port,current,runtime_consent=runtime_consent,version_approval=version_approval)
             if self.inventory(bundle)['files_current']:return {'reason':'current','activation_mode':'active' if runtime_active else 'inactive','automatic_restart':False}
             if not live:self.cold(steam=True)
             missing=[]
@@ -1585,12 +1702,11 @@ class FrameInstall:
         return {'reason':'prepared','pair_id':pair['pair_id'],'automatic_restart':False,
                 'activation_mode':'active' if runtime_active else 'inactive','manual_restart_required':True,'coverage_operational':False}
 
-    def update(self,bundle,pair,address,port,current,*,runtime_consent=None):
+    def update(self,bundle,pair,address,port,current,*,runtime_consent=None,version_approval=None):
         """Replace owned payloads live while retaining the initial predecessors."""
         e=self.e;bundle.admit('Windows');snapshot=self.snapshot(bundle)
         runtime_active=runtime_admission(e,bundle,'frame',snapshot,runtime_consent);_,original=self.runtime(bundle)
-        e.require(not blocked_version_update(bundle.frame.get('version'),current.get('version')),
-                  'The installed Frame patch is newer or the package is unversioned; downgrade was not applied.')
+        require_version_change(e,bundle,bundle.frame.get('version'),current.get('version'),version_approval)
         e.require(self.machine().lower() in ('aarch64','arm64'),'The selected device is not a supported Steam Frame.')
         e.require(type(port)is int and 1024<=port<=65535,'Invalid connection port.')
         address=private_ipv4(address)
@@ -1658,11 +1774,12 @@ class FrameInstall:
         for op in operations:
             path=Path(op['path'])
             if path not in wanted:
-                if path.is_relative_to(self.root) and path.relative_to(self.root).as_posix() in RETIRED_FRAME_FILES:
+                if (path.is_relative_to(self.root) and (path.relative_to(self.root).as_posix() in RETIRED_FRAME_FILES or path.is_relative_to(self.root/'room-setup')) or
+                    path in (self.config/'systemd/user'/ROOM_UNIT,self.config/'systemd/user/steamvr.service.d'/ROOM_HOOK)):
                     # The earlier exact-current comparison above proves that
                     # this is our unchanged old artifact. Preserve op['before']
                     # for uninstall and the checkpoint's full old state for Undo.
-                    op['after']=None
+                    op['after']=op['before'] if (path.is_relative_to(self.root/'room-setup') or path.name in (ROOM_UNIT,ROOM_HOOK)) else None
                 observed=self.tx.current(path)
                 if observed!=op['after']:changes.append({**op,'before':observed})
         pending={**current,'bundle':bundle.pin,'operations':operations,'settings':settings,'phase':'pending'}
@@ -1672,6 +1789,8 @@ class FrameInstall:
         previous=e.read(self.tx.path,64*1024*1024,private=True)
         self.backup('update',changes,current['settings'],[helper.file_value(e.encoded(pending)),helper.file_value(e.encoded(committed))],pause_settings=settings,target=bundle.pin)
         e.put(self.tx.path,e.encoded(pending),previous)
+        self.lifecycle().require_full_restart()
+        self.quiesce_room_setup(current)
         # All cold work and the exact recovery journal precede live quiescence.
         # A generation/backup failure must not pause an otherwise valid session.
         if current['settings'].get('policy')==SESSION_POLICY or settings_moved:
@@ -1738,6 +1857,7 @@ class FrameInstall:
         if backup:
             settings=state['settings'] if state else {'path':str(self.settings_path()),'policy':SESSION_POLICY}
             self.backup('uninstall',list(operations.values()),settings,[None],camera_override=legacy['camera'] if legacy else None,target=target)
+        self.quiesce_room_setup(state,pending)
         if state:
             with self.camera_context(state=state,checkpoint=self.checkpoint().value() if purge_legacy else None) as camera:
                 if camera:self.camera_call(camera,'restore_owned')
@@ -1892,7 +2012,7 @@ def remote_request(engine,request,*,unit=None):
         e.put(root/'stream-bridge-bundle.json',e.encoded(manifest))
         bundle=Bundle(root,e)
         if command=='bridge-prepare':return unit.install(bundle,request['pairing'],request['address'],request['port'],
-            backup=request.get('automated') is True,live=request.get('automated') is True,runtime_consent=request.get('runtime_consent'))
+            backup=request.get('automated') is True,live=request.get('automated') is True,runtime_consent=request.get('runtime_consent'),version_approval=request.get('version_approval'))
         raise e.SetupError('Unknown fixed Frame operation.')
 
 
@@ -1972,7 +2092,7 @@ class Remote:
             message=self.checks.get(reason,'The Frame refused this operation. Check the setup log and recovery paths shown below.')
             number=failure.get('errno')
             if reason=='os_error' and type(number)is int and 0<number<4096:message+=' OS error '+str(number)+'.'
-            failure=e.SetupError(message);failure._sfnp_public_connection_failure=True
+            failure=e.SetupError(message);failure._sfnp_remote_refusal=True;failure._sfnp_public_connection_failure=True
             raise failure
         if self.log:self.log.event(stage,'result',command=command,status='ok')
         return result
@@ -2105,9 +2225,9 @@ class Automation:
               'key_hex':secrets.token_hex(32),'role':'producer','protocol_major':1}
         address=local_address(self.address)
         self.phase('frame_prepare')
-        self.call('bridge-prepare',pairing={**pair,'role':'receiver'},address=address,port=47631,automated=True,runtime_consent=self.consent('frame'))
+        self.call('bridge-prepare',pairing={**pair,'role':'receiver'},address=address,port=47631,automated=True,runtime_consent=self.consent('frame'),version_approval=self.context.get('version_approvals',{}).get('frame'))
         self.phase('pc_install')
-        self.installed.install(self.bundle,self.local.inventory(),pair,address,47631,backup=True,runtime_consent=self.consent('pc'))
+        self.installed.install(self.bundle,self.local.inventory(),pair,address,47631,backup=True,runtime_consent=self.consent('pc'),version_approval=self.context.get('version_approvals',{}).get('pc'))
         self.phase('frame_commit');self.call('bridge-commit')
 
     def restart_prepared(self):
@@ -2255,7 +2375,7 @@ class PcOnlyAutomation(Automation):
         self.phase('pc_install')
         self.installed.install(self.bundle,self.local.inventory(),pair,
             settings['controlListenAddress']['installed'],settings['controlPort']['installed'],
-            backup=True,runtime_consent=self.consent('pc'))
+            backup=True,runtime_consent=self.consent('pc'),version_approval=self.context.get('version_approvals',{}).get('pc'))
 
     def prepared_health(self):
         self.phase('pc_install')
@@ -2361,7 +2481,11 @@ def run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=No
                 if args.check or args.dry_run or not sys.stdin.isatty():raise
                 if isinstance(error,KeyboardInterrupt):return 130
                 ui=context.get('ui') or engine.load_presentation().Presenter(input_fn=input_fn,lang=args.lang,input_enabled=True)
-                if isinstance(error,engine.SetupError):print(str(error),file=sys.stderr)
+                if isinstance(error,engine.SetupError):
+                    if getattr(error,'_sfnp_remote_refusal',False):
+                        ui.say('bridge_frame_refused')
+                        if hasattr(ui,'problem'):ui.problem(str(error))
+                    else:print(str(error),file=sys.stderr)
                 ui.say('bridge_retry_question')
                 if ui.choose_action(['retry','exit'],recommended='retry')!='retry':return 130 if isinstance(error,KeyboardInterrupt) else 2
             # A preflight/discovery retry is still the same setup session.
@@ -2442,6 +2566,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
                     selected=True
                     return peer,observed
             except (OSError,ValueError) as error:
+                if getattr(error,'_sfnp_remote_refusal',False):raise
                 if interactive and ui:
                     ui.say('bridge_connection_failed')
                     if getattr(error,'_sfnp_public_connection_failure',False) and hasattr(ui,'problem'):
@@ -2471,10 +2596,11 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
                     'target_version':patch_version(bundle.frame.get('version'))} if frame is not None else {
                     'installed':None,'installed_version':None,'target_version':patch_version(bundle.frame.get('version'))}
     versions={'pc':pc_versions,'frame':frame_versions}
-    downgrade=any(blocked_version_update(v['target_version'],v['installed_version']) for v in versions.values())
+    downgrade=any(v['target_version'] is not None and older_version(v['target_version'],v['installed_version']) for v in versions.values())
+    unversioned=any(v['installed_version'] is not None and v['target_version'] is None for v in versions.values())
     if log:log.event('preflight','result',status='ok',versions=versions)
     pc_snapshot=installed.snapshot(bundle,pc);pc_admitted=pc_snapshot['vrlink']['matches']
-    report={'schema':SCHEMA,'bridge_available':available,'automatic_restart':False,'version_update_blocked':downgrade,
+    report={'schema':SCHEMA,'bridge_available':available,'automatic_restart':False,'version_update_blocked':unversioned,'version_replacement':downgrade,
             'version':bundle.value.get('version'),'installer_version':bundle.value.get('version'),
             'target_versions':{k:v['target_version'] for k,v in versions.items()},
             'pc':{'compatible':installed.check(bundle,pc),'runtime_versions':pc.get('runtime_versions'),
@@ -2508,6 +2634,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         if frame is not None:ui.status('receiver_ready' if frame.get('runtime_compatible') else 'receiver_changed','info')
         ui.status('bridge_available' if available else 'bridge_unavailable','info')
         if downgrade:ui.say('version_downgrade')
+        if unversioned:ui.say('version_unversioned')
         display_inventory(pc,frame)
     actions=['retry','check','exit']
     pending=pc_scope is not None or (local.root/'setup-restore.json').exists() or (local.root/'lifecycle.json').exists() or frame is not None and frame.get('recovery_pending')
@@ -2517,7 +2644,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
     frame_present=frame_snapshot and all(frame_snapshot.get(role,{}).get('format_valid') for role in ('vrlink','compositor','fragment'))
     components_current=all(v['installed'] and v['target_version'] is not None and
         v['installed_version']==v['target_version'] for v in versions.values()) and report['pc']['patch_payload_current'] and frame is not None and frame.get('patch_payload_current') is True
-    if available and not downgrade and frame is not None and pc_snapshot['vrlink']['format_valid'] and (frame_present or frame.get('runtime_compatible')):
+    if available and not unversioned and frame is not None and pc_snapshot['vrlink']['format_valid'] and (frame_present or frame.get('runtime_compatible')):
         if pc_scope is not None:actions.insert(0,'update')
         elif state is None:actions.insert(0,'install')
         elif components_current or state['bundle']==bundle.pin and frame.get('files_current') is True:actions.insert(0,'repair')
@@ -2575,6 +2702,7 @@ def _run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=N
         ui.say('bridge_pc_only_plan' if pc_plan else 'bridge_install_plan')
         if hasattr(ui,'version_plan'):ui.version_plan(pc=pc_versions,frame=frame_versions)
         if not confirm('bridge_confirm'):return 0
+        context['version_approvals']={side:version_consent(bundle,v['target_version'],v['installed_version']) for side,v in versions.items()}
     context['operation_action']=action
     automation=PcOnlyAutomation if pc_plan or pc_scope is not None else Automation
     ports=automation(e,bundle,local,installed,remote,ui,context,factory,address,args.user)

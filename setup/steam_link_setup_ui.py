@@ -54,6 +54,7 @@ TEXT = {
         'bridge_rolled_back': 'The previous setup has been restored and its startup checks passed. PC SteamVR stays closed. The log and recovery paths are kept below.',
         'bridge_retry_question': 'Would you like to try again?',
         'bridge_connection_failed': 'The connection or sign-in failed. Details and the setup log show the reason; you can try again.',
+        'bridge_frame_refused': 'Your Frame answered, but could not complete this check or change. The details below explain why.',
         'bridge_cancelled_retained': 'Setup cancelled. No automatic rollback was started. Any pending recovery records were kept for your next setup run.',
         'bridge_reconnect': 'Reconnecting to your Frame after the restart',
         'bridge_retry_ambiguous': 'The last operation could not be confirmed. Setup will check what changed before offering a safe retry.',
@@ -130,8 +131,8 @@ TEXT = {
         'actions': 'What would you like to do?',
         'action_install': 'Install',
         'action_install_description': 'Install the components included in this package.',
-        'action_update': 'Update',
-        'action_update_description': 'Update the existing installation with this package.',
+        'action_update': 'Install this package version',
+        'action_update_description': 'Replace the installed patch with the version included in this installer.',
         'action_repair': 'Repair',
         'action_repair_description': 'Reapply this patch version and check the Frame startup.',
         'action_uninstall': 'Uninstall',
@@ -168,7 +169,8 @@ TEXT = {
         'version_plan': 'Patch versions to apply',
         'version_pc': 'This PC',
         'version_frame': 'Steam Frame',
-        'version_downgrade': 'This package is older than an installed patch or has no version information. Update is unavailable. Use a newer package, or choose Restore previous setup if a saved recovery is available.',
+        'version_downgrade': 'A newer patch is installed. You can replace it with the installer version shown here. Apply confirms this version change.',
+        'version_unversioned': 'This installer has no patch version. Choose a versioned installer to replace the installed patch.',
         'inspection': 'Check only: no patch will be installed or removed, and nothing will be restarted.',
         'setup': 'We will check your PC and Frame before offering any changes.',
         'search': 'Looking for your Steam Frame',
@@ -203,6 +205,7 @@ TEXT = {
         'bridge_rolled_back': 'Der vorherige Zustand ist wiederhergestellt und hat die Startprüfungen bestanden. PC-SteamVR bleibt geschlossen. Das Log und die Wiederherstellungspfade bleiben unten erhalten.',
         'bridge_retry_question': 'Möchtest du es erneut versuchen?',
         'bridge_connection_failed': 'Die Verbindung oder Anmeldung ist fehlgeschlagen. Details und Setup-Log zeigen den Grund; du kannst es erneut versuchen.',
+        'bridge_frame_refused': 'Die Frame hat geantwortet und konnte diese Prüfung oder Änderung nicht abschließen. Die Details unten zeigen den Grund.',
         'bridge_cancelled_retained': 'Einrichtung abgebrochen. Es wurde keine automatische Rücknahme gestartet. Ausstehende Wiederherstellungsdaten bleiben für den nächsten Lauf erhalten.',
         'bridge_reconnect': 'Nach dem Neustart wieder mit der Frame verbinden',
         'bridge_retry_ambiguous': 'Die letzte Aktion konnte nicht bestätigt werden. Die Einrichtung prüft zunächst die Änderungen und bietet dann einen sicheren neuen Versuch an.',
@@ -279,8 +282,8 @@ TEXT = {
         'actions': 'Was möchtest du tun?',
         'action_install': 'Installieren',
         'action_install_description': 'Die in diesem Paket enthaltenen Komponenten installieren.',
-        'action_update': 'Aktualisieren',
-        'action_update_description': 'Die vorhandene Installation mit diesem Paket aktualisieren.',
+        'action_update': 'Diese Version installieren',
+        'action_update_description': 'Den installierten Patch durch die mitgelieferte Version dieses Installers ersetzen.',
         'action_repair': 'Reparieren',
         'action_repair_description': 'Diese Patch-Version erneut anwenden und den Frame-Start prüfen.',
         'action_uninstall': 'Deinstallieren',
@@ -317,7 +320,8 @@ TEXT = {
         'version_plan': 'Anzuwendende Patch-Versionen',
         'version_pc': 'Dieser PC',
         'version_frame': 'Steam Frame',
-        'version_downgrade': 'Dieses Paket ist älter als ein installierter Patch oder hat keine Versionsangabe. Eine Aktualisierung ist damit nicht möglich. Nutze ein neueres Paket oder wähle Vorherigen Zustand wiederherstellen, falls entsprechende Wiederherstellungsdaten verfügbar sind.',
+        'version_downgrade': 'Ein neuerer Patch ist installiert. Du kannst ihn durch die hier angezeigte Version dieses Installers ersetzen. Anwenden bestätigt diesen Versionswechsel.',
+        'version_unversioned': 'Dieser Installer enthält keine Patch-Versionsangabe. Wähle einen Installer mit Versionsangabe, um den installierten Patch zu ersetzen.',
         'inspection': 'Nur prüfen: Es wird kein Patch installiert oder entfernt und nichts neu gestartet.',
         'setup': 'Wir prüfen PC und Frame, bevor Änderungen angeboten werden.',
         'search': 'Steam Frame wird gesucht',
@@ -1318,7 +1322,8 @@ def find_frame(validate, *, cached_hosts=(), sources=None, presenter=None,
             scope = ui.suspend() if interactive and not getattr(ui, 'inline_ssh', False) else nullcontext()
             with scope:
                 value = validate(address, interactive=interactive)
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
+            if getattr(error,'_sfnp_remote_refusal',False):raise
             # Never echo arbitrary SSH diagnostics or secrets. A failed manual
             # check gets the same explicit Retry/Manual/PC-only/Exit choices.
             return None
@@ -1395,7 +1400,8 @@ def find_frame(validate, *, cached_hosts=(), sources=None, presenter=None,
     while True:
         try:
             found = search_once()
-        except (OSError, ValueError):
+        except (OSError, ValueError) as error:
+            if getattr(error,'_sfnp_remote_refusal',False):raise
             found = None
         if found:
             return found

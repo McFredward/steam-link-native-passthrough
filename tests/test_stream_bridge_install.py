@@ -843,6 +843,138 @@ class Tests(unittest.TestCase):
                     self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
                 self.assertEqual(before,{str(p):p.read_bytes() for p in self.base.rglob('*') if p.is_file()})
 
+    def roomscan_fixture(self):
+        installed=self.install_component_fixture(pc='0.3.12-roomscan.8',frame='0.3.13-roomscan.16')
+        raw=s.read(self.unit.tx.path);state=s.parse(raw)
+        paths={self.froot/'room-setup/sfnp-room-overlay':b'owned room overlay',
+               self.froot/'room-setup/room.vrmanifest':b'owned temporary application manifest',
+               self.unit.config/'systemd/user'/b.ROOM_UNIT:b'[Unit]\nPartOf=steamvr.service\n',
+               self.unit.config/'systemd/user/steamvr.service.d'/b.ROOM_HOOK:b'[Unit]\nWants=sfnp-room-setup.service\n'}
+        for path,payload in paths.items():
+            op=self.unit.tx.operation(path,payload);self.unit.tx.replace(op);state['operations'].append(op)
+        s.put(self.unit.tx.path,s.encoded(state),raw)
+        run=self.unit.run
+        self.unit.run=lambda args,**kw:(self.commands.append(args) or (0,b'')) if args[2:]==['stop',b.ROOM_UNIT] else run(args,**kw)
+        return installed,paths
+
+    def test_roomscan_inventory_and_confirmed_stable_replacement_preserve_exact_undo(self):
+        installed,room=self.roomscan_fixture();old_pc=s.read(installed.receipt);old_frame=s.read(self.unit.tx.path)
+        saved=self.froot.parent/'rooms'/'saved-room.json';s.put(saved,b'user room measurements')
+        self.version_bundle(pc='0.3.11',frame='0.3.5')
+        frame=self.unit.inventory(self.bundle)
+        self.assertEqual(frame['installed_version'],'0.3.13-roomscan.16')
+        self.assertEqual(frame['target_version'],'0.3.5');self.assertFalse(frame['patch_payload_current'])
+        installed.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631,backup=True,
+            version_approval=b.version_consent(self.bundle,'0.3.11','0.3.12-roomscan.8'))
+        with self.fake_generation():self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True,
+            version_approval=b.version_consent(self.bundle,'0.3.5','0.3.13-roomscan.16'))
+        self.unit.tx.commit()
+        self.assertEqual(installed.state()['version'],'0.3.11');self.assertEqual(self.unit.tx.state()['version'],'0.3.5')
+        for path in room:self.assertFalse(path.exists())
+        self.assertIn(['/usr/bin/systemctl','--user','stop',b.ROOM_UNIT],self.commands)
+        self.assertEqual(s.read(saved),b'user room measurements')
+        installed.checkpoint().restore();self.unit.checkpoint().restore()
+        self.assertEqual(s.read(installed.receipt),old_pc);self.assertEqual(s.read(self.unit.tx.path),old_frame)
+        for path,payload in room.items():self.assertEqual(s.read(path),payload)
+        self.assertEqual(s.read(saved),b'user room measurements')
+
+    def test_roomscan_wizard_shows_both_versions_and_applies_confirmed_replacement(self):
+        installed,room=self.roomscan_fixture();self.version_bundle(pc='0.3.11',frame='0.3.5')
+        with self.fake_generation():result,ui=self.wizard(action='update')
+        self.assertEqual(result,0)
+        self.assertIn('version_downgrade',ui.messages);self.assertIn('bridge_confirm',ui.questions)
+        self.assertEqual(ui.inventories[0]['pc']['installed_version'],'0.3.12-roomscan.8')
+        self.assertEqual(ui.inventories[0]['frame']['installed_version'],'0.3.13-roomscan.16')
+        self.assertEqual(ui.inventories[0]['frame']['target_version'],'0.3.5')
+        self.assertEqual(installed.state()['version'],'0.3.11');self.assertEqual(self.unit.tx.state()['version'],'0.3.5')
+        for path in room:self.assertFalse(path.exists())
+
+    def test_version_replacement_approval_is_bound_to_current_version_and_bundle(self):
+        installed=self.install_component_fixture(pc='0.3.12-roomscan.8',frame='0.3.13-roomscan.16')
+        self.version_bundle(pc='0.3.11',frame='0.3.5')
+        before={str(p):p.read_bytes() for p in self.base.rglob('*') if p.is_file()}
+        for side,current,target in [('pc','0.3.12-roomscan.8','0.3.11'),('frame','0.3.13-roomscan.16','0.3.5')]:
+            approved=b.version_consent(self.bundle,target,current)
+            for stale in ({**approved,'bundle':'f'*64},{**approved,'installed_version':'0.3.99'},None):
+                with self.subTest(side=side,stale=stale),self.assertRaisesRegex(s.SetupError,'confirmation'):
+                    if side=='pc':installed.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631,backup=True,version_approval=stale)
+                    else:self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True,version_approval=stale)
+        self.assertEqual(before,{str(p):p.read_bytes() for p in self.base.rglob('*') if p.is_file()})
+
+    def test_ordinary_update_preserves_an_unrecorded_room_service_link(self):
+        self.install_component_fixture();self.version_bundle(pc='0.2.12',frame='0.2.12')
+        service=self.unit.config/'systemd/user'/b.ROOM_UNIT
+        service.parent.mkdir(parents=True,exist_ok=True)
+        service.symlink_to('/unrelated/private/service')
+        with self.fake_generation():self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
+        self.assertEqual(os.readlink(service),'/unrelated/private/service')
+        self.assertNotIn(['/usr/bin/systemctl','--user','stop',b.ROOM_UNIT],self.commands)
+
+    def test_roomscan_does_not_admit_arbitrary_external_receipt_paths(self):
+        self.roomscan_fixture();raw=s.read(self.unit.tx.path);state=s.parse(raw)
+        foreign=self.fhome/'.config/systemd/user/unrelated.service'
+        state['operations'].append({'path':str(foreign),'before':None,'after':None,'mode':0o600})
+        s.put(self.unit.tx.path,s.encoded(state),raw)
+        with self.assertRaisesRegex(s.SetupError,'component scope'):self.unit.inventory(self.bundle)
+        self.assertFalse(foreign.exists())
+
+    @unittest.skipUnless(hasattr(os,'getuid') and hasattr(__import__('socket'),'SO_PEERCRED'),'Linux peer credentials')
+    def test_room_camera_stop_uses_owned_peer_and_rejects_image_payloads(self):
+        import socket,struct,threading,secrets
+        if os.getuid()==0:self.skipTest('private unprivileged camera session')
+        directory=self.base/'room-camera';directory.mkdir(mode=0o700)
+        for images in (0,1):
+            with self.subTest(images=images):
+                address='sfnp.room.camera.'+str(os.getuid())+'.'+secrets.token_hex(16)
+                record=directory/'session.json'
+                s.put(record,s.encoded({'schema':'sfnp-room-camera-session-v1','state':'armed',
+                    'abstract_socket':address,'helper_pid':os.getpid(),'helper_sha256':'1'*64}))
+                received=[]
+                with socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET) as listener:
+                    listener.bind('\0'+address);listener.listen(1);listener.settimeout(3)
+                    def serve():
+                        with listener.accept()[0] as peer:
+                            received.append(peer.recv(1024))
+                            payload=b'{"status":"stopping"}'
+                            record.unlink()
+                            peer.send(struct.pack('<II',len(payload),images)+payload)
+                    worker=threading.Thread(target=serve);worker.start()
+                    try:
+                        if images:
+                            with self.assertRaisesRegex(ValueError,'extent'):b.stop_room_capture(directory)
+                        else:self.assertEqual(b.stop_room_capture(directory),{'state':'inactive'})
+                    finally:worker.join(4)
+                self.assertFalse(worker.is_alive());self.assertEqual(received,[b'{"command":"stop"}'])
+
+    @unittest.skipUnless(hasattr(os,'getuid'),'private Unix camera session')
+    def test_room_camera_stop_refuses_a_nonprivate_descriptor_directory(self):
+        if os.getuid()==0:self.skipTest('private unprivileged camera session')
+        directory=self.base/'untrusted-camera';directory.mkdir(mode=0o755);directory.chmod(0o755)
+        with self.assertRaisesRegex(ValueError,'not private'):b.stop_room_capture(directory)
+
+    def test_frame_validation_refusal_is_not_reported_as_connection_failure(self):
+        import contextlib,types
+        self.version_bundle();messages=[];problems=[]
+        class Screen:
+            def banner(inner,**kw):pass
+            def status(inner,*a):pass
+            def path(inner,*a,**kw):pass
+            def say(inner,key):messages.append(key)
+            def problem(inner,message):problems.append(message)
+            def choose_action(inner,*a,**kw):return 'exit'
+        class Peer:
+            def call(inner,request):
+                error=s.SetupError('Unknown Frame component scope preserved.')
+                error._sfnp_remote_refusal=True;raise error
+            def close(inner):pass
+        def finder(validate,**kw):return validate('192.168.1.25',interactive=True)
+        args=types.SimpleNamespace(bundle=self.bundle_root,check=False,dry_run=False,lang='en',frame=None,user='steamos',action=None)
+        with mock.patch.object(s.sys.stdin,'isatty',return_value=True),mock.patch.object(s,'load_presentation',return_value=types.SimpleNamespace(Presenter=lambda **kw:Screen())):
+            result=b.run(args,s,self.local,discover_frame=finder,remote_factory=lambda *a,**kw:Peer())
+        self.assertEqual(result,2);self.assertIn('bridge_frame_refused',messages)
+        self.assertNotIn('bridge_connection_failed',messages)
+        self.assertEqual(problems,['Unknown Frame component scope preserved.'])
+
     def test_version_does_not_override_changed_file_hashes(self):
         self.version_bundle();installed=b.LocalInstall(s,self.local)
         installed.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631)
@@ -927,7 +1059,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(report['installer_version'],'0.2.0')
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.base.rglob('*') if p.is_file()})
 
-    def test_version_newer_frame_does_not_offer_an_update_or_repair(self):
+    def test_version_newer_frame_shows_versions_and_offers_package_replacement(self):
         import contextlib,types
         self.version_bundle('0.2.0','0.3.0');installed=b.LocalInstall(s,self.local)
         installed.install(self.bundle,self.local.inventory(),self.pair,'192.168.1.4',47631)
@@ -947,8 +1079,8 @@ class Tests(unittest.TestCase):
         args=types.SimpleNamespace(bundle=self.bundle_root,check=False,dry_run=False,lang='en',frame='192.168.1.25',user='steamos',action=None)
         with mock.patch.object(s.sys.stdin,'isatty',return_value=True),mock.patch.object(s,'load_presentation',return_value=types.SimpleNamespace(Presenter=lambda **kw:Screen())):
             self.assertEqual(b.run(args,s,self.local,remote_factory=lambda *a,**kw:Peer()),0)
-        self.assertFalse({'install','update','repair'}&set(choices[0][0]))
-        self.assertEqual(choices[0][1]['recommended'],'check');self.assertIn('version_downgrade',messages)
+        self.assertIn('update',choices[0][0])
+        self.assertEqual(choices[0][1]['recommended'],'update');self.assertIn('version_downgrade',messages)
         self.assertEqual(calls,['bridge-inventory'])
 
     def test_prototype_never_applies(self):
