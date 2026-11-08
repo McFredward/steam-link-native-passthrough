@@ -253,8 +253,8 @@ void sampledNative(const std::vector<std::uint32_t>& vs,const std::vector<std::u
     const std::array<VkDescriptorSetLayoutBinding,2> bindings{{f.binding,
         {25,VK_DESCRIPTOR_TYPE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr}}};
     f.set.bindingCount=bindings.size();f.set.pBindings=bindings.data();
-    VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM offset{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM};
-    VkPhysicalDeviceFragmentDensityMapFeaturesEXT density{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT};
+    auto offset=info<VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM);
+    auto density=info<VkPhysicalDeviceFragmentDensityMapFeaturesEXT>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT);
     density.fragmentDensityMap=VK_TRUE;offset.pNext=&density;
     offset.fragmentDensityMapOffset=VK_TRUE;f.device.pNext=&offset;
     auto owner=std::make_unique<journal::Journal>(1,clone::ProbeInterface{},journal::PendingCount1::RetainFacts,
