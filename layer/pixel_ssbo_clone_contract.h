@@ -182,6 +182,7 @@ template<class T> bool ordinary(const T& in,VkStructureType type,Refusal& why) n
     return !in.pNext || refuse(why,Reason::Extension,UINT32_MAX,static_cast<std::uint32_t>(in.sType));
 }
 enum class FeatureSource : std::uint8_t {None,Legacy,Features2};
+enum class ShaderAccess : std::uint8_t {FragmentStorage,SampledFragment};
 struct FeatureFacts {
     bool complete=false,observed=false,enabled=false;
     FeatureSource source=FeatureSource::None;
@@ -305,9 +306,11 @@ inline bool knownFeaturePayload(const VkBaseInStructure* node,std::uint32_t inde
     default:return refuse(why,Reason::Extension,index,static_cast<std::uint32_t>(node->sType));
     }
 }
-inline bool enabledFeature(const VkDeviceCreateInfo& in,bool successfulCreate,
-                           FeatureFacts& out,Refusal& why) noexcept {
+inline bool captureDeviceFeatures(const VkDeviceCreateInfo& in,bool successfulCreate,
+                           FeatureFacts& out,Refusal& why,ShaderAccess access) noexcept {
     out={};why={};
+    if(access!=ShaderAccess::FragmentStorage&&access!=ShaderAccess::SampledFragment)
+        return refuse(why,Reason::FeatureValue);
     if(!successfulCreate)return refuse(why,Reason::NativeCreationFailed);
     if(in.sType!=VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO || in.flags)
         return refuse(why,Reason::Type,UINT32_MAX,static_cast<std::uint32_t>(in.sType));
@@ -347,9 +350,18 @@ inline bool enabledFeature(const VkDeviceCreateInfo& in,bool successfulCreate,
                !coreFeatureValues(features,index,node->sType,why))return false;
         }else if(!knownFeaturePayload(node,index,why))return false;
     }
-    if(!out.observed)return refuse(why,Reason::FeatureAbsent);
-    if(!out.enabled)return refuse(why,Reason::FeatureDisabled);
+    // The production fragment only samples images and writes its colour
+    // output. Keep the actual storage bit unchanged; it is not a requirement
+    // of that path. Optional-feature payload validation remains identical.
+    if(access==ShaderAccess::FragmentStorage){
+        if(!out.observed)return refuse(why,Reason::FeatureAbsent);
+        if(!out.enabled)return refuse(why,Reason::FeatureDisabled);
+    }
     out.complete=true;return true;
+}
+inline bool enabledFeature(const VkDeviceCreateInfo& in,bool successfulCreate,
+                           FeatureFacts& out,Refusal& why) noexcept {
+    return captureDeviceFeatures(in,successfulCreate,out,why,ShaderAccess::FragmentStorage);
 }
 
 struct Set0Definition {

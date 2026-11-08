@@ -247,6 +247,23 @@ void loadShaders(journal::Journal& j,const std::vector<std::uint32_t>& vs,const 
     require(j.createShader(object<VkShaderModule>(0x40),ci,VK_SUCCESS),"exact private VS definition captured");ci.codeSize=ps.size()*4;ci.pCode=ps.data();
     require(j.createShader(object<VkShaderModule>(0x50),ci,VK_SUCCESS),"exact private PS definition captured");
 }
+void sampledNative(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){
+    Fixture f;f.features.fragmentStoresAndAtomics=VK_FALSE;
+    auto owner=std::make_unique<journal::Journal>(1,clone::ProbeInterface{},journal::PendingCount1::RetainFacts,
+                                                clone::ShaderAccess::SampledFragment);
+    auto& j=*owner;f.initialize(j);f.definitions(j);loadShaders(j,vs,ps);
+    journal::Event event;
+    require(j.createPipeline(object<VkPipeline>(0x60),f.graphics,VK_SUCCESS,&event),"actual reviewed shader pair retained on sampled-only device");
+    journal::Ready ready;require(j.takeReady(ready,&event)&&ready.recipe.definitionComplete,"complete immutable pipeline recipe retained");
+    require(ready.recipe.feature.complete&&!ready.recipe.feature.enabled&&ready.recipe.feature.raw==VK_FALSE,
+            "disabled storage remains disabled in the complete sampled recipe");
+    require(!ready.nativeAuthority&&!ready.recipe.nativeCompatibilityProven&&!ready.recipe.runtimeActivationAuthorized,
+            "native/frame authority is not inferred from a device feature policy");
+    require(f.features.fragmentStoresAndAtomics==VK_FALSE,"original device input unchanged");
+    auto strict=std::make_unique<journal::Journal>();
+    require(!strict->createDevice(object<VkDevice>(1),f.device,VK_SUCCESS,&event)&&event.contract.reason==clone::Reason::FeatureDisabled,
+            "same input still refuses storage/atomic probe journal");
+}
 void privateRecipes(const std::vector<std::uint32_t>& sourceVs,const std::vector<std::uint32_t>& sourcePs){
     Fixture f;auto jOwner=std::make_unique<journal::Journal>();auto& j=*jOwner;journal::Event event;f.initialize(j);
     require(j.createSet(f.nativeSet,f.set,VK_SUCCESS,&event) && event.generation==1,"first set identity");
@@ -437,6 +454,7 @@ void count1Profile(const char* vsPath,const char* psPath,const char* probePath){
 }
 }
 int main(int argc,char** argv){
+    if(argc==4 && std::strcmp(argv[1],"--sampled-native")==0){sampledNative(readShader(argv[2]),readShader(argv[3]));std::cout<<"{\"scope\":\"sampled-native-pipeline\",\"checks\":"<<checks.load()<<",\"fragment_storage_enabled\":false,\"native_authority\":false}\n";return 0;}
     if(argc==2 && std::strcmp(argv[1],"--graphics-observations-only")==0){graphicsObservations();std::cout<<"{\"scope\":\"exact-target-graphics-observation-subset\",\"checks\":"<<checks.load()<<",\"native_authority\":false}\n";return 0;}
     if(argc==4 && std::strcmp(argv[1],"--startup-only")==0){semanticFactPressure();privateStartup(readShader(argv[2]),readShader(argv[3]));std::cout<<"{\"scope\":\"startup-pressure-model-subset\",\"checks\":"<<checks.load()<<",\"journal_bytes\":"<<sizeof(journal::Journal)<<",\"exact_native_payload_replay\":false,\"native_authority\":false}\n";return 0;}
     if(argc==2 && std::strcmp(argv[1],"--refusal-contexts-only")==0){refusalContexts();std::cout<<"{\"scope\":\"journal-context-rp2-subset\",\"checks\":"<<checks.load()<<"}\n";return 0;}

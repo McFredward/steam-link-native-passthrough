@@ -4,6 +4,7 @@
 #include "stream_bridge_coverage_gpu.h"
 #include "native_presenter_pipeline.h"
 #include "stream_bridge_coverage_transform.h"
+#include "stream_bridge_cold_admission.h"
 #include "submit_timeline_contract.h"
 #include "bridge/stream_bridge_log.h"
 #include <algorithm>
@@ -40,6 +41,50 @@ void coldNote(const char* message,sb::logging::Level level=sb::logging::Level::W
         for(const auto* old:seen)if(old&&!std::strcmp(old,message))return;
         for(auto& old:seen)if(!old){old=message;std::fprintf(stderr,"[Steam Link Native Passthrough] %s\n",message);return;}
     }catch(...){/* Optional cold diagnostics cannot affect native creation. */}
+}
+void coldRefusal(const char* stage,const journal::Event& event,std::size_t bytes=0,
+                 std::uint32_t flags=0,bool next=false,
+                 const stream_bridge_cold_admission::Shader* shader=nullptr,
+                 sb::logging::Level level=sb::logging::Level::Debug) noexcept {
+    if(!sb::logging::enabled(level))return;
+    try{
+        struct Key {const char* stage=nullptr;journal::Reason reason{};frame_pixel_ssbo_clone::Reason contract{};
+                    std::uint32_t type=0;std::array<std::uint8_t,32> hash{};};
+        static std::mutex gate;static std::array<Key,32> seen{};
+        std::lock_guard<std::mutex> lock(gate);
+        const std::array<std::uint8_t,32> hash=shader?shader->sha256:std::array<std::uint8_t,32>{};
+        for(const auto& old:seen)if(old.stage&&!std::strcmp(old.stage,stage)&&old.reason==event.reason&&
+            old.contract==event.contract.reason&&old.type==event.contract.type&&old.hash==hash)return;
+        for(auto& old:seen)if(!old.stage){
+            old={stage,event.reason,event.contract.reason,event.contract.type,hash};
+            const auto digest=stream_bridge_cold_admission::hex(hash);
+            std::fprintf(stderr,"[Steam Link Native Passthrough] native %s admission refused: journal=%s; contract=%s; index=%u; type=%u; bytes=%zu; flags=%u; has-next=%u; entry=%s; raw-sha256=%s\n",
+                stage,journal::reasonName(event.reason),frame_pixel_ssbo_clone::reasonName(event.contract.reason),
+                event.contract.index,event.contract.type,bytes,flags,unsigned(next),shader?shader->entry.data():"none",shader?digest.data():"none");return;
+        }
+    }catch(...){/* Cold scalar diagnostics never affect native creation. */}
+}
+void coldInspection(const frame_native_presenter::Result& result) noexcept {
+    if(!sb::logging::enabled(sb::logging::Level::Debug))return;
+    try{static std::mutex gate;static std::array<std::array<std::uint32_t,4>,16> seen{};static std::size_t count=0;
+        const std::array<std::uint32_t,4> key{{std::uint32_t(result.reason),std::uint32_t(result.graphicsGate),
+                                            std::uint32_t(result.attachmentFormat),std::uint32_t(result.unsupportedDynamic)}};
+        std::lock_guard<std::mutex> lock(gate);for(std::size_t n=0;n<count;++n)if(seen[n]==key)return;
+        if(count==seen.size())return;
+        seen[count++]=key;
+        std::fprintf(stderr,"[Steam Link Native Passthrough] native pipeline inspection refused: reason=%u; graphics-gate=%u; attachment-format=%u; unsupported-dynamic=%u\n",key[0],key[1],key[2],key[3]);
+    }catch(...){/* Creation still returns the original successful pipeline. */}
+}
+void coldDevice(std::uint32_t api,const frame_pixel_ssbo_clone::FeatureFacts& facts) noexcept {
+    if(!sb::logging::enabled(sb::logging::Level::Debug))return;
+    try{static std::mutex gate;static std::array<std::array<std::uint32_t,4>,16> seen{};static std::size_t count=0;
+        const std::array<std::uint32_t,4> key{{api,unsigned(facts.observed),unsigned(facts.enabled),unsigned(facts.source)}};
+        std::lock_guard<std::mutex> lock(gate);for(std::size_t n=0;n<count;++n)if(seen[n]==key)return;
+        if(count==seen.size())return;
+        seen[count++]=key;
+        std::fprintf(stderr,"[Steam Link Native Passthrough] native device admission accepted: api=%u.%u; storage-observed=%u; fragment-stores=%u; sampled-fragment=1\n",
+            VK_API_VERSION_MAJOR(api),VK_API_VERSION_MINOR(api),unsigned(facts.observed),unsigned(facts.enabled));
+    }catch(...){/* Bounded cold facts are diagnostic only. */}
 }
 }
 struct Renderer::Impl {
@@ -98,7 +143,8 @@ struct Renderer::Impl {
     std::atomic<bool> guardedRecordingPossible{false},uploadsPending{false};
     mutable std::mutex gate;VkDevice device{};PFN_vkGetDeviceProcAddr gdpa{};VkPhysicalDeviceMemoryProperties memory{};
     std::uint32_t api=0,family=UINT32_MAX;std::uint64_t generation=0;bool prepared=false,coveragePrepared=false,registered=false,count1Authorized=false;
-    gpu::Pool pool;journal::Journal definitions{1,{},journal::PendingCount1::RetainFacts};
+    gpu::Pool pool;journal::Journal definitions{1,{},journal::PendingCount1::RetainFacts,
+                                              frame_pixel_ssbo_clone::ShaderAccess::SampledFragment};
     VkDescriptorSetLayout controlLayout{};VkDescriptorPool controlPool{};VkCommandPool guardPool{};
     VkCommandBuffer zero{},cameraZero{};VkQueue queue{};VkBuffer controlsBuffer{};VkDeviceMemory controlsMemory{};std::array<Control,128> controls{};
     // Fixed cold metadata budgets; never evict a still-live native generation.
@@ -388,16 +434,28 @@ frame_pixel_ssbo_journal::Journal& Renderer::definitions() noexcept{return impl_
 RendererStats Renderer::statsCold()const noexcept{return impl_->stats();}
 void Renderer::shaderCreated(VkShaderModule value,const VkShaderModuleCreateInfo& info) noexcept{
     auto&p=*impl_;try{
-        if(!p.definitions.createShader(value,info,VK_SUCCESS)||!p.prepared||info.codeSize<20||info.codeSize>65536)return;
+        journal::Event event;const bool captured=p.definitions.createShader(value,info,VK_SUCCESS,&event);
+        if(p.prepared){
+            coldNote("native shader-module callback observed",sb::logging::Level::Debug);
+            if(!captured){
+                stream_bridge_cold_admission::Shader metadata;
+                if(stream_bridge_cold_admission::distortionShader(info,metadata))coldRefusal("shader",event,info.codeSize,info.flags,info.pNext!=nullptr,&metadata);
+                else if(event.reason!=journal::Reason::Contract)coldRefusal("shader",event,info.codeSize,info.flags,info.pNext!=nullptr);
+            }
+        }
+        if(!captured||!p.prepared||info.codeSize<20||info.codeSize>65536)return;
         std::lock_guard<std::mutex> lock(p.gate);if(p.count1Authorized)return;
         auto original=std::make_unique<frame_pixel_ssbo_clone::ShaderDefinition>();
         frame_pixel_ssbo_clone::ProbeInterface proof;
         frame_pixel_ssbo_clone::Refusal why;
-        if(frame_pixel_ssbo_clone::captureShader(info,frame_pixel_ssbo_clone::ShaderRole::Fragment,*original,why)&&
-           frame_pixel_ssbo_clone::ProbeInterface::nativeCount1(original->words.data(),original->bytes,proof,why)&&
-           p.definitions.authorizeProbeInterface(proof)){
+        // Recognized vertex modules do not need to authorize a fragment image
+        // interface. Do not report them as failed Count1 fragment attempts.
+        if(!frame_pixel_ssbo_clone::captureShader(info,frame_pixel_ssbo_clone::ShaderRole::Fragment,*original,why))return;
+        if(frame_pixel_ssbo_clone::ProbeInterface::nativeCount1(original->words.data(),original->bytes,proof,why)&&
+           p.definitions.authorizeProbeInterface(proof,&event)){
             p.count1Authorized=true;coldNote("native count1 image interface verified",sb::logging::Level::Debug);
-        }else coldNote("native count1 image interface refused; native pipeline retained");
+        }else{if(event.reason==journal::Reason::None&&why.reason!=frame_pixel_ssbo_clone::Reason::None){event.reason=journal::Reason::Contract;event.contract=why;}
+            coldRefusal("count1",event,info.codeSize,info.flags,info.pNext!=nullptr);coldNote("native count1 image interface refused; native pipeline retained");}
     }catch(...){coldNote("native shader admission unavailable; native pipeline retained");}
 }
 bool Renderer::prepareCold(VkDevice device,VkPhysicalDeviceMemoryProperties memory,PFN_vkGetDeviceProcAddr get,const VkDeviceCreateInfo& create,std::uint32_t api,std::uint32_t family) noexcept{
@@ -409,7 +467,14 @@ bool Renderer::prepareCold(VkDevice device,VkPhysicalDeviceMemoryProperties memo
         p.QueueSubmit2KHR=reinterpret_cast<PFN_vkQueueSubmit2>(get(device,"vkQueueSubmit2KHR"));
         if(!enabled())return false;
         p.device=device;p.memory=memory;p.gdpa=get;p.api=api;p.family=family;
-        p.definitions.createDevice(device,create,VK_SUCCESS);
+        journal::Event deviceEvent;
+        if(!p.definitions.createDevice(device,create,VK_SUCCESS,&deviceEvent)){
+            coldRefusal("device",deviceEvent,0,create.flags,create.pNext!=nullptr,nullptr,sb::logging::Level::Warning);
+            return false;
+        }else{
+            coldNote("native sampled-fragment device facts verified",sb::logging::Level::Debug);
+            coldDevice(api,p.definitions.inspectStats().feature);
+        }
         if(processKind()==ProcessKind::Vrlink)return true;
         if(api<VK_API_VERSION_1_1){coldNote("renderer unavailable: negotiated Vulkan API below 1.1; original retained");return false;}
         if(!p.load()){coldNote("renderer unavailable: required Vulkan dispatch missing; original retained");return false;}
@@ -436,11 +501,14 @@ void Renderer::graphicsCreated(VkPipelineCache cache,const VkGraphicsPipelineCre
     // context has no retained lifetime here, so keep that unsupported object
     // entirely native instead of borrowing callbacks after this cold call.
     if(allocator){coldNote("custom pipeline allocator retained without replacement",sb::logging::Level::Debug);return;}
-    try{journal::Event event;if(!p.definitions.createPipeline(original,info,VK_SUCCESS,&event)){
+    try{journal::Event event;coldNote("native graphics-pipeline callback observed",sb::logging::Level::Debug);
+        if(!p.definitions.createPipeline(original,info,VK_SUCCESS,&event)){
+            coldRefusal("pipeline",event,0,info.flags,info.pNext!=nullptr);
             if(event.contract.reason==frame_pixel_ssbo_clone::Reason::Image9Extent)coldNote("native pipeline refused: image interface not verified");
             return;
         }auto ready=std::make_unique<journal::Ready>();if(!p.definitions.lookupPipeline({handle(p.device),event.value,event.generation},*ready))return;
-        if(frame_native_presenter::inspectCompletedPipeline(p.device,p.api,VK_SUCCESS,info,original,ready->recipe).reason!=frame_native_presenter::Reason::None)return;
+        const auto inspected=frame_native_presenter::inspectCompletedPipeline(p.device,p.api,VK_SUCCESS,info,original,ready->recipe);
+        if(inspected.reason!=frame_native_presenter::Reason::None){coldInspection(inspected);return;}
         namespace transform=stream_bridge_coverage_transform;
         transform::Fragment coverage,cameraOnly;
         if(!transform::pairedStages(ready->recipe.vertex,ready->recipe.fragment)||
