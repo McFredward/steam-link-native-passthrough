@@ -1,8 +1,8 @@
 # Developing Steam Link Native Passthrough
 
-The stable **0.3.15** baseline delivers PC **0.3.11** / Frame **0.3.5** on the
+The stable **0.3.18** baseline delivers PC **0.3.13** / Frame **0.3.5** on the
 paired Windows/NVIDIA/HEVC route. Main uses Important logging; dev uses Debug.
-See the [release state and evidence](development/RELEASE-0.3.15.md) and
+See the [release state and evidence](development/RELEASE-0.3.18.md) and
 [complete documentation index](README.md). [Installation](../README.md#installation) and [compatibility](COMPATIBILITY.md) are the
 player entry points. The [retired atlas record](history/ATLAS-RECEIVER.md) preserves
 the earlier implementation and evidence; its formats are not runtime fallbacks.

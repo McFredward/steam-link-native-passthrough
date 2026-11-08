@@ -15,7 +15,13 @@ No GitHub Release is needed to deliver routine candidates:
    Publish the validated source and payload to `dev` while optimization is in
    progress. Update `main` only after explicit maintainer release approval.
 
-Release0.3.15 promotes the validated dev native/setup payloads to main with
+Release0.3.18 promotes the confirmed PC0.3.13 fix with unchanged stable
+Frame0.3.5 and installer logic. The package version advances to0.3.18. Verify the
+PC DLL against the successful candidate and all Frame/setup bytes against the
+stable baseline; change only package metadata, explanatory text and integrity
+pins. The normal bootstrap and tagged release must deliver the same archive.
+
+The earlier release0.3.15 promoted the validated dev native/setup payloads to main with
 Important defaults. Retarget only `pc-provider/logging-default.conf`,
 `frame/logging-default.conf`, explanatory text and inner/outer integrity metadata.
 Update the archive receipt's exact size/SHA256, then perform steps3–4 above.

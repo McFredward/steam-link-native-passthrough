@@ -2,12 +2,11 @@
 
 ## Current release
 
-Stable installer **0.3.15**, PC **0.3.11**, Frame **0.3.5** promotes the tested
-dev native binaries to main with Important logging; dev retains Debug. A channel
-switch changes owned configuration and package/bootstrap hashes, not native
-versions. Frame0.3.5 enables two within-picture HEVC slice threads, a byte-pinned
-private FFmpeg backport and strict complete-picture output. Frame0.3.4 introduced
-R8 buffer reuse. See [release evidence](development/RELEASE-0.3.15.md).
+Stable installer **0.3.18**, PC **0.3.13**, Frame **0.3.5** ships the confirmed
+native texture-edge rounding correction with Important logging. The PC DLL is
+the tested candidate; Frame payloads and stable installer logic remain unchanged.
+An intact Frame0.3.5 installation receives a PC-only update without Frame restart.
+See [release evidence](development/RELEASE-0.3.18.md).
 
 ## Earlier candidate checkpoints
 
@@ -73,7 +72,9 @@ still delivers PC patch **0.2.11** and Frame patch **0.2.12**. A semantic versio
 SteamVR compatibility or a hardware result.
 
 Increment the affected component in `PATCH_VERSIONS.json` when its native patch
-changes. The other component can retain its version. Publishing different native
+changes, and increment `VERSION` for the newly delivered installation package.
+The other component retains its version. Installer-only updates increment only
+`VERSION`. Publishing different native
 artifacts under the same component version is not the normal workflow; exact
 artifact checks still detect such differences and do not call them current.
 

@@ -12,6 +12,10 @@
   approved publishing the tested0.3.15 candidate to main on2026-10-30, with
   Important logging and refreshed developer documentation. This approval covers
   this release; subsequent candidates still integrate on dev unless approved.
+  On2026-11-08 the maintainer confirmed the native crop-rounding fix on a headset
+  and approved release0.3.18 with PC0.3.13, unchanged Frame0.3.5 and stable setup
+  logic. This approval covers this fix, not the parked installer replacement or
+  the development Frame decoder. Future releases require another approval.
 - Commit as `McFredward <frederik@lissek.info>`. Speak German to the maintainer;
   source, comments and developer documentation are English.
 - The intended input is real per-eye scene coverage, independent of scene RGB.
@@ -91,6 +95,9 @@
 - Installer `VERSION` and PC/Frame `PATCH_VERSIONS.json` are independent. An
   installer-only update must not invent a native patch version or recommend a
   patch update when the installed native components are already current.
+  The maintainer's2026-11-08 clarification requires a new installer/package
+  version when a changed native patch is shipped. Increment the affected native
+  component and `VERSION`; preserve the other native component's version.
 - The maintainer's 2026-10-19 installer request permits installation on untested
   SteamVR versions after an explicit additional warning and confirmation. Do not
   hide Install/Update/Repair solely because a runtime differs. Installation

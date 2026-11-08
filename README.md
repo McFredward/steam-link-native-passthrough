@@ -22,15 +22,19 @@
 
 Play supported PC VR games in your real room over Steam Link.
 
-**Latest release: [0.3.15](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15) · Published October 30, 2026**
+**Latest release: [0.3.18](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.18) · Published November 8, 2026**
 
 | Component | Release version |
 |---|---|
-| Installer | **0.3.15** |
-| PC sender | **0.3.11** |
+| Installer | **0.3.18** |
+| PC sender | **0.3.13** |
 | Frame receiver | **0.3.5** |
 
 The installation command below installs this release from `main` with normal logging.
+
+PC0.3.13 fixes a native texture-edge rounding error that could leave passthrough
+black in Venture. The fix was confirmed on Steam Frame. Updating an intact
+Frame0.3.5 installation changes only the PC patch and does not restart the Frame.
 
 ## Native transparency, no colour replacement
 

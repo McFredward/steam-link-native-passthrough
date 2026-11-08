@@ -1,7 +1,7 @@
 # Developer documentation index
 
-Updated October 30, 2026 for stable installer 0.3.15 / PC 0.3.11 / Frame 0.3.5.
-Start with [Developing](DEVELOPING.md) and the [release baseline/evidence](development/RELEASE-0.3.15.md).
+Updated November 8, 2026 for stable installer 0.3.18 / PC 0.3.13 / Frame 0.3.5.
+Start with [Developing](DEVELOPING.md) and the [release baseline/evidence](development/RELEASE-0.3.18.md).
 Main ships Important logging; dev retains Debug. Temporal HEVC is the negotiated
 default with explicit lossless fallback/preferences; exact image proof is mandatory.
 
@@ -40,7 +40,8 @@ versions and pending checks; they do not override current source or release scop
 | [Native Frame camera failure after setup restart](development/NATIVE-CAMERA-STARTUP.md) | `development/NATIVE-CAMERA-STARTUP.md` |
 | [General native mask compression and camera-only recovery](development/NATIVE-MASK-CODEC.md) | `development/NATIVE-MASK-CODEC.md` |
 | [Native update recognition, October21](development/NATIVE-UPDATE-RECOGNITION.md) | `development/NATIVE-UPDATE-RECOGNITION.md` |
-| [Release 0.3.15 developer baseline](development/RELEASE-0.3.15.md) | `development/RELEASE-0.3.15.md` |
+| [Release 0.3.18: native texture-edge rounding](development/RELEASE-0.3.18.md) | `development/RELEASE-0.3.18.md` |
+| [Prior release 0.3.15 developer baseline](development/RELEASE-0.3.15.md) | `development/RELEASE-0.3.15.md` |
 | [Vanilla uninstall and exact operation Undo](development/VANILLA-UNINSTALL-20261019.md) | `development/VANILLA-UNINSTALL-20261019.md` |
 
 ## Current wire/API contracts

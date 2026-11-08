@@ -22,15 +22,20 @@
 
 Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
-**Aktuelles Release: [0.3.15](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15) · Veröffentlicht am 30. Oktober 2026**
+**Aktuelles Release: [0.3.18](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.18) · Veröffentlicht am 8. November 2026**
 
 | Komponente | Release-Version |
 |---|---|
-| Installer | **0.3.15** |
-| PC-Sender | **0.3.11** |
+| Installer | **0.3.18** |
+| PC-Sender | **0.3.13** |
 | Frame-Empfänger | **0.3.5** |
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
+
+PC0.3.13 behebt einen Rundungsfehler an nativen Texturgrenzen, durch den
+Passthrough in Venture schwarz bleiben konnte. Die Korrektur wurde auf Steam
+Frame bestätigt. Bei intakter Frame0.3.5-Installation wird nur der PC-Patch
+aktualisiert; die Frame wird dabei nicht neu gestartet.
 
 ## Native Transparenz, kein Farbersatz
 

@@ -1,6 +1,6 @@
 # Tested versions and evidence
 
-## Successfully tested runtimes: October30 release baseline
+## Successfully tested runtimes: November8 release
 
 | Component | Current paired route |
 |---|---|
@@ -10,8 +10,8 @@
 | PC sender | Windows x86_64, supported NVIDIA encoder, HEVC |
 | Game source | Explicit SDR RGBA integration; real RGB contribution, coverage alpha and independently proved native eyes |
 | Installation | Matching PC and Frame companions, [guided setup](PC-FRAME-SETUP.md) |
-| Released components | Installer0.3.15, PC0.3.11, Frame0.3.5; Demeo Mixed Reality2.0.0 |
-| Hardware status | Demeo/Battles/Battlemarked desktop fix confirmed; Spirit Sling via Venture reports improvement on0.3.15 |
+| Released components | Installer0.3.18, PC0.3.13, Frame0.3.5; Demeo Mixed Reality2.0.0 |
+| Hardware status | Venture MR restored with PC0.3.13; earlier Demeo/Battles/Battlemarked desktop confirmation remains scoped to its recorded tests |
 
 The supported game and minimum version have their own [table](../README.md#supported-games).
 Steam Frame standalone passthrough is separate and requires neither streamed companion.
@@ -67,7 +67,14 @@ background-sampling shaders and every material family are not certified.
 
 ## Current evidence
 
-The stable [0.3.15 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15)
+The [0.3.18 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.18)
+contains the exact PC0.3.13 DLL the maintainer confirmed restored Venture MR on
+November8. It corrects tiny native crop-edge roundoff while preserving native
+arguments and exact source/image proof. Frame0.3.5 and installer logic remain
+unchanged. This confirmation is not a new controlled quality or latency result.
+See [release0.3.18](development/RELEASE-0.3.18.md).
+
+The prior stable [0.3.15 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15)
 contains the native PC0.3.11/Frame0.3.5 binaries tested on dev. Main changes only
 the logging defaults and related integrity metadata. The full native CI and
 Windows/Linux installer CI passed before publication; public asset downloads
