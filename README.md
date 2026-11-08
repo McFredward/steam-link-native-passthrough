@@ -36,12 +36,13 @@ PC0.3.13 fixes a native texture-edge rounding error that could leave passthrough
 black in Venture. The fix was confirmed on Steam Frame. Updating an intact
 Frame0.3.5 installation changes only the PC patch and does not restart the Frame.
 
-For the **experimental Arcturus room setup candidate 0.3.16-roomscan.17**, use
+For the **experimental Arcturus room setup candidate 0.3.19-roomscan.17.1**, use
 the separate `arcturus-room-setup` branch installer:
 
-The development source is rebased on stable 0.3.18, including the PC 0.3.13
-texture-edge fix. The command below still delivers the frozen roomscan.17
-archive; it does not yet install that fix or the reconstruction rebuild.
+Maintenance build 17.1 combines the confirmed PC 0.3.13 texture-edge fix with
+the original roomscan.17 implementation. All Frame files, camera helpers, setup
+code and private dependencies are unchanged. The reconstruction rebuild remains
+in development and is not included in this installer.
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex

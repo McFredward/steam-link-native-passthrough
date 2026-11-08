@@ -68,3 +68,14 @@ execution. The existing runtime is not configured, installed or restarted.
 Windows CI executes the exact delivered binary's input selftest and exercises
 native error-log collection/cleanup plus tampered-download refusal. Real NVENC
 measurements require the maintainer's NVIDIA GPU; CI does not claim that result.
+
+
+The `arcturus-room-setup` branch delivers maintenance installer
+`0.3.19-roomscan.17.1`: the frozen roomscan.17 payload plus the released PC0.3.13
+DLL. Reproduce it with `tools/package_room_pc_update.py`; its two input archives
+are immutable and size/SHA-pinned. All Frame/setup/dependency bytes remain
+unchanged. The composite source manifest records per-file `source_origins`, the
+original runtime profile/receipts under `base_*`, and the PC release evidence.
+`room-setup/maintenance-17.1.json` is the current composition record; the other
+room profile/validation records remain historical roomscan.17 evidence. This
+maintenance package does not ship the reconstruction rebuild or candidate18.

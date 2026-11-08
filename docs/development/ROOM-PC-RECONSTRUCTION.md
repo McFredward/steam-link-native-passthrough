@@ -1314,3 +1314,28 @@ installer/component versions and receipts intact. The next package must include
 the verified PC 0.3.13 binary, update installer/PC version metadata and validation
 pins, and preserve the unchanged Frame component version. No candidate 18 has
 been packaged or installed by this rebase.
+
+
+### Roomscan.17 maintenance installer with PC 0.3.13
+
+Installer `0.3.19-roomscan.17.1` combines the original immutable roomscan.17
+archive with the released, headset-confirmed PC 0.3.13 DLL. It preserves all
+40 Frame entries and all 981 setup/runtime entries byte for byte, including
+the session-only camera reader, accepted grid/pulse, X, mandatory room phase,
+room data persistence and reconstruction dependencies. Frame retains component
+version `0.3.13-roomscan.16`. This package restores the existing test environment;
+it does not improve the rejected reconstruction quality or ship candidate 18.
+
+`tools/package_room_pc_update.py` reproduces the composition from the two
+size/SHA-pinned repository archives. The source manifest records each packaged
+source's origin: the frozen room source revision, or the new version-metadata
+revision. The released PC source/build evidence is recorded separately. Original
+validation receipts remain explicitly inherited, rather than relabelled as new
+checks of the reconstruction rebuild. The production Bundle parser admits the
+completed package and rejects a control replacing the fixed DLL with the old
+one. The combined room package has not yet had a new wearer test.
+
+See `distribution/room-setup/maintenance-17.1.json` for exact input/output hashes,
+component versions and the seven changed archive entries. The older room runtime
+profile, software receipts and bootstrap proof in that directory describe the
+original roomscan.17 package, not a newly built camera or reconstruction core.

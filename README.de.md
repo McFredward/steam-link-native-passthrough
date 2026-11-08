@@ -37,13 +37,13 @@ Passthrough in Venture schwarz bleiben konnte. Die Korrektur wurde auf Steam
 Frame bestätigt. Bei intakter Frame0.3.5-Installation wird nur der PC-Patch
 aktualisiert; die Frame wird dabei nicht neu gestartet.
 
-Für den **experimentellen Arcturus-Raumscan 0.3.16-roomscan.17** gibt es den
+Für den **experimentellen Arcturus-Raumscan 0.3.19-roomscan.17.1** gibt es den
 separaten Installer auf dem Branch `arcturus-room-setup`:
 
-Der Entwicklungsstand basiert auf Stable 0.3.18 einschließlich des
-Texturgrenzen-Fixes aus PC 0.3.13. Der folgende Befehl liefert weiterhin das
-eingefrorene roomscan.17-Archiv; der Fix und der Neuaufbau der Rekonstruktion
-sind darin noch nicht enthalten.
+Wartungsbuild 17.1 verbindet den bestätigten Texturgrenzen-Fix aus PC 0.3.13
+mit dem ursprünglichen Raumscan-Teststand 17. Alle Frame-Dateien, Kamerahelfer,
+Installer-Logik und privaten Abhängigkeiten bleiben unverändert. Der neue
+Rekonstruktionskern ist noch in Entwicklung und nicht in diesem Installer.
 
 ```powershell
 irm https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/arcturus-room-setup/get.ps1 | iex
