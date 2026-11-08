@@ -74,6 +74,22 @@ jobs:
           print(result.stderr)
           assert result.returncode == 1 and 'empty client cleanup cannot invalidate the unchanged shared inventory' in result.stderr
           PY
+      - name: Prove strict crop edges reproduce the observed Venture rejection
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('pc/stream-bridge-sender-provider-directmode.cpp').read_text()
+          needle = 'constexpr float TextureBoundsRounding=4*std::numeric_limits<float>::epsilon();'
+          assert source.count(needle) == 1
+          Path('build/strict-crop.cpp').write_text(source.replace(needle, 'constexpr float TextureBoundsRounding=0;'))
+          PY
+          c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -pthread -I. -Ipc -isystem build/cleanup-sdk tests/test_stream_bridge_sender_provider_directmode.cpp build/strict-crop.cpp -o build/strict-crop
+          python3 - <<'PY'
+          import subprocess
+          result = subprocess.run(['build/strict-crop'], capture_output=True, text=True)
+          print(result.stderr)
+          assert result.returncode == 1 and "Venture's observed tiny negative crop edge retains its exact stereo source" in result.stderr
+          PY
   shared-resource:
     if: github.event_name == 'workflow_dispatch' && (inputs.focus == 'shared' || inputs.focus == 'all')
     runs-on: windows-2025

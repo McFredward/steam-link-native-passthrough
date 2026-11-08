@@ -3,17 +3,19 @@
 #include <cstdio>
 #include <stdexcept>
 #include <limits>
+#include <cmath>
 using namespace stream_bridge::sender;
 namespace {
 unsigned checks=0,creates=0,submits=0,presents=0,posts=0,seen=0,destroys=0,destroyAlls=0;
 void* object=reinterpret_cast<void*>(0x1234);DirectModeFunctions table{};DirectFrame frame{};bool destroyInPresent=false,emptyDestroyInPresent=false;
 DirectMode::SwapTextureSetDesc_t forwarded{};const DirectMode::SwapTextureSetDesc_t* forwardedPointer=nullptr;
+DirectMode::SubmitLayerPerEye_t forwardedEyes[2]{};const DirectMode::SubmitLayerPerEye_t* forwardedEyesPointer=nullptr;
 void check(bool b,const char* s){++checks;if(!b)throw std::runtime_error(s);}
 void create(void*,std::uint32_t,const DirectMode::SwapTextureSetDesc_t* d,DirectMode::SwapTextureSet_t* o){++creates;forwardedPointer=d;if(d)forwarded=*d;for(unsigned i=0;i<3;++i)o->rSharedTextureHandles[i]=100*creates+i+1;}
 void destroy(void*,vr::SharedTextureHandle_t){++destroys;}
 void destroyAll(void*,std::uint32_t){++destroyAlls;if(destroyInPresent)check(!DirectModeBoundary::currentFrame(),"real source revocation is already visible inside original native destruction");}
 void next(void*,vr::SharedTextureHandle_t[2],std::uint32_t(*)[2]){}
-void submit(void*,const DirectMode::SubmitLayerPerEye_t(&)[2]){++submits;}
+void submit(void*,const DirectMode::SubmitLayerPerEye_t(&eyes)[2]){++submits;forwardedEyesPointer=eyes;std::memcpy(forwardedEyes,eyes,sizeof forwardedEyes);}
 void present(void* o,vr::SharedTextureHandle_t){++presents;if(const auto* p=DirectModeBoundary::currentFrame()){frame=*p;++seen;}if(emptyDestroyInPresent){table.destroyAll(o,9001);table.destroy(o,999999);check(DirectModeBoundary::currentFrame()!=nullptr,"empty client cleanup must preserve the current exact game frame");}if(destroyInPresent){table.destroyAll(o,42);check(!DirectModeBoundary::currentFrame(),"actual destruction invalidates in-flight snapshot epoch immediately");}}
 void post(void*,const DirectMode::Throttling_t*){++posts;if(const auto* p=DirectModeBoundary::currentFrame()){check(p->presentSerial==frame.presentSerial,"PostPresent retains exact prior Present scope");++seen;}}
 void timing(void*,vr::DriverDirectMode_FrameTiming*){}
@@ -95,6 +97,43 @@ void run(bool gloomhaven){
     check(seen==count&&diagnostics.count(DirectDiagnostic::SubmitGeometry)==2&&diagnostics.submit.bounds[1]==1&&diagnostics.submit.bounds[3]==0,
         "inverted bounds remain refused and are reported without changing the existing admission rule");
     eyes[1].bounds.vMin=0;eyes[1].bounds.vMax=1;
+    const auto normalRight=eyes[1];
+    const auto cropped=[&](vr::VRTextureBounds_t bounds,bool accepted,const char* message){
+        eyes[1].bounds=bounds;const auto previous=seen,nativeSubmits=submits,nativePresents=presents,nativePosts=posts;
+        table.submit(object,eyes);table.present(object,77);table.post(object,nullptr);
+        check(seen==previous+(accepted?2u:0u),message);
+        check(submits==nativeSubmits+1&&presents==nativePresents+1&&posts==nativePosts+1&&forwardedEyesPointer==eyes&&std::memcmp(forwardedEyes,eyes,sizeof eyes)==0,
+            "both accepted and rejected crops preserve every original native argument and call exactly once");
+        check(bridge.inventoryRevision()==revision,"crop validation cannot change source registry identity");
+        if(accepted)check(frame.layerCount==1&&frame.layers[0][0].processId==42&&frame.layers[0][1].processId==42&&std::memcmp(&frame.layers[0][1].submitted,&eyes[1],sizeof eyes[1])==0,
+            "rounding tolerance retains exact current stereo source and unmodified float crop");
+    };
+    // The actual Venture capture fails the former strict vMin < 0 check.
+    const vr::VRTextureBounds_t ventureCrop{0,-2.755537e-08f,0.73228f,0.7320542f};
+    cropped(ventureCrop,true,"Venture's observed tiny negative crop edge retains its exact stereo source");
+    const auto normalLeft=eyes[0];eyes[0].bounds=ventureCrop;
+    cropped(ventureCrop,true,"simultaneous edge rounding in both eyes retains the complete current pair");eyes[0]=normalLeft;
+    constexpr float rounding=4*std::numeric_limits<float>::epsilon();
+    for(const auto b:{vr::VRTextureBounds_t{-rounding,0,1,1},{0,-rounding,1,1},{0,0,1+rounding,1},{0,0,1,1+rounding},{-rounding,-rounding,1+rounding,1+rounding}})
+        cropped(b,true,"finite crop edge arithmetic within the explicit subtexel budget is admitted");
+    const float below=std::nextafter(-rounding,-std::numeric_limits<float>::infinity());
+    const float above=std::nextafter(1+rounding,std::numeric_limits<float>::infinity());
+    for(const auto b:{vr::VRTextureBounds_t{below,0,1,1},{0,below,1,1},{0,0,above,1},{0,0,1,above},
+        {-0.001f,0,1,1},{0,0,1,1.001f},{1,0,0,1},{0,1,1,0},{0,0,0,1},{0,0,1,0},
+        {-rounding,0,0,1},{1,0,1+rounding,1},{0,-rounding,1,0},{0,1,1,1+rounding},
+        {0,std::numeric_limits<float>::quiet_NaN(),1,1},{0,0,std::numeric_limits<float>::infinity(),1}})
+        cropped(b,false,"out-of-budget, nonfinite, reversed, empty and wholly exterior crops remain refused");
+    eyes[1]=normalRight;eyes[1].mProjection.m[0][0]=std::numeric_limits<float>::quiet_NaN();
+    cropped(ventureCrop,false,"rounded crop cannot admit a nonfinite native projection");
+    eyes[1]=normalRight;eyes[1].mHmdPose.m[2][3]=std::numeric_limits<float>::infinity();
+    cropped(ventureCrop,false,"rounded crop cannot admit a nonfinite native pose");
+    eyes[1]=normalRight;eyes[1].flHmdPosePredictionTimeInSecondsFromNow=std::numeric_limits<float>::quiet_NaN();
+    cropped(ventureCrop,false,"rounded crop cannot admit nonfinite prediction timing");
+    eyes[1]=normalRight;eyes[1].hTexture=999;
+    cropped(ventureCrop,false,"rounded crop cannot invent shared-texture ownership for an unknown handle");
+    eyes[1]=normalRight;count=seen;
+    table.submit(object,eyes);table.present(object,77);table.post(object,nullptr);
+    check(seen==count+2,"valid native stereo immediately recovers after rejected crop collection");count=seen;
     for(unsigned i=0;i<5;++i)table.submit(object,eyes);
     check(!bridge.inventoryRevision(),"tainted native collection cannot look like an unchanged admitted registry");
     table.present(object,77);check(seen==count,"overflowing native layer collection not partially certified");
