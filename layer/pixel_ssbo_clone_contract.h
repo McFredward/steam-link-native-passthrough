@@ -643,13 +643,15 @@ inline bool captureShader(const VkShaderModuleCreateInfo& in,ShaderRole role,Sha
     frame_receiver::Sha256 hash;hash.update(in.pCode,in.codeSize);out.sha256=hash.finish();
     namespace contract=stream_bridge_shader_contract;
     const bool vertex=role==ShaderRole::Vertex;
-    const std::size_t sizes[2]{vertex?9460u:6620u,vertex?9508u:4532u};
-    const char* pins[2]{vertex?"94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5":ProbeInterface::OriginalFragmentSha256,
+    const std::size_t sizes[3]{vertex?9460u:6620u,vertex?9508u:4532u,7136u};
+    const char* pins[3]{vertex?"94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5":ProbeInterface::OriginalFragmentSha256,
         vertex?"8b503f9b741b8f8e4460cff089f94ebc24e546fc6d39cb44206ccd5b17356b50":
-               "a42daff46b5a155bc66ba53361face163fb1bd39260cb374430c1732c0ecfd1f"};
-    const contract::Contract profiles[2]{vertex?contract::vertex():contract::fragment(),
-                                       vertex?contract::vertexBeta():contract::fragmentBeta()};
-    for(unsigned n=0;n<2;++n){
+               "a42daff46b5a155bc66ba53361face163fb1bd39260cb374430c1732c0ecfd1f",
+        "9dbfb10bfa78f2b115ab8cb8c579479bf125492ac26f54719653451e1d814f1f"};
+    const contract::Contract profiles[3]{vertex?contract::vertex():contract::fragment(),
+                                       vertex?contract::vertexBeta():contract::fragmentBeta(),contract::vertexAchromaticBeta()};
+    const unsigned count=vertex?3u:2u;
+    for(unsigned n=0;n<count;++n){
         if(in.codeSize==sizes[n]&&digestMatches(out.sha256,pins[n])){
             out.bytes=static_cast<std::uint32_t>(in.codeSize);std::memcpy(out.words.data(),in.pCode,in.codeSize);out.complete=true;return true;
         }
@@ -659,7 +661,8 @@ inline bool captureShader(const VkShaderModuleCreateInfo& in,ShaderRole role,Sha
         if(!digestMatches(digest,pins[n]))continue;
         out.sha256=digest;out.bytes=static_cast<std::uint32_t>(used*4);out.complete=true;return true;
     }
-    out={};return refuse(why,(in.codeSize==sizes[0]||in.codeSize==sizes[1])?Reason::ShaderPin:Reason::ShaderProfile);
+    bool knownSize=false;for(unsigned n=0;n<count;++n)knownSize|=in.codeSize==sizes[n];
+    out={};return refuse(why,knownSize?Reason::ShaderPin:Reason::ShaderProfile);
 }
 
 } // namespace frame_pixel_ssbo_clone

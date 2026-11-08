@@ -1,4 +1,12 @@
-# Runtime compatibility and candidate0.3.23
+# Runtime compatibility and candidate0.3.24
+
+Candidate0.3.24 contains Frame0.3.10 and unchanged PC0.3.13. The0.3.9 run passes
+device admission, then identifies an unsupported actual beta vertex shader.
+This candidate recognizes that stage and adds explicit vertex/fragment
+interface checking. The previously selected layered beta vertex was
+incompatible with the current achromatic fragment. See
+[the correction and actual native GPU pipeline checks](FRAME-ACTIVE-VERTEX.md).
+Both the old and current valid paths remain; headset presentation is pending.
 
 Candidate0.3.23 contains Frame0.3.9 and the unchanged PC0.3.13 provider.
 The maintainer's new PC2.19.2 run verifies native API and encoder initialization;
@@ -30,20 +38,22 @@ identify SteamVR2.18.4/build1792185270. They record Battlemarked and a sender
 waiting for its paired receiver.
 
 Read-only inspection found the previous Frame companion still installed and
-loaded by the current compositor. Its library had not been removed. Both native
-pipeline stages had changed: the fragment has a different sample/branch
-contract, and the layered vertex stage changed its interface. The installed
-derived fragments still belonged to the previous native shader. The existing
-admission therefore could not prepare the required current image route. A
+loaded by the current compositor. Its library had not been removed. The current
+fragment has a different sample/branch contract; the installed derived fragments
+still belonged to the previous native shader. Later creation-time diagnostics
+identified the actual current vertex and exposed the initially incorrect beta
+stage pairing, corrected in0.3.10. The existing admission could not prepare the
+required current image route. A
 missing local route also prevents receiver negotiation; the PC waiting for a
 peer is consistent with this failure. The complete new runtime path still needs
 a headset test after installation.
 
 ## One patch for both paths
 
-Frame0.3.7 retains the previous reviewed shader logic and adds the current
-reviewed logic. It recognizes the actual native vertex/fragment pair when that
-pipeline is created. It derives coverage and camera-only fragments from that
+Frame0.3.7 retained previous fragment logic and added current fragment logic.
+Frame0.3.10 corrects the current vertex selection and verifies its interface
+against the fragment when that pipeline is created. It derives coverage and
+camera-only fragments from that
 same current fragment, using only owned insertions. It no longer activates
 installation-time shader files that may predate a runtime update. Those files
 remain checked installation/rollback records.
@@ -85,8 +95,8 @@ by guessing an eye index.
   mismatched pairs are refused.
 - All generated fragments pass `spirv-val --target-env vulkan1.1`; the ARM64
   receiver builds with the existing codec62/util60 decoder libraries.
-- 43 host CTest suites pass, including the PC native-image, negotiated-source
-  and sampled-device controls. Installer/package/startup tests are recorded with
+- 44 host CTest suites pass, including the PC native-image, negotiated-source,
+  sampled-device and stage-interface controls. Installer/package/startup tests are recorded with
   the delivery.
 
 Private native inputs and generated shaders remain outside Git and the package.

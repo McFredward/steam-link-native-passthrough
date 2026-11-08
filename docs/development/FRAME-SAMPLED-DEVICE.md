@@ -4,6 +4,9 @@ Update: the next headset run identified an unfamiliar density-map-offset
 feature as the current rejection. [Frame0.3.9](FRAME-DENSITY-FEATURES.md) handles
 that explicit cause. The sampled-storage correction below was insufficient
 for that runtime's complete device chain.
+The subsequent0.3.9 run observes the actual storage feature enabled; it was not
+that device's rejecting bit. The current remaining shader correction is in
+[Frame0.3.10](FRAME-ACTIVE-VERTEX.md).
 
 ## What is observed
 

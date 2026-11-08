@@ -4,6 +4,7 @@
 // across native shader generations or borrowed from installation-time output.
 #include "pixel_ssbo_clone_contract.h"
 #include "stream_bridge_coverage_transform_data.h"
+#include "stream_bridge_shader_interface.h"
 
 namespace stream_bridge_coverage_transform {
 namespace clone=frame_pixel_ssbo_clone;
@@ -13,7 +14,7 @@ struct Fragment {
 };
 inline bool transform(const clone::ShaderDefinition& original,bool cameraOnly,Fragment& out) noexcept {
     out={};if(!original.complete)return false;
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    VkShaderModuleCreateInfo info{};info.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     info.codeSize=original.bytes;info.pCode=original.words.data();
     clone::ShaderDefinition checked;clone::Refusal why;
     if(!clone::captureShader(info,clone::ShaderRole::Fragment,checked,why))return false;
@@ -40,11 +41,15 @@ inline bool pairedStages(const clone::ShaderDefinition& vertex,const clone::Shad
     // recipe containing stages from two different native pipeline contracts.
     if(!vertex.complete||!fragment.complete)return false;
     clone::ShaderDefinition vs,ps;clone::Refusal why;
-    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    VkShaderModuleCreateInfo info{};info.sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     info.codeSize=vertex.bytes;info.pCode=vertex.words.data();
     if(!clone::captureShader(info,clone::ShaderRole::Vertex,vs,why))return false;
     info.codeSize=fragment.bytes;info.pCode=fragment.words.data();
     if(!clone::captureShader(info,clone::ShaderRole::Fragment,ps,why))return false;
-    return (vs.bytes==9460&&ps.bytes==6620)||(vs.bytes==9508&&ps.bytes==4532);
+    if(!((vs.bytes==9460&&ps.bytes==6620)||(vs.bytes==7136&&ps.bytes==4532)))return false;
+    stream_bridge_shader_interface::Interface outputs,inputs;
+    return stream_bridge_shader_interface::capture(vs.words.data(),vs.bytes,true,outputs)&&
+           stream_bridge_shader_interface::capture(ps.words.data(),ps.bytes,false,inputs)&&
+           stream_bridge_shader_interface::compatible(outputs,inputs);
 }
 } // namespace stream_bridge_coverage_transform
