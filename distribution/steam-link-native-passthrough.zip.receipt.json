@@ -1,12 +1,12 @@
 {
   "archive": {
-    "bytes": 20216147,
-    "sha256": "23d2ed8c4b4c60d59d8ed9c8bbd37c9d0d004bca0f56555a6c1a3a49e271eb58"
+    "bytes": 20224198,
+    "sha256": "c1a7ae6db53e665a33c922af824aa776ff7dbfa311b5b6dfa1e9b651c57bcde0"
   },
   "artifacts": {
     "frame_layer": {
-      "bytes": 3723200,
-      "sha256": "9a30a0a48c93742d7b9cff831cb205b21398d01d720cb3717d97170a2944e3c9"
+      "bytes": 3724048,
+      "sha256": "bc927c7f3265436f1a4f25745ed5c6e7acc22e3ffb304416368b11f45d885bfc"
     },
     "frame_selector": {
       "bytes": 73360,
@@ -21,13 +21,13 @@
       "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
     },
     "pc_provider": {
-      "bytes": 2094080,
-      "sha256": "71880dd51a013cc8d8a19a3f814fb293df24947e8df31088db7f0ef3cd3cabac"
+      "bytes": 2098688,
+      "sha256": "ab11a3cf43f86c9d32f2a96a970707c5322a86b62d55112d164ff3e83f32a57c"
     }
   },
   "component_versions": {
-    "frame": "0.3.5",
-    "pc": "0.3.11"
+    "frame": "0.3.7",
+    "pc": "0.3.13"
   },
   "device_actions": false,
   "hardware_verified": false,
@@ -36,8 +36,8 @@
   "readiness": "release",
   "result": "PASS",
   "runtime_profile": {
-    "bytes": 11548,
-    "sha256": "72cbb7660c689c6a193e245485fe885ad5acc98cd5752ab7b8287a9fd0415f46"
+    "bytes": 11549,
+    "sha256": "60fe549ed09743d83c75e12b0ef7b11d4804c9ad912ae690169fc0aebd9e0d5d"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -47,11 +47,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 79,
-      "sha256": "d8269283f154d73ce0d451f2b6b733d588c0600848a2b54ed3e1be371bc37169"
+      "sha256": "989eb2f0ed50b6487f91a1b3bfbaa2a527fc45dabd4b3d7451c87513fbb090c7"
     },
     "VERSION": {
       "bytes": 7,
-      "sha256": "304ee74090c149b24dd0a0c279da94cdff8469db1dda00a60560626a54c4cfec"
+      "sha256": "52f0f7238f6b810629ffd4feb4abfd7c5bc147dbd1372191f8843b2016db5c39"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -146,8 +146,8 @@
       "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 173055,
-      "sha256": "a82e7eef93096c2049b352a738f70e184c5201fc579a250f591c9e8a99798c75"
+      "bytes": 174065,
+      "sha256": "017703135be4d0650fe73eec63f1850de64b8dcf65cc207470848f3b3670019f"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -198,16 +198,16 @@
       "sha256": "a375a068bc68f0c8e34fa2051bb7371d816aa737cbf527bcfaaac0e5dcb06a93"
     },
     "tools/native_fragment_stream_coverage.py": {
-      "bytes": 8750,
-      "sha256": "a8e947aa49bd1881d66ae9a2bed6b3eeb5761e0a5e3368165467495f4046a511"
+      "bytes": 15510,
+      "sha256": "c4ee8bd9981d8573f02094d304461463c611b03a3f832071de05962c850e32f4"
     },
     "tools/native_shader_contract.json": {
-      "bytes": 13764,
-      "sha256": "fa56730966a22ee374c4b77a7b5303c75788e1dc4fc604793d266fcc8e4093b5"
+      "bytes": 20549,
+      "sha256": "5bfc8bfa1ffc9b55471cc71803cf30bf7e0236cd55ed8208ba0cba4a970ec559"
     },
     "tools/native_shader_contract.py": {
-      "bytes": 3006,
-      "sha256": "8c1925915b587ba330bcdcaf7be592532e5fd64d67465417e87bec67b84cef94"
+      "bytes": 3450,
+      "sha256": "b4f529e9d1fc3d90a268e3b28f76accba604634670e0ee4799c2076f11b5cd3a"
     },
     "tools/package_setup_dependencies.py": {
       "bytes": 7369,
@@ -234,7 +234,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "2804943d26948f865be1b62375ed3c11fa460510",
+  "source_revision": "bc7d46056b556416827e102947172faf84e1014a",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -251,10 +251,10 @@
       ],
       "hardware_verified": false,
       "pin": {
-        "bytes": 8584,
-        "sha256": "6ce8debb8dffe2ed6b5135cf87958bc0893e8277f8f1f6e23a0003ca15691d1c"
+        "bytes": 8585,
+        "sha256": "2f96490beea5fb49ba8fa1b423e41db93dd77f5a54669bcfcd9d02817979e5c3"
       }
     }
   ],
-  "version": "0.3.15"
+  "version": "0.3.20"
 }
