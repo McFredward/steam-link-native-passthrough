@@ -1,0 +1,131 @@
+{
+  "actual_device_refusal_not_yet_observed": false,
+  "archive": {
+    "bytes": 20232006,
+    "sha256": "decdcade5552d7d94b9decac08ceac0fb31b4da33ffeb62dc0aadc320cc4106f"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3725848,
+      "sha256": "6253c6a8e9e26919d961fffd1b0e7d0252b53bff66b9ac0862d5ceb4b8ec3621"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2098688,
+      "sha256": "ab11a3cf43f86c9d32f2a96a970707c5322a86b62d55112d164ff3e83f32a57c"
+    }
+  },
+  "base_candidate": "0.3.23",
+  "change": "actual achromatic vertex admission and explicit SPIR-V stage-interface compatibility",
+  "component_versions": {
+    "frame": "0.3.10",
+    "pc": "0.3.13"
+  },
+  "device_actions": false,
+  "hardware_verified": false,
+  "host_ctest_suites": 44,
+  "observed_gate": {
+    "count1_verified": true,
+    "device_admitted": true,
+    "journal": "unknown_shader",
+    "rejected_vertex_bytes": 7136,
+    "rejected_vertex_sha256": "9dbfb10bfa78f2b115ab8cb8c579479bf125492ac26f54719653451e1d814f1f"
+  },
+  "pc_beta_hardware_verified": false,
+  "pc_provider_byte_identical": true,
+  "regression_control": {
+    "after": {
+      "actual_pair_accepted": true,
+      "actual_vertex_captured": true,
+      "incompatible_layered_pair_accepted": false,
+      "native_authority": false
+    },
+    "before": {
+      "actual_pair_accepted": false,
+      "actual_vertex_captured": false,
+      "incompatible_layered_pair_accepted": true,
+      "native_authority": false
+    }
+  },
+  "sampled_native_checks_each": 21,
+  "schema": "sfnp-frame-active-vertex-candidate-v1",
+  "software_logs": {
+    "build-024-arm.log": {
+      "bytes": 374,
+      "sha256": "c462809cb1809434903edbbcba54c2b3df836cc9c11d0d3dd67c254d54380566"
+    },
+    "ctest-024.log": {
+      "bytes": 5942,
+      "sha256": "3247d34aa8899b96d4def00e3a8ebf28068895d6d355b33d51c32e1d66a35aa1"
+    },
+    "installer-024-tests.log": {
+      "bytes": 488,
+      "sha256": "d0df3fd8b88035bfdeaed4f77a770014cd42426acf453d4d0f1aa23bb3fdd6a9"
+    },
+    "legacy-clone-024.log": {
+      "bytes": 191,
+      "sha256": "dea6b58cbe8cddf3d6a867aec27d4321a73bb8e0eccdcef520cb8601c7191b04"
+    },
+    "legacy-journal-024.log": {
+      "bytes": 202,
+      "sha256": "1dc836eb5471b866b9c861b599fe94be79de849b8d475a2ccbcef1cfdc627e07"
+    },
+    "legacy-owned-024.log": {
+      "bytes": 40,
+      "sha256": "6d10dc0f5bb63925bcfbc957027b62d0fbbcfc63cda4753ed9ad5b6058c2b55d"
+    },
+    "live-transform-024.log": {
+      "bytes": 57,
+      "sha256": "dff22137aea5a650fdd09c2ef09f8ce654f343c13d3b03b5c70ec12a0f8023a6"
+    },
+    "native-stages-new-024.log": {
+      "bytes": 120,
+      "sha256": "282ca0fe8ff40d60d53c449ca02e6b4919c8ee9934a27186debba640b980c209"
+    },
+    "native-stages-old-024.log": {
+      "bytes": 120,
+      "sha256": "282ca0fe8ff40d60d53c449ca02e6b4919c8ee9934a27186debba640b980c209"
+    },
+    "package-024-tests.log": {
+      "bytes": 116,
+      "sha256": "ecea85f9f90ae9535ecf6b7ba8bf64cf5ba1182a40ef9af04017f6730ea85614"
+    },
+    "sampled-device-024-sanitized.log": {
+      "bytes": 73,
+      "sha256": "18b8e0760e0ba44c5670c949f1aec85c73a69f17d50bf3e662189c54ffb34dc1"
+    },
+    "sampled-new-native-024.log": {
+      "bytes": 106,
+      "sha256": "d74adbf22548a0db5beca33992232d09e4a9640d2f5c4dc7ab17f31a872c870a"
+    },
+    "sampled-old-native-024.log": {
+      "bytes": 106,
+      "sha256": "d74adbf22548a0db5beca33992232d09e4a9640d2f5c4dc7ab17f31a872c870a"
+    },
+    "shader-contract-024-tests.log": {
+      "bytes": 104,
+      "sha256": "62cfbeb2911bb226088bfb0918eb4b05008ea70b20bce854ee2ca8a564bd37a5"
+    },
+    "shader-interface-024-sanitized.log": {
+      "bytes": 56,
+      "sha256": "1f9889245cabf0fd97f18f0ded9deb478a23db8f5a8513ce6f079d437c8220d1"
+    },
+    "vulkan-024-tests.log": {
+      "bytes": 170,
+      "sha256": "c45656ab0172cad9ab8c97439e99b6b735c01c218efc772187179376127f5cdf"
+    }
+  },
+  "source_revision": "6d4289433ecabc3466638bea5a79ae3dfb6bd6c2",
+  "version": "0.3.24"
+}
