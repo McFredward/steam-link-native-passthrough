@@ -1,5 +1,5 @@
 param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview, [ValidateRange(0,200)][int] $HevcMaskBitrate = 0)
-# Venture PC crop-rounding test candidate; unchanged stable Frame 0.3.5 and installer.
+# General PC patch 0.3.13; unchanged stable Frame 0.3.5 and installer 0.3.15.
 # Separate from regular get.ps1; corrected headset output has not yet been verified.
 & {
     param([bool] $sfnpInspection, [bool] $sfnpManage, [bool] $sfnpBridgePreview, [int] $sfnpHevcMaskBitrate)
@@ -8,10 +8,10 @@ param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview, [Vali
     $sfnpStage = $null
     $sfnpTls = [Net.ServicePointManager]::SecurityProtocol
     $sfnpRepo = 'McFredward/steam-link-native-passthrough'
-    $sfnpRepositoryCommit = 'bd8d87895be3292c31c036ae1e0774641ce8c32c'
+    $sfnpRepositoryCommit = '9e4c4da8237b24a91bb319d50d98cdf66aaae7e5'
     $sfnpRepositoryAsset = 'distribution/venture-source-admission.zip'
-    $sfnpRepositoryBytes = 20218694
-    $sfnpRepositorySha256 = '46bf1af05caf5821acfd6771de22c471e5b296c6774359e407bb7ea367893dbf'
+    $sfnpRepositoryBytes = 20218647
+    $sfnpRepositorySha256 = 'f3383b25e52958a5867ce9e3537ba5954e7a30e14fdb3ed265ae2b3b2073abc9'
     $sfnpAsset = 'steam-link-native-passthrough-bridge-preview.zip'
     $sfnpEndpoint = '/releases/tags/stream-bridge-preview-v1'
     if ($sfnpInspection) {
