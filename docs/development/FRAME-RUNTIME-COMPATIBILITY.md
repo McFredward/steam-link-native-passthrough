@@ -1,5 +1,9 @@
 # Runtime changes and candidate0.3.20
 
+Installer0.3.21 carries these same native components and fixes a
+[PC shutdown query race](SETUP-PC-SHUTDOWN.md) that prevented the reported0.3.20
+installation from reaching the Frame update.
+
 Candidate0.3.20 contains Frame0.3.7 and the unchanged, confirmed PC0.3.13
 provider. It is a development candidate; the new Frame beta has not yet passed
 the maintainer's end-to-end headset test. The stable release remains0.3.18.

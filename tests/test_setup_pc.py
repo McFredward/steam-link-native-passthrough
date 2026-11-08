@@ -275,12 +275,74 @@ class Tests(unittest.TestCase):
                 adapter.wait=lambda *a:0 if state['query'] and dead else 0x102
                 adapter._sid=lambda *a:adapter.user
                 def query(*a):state['query']=True;return False
-                adapter.query=query;adapter.close=closed.append
+                adapter.query=query;adapter.close=closed.append;adapter.last_error=lambda:31
                 if dead:self.assertIsNone(adapter._process(42))
                 else:
-                    with self.assertRaisesRegex(e.SetupError,'executable path could not be checked'):
+                    with self.assertRaisesRegex(OSError,'executable path of a running SteamVR process') as failure:
                         adapter._process(42)
+                    self.assertEqual(failure.exception.winerror,31)
                 self.assertEqual(closed,[123])
+
+    def native_query_adapter(self):
+        adapter=object.__new__(pc.WindowsAdapter)
+        adapter.e=e;adapter.w=wintypes;adapter.user=b'fixture-owner'
+        adapter.open=lambda *a:123;adapter._sid=lambda *a:adapter.user
+        adapter.last_error=lambda:31
+        return adapter
+
+    def test_native_image_query_waits_for_the_same_exiting_handle(self):
+        adapter=self.native_query_adapter();waits=[];closed=[]
+        adapter.query=lambda *a:False
+        def wait(handle,timeout):
+            waits.append((handle,timeout));return 0 if timeout==pc.QUERY_EXIT_WAIT_MS else 0x102
+        adapter.wait=wait;adapter.close=closed.append
+        self.assertIsNone(adapter._process(42))
+        self.assertEqual(waits,[(123,0),(123,pc.QUERY_EXIT_WAIT_MS)])
+        self.assertEqual(closed,[123])
+
+    def test_native_image_query_retry_still_verifies_path_and_creation_time(self):
+        adapter=self.native_query_adapter();closed=[];queries=[];waits=[]
+        target=self.root/'bin/win64/vrserver.exe';adapter.paths={'vrserver.exe':target}
+        adapter._normalize=lambda p:str(p)
+        def query(handle,flags,path,size):
+            queries.append(handle)
+            bound=ctypes.cast(size,ctypes.POINTER(wintypes.DWORD)).contents
+            if len(queries)==1:bound.value=65536;return False
+            self.assertEqual(bound.value,len(path))
+            path.value=str(target);return True
+        def times(handle,created,*rest):
+            ctypes.cast(created,ctypes.POINTER(wintypes.FILETIME)).contents.dwLowDateTime=1234;return True
+        adapter.query=query;adapter.times=times
+        adapter.wait=lambda handle,timeout:waits.append((handle,timeout)) or 0x102
+        adapter.close=closed.append
+        handle,identity=adapter._process(42)
+        self.assertEqual(identity,{'pid':42,'created':1234,'path':str(target)})
+        self.assertEqual(queries,[123,123]);self.assertEqual(waits,[(123,0),(123,pc.QUERY_EXIT_WAIT_MS)])
+        self.assertEqual(closed,[]);adapter.close(handle);self.assertEqual(closed,[123])
+
+    def test_native_image_query_live_denial_retains_win32_error_and_never_kills(self):
+        adapter=self.native_query_adapter();closed=[];queries=[];waits=[]
+        adapter.last_error=lambda:5
+        adapter.query=lambda *a:queries.append(a[0]) or False
+        adapter.wait=lambda handle,timeout:waits.append((handle,timeout)) or 0x102
+        adapter.close=closed.append
+        adapter.kill=lambda *a:self.fail('unverified process must never be killed')
+        with self.assertRaises(PermissionError) as failure:adapter._process(42)
+        self.assertEqual(failure.exception.winerror,5)
+        logger=module('sfnp_pc_failure_log_test',ROOT/'setup/steam_link_setup_log.py')
+        event=logger.classify_failure(failure.exception)
+        self.assertEqual((event['error_type'],event['reason'],event['winerror']),
+                         ('permission_error','permission_denied',5))
+        self.assertEqual(queries,[123,123]);self.assertEqual(closed,[123])
+        self.assertEqual(waits,[(123,0),(123,pc.QUERY_EXIT_WAIT_MS),(123,0)])
+
+    def test_native_image_query_failed_wait_is_not_proof_of_exit(self):
+        adapter=self.native_query_adapter();closed=[]
+        adapter.query=lambda *a:False
+        adapter.wait=lambda handle,timeout:0xffffffff if timeout else 0x102
+        adapter.close=closed.append
+        with self.assertRaisesRegex(e.SetupError,'liveness could not be checked'):adapter._process(42)
+        self.assertEqual(closed,[123])
 
     def test_native_terminate_race_requires_the_owned_handle_to_have_exited(self):
         for dead in (False,True):

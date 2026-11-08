@@ -20,6 +20,7 @@ import time
 SCHEMA = 'sfnp-pc-lifecycle-v1'
 NAMES = ('vrmonitor.exe', 'vrcompositor.exe', 'vrserver.exe')
 MAX_PROCESSES = 64
+QUERY_EXIT_WAIT_MS = 500
 
 
 def _duration(engine, value):
@@ -208,6 +209,7 @@ class WindowsAdapter:
         self.first=bind(self.k,'Process32FirstW',[H,ctypes.POINTER(Entry)],B)
         self.next=bind(self.k,'Process32NextW',[H,ctypes.POINTER(Entry)],B)
         self.user = self._sid(self.current())
+        self.last_error = ctypes.get_last_error
 
     @staticmethod
     def clock():return time.monotonic()
@@ -319,7 +321,23 @@ class WindowsAdapter:
             if status==0:return None
             if self._sid(handle)!=self.user:return None
             path=ctypes.create_unicode_buffer(32768);size=self.w.DWORD(len(path))
-            self.e.require(self.query(handle,0,path,ctypes.byref(size)),'PC runtime executable path could not be checked.')
+            if not self.query(handle,0,path,ctypes.byref(size)):
+                # During shutdown the image query can fail before the process
+                # handle becomes signaled. Wait on that same owned handle,
+                # then retry the query once if it is still alive. A timeout or
+                # query failure never grants path/termination authority.
+                status=self.wait(handle,QUERY_EXIT_WAIT_MS)
+                self.e.require(status in (0,0x102),'PC process liveness could not be checked.')
+                if status==0:return None
+                size.value=len(path)
+                if not self.query(handle,0,path,ctypes.byref(size)):
+                    code=self.last_error()
+                    if self.wait(handle,0)==0:return None
+                    error=(PermissionError if code==5 else OSError)(
+                        'The executable path of a running SteamVR process could not be checked. '
+                        'Close SteamVR on this PC and retry setup. No unverified process was stopped.')
+                    error.winerror=code
+                    raise error
             expected=next((value for value in self.paths.values() if self._normalize(path.value)==self._normalize(value)),None)
             if expected is None:return None
             self.e.no_links(expected)
