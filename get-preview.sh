@@ -7,7 +7,7 @@ done
 sfnp_preview_stage=$(mktemp -d)
 trap 'rm -rf -- "$sfnp_preview_stage"' EXIT
 curl --fail --silent --show-error --proto '=https' --max-time 30 --max-filesize 65536 \
-    'https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/9130f7e4044b097489309b5ca979f9035d0c3da6/get.sh' \
+    'https://raw.githubusercontent.com/McFredward/steam-link-native-passthrough/29171267a2e3499c0ec7a5ab51127cf828661c60/get.sh' \
     --output "$sfnp_preview_stage/get.sh"
-printf '%s  %s\n' '22ec0a42090fc3f332247ba622791cfd32cd8ee4cd10d4f7756abd598846b786' "$sfnp_preview_stage/get.sh" | sha256sum --check --status
+printf '%s  %s\n' 'd3417bc598df054a53c9fd93e12bfac1f9b3fd904b5e70109064d823c597c187' "$sfnp_preview_stage/get.sh" | sha256sum --check --status
 bash "$sfnp_preview_stage/get.sh" --bridge-preview

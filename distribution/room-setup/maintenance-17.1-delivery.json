@@ -1,0 +1,27 @@
+{
+  "schema": "sfnp-room-maintenance-delivery-v1",
+  "result": "LOCAL_PASS_PUBLIC_PENDING",
+  "version": "0.3.19-roomscan.17.1",
+  "archive": {
+    "bytes": 23199501,
+    "sha256": "2289e8d5454baa508f11aa574eaeb2b265628bfe78b44142e9af31b615e8b795"
+  },
+  "archive_commit": "90005ab64f7c8713748c4bf4ab4a931868610a3c",
+  "bootstrap_commit": "29171267a2e3499c0ec7a5ab51127cf828661c60",
+  "package_source_revision": "c8354f0c318cba7cb7e0549174f09fe31bd3fead",
+  "bootstrap_tests": 39,
+  "packaging_tests": 18,
+  "logging_tests": 7,
+  "powershell_actual_archive_extraction": "PASS",
+  "actual_windows_candidate": "PENDING",
+  "source_origins_individually_git_verified": true,
+  "outer_and_bundle_payload_pins_verified": true,
+  "production_bundle_admission": "PASS",
+  "old_pc_substitution_control": "refused",
+  "frame_and_setup_bytes_unchanged": true,
+  "new_scan_core_included": false,
+  "combined_headset_test": false,
+  "device_actions": false,
+  "get.ps1_sha256": "41abf503492c00c5ee7b4d01b037306fd936ea196dc8b3a90d3c9ca8ad4c5326",
+  "get.sh_sha256": "d3417bc598df054a53c9fd93e12bfac1f9b3fd904b5e70109064d823c597c187"
+}
