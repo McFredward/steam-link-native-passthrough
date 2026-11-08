@@ -1,4 +1,11 @@
-# Runtime changes and candidate0.3.20
+# Runtime compatibility and candidate0.3.22
+
+Candidate0.3.22 contains Frame0.3.8 and the unchanged PC0.3.13 provider.
+It removes a storage/atomics feature requirement from the sampled coverage
+renderer and adds bounded creation-time admission diagnostics. It is a
+development candidate, not a successful headset compatibility claim. Stable
+remains0.3.18. See [device admission](FRAME-SAMPLED-DEVICE.md) for the evidence
+and the distinction between the observed failure and the remaining hypothesis.
 
 Installer0.3.21 carries these same native components and fixes a
 [PC shutdown query race](SETUP-PC-SHUTDOWN.md) that prevented the reported0.3.20
@@ -51,9 +58,11 @@ The PC already discovers its public imports, DirectMode009 RTTI/method table and
 executable mapping from the current image. Its coverage association uses current
 resources, rather than fixed build offsets. Synthetic moved-image regression
 controls pass. PC0.3.13 therefore stays byte-identical in this candidate. This
-does not constitute a hardware test of PC SteamVR beta2.19.2: the reported PC
-runtime is still2.18.4. Unsupported array-resource shapes are not unlocked by
-guessing an eye index.
+does not constitute a hardware test of PC SteamVR beta2.19.2. The maintainer
+has now switched the PC to beta too, but the latest supplied PC logs still
+describe2.18.4. A fresh beta run must establish the actual PC build, native API
+admission and end-to-end frame pairing. Unsupported array-resource shapes are
+not unlocked by guessing an eye index.
 
 ## Software evidence and remaining test
 
@@ -69,8 +78,9 @@ guessing an eye index.
   mismatched pairs are refused.
 - All generated fragments pass `spirv-val --target-env vulkan1.1`; the ARM64
   receiver builds with the existing codec62/util60 decoder libraries.
-- 42 host CTest suites pass, including the PC native-image and negotiated-source
-  controls. Installer/package/startup tests are recorded with the delivery.
+- 43 host CTest suites pass, including the PC native-image, negotiated-source
+  and sampled-device controls. Installer/package/startup tests are recorded with
+  the delivery.
 
 Private native inputs and generated shaders remain outside Git and the package.
 This evidence proves software behavior on owned offscreen resources, not actual

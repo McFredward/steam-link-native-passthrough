@@ -80,8 +80,9 @@ class Journal {
 public:
     // An explicit nonzero seed supports deterministic wrap-boundary controls.
     // It is NOT a source-provided generation or a native authority assertion.
-    explicit Journal(std::uint64_t firstGeneration=1,clone::ProbeInterface profile={},PendingCount1 pending=PendingCount1::Refuse):
-        nextGeneration_(firstGeneration),probeInterface_(profile),pendingCount1_(pending){stats_.journalEpoch=acquireEpoch();}
+    explicit Journal(std::uint64_t firstGeneration=1,clone::ProbeInterface profile={},PendingCount1 pending=PendingCount1::Refuse,
+                     clone::ShaderAccess access=clone::ShaderAccess::FragmentStorage):
+        nextGeneration_(firstGeneration),probeInterface_(profile),pendingCount1_(pending),shaderAccess_(access){stats_.journalEpoch=acquireEpoch();}
     Journal(const Journal&)=delete;
     Journal& operator=(const Journal&)=delete;
 
@@ -96,7 +97,7 @@ public:
         // fact/refusal remains inspectable; a failed original create initializes nothing.
         stats_.initialized=true;stats_.device=value;
         frame_pixel_definition_facts::device(facts_,ci,result);
-        if(!clone::enabledFeature(ci,true,stats_.feature,stats_.deviceRefusal))
+        if(!clone::captureDeviceFeatures(ci,true,stats_.feature,stats_.deviceRefusal,shaderAccess_))
             return fail(out,Reason::DeviceIneligible,ObjectKind::Device,value,0,stats_.deviceRefusal);
         return true;
     }
@@ -331,6 +332,7 @@ private:
     std::uint64_t nextGeneration_=1;
     clone::ProbeInterface probeInterface_{};
     PendingCount1 pendingCount1_=PendingCount1::Refuse;
+    const clone::ShaderAccess shaderAccess_;
     bool retired_=false;
     Stats stats_{};
     frame_pixel_definition_facts::Facts facts_{};
@@ -388,7 +390,8 @@ private:
     }
     bool deviceEligible(Event* out,ObjectKind kind,std::uint64_t value) noexcept {
         if(!stats_.initialized)return fail(out,Reason::NotInitialized,kind,value);
-        if(retired_ || !stats_.feature.complete || !stats_.feature.enabled)
+        if(retired_ || !stats_.feature.complete ||
+           (shaderAccess_==clone::ShaderAccess::FragmentStorage&&!stats_.feature.enabled))
             return fail(out,Reason::DeviceIneligible,kind,value,0,stats_.deviceRefusal);
         return true;
     }

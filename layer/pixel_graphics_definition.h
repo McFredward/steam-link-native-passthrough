@@ -354,7 +354,8 @@ inline bool captureGraphics(const VkGraphicsPipelineCreateInfo& in,VkPipelineLay
            (!dynamic(VK_DYNAMIC_STATE_STENCIL_TEST_ENABLE)&&!boolean(out.depth.stencilTestEnable))||
            (!dynamic(VK_DYNAMIC_STATE_DEPTH_BOUNDS)&&(dynamic(VK_DYNAMIC_STATE_DEPTH_BOUNDS_TEST_ENABLE)||out.depth.depthBoundsTestEnable)&&(!std::isfinite(out.depth.minDepthBounds)||!std::isfinite(out.depth.maxDepthBounds))))return refuse(why,Reason::Scalar);
     }
-    // enabledFeature currently rejects BLEND_OPERATION_ADVANCED_FEATURES_EXT;
+    // captureDeviceFeatures rejects BLEND_OPERATION_ADVANCED_FEATURES_EXT in
+    // both storage and sampled-fragment policies;
     // complete checked device facts therefore establish its coherent-operation
     // feature absent (it is not folded into Vulkan11/12/13). If that whitelist
     // ever admits the feature, replace this absence proof with its actual bit.

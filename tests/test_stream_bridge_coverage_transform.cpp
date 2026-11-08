@@ -1,6 +1,7 @@
 // Public refusal controls; optional private actual-stage replay. No native code
 // or generated Valve-derived shader is embedded in this test.
 #include "layer/stream_bridge_coverage_transform.h"
+#include "layer/stream_bridge_cold_admission.h"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -22,6 +23,11 @@ c::ShaderDefinition capture(const std::vector<std::uint32_t>& words,c::ShaderRol
 }
 void replay(const char* vertex,const char* fragment,const std::filesystem::path& directory,const char* name){
     const auto source=load(fragment),vertexSource=load(vertex);const auto vs=capture(vertexSource,c::ShaderRole::Vertex),ps=capture(source,c::ShaderRole::Fragment);
+    for(const auto* words:{&source,&vertexSource}){
+        VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};info.codeSize=words->size()*4;info.pCode=words->data();
+        stream_bridge_cold_admission::Shader metadata;
+        check(stream_bridge_cold_admission::distortionShader(info,metadata)&&metadata.bytes==info.codeSize,"actual native stage yields only bounded entry/digest metadata");
+    }
     check(t::pairedStages(vs,ps),"reviewed native stage pair");
     c::ProbeInterface profile;c::Refusal why;
     check(c::ProbeInterface::nativeCount1(ps.words.data(),ps.bytes,profile,why)&&profile.specializedCount1(),"all native descriptor accesses authorize only constant0");
