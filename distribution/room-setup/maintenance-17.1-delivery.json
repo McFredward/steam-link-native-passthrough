@@ -1,6 +1,6 @@
 {
   "schema": "sfnp-room-maintenance-delivery-v1",
-  "result": "LOCAL_PASS_PUBLIC_PENDING",
+  "result": "PASS",
   "version": "0.3.19-roomscan.17.1",
   "archive": {
     "bytes": 23199501,
@@ -13,7 +13,7 @@
   "packaging_tests": 18,
   "logging_tests": 7,
   "powershell_actual_archive_extraction": "PASS",
-  "actual_windows_candidate": "PENDING",
+  "actual_windows_candidate": "PASS",
   "source_origins_individually_git_verified": true,
   "outer_and_bundle_payload_pins_verified": true,
   "production_bundle_admission": "PASS",
@@ -23,5 +23,46 @@
   "combined_headset_test": false,
   "device_actions": false,
   "get.ps1_sha256": "41abf503492c00c5ee7b4d01b037306fd936ea196dc8b3a90d3c9ca8ad4c5326",
-  "get.sh_sha256": "d3417bc598df054a53c9fd93e12bfac1f9b3fd904b5e70109064d823c597c187"
+  "get.sh_sha256": "d3417bc598df054a53c9fd93e12bfac1f9b3fd904b5e70109064d823c597c187",
+  "full_installer_ci": {
+    "run": 42480233223,
+    "revision": "0a6f3c7cdf95babd4efc3302fcfd36577e4130a8",
+    "result": "success",
+    "jobs": [
+      "linux",
+      "linux-python-baseline",
+      "windows-bootstrap"
+    ],
+    "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42480233223"
+  },
+  "public_download": {
+    "result": "PASS",
+    "version": "0.3.19-roomscan.17.1",
+    "archive": {
+      "bytes": 23199501,
+      "sha256": "2289e8d5454baa508f11aa574eaeb2b265628bfe78b44142e9af31b615e8b795"
+    },
+    "archive_commit": "90005ab64f7c8713748c4bf4ab4a931868610a3c",
+    "all_members_verified": 1042,
+    "branch_bootstrap_and_aliases_match": true,
+    "pc_patch": "0.3.13",
+    "frame_patch": "0.3.13-roomscan.16",
+    "device_actions": false
+  },
+  "room_ci": {
+    "run": 42480233366,
+    "revision": "0a6f3c7cdf95babd4efc3302fcfd36577e4130a8",
+    "result": "success",
+    "jobs": [
+      "core-and-installation",
+      "dashboard-controls",
+      "native-room-and-vision",
+      "pc-gaussian-mapping (ubuntu-24.04)",
+      "pc-gaussian-mapping (windows-2025)",
+      "surface-gaussian-reference (ubuntu-24.04)",
+      "surface-gaussian-reference (windows-2025)",
+      "surface-windows-runtime"
+    ],
+    "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42480233366"
+  }
 }
