@@ -6,9 +6,17 @@ std::atomic<DirectModeBoundary*> DirectModeBoundary::instance_{nullptr};
 thread_local const DirectFrame* DirectModeBoundary::current_=nullptr;
 namespace {
 bool description(const DirectMode::SwapTextureSetDesc_t& d){SharedTextureShape shape{};return decodeSwapTextureSetDesc(d,shape);}
+// Native float crop calculations can put a nominal edge just outside [0,1].
+// Four float epsilons are at most 1/128 texel at the admitted 16384 extent.
+// Validate the original mapping; never clamp or rewrite native submit arguments.
+constexpr float TextureBoundsRounding=4*std::numeric_limits<float>::epsilon();
+bool textureInterval(float low,float high){
+    return std::isfinite(low)&&std::isfinite(high)&&low>=-TextureBoundsRounding&&high<=1+TextureBoundsRounding&&
+        low<high&&low<1&&high>0;
+}
 bool geometry(const DirectMode::SubmitLayerPerEye_t& e){
     const auto& b=e.bounds;
-    if(!std::isfinite(b.uMin)||!std::isfinite(b.uMax)||!std::isfinite(b.vMin)||!std::isfinite(b.vMax)||b.uMin<0||b.uMax>1||b.vMin<0||b.vMax>1||b.uMax<=b.uMin||b.vMax<=b.vMin||!std::isfinite(e.flHmdPosePredictionTimeInSecondsFromNow))return false;
+    if(!textureInterval(b.uMin,b.uMax)||!textureInterval(b.vMin,b.vMax)||!std::isfinite(e.flHmdPosePredictionTimeInSecondsFromNow))return false;
     for(const auto& row:e.mProjection.m)for(float x:row)if(!std::isfinite(x))return false;
     for(const auto& row:e.mHmdPose.m)for(float x:row)if(!std::isfinite(x))return false;
     return true;
