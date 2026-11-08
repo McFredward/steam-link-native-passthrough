@@ -30,8 +30,8 @@ float-boundary correction, without an application or runtime-version exception.
 
 The exact logged crop is now a production-boundary regression test. A control
 that changes only the rounding budget back to zero fails on that crop. This
-reproduces the demonstrated admission defect in software. Whether another
-failure remains after source admission requires the next headset capture.
+reproduces the demonstrated admission defect in software. The maintainer then
+confirmed restored mixed reality with PC0.3.13 on Steam Frame.
 
 An earlier test of the old Venture build did receive a grant with the stable
 companion, but showed only the camera. That is a different observation after
@@ -54,8 +54,8 @@ worker, at Important level. No RGB debug telemetry is enabled. The float-boundar
 correction above is the only admission change. Source identity, native arguments,
 shaders, wire messages and fallback behavior are preserved.
 
-The dedicated `get-venture-diagnostics.ps1` bootstrap uses an immutable diagnostic
-archive. It is separate from the regular `get.ps1` entry point. The archive reuses
+The dev `get-venture-diagnostics.ps1` bootstrap delivered an immutable diagnostic
+archive, separate from the regular entry point. That test archive reused
 the stable 0.3.15 setup and Frame 0.3.5 files byte for byte, replacing only the PC
 provider and its package/version metadata. Its PC patch is `0.3.13`.
 The reused stable installer keeps its independent version `0.3.15`.
@@ -64,9 +64,12 @@ current Frame 0.3.5 installation the existing PC-only update path performs no
 Frame writes or restart. If setup instead proposes a Frame installation/repair,
 do not confirm that operation for this diagnostic test.
 
-The separate Venture diagnostic build remains necessary to correlate client and
-server decisions. Keep its MR setting enabled and reproduce the failure for
-roughly 20 seconds, then collect the normal Venture and PC SteamVR logs.
+That Venture diagnostic build was the official upstream source plus logs.
+The correction requires no Venture behavior change. On November8 the maintainer
+reported that the candidate worked and requested publication. Release0.3.18
+uses the same PC0.3.13 DLL, unchanged Frame0.3.5 and stable installer logic;
+the normal main bootstrap now delivers it. Only the installer/package version
+advances from0.3.15 to0.3.18. See [release evidence](RELEASE-0.3.18.md).
 
 ## Software checks
 
@@ -77,5 +80,6 @@ pass AddressSanitizer/UndefinedBehaviorSanitizer. The checks retain rejection of
 unknown handles, nonfinite/inverted/out-of-budget bounds, exterior-only intervals,
 nonfinite projection/pose/timing and unsupported packed descriptors, and verify
 recovery and unchanged native arguments. The strict-edge causal control also
-runs in the focused resource CI. These are software checks; corrected hardware
-output has not yet been verified.
+runs in the focused resource CI. The subsequent headset confirmation establishes
+restoration of the reported MR failure, without a new controlled quality or
+latency measurement.

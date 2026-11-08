@@ -3,7 +3,7 @@
 #include "stream_bridge_process.h"
 #include "stream_bridge_coverage_gpu.h"
 #include "native_presenter_pipeline.h"
-#include "pixel_ssbo_profile_transform.h"
+#include "stream_bridge_coverage_transform.h"
 #include "submit_timeline_contract.h"
 #include "bridge/stream_bridge_log.h"
 #include <algorithm>
@@ -99,7 +99,6 @@ struct Renderer::Impl {
     mutable std::mutex gate;VkDevice device{};PFN_vkGetDeviceProcAddr gdpa{};VkPhysicalDeviceMemoryProperties memory{};
     std::uint32_t api=0,family=UINT32_MAX;std::uint64_t generation=0;bool prepared=false,coveragePrepared=false,registered=false,count1Authorized=false;
     gpu::Pool pool;journal::Journal definitions{1,{},journal::PendingCount1::RetainFacts};
-    std::vector<std::uint32_t> coverageWords,cameraOnlyWords;
     VkDescriptorSetLayout controlLayout{};VkDescriptorPool controlPool{};VkCommandPool guardPool{};
     VkCommandBuffer zero{},cameraZero{};VkQueue queue{};VkBuffer controlsBuffer{};VkDeviceMemory controlsMemory{};std::array<Control,128> controls{};
     // Fixed cold metadata budgets; never evict a still-live native generation.
@@ -392,11 +391,11 @@ void Renderer::shaderCreated(VkShaderModule value,const VkShaderModuleCreateInfo
         if(!p.definitions.createShader(value,info,VK_SUCCESS)||!p.prepared||info.codeSize<20||info.codeSize>65536)return;
         std::lock_guard<std::mutex> lock(p.gate);if(p.count1Authorized)return;
         auto original=std::make_unique<frame_pixel_ssbo_clone::ShaderDefinition>();
-        auto proof=std::make_unique<frame_pixel_ssbo_profile::Artifact>();
+        frame_pixel_ssbo_clone::ProbeInterface proof;
         frame_pixel_ssbo_clone::Refusal why;
         if(frame_pixel_ssbo_clone::captureShader(info,frame_pixel_ssbo_clone::ShaderRole::Fragment,*original,why)&&
-           frame_pixel_ssbo_profile::transform(*original,false,*proof,why)&&
-           p.definitions.authorizeProbeInterface(proof->profile)){
+           frame_pixel_ssbo_clone::ProbeInterface::nativeCount1(original->words.data(),original->bytes,proof,why)&&
+           p.definitions.authorizeProbeInterface(proof)){
             p.count1Authorized=true;coldNote("native count1 image interface verified",sb::logging::Level::Debug);
         }else coldNote("native count1 image interface refused; native pipeline retained");
     }catch(...){coldNote("native shader admission unavailable; native pipeline retained");}
@@ -416,7 +415,6 @@ bool Renderer::prepareCold(VkDevice device,VkPhysicalDeviceMemoryProperties memo
         if(!p.load()){coldNote("renderer unavailable: required Vulkan dispatch missing; original retained");return false;}
         // Ordinary native RGB is always the baseline. Missing exact coverage
         // never installs a picture/mask atlas decoder or replaces the picture.
-        if(!readCoverageFragmentCold(p.coverageWords)||!readCameraOnlyFragmentCold(p.cameraOnlyWords)){coldNote("exact coverage unavailable: coverage.spv missing, changed or inaccessible; ordinary native video retained");return false;}
         if(family==UINT32_MAX){coldNote("exact coverage unavailable: no admitted graphics queue; ordinary native video retained");return false;}
         if(!p.pool.prepare(device,get,memory,family)){coldNote("exact coverage unavailable: GPU pool preparation failed; ordinary native video retained");return false;}
         VkDescriptorSetLayoutBinding binding{0,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr};VkDescriptorSetLayoutCreateInfo layout{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};layout.bindingCount=1;layout.pBindings=&binding;
@@ -443,9 +441,16 @@ void Renderer::graphicsCreated(VkPipelineCache cache,const VkGraphicsPipelineCre
             return;
         }auto ready=std::make_unique<journal::Ready>();if(!p.definitions.lookupPipeline({handle(p.device),event.value,event.generation},*ready))return;
         if(frame_native_presenter::inspectCompletedPipeline(p.device,p.api,VK_SUCCESS,info,original,ready->recipe).reason!=frame_native_presenter::Reason::None)return;
+        namespace transform=stream_bridge_coverage_transform;
+        transform::Fragment coverage,cameraOnly;
+        if(!transform::pairedStages(ready->recipe.vertex,ready->recipe.fragment)||
+           !transform::transform(ready->recipe.fragment,false,coverage)||
+           !transform::transform(ready->recipe.fragment,true,cameraOnly)){
+            coldNote("native coverage shader contract unavailable; original pipeline retained");return;
+        }
         std::lock_guard<std::mutex> lock(p.gate);auto* entry=add(p.pipelines,handle(original));if(!entry)return;
-        auto create=[&](const std::vector<std::uint32_t>& words,VkPipelineLayout layout,VkPipeline& pipeline){
-            VkShaderModuleCreateInfo shader{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};shader.codeSize=words.size()*4;shader.pCode=words.data();VkShaderModule module{};if(p.CreateShaderModule(p.device,&shader,nullptr,&module)!=VK_SUCCESS)return;
+        auto create=[&](const transform::Fragment& fragment,VkPipelineLayout layout,VkPipeline& pipeline){
+            VkShaderModuleCreateInfo shader{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};shader.codeSize=fragment.bytes;shader.pCode=fragment.words.data();VkShaderModule module{};if(p.CreateShaderModule(p.device,&shader,nullptr,&module)!=VK_SUCCESS)return;
             auto candidate=info;std::array<VkPipelineShaderStageCreateInfo,2> stages{{info.pStages[0],info.pStages[1]}};for(auto& stage:stages)if(stage.stage==VK_SHADER_STAGE_FRAGMENT_BIT)stage.module=module;candidate.pStages=stages.data();candidate.layout=layout;
             const auto result=p.CreateGraphicsPipelines(p.device,cache,1,&candidate,nullptr,&pipeline);p.DestroyShaderModule(p.device,module,nullptr);if(pipeline==original){pipeline={};return;}if(result!=VK_SUCCESS&&pipeline){p.DestroyPipeline(p.device,pipeline,nullptr);pipeline={};}
         };
@@ -455,8 +460,8 @@ void Renderer::graphicsCreated(VkPipelineCache cache,const VkGraphicsPipelineCre
         VkPipelineLayoutCreateInfo ci{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};ci.setLayoutCount=3;ci.pSetLayouts=layouts;ci.pushConstantRangeCount=ready->recipe.layout.count;ci.pPushConstantRanges=ready->recipe.layout.ranges.data();
         VkPipelineLayout coverageLayout{};
         if(p.CreatePipelineLayout(p.device,&ci,nullptr,&coverageLayout)==VK_SUCCESS&&coverageLayout){
-            entry->layout=coverageLayout;create(p.coverageWords,entry->layout,entry->coverage);
-            create(p.cameraOnlyWords,entry->layout,entry->cameraOnly);
+            entry->layout=coverageLayout;create(coverage,entry->layout,entry->coverage);
+            create(cameraOnly,entry->layout,entry->cameraOnly);
         }
         if(entry->coverage){
             if(entry->cameraOnly)for(auto& record:p.recoveryPipelines)if(!record.id.load(std::memory_order_relaxed)){

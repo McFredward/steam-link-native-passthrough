@@ -32,7 +32,15 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-Dev-Teststand: **0.3.16** · Frame **0.3.6**, PC **0.3.11** · 1. November 2026.
+Dev-Teststand: **0.3.20** · Frame **0.3.7**, PC **0.3.13** · 8. November 2026.
+Derselbe Frame-Patch behält den bisherigen Runtime-Pfad und ergänzt den neuen Beta-Pfad.
+Details zu Softwaretests und dem noch offenen Brillentest stehen in der
+[Kompatibilitätsdokumentation](docs/development/FRAME-RUNTIME-COMPATIBILITY.md).
+
+Im stabilen Release0.3.18 behebt PC0.3.13 einen Rundungsfehler an nativen Texturgrenzen, durch den
+Passthrough in Venture schwarz bleiben konnte. Die Korrektur wurde auf Steam
+Frame bestätigt. Beim Update auf dieses stabile Release wird bei intakter Frame0.3.5-Installation nur der PC-Patch
+aktualisiert; die Frame wird dabei nicht neu gestartet.
 
 ## Native Transparenz, kein Farbersatz
 

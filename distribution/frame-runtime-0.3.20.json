@@ -1,0 +1,57 @@
+{
+  "archive": {
+    "bytes": 20224198,
+    "sha256": "c1a7ae6db53e665a33c922af824aa776ff7dbfa311b5b6dfa1e9b651c57bcde0"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3724048,
+      "sha256": "bc927c7f3265436f1a4f25745ed5c6e7acc22e3ffb304416368b11f45d885bfc"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2098688,
+      "sha256": "ab11a3cf43f86c9d32f2a96a970707c5322a86b62d55112d164ff3e83f32a57c"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.7",
+    "pc": "0.3.13"
+  },
+  "current_shader_family_added": true,
+  "device_actions": false,
+  "hardware_verification_scope": "Previous PC0.3.13 confirmation retained; Frame beta2.19.2 candidate awaits headset verification.",
+  "hardware_verified": false,
+  "pc_provider_byte_identical_to_0_3_18": true,
+  "previous_shader_family_retained": true,
+  "runtime_pipeline_generation": true,
+  "schema": "sfnp-frame-runtime-candidate-v1",
+  "selector_and_decoder_byte_identical_to_0_3_18": true,
+  "software_validation": {
+    "actual_bundle_generation_old_and_new": true,
+    "current_gpu_cases": 216,
+    "current_gpu_checks": 1777,
+    "gpu_rgb_bit_identical": true,
+    "host_ctest_suites": 42,
+    "installer_tests": 91,
+    "live_transform_checks": 2444,
+    "package_tests": 17,
+    "previous_gpu_cases": 144,
+    "previous_gpu_checks": 840,
+    "startup_tests": 135,
+    "vulkan_validation_errors": 0
+  },
+  "source_revision": "bc7d46056b556416827e102947172faf84e1014a",
+  "version": "0.3.20"
+}

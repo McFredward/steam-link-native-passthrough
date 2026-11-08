@@ -1,6 +1,6 @@
 # Build and validate the current paired route
 
-> Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
+> Current baseline: [release0.3.18 and validation scope](RELEASE-0.3.18.md).
 > Versioned observations below retain their original checkpoint scope.
 
 This is a developer workflow, not an installation guide. Players use the

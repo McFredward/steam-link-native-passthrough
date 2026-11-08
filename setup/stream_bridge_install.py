@@ -92,6 +92,7 @@ ROOM_HOOK = '90-sfnp-room-setup.conf'
 MASK_CODEC_FILES = frozenset({'frame/libavcodec-sfnp-mask.so.62','frame/libavutil-sfnp-mask.so.60'})
 GENERATED = {'coverage.spv': {'bytes':7420,'sha256':'37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3'},
              'camera-only.spv': {'bytes':7072,'sha256':'a8f7c2a375abb3f8d5188fdf129c00b2a2a1b13f3f3d8e7620b0a833510ea8ee'}}
+GENERATED_CURRENT = {'coverage.spv': {'bytes': 5388, 'sha256': 'c2e3be45f55545f5246a13e91be6785cba15c50cad56ecfb47eb4fe59e02c7b8'}, 'camera-only.spv': {'bytes': 4968, 'sha256': '11167e3d7b19362376af4eecc5335c203b7da5d7ca88caeefbf68e48250d7a36'}}
 # Removal/recovery allowlist only. These files are never generated, installed or
 # selected by this version. An owned update removes them while retaining their
 # exact predecessors in the transaction so explicit Undo remains safe.
@@ -905,9 +906,9 @@ def generate_shaders(engine,bundle,original,stage):
         coverage,_=module.transform(original)
         camera_only,_=module.transform(original,camera_only=True)
         outputs={'coverage.spv':coverage,'camera-only.spv':camera_only}
-        for name,raw in outputs.items():
-            e.require(len(raw)==GENERATED[name]['bytes'] and e.sha(raw)==GENERATED[name]['sha256'],
-                      'The locally generated shader differs from the reviewed output.')
+        e.require(any(all(len(raw)==pins[name]['bytes'] and e.sha(raw)==pins[name]['sha256']
+                          for name,raw in outputs.items()) for pins in (GENERATED,GENERATED_CURRENT)),
+                  'The locally generated shader differs from the reviewed output.')
         return outputs
     finally:
         sys.path[:]=previous
@@ -1151,7 +1152,17 @@ class FrameInstall:
             room_group_current=not any(Path(path).is_relative_to(self.root/'room-setup') and value is not None for path,value in operations.items())
             patch_current=patch_current and mask_pair_current and room_group_current
             pins.update({name.removeprefix('frame/'):bundle.value['files'][name] for name in target_masks})
-            if state.get('activation_mode','active')=='active':pins.update(bundle.frame['generated'])
+            if state.get('activation_mode','active')=='active':
+                generated={}
+                for name in GENERATED:
+                    value=operations.get(str(self.root/name))
+                    generated[name]=base64.b64decode(value['bytes'],validate=True) if value and value['kind']=='file' else b''
+                # Installation outputs remain integrity checked. The renderer
+                # derives its actual fragment from each current pipeline, so
+                # changing runtime does not make the other reviewed output stale.
+                patch_current=patch_current and any(all(len(generated[name])==pin['bytes'] and
+                    self.e.sha(generated[name])==pin['sha256'] for name,pin in variant.items())
+                    for variant in (GENERATED,GENERATED_CURRENT))
             for name,pin in pins.items():
                 value=operations.get(str(self.root/name))
                 raw=base64.b64decode(value['bytes'],validate=True) if value and value['kind']=='file' else b''

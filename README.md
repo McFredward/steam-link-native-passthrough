@@ -32,7 +32,13 @@ Play supported PC VR games in your real room over Steam Link.
 
 The installation command below installs this release from `main` with normal logging.
 
-Dev test candidate: **0.3.16** · Frame **0.3.6**, PC **0.3.11** · November 1, 2026.
+Dev test candidate: **0.3.20** · Frame **0.3.7**, PC **0.3.13** · November 8, 2026.
+The same Frame patch retains the previous runtime path and adds the new beta path.
+See [software validation and the remaining headset test](docs/development/FRAME-RUNTIME-COMPATIBILITY.md).
+
+In stable release0.3.18, PC0.3.13 fixes a native texture-edge rounding error that could leave passthrough
+black in Venture. The fix was confirmed on Steam Frame. Updating an intact
+Frame0.3.5 installation to that stable release changes only the PC patch and does not restart the Frame.
 
 ## Native transparency, no colour replacement
 

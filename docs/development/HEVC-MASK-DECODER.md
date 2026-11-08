@@ -3,10 +3,11 @@
 > Current baseline: [release0.3.15 and measured limits](RELEASE-0.3.15.md).
 > Versioned observations below retain their original checkpoint scope.
 
-Dev candidate installer0.3.16 / Frame0.3.6 adds the explicit Main8/420
+The November1 experiment installer0.3.16 / Frame0.3.6 added the explicit Main8/420
 [luma-only decoder optimization](MASK-LUMA-ONLY.md). The PC encoder, wire data,
 mask resolution, Y samples, luma filters and exact image/mask release rules are
-unchanged. Stable main remains0.3.15; the candidate needs a fresh in-game
+unchanged. Its source remains on dev; the runtime-compatibility0.3.20 archive keeps the stable
+decoder bytes instead. Stable main is0.3.18. This separate decoder experiment needs a fresh in-game
 world-stability comparison before any claim that the wobble is fixed.
 
 PC0.3.8 completes missing P-picture parameter NALs from the successfully locked

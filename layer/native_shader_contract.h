@@ -48,4 +48,6 @@ inline bool normalize(const std::uint32_t* words,std::size_t bytes,Contract cont
 }
 inline Contract vertex()noexcept{return {VertexHeader,VertexResultIds,sizeof(VertexResultIds)/sizeof(*VertexResultIds)};}
 inline Contract fragment()noexcept{return {FragmentHeader,FragmentResultIds,sizeof(FragmentResultIds)/sizeof(*FragmentResultIds)};}
+inline Contract vertexBeta()noexcept{return {VertexBetaHeader,VertexBetaResultIds,sizeof(VertexBetaResultIds)/sizeof(*VertexBetaResultIds)};}
+inline Contract fragmentBeta()noexcept{return {FragmentBetaHeader,FragmentBetaResultIds,sizeof(FragmentBetaResultIds)/sizeof(*FragmentBetaResultIds)};}
 } // namespace stream_bridge_shader_contract
