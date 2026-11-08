@@ -1,0 +1,76 @@
+{
+  "archive": {
+    "bytes": 20224472,
+    "sha256": "ac04bd68ceb8874b602e830cbee7c4d08e30b8599befc84e666067f3f9d03063"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3724048,
+      "sha256": "bc927c7f3265436f1a4f25745ed5c6e7acc22e3ffb304416368b11f45d885bfc"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2098688,
+      "sha256": "ab11a3cf43f86c9d32f2a96a970707c5322a86b62d55112d164ff3e83f32a57c"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.7",
+    "pc": "0.3.13"
+  },
+  "device_actions": false,
+  "hardware_verified": false,
+  "inherited_native_candidate": "0.3.20",
+  "native_binaries_unchanged": true,
+  "observed_regression_control": {
+    "bounded_same_handle_exit_fixed": true,
+    "device_actions": false,
+    "native_components_changed": false,
+    "new_waits": [
+      [
+        123,
+        0
+      ],
+      [
+        123,
+        500
+      ]
+    ],
+    "observed_check": "check_bb3c91bd1a919545",
+    "old_waits": [
+      [
+        123,
+        0
+      ],
+      [
+        123,
+        0
+      ]
+    ],
+    "released0_3_20_reproduces": true,
+    "schema": "sfnp-pc-stop-query-regression-v1",
+    "windows_api_ports_injected": true
+  },
+  "schema": "sfnp-pc-query-setup-candidate-v1",
+  "software_test_counts": {
+    "installer-021-tests.log": 91,
+    "package-021-tests.log": 17,
+    "pc-only-021-tests.log": 21,
+    "pc-stop-race-tests.log": 27,
+    "session-021-tests.log": 17,
+    "setup-log-021-tests.log": 20
+  },
+  "source_revision": "8dee3f7422187e775f8d75a50a2ccafed47b39ca",
+  "version": "0.3.21"
+}
