@@ -1,5 +1,6 @@
 #include "layer/pixel_ssbo_definition_journal.h"
 #include "layer/pixel_ssbo_profile_transform.h"
+#include "layer/native_presenter_pipeline.h"
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
@@ -249,17 +250,30 @@ void loadShaders(journal::Journal& j,const std::vector<std::uint32_t>& vs,const 
 }
 void sampledNative(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){
     Fixture f;f.features.fragmentStoresAndAtomics=VK_FALSE;
+    const std::array<VkDescriptorSetLayoutBinding,2> bindings{{f.binding,
+        {25,VK_DESCRIPTOR_TYPE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr}}};
+    f.set.bindingCount=bindings.size();f.set.pBindings=bindings.data();
+    VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM offset{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM};
+    VkPhysicalDeviceFragmentDensityMapFeaturesEXT density{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT};
+    density.fragmentDensityMap=VK_TRUE;offset.pNext=&density;
+    offset.fragmentDensityMapOffset=VK_TRUE;f.device.pNext=&offset;
     auto owner=std::make_unique<journal::Journal>(1,clone::ProbeInterface{},journal::PendingCount1::RetainFacts,
                                                 clone::ShaderAccess::SampledFragment);
     auto& j=*owner;f.initialize(j);f.definitions(j);loadShaders(j,vs,ps);
     journal::Event event;
     require(j.createPipeline(object<VkPipeline>(0x60),f.graphics,VK_SUCCESS,&event),"actual reviewed shader pair retained on sampled-only device");
     journal::Ready ready;require(j.takeReady(ready,&event)&&ready.recipe.definitionComplete,"complete immutable pipeline recipe retained");
+    require(frame_native_presenter::inspectCompletedPipeline(object<VkDevice>(1),VK_API_VERSION_1_1,VK_SUCCESS,
+            f.graphics,object<VkPipeline>(0x60),ready.recipe).reason==frame_native_presenter::Reason::None,
+            "sampled device with native density capabilities passes cold production pipeline inspection");
     require(ready.recipe.feature.complete&&!ready.recipe.feature.enabled&&ready.recipe.feature.raw==VK_FALSE,
             "disabled storage remains disabled in the complete sampled recipe");
     require(!ready.nativeAuthority&&!ready.recipe.nativeCompatibilityProven&&!ready.recipe.runtimeActivationAuthorized,
             "native/frame authority is not inferred from a device feature policy");
     require(f.features.fragmentStoresAndAtomics==VK_FALSE,"original device input unchanged");
+    require(offset.fragmentDensityMapOffset==VK_TRUE&&f.device.pNext==&offset&&offset.pNext==&density&&
+            density.fragmentDensityMap==VK_TRUE&&density.pNext==nullptr,
+            "native foveation-offset capability and feature chain remain unchanged");
     auto strict=std::make_unique<journal::Journal>();
     require(!strict->createDevice(object<VkDevice>(1),f.device,VK_SUCCESS,&event)&&event.contract.reason==clone::Reason::FeatureDisabled,
             "same input still refuses storage/atomic probe journal");

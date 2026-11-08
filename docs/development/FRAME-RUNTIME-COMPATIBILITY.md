@@ -1,4 +1,11 @@
-# Runtime compatibility and candidate0.3.22
+# Runtime compatibility and candidate0.3.23
+
+Candidate0.3.23 contains Frame0.3.9 and the unchanged PC0.3.13 provider.
+The maintainer's new PC2.19.2 run verifies native API and encoder initialization;
+the corresponding Frame0.3.8 log identifies a rejected density-map-offset device
+feature. Frame0.3.9 validates that public feature and its density-map base
+feature. See [the exact failure and validation](FRAME-DENSITY-FEATURES.md).
+End-to-end passthrough on both beta runtimes still requires a headset test.
 
 Candidate0.3.22 contains Frame0.3.8 and the unchanged PC0.3.13 provider.
 It removes a storage/atomics feature requirement from the sampled coverage
@@ -58,11 +65,11 @@ The PC already discovers its public imports, DirectMode009 RTTI/method table and
 executable mapping from the current image. Its coverage association uses current
 resources, rather than fixed build offsets. Synthetic moved-image regression
 controls pass. PC0.3.13 therefore stays byte-identical in this candidate. This
-does not constitute a hardware test of PC SteamVR beta2.19.2. The maintainer
-has now switched the PC to beta too, but the latest supplied PC logs still
-describe2.18.4. A fresh beta run must establish the actual PC build, native API
-admission and end-to-end frame pairing. Unsupported array-resource shapes are
-not unlocked by guessing an eye index.
+does not alone constitute a hardware test of PC SteamVR beta2.19.2. The new
+23:22 local PC log now confirms2.19.2, admitted native APIs and both mask
+encoders initialized. It still waits for its Frame peer. End-to-end frame
+pairing remains unverified. Unsupported array-resource shapes are not unlocked
+by guessing an eye index.
 
 ## Software evidence and remaining test
 
