@@ -55,12 +55,17 @@ Other games need an integration; installing the patch alone is not enough.
 Steam Link can use **Auto or a fixed bitrate**.
 **Close OVR Advanced Settings when playing Demeo**; it can cause unwanted recentering.
 
-## Successfully tested SteamVR versions
+## Successfully tested versions
 
 | Component | Successfully tested versions |
 |---|---|
 | PC SteamVR | **2.18.4**, 2.17.10 |
 | Steam Frame SteamVR | **2.18.2** |
+| Steam Frame SteamOS | **0.4.5** · build `20261022.6150929` |
+
+After the Frame update on November 8, 2026, the maintainer reports that
+passthrough still works with this system build and SteamVR 2.18.2.
+See the [version check and test scope](docs/COMPATIBILITY.md#frame-update-follow-up-november-8-2026).
 
 ## Installation
 

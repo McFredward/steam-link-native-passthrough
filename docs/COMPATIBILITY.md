@@ -1,20 +1,38 @@
 # Tested versions and evidence
 
-## Successfully tested runtimes: October30 release baseline
+## Successfully tested versions
 
 | Component | Current paired route |
 |---|---|
 | Headset and transport | Steam Frame over Steam Link |
+| Frame system | **SteamOS 0.4.5 · build 20261022.6150929**, variant `vr`; checked after the November 8 update |
 | PC SteamVR | **2.18.4 · build 1792185270**; earlier PC2.17.10 also tested |
 | Frame SteamVR | **2.18.2 · build 1791331621**, user-confirmed paired picture |
 | PC sender | Windows x86_64, supported NVIDIA encoder, HEVC |
 | Game source | Explicit SDR RGBA integration; real RGB contribution, coverage alpha and independently proved native eyes |
 | Installation | Matching PC and Frame companions, [guided setup](PC-FRAME-SETUP.md) |
-| Released components | Installer0.3.15, PC0.3.11, Frame0.3.5; Demeo Mixed Reality2.0.0 |
-| Hardware status | Demeo/Battles/Battlemarked desktop fix confirmed; Spirit Sling via Venture reports improvement on0.3.15 |
+| Released components | Installer0.3.18, PC0.3.13, Frame0.3.5; Demeo Mixed Reality2.0.0 |
+| Hardware status | Venture MR restored with PC0.3.13; earlier Demeo/Battles/Battlemarked desktop confirmation remains scoped to its recorded tests |
 
 The supported game and minimum version have their own [table](../README.md#supported-games).
 Steam Frame standalone passthrough is separate and requires neither streamed companion.
+
+## Frame update follow-up: November 8, 2026
+
+The maintainer reports that passthrough continues to work after updating the
+Frame. Read-only SSH checks at 12:25–12:28 UTC confirmed SteamOS 0.4.5,
+`BUILD_ID=20261022.6150929`, variant `vr`, and SteamVR build 1791331621, the
+already recorded 2.18.2 runtime. Both running SteamVR executables matched their
+current on-disk files. The installed
+passthrough layer matched the released Frame 0.3.5 layer byte for byte.
+
+This records the exact system build and a fresh confirmation of continued
+passthrough operation on the existing installation. The observed OS and
+SteamVR version numbers remain the previously known ones; the metadata does
+not identify which update component changed. The functional result is the
+maintainer's report; the SSH checks establish the current device metadata.
+
+## Runtime compatibility scope
 
 These are recorded successful tests, not a runtime version allowlist. The PC
 and Frame independently recognize the interfaces and rendering properties they
@@ -67,7 +85,14 @@ background-sampling shaders and every material family are not certified.
 
 ## Current evidence
 
-The stable [0.3.15 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15)
+The [0.3.18 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.18)
+contains the exact PC0.3.13 DLL the maintainer confirmed restored Venture MR on
+November8. It corrects tiny native crop-edge roundoff while preserving native
+arguments and exact source/image proof. Frame0.3.5 and installer logic remain
+unchanged. This confirmation is not a new controlled quality or latency result.
+See [release0.3.18](development/RELEASE-0.3.18.md).
+
+The prior stable [0.3.15 release](https://github.com/McFredward/steam-link-native-passthrough/releases/tag/v0.3.15)
 contains the native PC0.3.11/Frame0.3.5 binaries tested on dev. Main changes only
 the logging defaults and related integrity metadata. The full native CI and
 Windows/Linux installer CI passed before publication; public asset downloads
