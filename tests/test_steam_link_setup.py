@@ -773,8 +773,13 @@ class WizardTests(unittest.TestCase):
         with self.assertRaises(s.SetupError):s.remember_frame(self.local,'steamframe.local','steamos')
         self.assertEqual(path.read_bytes(),foreign)
         path.unlink();s.remember_frame(self.local,'steamframe.local','steamos')
-        before=path.stat();s.remember_frame(self.local,'steamframe.local','steamos')
-        self.assertEqual(before,path.stat())
+        contents=path.read_bytes();before=path.stat()
+        s.remember_frame(self.local,'steamframe.local','steamos');after=path.stat()
+        # Reading the existing cache may update atime under relatime. A no-op
+        # must preserve the file itself, ownership, permissions and write times.
+        fields=('st_dev','st_ino','st_mode','st_nlink','st_uid','st_gid','st_size','st_mtime_ns','st_ctime_ns')
+        self.assertEqual(tuple(getattr(before,key) for key in fields),tuple(getattr(after,key) for key in fields))
+        self.assertEqual(path.read_bytes(),contents)
     def test_retired_bundle_cli_refuses_without_partial_install_or_recovery_records(self):
         before=self.snapshot();error=io.StringIO()
         with contextlib.redirect_stdout(io.StringIO()),contextlib.redirect_stderr(error), \
