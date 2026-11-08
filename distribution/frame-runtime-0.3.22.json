@@ -1,0 +1,95 @@
+{
+  "actual_device_refusal_not_yet_observed": true,
+  "archive": {
+    "bytes": 20228163,
+    "sha256": "453a7218ab912b7b3ed0053c866b0e8cd6468f265864ea995fba99e437be3ea4"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3725304,
+      "sha256": "c01c1e2b4f8bed319a2e8d283b1a269fbb11ef5a38648272912b848656080cbb"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2098688,
+      "sha256": "ab11a3cf43f86c9d32f2a96a970707c5322a86b62d55112d164ff3e83f32a57c"
+    }
+  },
+  "base_candidate": "0.3.21",
+  "change": "sampled-fragment device policy and bounded cold admission diagnostics",
+  "component_versions": {
+    "frame": "0.3.8",
+    "pc": "0.3.13"
+  },
+  "device_actions": false,
+  "hardware_verified": false,
+  "host_ctest_suites": 43,
+  "observed_gate": "resources_ready_without_count1_or_pipeline",
+  "pc_beta_hardware_verified": false,
+  "pc_provider_byte_identical": true,
+  "sampled_native_checks_each": 18,
+  "schema": "sfnp-frame-sampled-device-candidate-v1",
+  "software_logs": {
+    "build-022-arm.log": {
+      "bytes": 374,
+      "sha256": "6d9349c59c33a32f3571ca9e963e42bb9a15093d4aedbcb5194f7d03c55e1b74"
+    },
+    "ctest-022.log": {
+      "bytes": 5809,
+      "sha256": "3ca228deefa6154599fd88f30cddafd5e3ced3ab4fa843d9c381f3b587d6dfcc"
+    },
+    "installer-022-tests.log": {
+      "bytes": 488,
+      "sha256": "a94ca315f1807c568043f5369bbb9437f97b87b3277fe31a940908ff03271f71"
+    },
+    "legacy-clone-022.log": {
+      "bytes": 191,
+      "sha256": "dea6b58cbe8cddf3d6a867aec27d4321a73bb8e0eccdcef520cb8601c7191b04"
+    },
+    "legacy-journal-022.log": {
+      "bytes": 202,
+      "sha256": "1dc836eb5471b866b9c861b599fe94be79de849b8d475a2ccbcef1cfdc627e07"
+    },
+    "legacy-owned-022.log": {
+      "bytes": 40,
+      "sha256": "6d10dc0f5bb63925bcfbc957027b62d0fbbcfc63cda4753ed9ad5b6058c2b55d"
+    },
+    "live-transform-022.log": {
+      "bytes": 57,
+      "sha256": "8dc891845b1d723731957ffe9d0281168afe0fcb7dbb6a0ccb6e01199879a170"
+    },
+    "package-022-tests.log": {
+      "bytes": 116,
+      "sha256": "b3361809925917790780b08d02c8e34b6985b42e84921afcaaa8182bbfc2ce8b"
+    },
+    "sampled-device-022-sanitized.log": {
+      "bytes": 73,
+      "sha256": "608bce367e2554e9eb4ae0e2a194fe3a6407226034fb911d48a5d2368e90d925"
+    },
+    "sampled-new-native-022.log": {
+      "bytes": 106,
+      "sha256": "a8ba46438aa11ac2ea084b2ea1aa34d7446aa0f122fd7ad324e6c836dbe076f8"
+    },
+    "sampled-old-native-022.log": {
+      "bytes": 106,
+      "sha256": "a8ba46438aa11ac2ea084b2ea1aa34d7446aa0f122fd7ad324e6c836dbe076f8"
+    },
+    "vulkan-022-tests.log": {
+      "bytes": 170,
+      "sha256": "488619e590f1e1f3577f6bd232b4480b455ac58d5a00aca4c9b699b74f0ea133"
+    }
+  },
+  "source_revision": "12e62927e7f5c28f38cc296de067fdfa77752ca9",
+  "version": "0.3.22"
+}
