@@ -901,13 +901,17 @@ class Tests(unittest.TestCase):
                     else:self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True,version_approval=stale)
         self.assertEqual(before,{str(p):p.read_bytes() for p in self.base.rglob('*') if p.is_file()})
 
-    def test_ordinary_update_preserves_an_unrecorded_room_service_link(self):
+    def test_ordinary_update_does_not_inspect_an_unrecorded_room_service(self):
         self.install_component_fixture();self.version_bundle(pc='0.2.12',frame='0.2.12')
         service=self.unit.config/'systemd/user'/b.ROOM_UNIT
-        service.parent.mkdir(parents=True,exist_ok=True)
-        service.symlink_to('/unrelated/private/service')
-        with self.fake_generation():self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
-        self.assertEqual(os.readlink(service),'/unrelated/private/service')
+        s.put(service,b'user-managed room service')
+        current=self.unit.tx.current
+        def observed(path):
+            self.assertNotEqual(path,service,'Unrecorded Room Setup must stay outside an ordinary update')
+            return current(path)
+        with mock.patch.object(self.unit.tx,'current',side_effect=observed),self.fake_generation():
+            self.unit.install(self.bundle,{**self.pair,'role':'receiver'},'192.168.1.4',47631,backup=True,live=True)
+        self.assertEqual(s.read(service),b'user-managed room service')
         self.assertNotIn(['/usr/bin/systemctl','--user','stop',b.ROOM_UNIT],self.commands)
 
     def test_roomscan_does_not_admit_arbitrary_external_receipt_paths(self):
