@@ -58,12 +58,17 @@ Andere Spiele benötigen eine Integration; der Patch allein reicht nicht aus.
 Steam Link kann mit **Auto oder fester Bitrate** verwendet werden.
 **OVR Advanced Settings bei Demeo schließen**; es kann ungewollte Recenter auslösen.
 
-## Positiv getestete SteamVR-Versionen
+## Positiv getestete Versionen
 
 | Komponente | Positiv getestete Versionen |
 |---|---|
 | PC SteamVR | **2.18.4**, 2.17.10 |
 | Steam Frame SteamVR | **2.18.2** |
+| SteamOS auf der Steam Frame | **0.4.5** · Build `20261022.6150929` |
+
+Nach dem Frame-Update am 8. November 2026 meldet der Maintainer weiterhin
+funktionierendes Passthrough mit diesem System-Build und SteamVR 2.18.2.
+Details stehen unter [Versionsprüfung und Testumfang](docs/COMPATIBILITY.md#frame-update-follow-up-november-8-2026).
 
 ## Installation
 
