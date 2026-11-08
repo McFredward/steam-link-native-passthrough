@@ -18,7 +18,7 @@ rejects that nominal texture edge before native coverage can prepare the pair.
 
 ## Crop rounding correction
 
-PC patch `0.3.12-venture.2` tolerates at most four float epsilons outside the
+PC patch `0.3.13` tolerates at most four float epsilons outside the
 normalized texture edges: approximately `4.76837e-7`, or at most 1/128 texel at
 the maximum admitted 16384 extent. Intervals must remain finite, ordered,
 nonempty and overlap the texture interior. Larger excursions, reversed crops,
@@ -57,7 +57,8 @@ shaders, wire messages and fallback behavior are preserved.
 The dedicated `get-venture-diagnostics.ps1` bootstrap uses an immutable diagnostic
 archive. It is separate from the regular `get.ps1` entry point. The archive reuses
 the stable 0.3.15 setup and Frame 0.3.5 files byte for byte, replacing only the PC
-provider and its package/version metadata. Its PC patch is `0.3.12-venture.2`.
+provider and its package/version metadata. Its PC patch is `0.3.13`.
+The reused stable installer keeps its independent version `0.3.15`.
 The parked installer replacement changes are not included. With an intact,
 current Frame 0.3.5 installation the existing PC-only update path performs no
 Frame writes or restart. If setup instead proposes a Frame installation/repair,
