@@ -40,6 +40,9 @@ void run(bool gloomhaven){
     check(forwardedPointer==&desc&&std::memcmp(&forwarded,&desc,sizeof desc)==0,"native CreateSwapTextureSet receives original pointer and unmodified packed descriptor");
     const auto inventory=bridge.inventory();check(inventory.valid&&inventory.epoch&&inventory.swaps[0].processId==42&&inventory.swaps[0].handles[0]==left.rSharedTextureHandles[0]&&inventory.swaps[1].generation!=inventory.swaps[0].generation,"cold source inventory retains actual owner and distinct generations");
     const auto revision=bridge.inventoryRevision();check(revision==inventory.epoch,"cheap cold revision agrees with the exact owned snapshot");
+    const auto initialDiagnostics=bridge.diagnostics(42);
+    check(initialDiagnostics.enabled&&initialDiagnostics.contextAvailable&&initialDiagnostics.processSwaps==2&&bridge.diagnostics(43).processSwaps==0&&bridge.inventoryRevision()==revision,
+        "cold diagnostics distinguish client-owned swaps without changing their epoch or granting another PID");
     DirectMode::SubmitLayerPerEye_t eyes[2]{};for(auto& eye:eyes){eye.bounds={0,0,1,1};eye.mProjection.m[0][0]=1;eye.mProjection.m[1][1]=1;eye.mHmdPose.m[0][0]=1;eye.mHmdPose.m[1][1]=1;eye.mHmdPose.m[2][2]=1;}
     eyes[0].hTexture=left.rSharedTextureHandles[1];eyes[1].hTexture=right.rSharedTextureHandles[2];
     check(!DirectModeBoundary::currentFrame(),"no claimed source outside actual Present/Post");table.submit(object,eyes);table.present(object,77);table.post(object,nullptr);
@@ -80,7 +83,18 @@ void run(bool gloomhaven){
     }
     auto count=seen;table.present(object,77);table.post(object,nullptr);check(seen==count,"no new layer cannot reuse an old source frame");
     auto saved=eyes[1].hTexture;eyes[1].hTexture=999;table.submit(object,eyes);table.present(object,77);check(seen==count,"unknown source handle never assigned another eye texture");eyes[1].hTexture=saved;
+    auto diagnostics=bridge.diagnostics(42);
+    check(diagnostics.count(DirectDiagnostic::SubmitUnknown)==1&&diagnostics.count(DirectDiagnostic::SubmitPid)==0&&diagnostics.submit.reason==DirectDiagnostic::SubmitUnknown&&diagnostics.submit.pid==0,
+        "unknown eye rejection is visible without inventing a mixed-PID diagnosis or source owner");
     eyes[0].bounds.uMin=std::numeric_limits<float>::quiet_NaN();table.submit(object,eyes);table.present(object,77);check(seen==count,"nonfinite native mapping not admitted");eyes[0].bounds.uMin=0;
+    diagnostics=bridge.diagnostics(42);
+    check(diagnostics.count(DirectDiagnostic::SubmitGeometry)==1&&diagnostics.submit.reason==DirectDiagnostic::SubmitGeometry&&diagnostics.submit.pid==42&&diagnostics.submit.layers==1,
+        "invalid native geometry retains only coherent owner, layer and bounds diagnostics");
+    eyes[1].bounds.vMin=1;eyes[1].bounds.vMax=0;table.submit(object,eyes);table.present(object,77);
+    diagnostics=bridge.diagnostics(42);
+    check(seen==count&&diagnostics.count(DirectDiagnostic::SubmitGeometry)==2&&diagnostics.submit.bounds[1]==1&&diagnostics.submit.bounds[3]==0,
+        "inverted bounds remain refused and are reported without changing the existing admission rule");
+    eyes[1].bounds.vMin=0;eyes[1].bounds.vMax=1;
     for(unsigned i=0;i<5;++i)table.submit(object,eyes);
     check(!bridge.inventoryRevision(),"tainted native collection cannot look like an unchanged admitted registry");
     table.present(object,77);check(seen==count,"overflowing native layer collection not partially certified");
@@ -95,6 +109,9 @@ void run(bool gloomhaven){
     check(bridge.inventoryRevision()==singleRemovedRevision&&bridge.cleanupStats().changed==2,"repeated individual destruction is allocation-free rather than another epoch change");
     for(auto raw:{0u,4u,8u,9u}){auto d=desc;d.nSampleCount=raw;const auto pid=100u+raw;const auto calls=creates;table.create(object,pid,&d,&left);check(creates==calls+1&&bridge.ownsProcess(pid)&&std::memcmp(&forwarded,&d,sizeof d)==0,"supported packed/default descriptor retains owner with exact native pass-through");table.destroyAll(object,pid);}
     for(auto raw:{3u,7u,16u,17u,0xffffffffu}){auto d=desc;d.nSampleCount=raw;const auto calls=creates;table.create(object,500,&d,&left);check(creates==calls+1&&!bridge.ownsProcess(500)&&std::memcmp(&forwarded,&d,sizeof d)==0,"rejected coverage shape still forwards native creation untouched");}
+    diagnostics=bridge.diagnostics(500);
+    check(diagnostics.processSwaps==0&&diagnostics.count(DirectDiagnostic::CreateShape)==5&&diagnostics.create.reason==DirectDiagnostic::CreateShape&&diagnostics.create.pid==500&&diagnostics.create.packedSamples==0xffffffffu&&diagnostics.create.width==desc.nWidth,
+        "rejected packed descriptors expose their actual metadata without acquiring ownership");
     bridge.stop();check(!bridge.inventory().valid&&!bridge.inventoryRevision(),"stopped source registry cannot prepare texture imports or reuse a cold revision");table.submit(object,eyes);table.present(object,77);check(seen==count,"stop preserves original calls but removes all source authority");
 }
 }

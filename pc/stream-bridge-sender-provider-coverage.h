@@ -207,6 +207,7 @@ struct HevcMaskStats {
 };
 class SenderCoverage {
 public:
+    struct Readiness {bool enabled=false,prepared=false;std::uint32_t preparedPid=0,capturedPid=0;};
     SenderCoverage(DirectModeBoundary&,NvencBoundary&,ControlRuntime&);
     ~SenderCoverage();
     SenderCoverage(const SenderCoverage&)=delete;
@@ -223,6 +224,7 @@ public:
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
     void stop()noexcept;
     bool ready(std::uint32_t processId)const noexcept;
+    Readiness readiness()const noexcept; // Cold diagnostics only, never permission.
     bool operational(std::uint32_t processId)const noexcept;
     CoverageGateStats gateStats()const noexcept; // Cold, approximate diagnostics only.
     bool sourceAlpha(unsigned eye,SourceAlphaSample&)const noexcept;
