@@ -3,6 +3,21 @@
 // Never emit a native body, pointer, descriptor handle or scene/camera data.
 #include "pixel_ssbo_clone_contract.h"
 namespace stream_bridge_cold_admission {
+enum class ChainEnd : std::uint8_t {Complete,Cycle,Bounds};
+struct DeviceChain {
+    std::array<std::uint32_t,frame_pixel_ssbo_clone::MaxChain> types{};
+    std::uint32_t count=0;
+    ChainEnd end=ChainEnd::Complete;
+};
+inline DeviceChain deviceChain(const VkDeviceCreateInfo& info) noexcept {
+    DeviceChain out;std::array<const VkBaseInStructure*,frame_pixel_ssbo_clone::MaxChain> seen{};
+    for(auto* node=static_cast<const VkBaseInStructure*>(info.pNext);node;node=node->pNext){
+        for(std::uint32_t i=0;i<out.count;++i)if(seen[i]==node){out.end=ChainEnd::Cycle;return out;}
+        if(out.count==seen.size()){out.end=ChainEnd::Bounds;return out;}
+        seen[out.count]=node;out.types[out.count++]=std::uint32_t(node->sType);
+    }
+    return out;
+}
 struct Shader {
     std::array<char,32> entry{};
     std::array<std::uint8_t,32> sha256{};

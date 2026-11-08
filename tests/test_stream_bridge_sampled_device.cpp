@@ -44,6 +44,63 @@ void devices(){
     check(!c::captureDeviceFeatures(ci,false,observed,why,c::ShaderAccess::SampledFragment)&&why.reason==c::Reason::NativeCreationFailed,"failed original device does not create facts");
     check(!c::captureDeviceFeatures(ci,true,observed,why,c::ShaderAccess(255)),"invalid access policy refuses");
 }
+void densityOffset(){
+    VkPhysicalDeviceFeatures core{};VkDeviceCreateInfo ci{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};ci.pEnabledFeatures=&core;
+    VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM offset{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM};
+    ci.pNext=&offset;c::FeatureFacts facts;c::Refusal why;
+    for(const auto value:{VK_FALSE,VK_TRUE}){
+        offset.fragmentDensityMapOffset=value;
+        check(c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment)&&facts.complete&&!facts.enabled,
+              "defined offset capability is independent of fragment storage");
+        check(offset.fragmentDensityMapOffset==value&&offset.pNext==nullptr&&ci.pNext==&offset,
+              "native offset enablement and input chain remain untouched");
+    }
+    offset.fragmentDensityMapOffset=2;
+    check(!c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment)&&
+          why.reason==c::Reason::FeatureValue&&why.type==1000425000&&why.index==0,"invalid public offset boolean refuses with exact type");
+    offset.fragmentDensityMapOffset=VK_TRUE;
+    check(!c::enabledFeature(ci,true,facts,why)&&why.reason==c::Reason::FeatureDisabled,
+          "known offset payload never supplies storage authority");
+    core.fragmentStoresAndAtomics=VK_TRUE;
+    check(c::enabledFeature(ci,true,facts,why)&&facts.enabled,"strict storage path supports valid offset declaration too");
+    VkPhysicalDeviceFragmentDensityMapFeaturesEXT density{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT};
+    offset.pNext=&density;
+    for(unsigned bits=0;bits<8;++bits){
+        density.fragmentDensityMap=(bits&1)?VK_TRUE:VK_FALSE;
+        density.fragmentDensityMapDynamic=(bits&2)?VK_TRUE:VK_FALSE;
+        density.fragmentDensityMapNonSubsampledImages=(bits&4)?VK_TRUE:VK_FALSE;
+        check(c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment),
+              "public density capabilities are retained independently without changing native render passes");
+    }
+    for(auto* field:{&density.fragmentDensityMap,&density.fragmentDensityMapDynamic,&density.fragmentDensityMapNonSubsampledImages}){
+        *field=2;
+        check(!c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment)&&why.reason==c::Reason::FeatureValue&&
+              why.type==VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT&&why.index==1,
+              "every density feature boolean is validated at its exact node");
+        *field=VK_TRUE;
+    }
+    auto duplicate=offset;offset.pNext=&duplicate;
+    check(!c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment)&&why.reason==c::Reason::DuplicateNode,
+          "duplicate offset capability remains invalid");
+    offset.pNext=&offset;
+    check(!c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment)&&why.reason==c::Reason::ChainCycle,
+          "offset capability cannot make a cyclic chain eligible");
+    VkBaseInStructure unknown{VkStructureType(0x6fffffff),nullptr};offset.pNext=&unknown;
+    check(!c::captureDeviceFeatures(ci,true,facts,why,c::ShaderAccess::SampledFragment)&&why.reason==c::Reason::Extension&&why.index==1,
+          "later unfamiliar payload is still refused");
+    const auto before=diag::deviceChain(ci);
+    check(before.count==2&&before.types[0]==1000425000&&before.types[1]==0x6fffffff&&before.end==diag::ChainEnd::Complete,
+          "diagnostic records all public type headers, including a later refused node, without granting admission");
+    unknown.pNext=reinterpret_cast<const VkBaseInStructure*>(&offset);
+    const auto cycle=diag::deviceChain(ci);
+    check(cycle.count==2&&cycle.end==diag::ChainEnd::Cycle,"cyclic diagnostic stops at first repeated node");
+    std::array<VkBaseInStructure,c::MaxChain> chain{};
+    for(std::size_t n=0;n<chain.size();++n){chain[n].sType=VkStructureType(1000000000+n);chain[n].pNext=n+1<chain.size()?&chain[n+1]:reinterpret_cast<const VkBaseInStructure*>(std::uintptr_t(1));}
+    ci.pNext=chain.data();const auto bounded=diag::deviceChain(ci);
+    check(bounded.count==c::MaxChain&&bounded.end==diag::ChainEnd::Bounds,"diagnostic budget stops before dereferencing the next pointer");
+    chain.back().pNext=nullptr;
+    check(diag::deviceChain(ci).end==diag::ChainEnd::Complete,"exactly full terminated diagnostic chain is complete");
+}
 std::vector<std::uint32_t> module(const char* name){
     const auto n=std::strlen(name);std::vector<std::uint32_t> out{0x07230203,0x10000,0,2,0};
     const auto words=(n+1+3)/4;out.push_back(std::uint32_t((words+3)<<16)|15);out.push_back(4);out.push_back(1);
@@ -70,5 +127,5 @@ void metadata(){
     check(!diag::distortionShader(ci,out),"oversized input rejected before touching a pointer");
 }
 }
-int main(){try{devices();metadata();std::cout<<"sampled device and cold metadata: "<<checks<<" checks PASS; native_authority=false\n";return 0;}
+int main(){try{devices();densityOffset();metadata();std::cout<<"sampled device and cold metadata: "<<checks<<" checks PASS; native_authority=false\n";return 0;}
 catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

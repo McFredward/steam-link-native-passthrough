@@ -1,0 +1,116 @@
+{
+  "actual_device_refusal_not_yet_observed": false,
+  "archive": {
+    "bytes": 20230937,
+    "sha256": "ec121f1443a688114380ef9caacd17e9ffcef8382fe140d908ae9b3a3f6316d8"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3725936,
+      "sha256": "2c8bd6f31c4980ba4e998a5bb967dc27607c1c397a8d4ed9e5f0aa210d6dc357"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2098688,
+      "sha256": "ab11a3cf43f86c9d32f2a96a970707c5322a86b62d55112d164ff3e83f32a57c"
+    }
+  },
+  "base_candidate": "0.3.22",
+  "change": "typed density-map/offset feature validation and bounded remaining-chain diagnostics",
+  "component_versions": {
+    "frame": "0.3.9",
+    "pc": "0.3.13"
+  },
+  "device_actions": false,
+  "hardware_verified": false,
+  "host_ctest_suites": 43,
+  "observed_gate": {
+    "contract": "extension",
+    "index": 12,
+    "journal": "device_ineligible",
+    "type": 1000425000
+  },
+  "pc_beta_hardware_verified": false,
+  "pc_provider_byte_identical": true,
+  "regression_control": {
+    "after": {
+      "accepted": true,
+      "native_authority": false,
+      "offset_unchanged": true,
+      "reason": "none",
+      "type": 4294967295
+    },
+    "before": {
+      "accepted": false,
+      "native_authority": false,
+      "offset_unchanged": true,
+      "reason": "extension",
+      "type": 1000425000
+    }
+  },
+  "sampled_native_checks_each": 20,
+  "schema": "sfnp-frame-density-feature-candidate-v1",
+  "software_logs": {
+    "build-023-arm.log": {
+      "bytes": 475,
+      "sha256": "b7710b65ffb03be13d02f1f66463de501f2c72bbc9157f770d2408d133c8d346"
+    },
+    "ctest-023.log": {
+      "bytes": 5809,
+      "sha256": "f222e5907ee7c3cf74010be9704c05f547a95a01a0c382349cf55cf1dfb75dae"
+    },
+    "installer-023-tests.log": {
+      "bytes": 488,
+      "sha256": "f9b65ca4d84af08147e1d6e376142a3f7b15392ed3fa9faca51c43d5e32a3a63"
+    },
+    "legacy-clone-023.log": {
+      "bytes": 191,
+      "sha256": "dea6b58cbe8cddf3d6a867aec27d4321a73bb8e0eccdcef520cb8601c7191b04"
+    },
+    "legacy-journal-023.log": {
+      "bytes": 202,
+      "sha256": "1dc836eb5471b866b9c861b599fe94be79de849b8d475a2ccbcef1cfdc627e07"
+    },
+    "legacy-owned-023.log": {
+      "bytes": 40,
+      "sha256": "6d10dc0f5bb63925bcfbc957027b62d0fbbcfc63cda4753ed9ad5b6058c2b55d"
+    },
+    "live-transform-022.log": {
+      "bytes": 57,
+      "sha256": "8dc891845b1d723731957ffe9d0281168afe0fcb7dbb6a0ccb6e01199879a170"
+    },
+    "package-023-tests.log": {
+      "bytes": 116,
+      "sha256": "cbbc1ec42280bf1cc1ec9f21361d1d5fe6ec04db1ba1be79ac3544f4e368885a"
+    },
+    "sampled-device-023-sanitized.log": {
+      "bytes": 73,
+      "sha256": "18b8e0760e0ba44c5670c949f1aec85c73a69f17d50bf3e662189c54ffb34dc1"
+    },
+    "sampled-new-native-023.log": {
+      "bytes": 106,
+      "sha256": "aa7d238a54405c0e83d1248fb5866afcccfaea4e10315e20ba0fa164d85ffd45"
+    },
+    "sampled-old-native-023.log": {
+      "bytes": 106,
+      "sha256": "aa7d238a54405c0e83d1248fb5866afcccfaea4e10315e20ba0fa164d85ffd45"
+    },
+    "vulkan-023-tests.log": {
+      "bytes": 170,
+      "sha256": "9cc2ad270ca5e8c302cda89c910d3ac4cfc566225e4f35b6a1d57988a1b820f6"
+    }
+  },
+  "source_revision": "8b8bac0812c268ada7a814c85d2f9d35ee3340e1",
+  "version": "0.3.23"
+}

@@ -303,6 +303,17 @@ inline bool knownFeaturePayload(const VkBaseInStructure* node,std::uint32_t inde
         const auto& f=*reinterpret_cast<const VkPhysicalDevicePresentWaitFeaturesKHR*>(node);
         return featureValues({f.presentWait},index,node->sType,why);
     }
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_FEATURES_EXT: {
+        const auto& f=*reinterpret_cast<const VkPhysicalDeviceFragmentDensityMapFeaturesEXT*>(node);
+        return featureValues({f.fragmentDensityMap,f.fragmentDensityMapDynamic,
+                              f.fragmentDensityMapNonSubsampledImages},index,node->sType,why);
+    }
+    case VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_DENSITY_MAP_OFFSET_FEATURES_QCOM: {
+        // A native device capability declaration, not a request to modify a
+        // render pass or its foveation offsets. Preserve the original payload.
+        const auto& f=*reinterpret_cast<const VkPhysicalDeviceFragmentDensityMapOffsetFeaturesQCOM*>(node);
+        return featureValues({f.fragmentDensityMapOffset},index,node->sType,why);
+    }
     default:return refuse(why,Reason::Extension,index,static_cast<std::uint32_t>(node->sType));
     }
 }

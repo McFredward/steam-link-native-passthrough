@@ -1,5 +1,10 @@
 # Frame0.3.8: sampled-device admission
 
+Update: the next headset run identified an unfamiliar density-map-offset
+feature as the current rejection. [Frame0.3.9](FRAME-DENSITY-FEATURES.md) handles
+that explicit cause. The sampled-storage correction below was insufficient
+for that runtime's complete device chain.
+
 ## What is observed
 
 After the installer0.3.21 shutdown fix, read-only inspection confirmed

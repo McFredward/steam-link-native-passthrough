@@ -86,6 +86,25 @@ void coldDevice(std::uint32_t api,const frame_pixel_ssbo_clone::FeatureFacts& fa
             VK_API_VERSION_MAJOR(api),VK_API_VERSION_MINOR(api),unsigned(facts.observed),unsigned(facts.enabled));
     }catch(...){/* Bounded cold facts are diagnostic only. */}
 }
+void coldDeviceChain(const VkDeviceCreateInfo& create) noexcept {
+    if(!sb::logging::enabled(sb::logging::Level::Warning))return;
+    try{using Chain=stream_bridge_cold_admission::DeviceChain;
+        static std::mutex gate;static std::array<Chain,8> seen{};static std::size_t count=0;
+        const auto chain=stream_bridge_cold_admission::deviceChain(create);
+        std::lock_guard<std::mutex> lock(gate);for(std::size_t n=0;n<count;++n)
+            if(seen[n].types==chain.types&&seen[n].count==chain.count&&seen[n].end==chain.end)return;
+        if(count==seen.size())return;
+        seen[count++]=chain;
+        std::array<char,384> types{};std::size_t used=0;
+        for(std::uint32_t n=0;n<chain.count;++n){
+            const int written=std::snprintf(types.data()+used,types.size()-used,"%s%u",n?",":"",chain.types[n]);
+            if(written<0||std::size_t(written)>=types.size()-used)return;
+            used+=std::size_t(written);
+        }
+        std::fprintf(stderr,"[Steam Link Native Passthrough] native device feature chain: count=%u; end=%u; types=%s\n",
+            chain.count,unsigned(chain.end),types.data());
+    }catch(...){/* Public type metadata never changes device admission. */}
+}
 }
 struct Renderer::Impl {
     struct Memory{std::uint64_t id=0,generation=0,device=0,inode=0;int duplicate=-1;};
@@ -470,6 +489,7 @@ bool Renderer::prepareCold(VkDevice device,VkPhysicalDeviceMemoryProperties memo
         journal::Event deviceEvent;
         if(!p.definitions.createDevice(device,create,VK_SUCCESS,&deviceEvent)){
             coldRefusal("device",deviceEvent,0,create.flags,create.pNext!=nullptr,nullptr,sb::logging::Level::Warning);
+            coldDeviceChain(create);
             return false;
         }else{
             coldNote("native sampled-fragment device facts verified",sb::logging::Level::Debug);
