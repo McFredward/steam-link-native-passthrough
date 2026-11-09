@@ -66,6 +66,14 @@ void run(){
     check(obtained==requested&&observer.stats().devices==1&&observer.stats().factory,"shader observation is installed before the native device returns");
     check(device->GetFeatureLevel()==obtained&&device->GetCreationFlags()==0,"ordinary native device getters remain valid after observation");
     Com<ID3D11Device> parent;context->GetDevice(parent.out());check(parent.p&&parent->GetFeatureLevel()==obtained,"context-returned native device retains its complete dispatch");
+    Com<ID3D11Device> independent;Com<ID3D11DeviceContext> independentContext;
+    check(SUCCEEDED(pointer<Factory>(realFactory)(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,&requested,1,D3D11_SDK_VERSION,independent.out(),nullptr,independentContext.out())),"unobserved device sharing native methods still creates normally");
+    const auto independentTable=*reinterpret_cast<void***>(independent.p);
+    Com<ID3D11PixelShader> independentShader;
+    check(SUCCEEDED(independent->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,independentShader.out()))&&observer.identify(independentShader.p)==NativeShader::Unknown&&observer.stats().devices==1,"shared method observation forwards without granting an unobserved device shader authority");
+    check(observer.observeDevice(independent.p)&&*reinterpret_cast<void***>(independent.p)==independentTable&&observer.stats().devices==2,"second observed device preserves its entire native method table");
+    Com<ID3D11PixelShader> observedIndependent;
+    check(SUCCEEDED(independent->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,observedIndependent.out()))&&observer.identify(observedIndependent.p)==NativeShader::CopyView,"actual shader creation on the second observed device is recognized");
     Com<ID3D11VertexShader> vs;Com<ID3D11PixelShader> ps,unknown,coverage;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out())),"actual native VS creation forwarded");
     check(SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual native PS creation forwarded");
