@@ -1,4 +1,53 @@
-# Adaptive PC native draw geometry
+# Adaptive PC native draw and composition
+
+## PC0.3.15: capture alpha before native composition
+
+The subsequent matched run confirms `Draw(3,0)` with triangle-list topology.
+The geometry gate now passes, but its source is a1216x4864 RGBA16_FLOAT
+intermediate, not the original submitted game image. The PC produces no masks;
+Frame0.3.10 receives8210 authenticated picture associations without coverage.
+
+Private inspection of the supplied current PC runtime and external shader
+files explains the loss: both native copy-view programs write original source
+RGB with an output alpha of one. The later planar conversion therefore cannot
+recover game coverage from that intermediate. Admitting its FP16 format as a
+game source would hide this loss and does not fix it.
+
+PC0.3.15 observes the verified public D3D11 device factory and shader creation.
+Bounded executable/signature fingerprints recognize reviewed shader logic;
+whole runtime versions and hashes remain provenance rather than activation
+allowlists. Recognition belongs to the actual returned shader COM object.
+The observer preserves the complete native device method table and changes
+only its two public shader-creation cells. Calls from unobserved devices that
+share the table still forward, without gaining source authority.
+
+At the recognized copy-view draw, a companion R8 target receives transmittance
+from original source alpha using the same native vertex program, source view,
+viewport, offset constants and point-load coordinates. Compilation happens
+before rendering. The native draw runs normally; its RGB target is never
+rewritten. The previous direct-planar and older pinned routes remain available.
+
+A bounded graph requires actual DirectMode source/eye/allocation identity,
+current generation, non-overlapping native views that cover the full output,
+and both chroma and luma conversions to the same planar image. Recognized
+native copies must then reach the exact registered, mapped and accepted NVENC
+input. Unknown writes, missing views, wrong resources or changed frames refuse
+the association. No eye is inferred from tile position or an array index.
+
+The software controls use entirely owned shaders that deliberately replace
+alpha with one, real WARP textures, original RGB byte comparisons and the
+production observer through planar conversion and an explicitly fake NVENC
+acceptance boundary. Negative controls cover missing/wrong views, foreign
+conversion inputs and destructive writes. These tests do not establish
+hardware encoder behavior or successful headset output. Headset confirmation
+of this candidate remains pending.
+
+Installer0.3.26 ships PC0.3.15 and byte-identical Frame0.3.10 files. A PC-only
+update must leave Frame files, settings and services untouched and keep PC
+SteamVR closed after Apply. Private runtime files and shader bodies are not
+included in the package or repository.
+
+The sections below retain the preceding PC0.3.14 investigation and its evidence.
 
 ## Observed beta run
 
