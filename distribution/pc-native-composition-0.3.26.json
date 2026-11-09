@@ -1,0 +1,293 @@
+{
+  "archive": {
+    "bytes": 20246973,
+    "sha256": "90c0e895de168fda54c331debde00c71e6763d2bcd135c3cf8fccc29ffc24336"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3725848,
+      "sha256": "6253c6a8e9e26919d961fffd1b0e7d0252b53bff66b9ac0862d5ceb4b8ec3621"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2129408,
+      "sha256": "6a5897e0eafdba43ea8ab2e91cba853bd8a72b98200367b6e2e19bd1161c7aca"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.10",
+    "pc": "0.3.15"
+  },
+  "device_actions": false,
+  "fix": "Capture original source alpha before FP16 composition and require exact source/eye/conversion/encoder-input association",
+  "frame_files_byte_identical": true,
+  "hardware_verified": false,
+  "host_ctest_suites": 44,
+  "inherited_frame_validation_source": "a0a4c4cfa41f0129356f3a17e5fe5157f34b2135",
+  "native_composition_gpu_checks": 8260,
+  "observed_cause": "Native copy-view shaders force alpha to one before planar conversion",
+  "original_alpha_gpu_checks": 26280,
+  "pc_only_update": true,
+  "production_composition_checks": 118396,
+  "schema": "sfnp-pc-native-composition-candidate-v1",
+  "software_logs": {
+    "build-026-pc.log": {
+      "bytes": 170,
+      "sha256": "7129dc239ebb489f5cb64a6e352c1d185ea3b70fc21c95a0c78a2ef8d1a449ba"
+    },
+    "composition-sanitized-026.log": {
+      "bytes": 49,
+      "sha256": "4958a4babc89a3ce46bcc85bf13647fc57466e54740d08cb7df15add3108ba9a"
+    },
+    "ctest-026.log": {
+      "bytes": 5955,
+      "sha256": "83ed8923462586314ac0a6bb5e54847879679a17c981718b1118084c445dff5e"
+    },
+    "installer-026-tests.log": {
+      "bytes": 488,
+      "sha256": "6252a6f14b86ae4af949b6b632831fc030cb67bb1b83212ed6ec8659487f44cf"
+    },
+    "package-026-tests.log": {
+      "bytes": 116,
+      "sha256": "e7a13840357a1362efd96bd821e705c688dc00f7812cbf6873d0ae576a8586e4"
+    },
+    "pc-only-026-tests.log": {
+      "bytes": 3378,
+      "sha256": "9f0564b617b48c7de94f5c4d1c307803ba2f417e06bb99278246f00c23c9c51f"
+    },
+    "windows-resource-026-ci.log": {
+      "bytes": 110591,
+      "sha256": "c947e9f91c76832425710d462def751a82460456898f626c3a29615a36145dcf"
+    },
+    "windows-source-026-ci.log": {
+      "bytes": 27086,
+      "sha256": "da3c47215f12bd1584ad71d9c2d3b36b75e861e374995f0e91812f6dbe9cf05f"
+    }
+  },
+  "source_revision": "86bfd834e248528c5bdde783b8d61c3584cedb2c",
+  "version": "0.3.26",
+  "windows_ci": {
+    "resource": {
+      "conclusion": "success",
+      "headSha": "8e5b0a761805bcdbc261cc38746e763a61904983",
+      "jobs": [
+        {
+          "completedAt": "2026-11-09T13:36:25Z",
+          "conclusion": "success",
+          "databaseId": 129192270785,
+          "name": "context-observer",
+          "startedAt": "2026-11-09T13:34:54Z",
+          "status": "completed",
+          "steps": [
+            {
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prepare pinned public SDK headers",
+              "number": 3,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile actual production context observer",
+              "number": 4,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Exercise actual facade API and production observer from cold context",
+              "number": 5,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prepare causal control using stale original native dispatch",
+              "number": 6,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile identical production facade with only fresh lookup removed",
+              "number": 7,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prove real native dispatch changes reject the stale-target control",
+              "number": 8,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/upload-artifact@v4",
+              "number": 9,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 18,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 19,
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42626716760/job/129192270785"
+        },
+        {
+          "completedAt": "2026-11-09T13:35:32Z",
+          "conclusion": "success",
+          "databaseId": 129192270980,
+          "name": "writable-context-shadow",
+          "startedAt": "2026-11-09T13:34:54Z",
+          "status": "completed",
+          "steps": [
+            {
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile independent full-public-ABI writable shadow experiment",
+              "number": 3,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actual WARP Draw Copy Readback Getter Flush and protection transitions",
+              "number": 4,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/upload-artifact@v4",
+              "number": 5,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 10,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 11,
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42626716760/job/129192270980"
+        },
+        {
+          "completedAt": "2026-11-09T13:35:09Z",
+          "conclusion": "success",
+          "databaseId": 129192271116,
+          "name": "cleanup-continuity",
+          "startedAt": "2026-11-09T13:34:55Z",
+          "status": "completed",
+          "steps": [
+            {
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prepare pinned public DirectMode declarations",
+              "number": 3,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Check exact pairs through empty client cleanup and working Gloomhaven boundary",
+              "number": 4,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Restore only unnecessary epoch changes as a causal control",
+              "number": 5,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prove strict crop edges reproduce the observed Venture rejection",
+              "number": 6,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 12,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 13,
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42626716760/job/129192271116"
+        },
+        {
+          "completedAt": "2026-11-09T13:34:52Z",
+          "conclusion": "skipped",
+          "databaseId": 129192273023,
+          "name": "shared-resource",
+          "startedAt": "2026-11-09T13:34:52Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42626716760/job/129192273023"
+        }
+      ],
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42626716760"
+    },
+    "source": {
+      "conclusion": "success",
+      "headSha": "8e5b0a761805bcdbc261cc38746e763a61904983",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42626716705"
+    }
+  }
+}
