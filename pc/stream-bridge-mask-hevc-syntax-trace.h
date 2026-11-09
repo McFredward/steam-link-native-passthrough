@@ -26,7 +26,8 @@ class MaskHevcSyntaxTraceSlot {
         for(auto i=from;i+2<bytes.size;++i)if(!bytes.data[i]&&!bytes.data[i+1]){
             if(bytes.data[i+2]==1){at=i;length=3;return true;}
             if(i+3<bytes.size&&!bytes.data[i+2]&&bytes.data[i+3]==1){at=i;length=4;return true;}
-        }return false;
+        }
+        return false;
     }
 public:
     bool captureOnce(Bytes bytes,unsigned width,unsigned height)noexcept{
