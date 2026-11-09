@@ -51,11 +51,14 @@ struct CompositionFixture {
         D3D11_RASTERIZER_DESC r{};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=TRUE;check(SUCCEEDED(device->CreateRasterizerState(&r,raster.out())),"native copy rasterizer");
     }
     void render(){
+        std::puts("Owned production render: enter");std::fflush(stdout);
         check(DirectModeBoundary::currentFrame()!=nullptr,"real typed DirectMode presentation scope");
         context->ClearState();context->RSSetState(raster.p);context->VSSetShader(vertex.p,nullptr,0);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->PSSetShader(copyPixel.p,nullptr,0);context->PSSetConstantBuffers(2,1,&constants.p);context->OMSetRenderTargets(1,&imageTarget.p,nullptr);
+        std::puts("Owned production render: bindings ready");std::fflush(stdout);
         for(unsigned tile=0;tile<4;++tile){if(tile==3&&mode==Mode::MissingTile)continue;const unsigned eye=mode==Mode::WrongEye?0:tile/2;
             const D3D11_VIEWPORT viewport{0,float(tile*Height/4),float(Width),float(Height/4),0,1};context->RSSetViewports(1,&viewport);
-            float b[12]{};b[9]=float((tile/2)*Height/2);context->UpdateSubresource(constants.p,0,nullptr,b,0,0);context->PSSetShaderResources(0,1,&eyes[eye].p);context->Draw(3,0);
+            float b[12]{};b[9]=float((tile/2)*Height/2);context->UpdateSubresource(constants.p,0,nullptr,b,0,0);context->PSSetShaderResources(0,1,&eyes[eye].p);
+            std::printf("Owned production render: draw tile %u\n",tile);std::fflush(stdout);context->Draw(3,0);
         }
         const FLOAT zero[4]{};
         if(mode==Mode::ClearImage)context->ClearRenderTargetView(imageTarget.p,zero);
