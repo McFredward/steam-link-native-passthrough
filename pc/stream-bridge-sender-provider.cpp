@@ -595,6 +595,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 stats.lastDrawVertices,stats.lastDrawStart,stats.lastDrawTopology,unsigned(stats.lastDrawAdaptive),unsigned(stats.lastDrawShapeSupported),
                 static_cast<unsigned long long>(stats.drawShapesSupported),static_cast<unsigned long long>(stats.drawShapesRefused));report(text,stream_bridge::logging::Level::Debug);
             std::snprintf(text,sizeof text,
+                "coverage shader observation: factory=%u; devices=%llu; recognized=%llu; other-creations=%llu; code and signatures identify actual native objects, never source/frame authority",
+                unsigned(stats.nativeShaderFactory),static_cast<unsigned long long>(stats.nativeShaderDevices),
+                static_cast<unsigned long long>(stats.nativeShadersRecognized),static_cast<unsigned long long>(stats.nativeShadersRefused));report(text,stream_bridge::logging::Level::Debug);
+            std::snprintf(text,sizeof text,
                 "coverage native source: extent=%ux%u; view/storage-format=%u/%u; array/mips/samples=%u/%u/%u; srv-dimension/first-slice/slice-count/mip=%u/%u/%u/%u; diagnostic metadata only",
                 stats.lastSourceWidth,stats.lastSourceHeight,stats.lastSourceFormat,stats.nativeSourceShape[4],
                 stats.nativeSourceShape[0],stats.nativeSourceShape[1],stats.nativeSourceShape[2],stats.nativeSourceShape[3],

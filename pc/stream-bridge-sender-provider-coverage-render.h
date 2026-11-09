@@ -59,4 +59,13 @@ bool createTransmittanceBlend(ID3D11Device*,ID3D11BlendState**)noexcept;
 // An attached depth target is refused rather than writing it a second time.
 bool drawTransmittance(ID3D11DeviceContext*,ID3D11RenderTargetView*,
     ID3D11BlendState*,NativeDraw,UINT vertexCount,UINT startVertex)noexcept;
+// Cold compilation of our alpha-only point-load shader. For the separately
+// proved native copy-view family it uses the existing b2 offset and t0 image,
+// keeping the native VS, viewport and all bindings. No scene RGB is sampled.
+bool createCopyViewCoverageShader(ID3D11Device*,ID3D11PixelShader**)noexcept;
+// Writes inverse source alpha to R8 in the exact native destination region.
+// The reviewed native copy shader writes opaque RGB with overwrite semantics;
+// repeated/non-overlapping view tiles must not multiply fractional coverage.
+bool drawCopyViewCoverage(ID3D11DeviceContext*,ID3D11RenderTargetView*,
+    ID3D11PixelShader*,NativeDraw,UINT vertexCount,UINT startVertex)noexcept;
 } // namespace stream_bridge::sender

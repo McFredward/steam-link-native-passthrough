@@ -1,5 +1,6 @@
 #include "stream-bridge-sender-provider-coverage-render.h"
 #include <array>
+#include <d3dcompiler.h>
 namespace stream_bridge::sender {
 namespace {
 bool allocationHandle(ID3D11Resource* resource,std::uint64_t expected)noexcept{
@@ -105,6 +106,46 @@ bool drawTransmittance(ID3D11DeviceContext* context,ID3D11RenderTargetView* targ
     nativeDraw(context,count,start);
     UINT restoredCount=0;for(UINT i=0;i<originals.size();++i)if(originals[i])restoredCount=i+1;
     context->OMSetRenderTargets(restoredCount,originals.data(),nullptr);context->OMSetBlendState(originalBlend,factors,mask);
+    if(originalBlend)originalBlend->Release();
+    for(auto* rt:originals)if(rt)rt->Release();
+    return true;
+}
+bool createCopyViewCoverageShader(ID3D11Device* device,ID3D11PixelShader** output)noexcept{
+    if(!device||!output)return false;
+    static constexpr char source[]=R"(
+cbuffer CopyViewParameters : register(b2) {
+    float4 colourParameters;
+    float4 filterParameters;
+    float4 sourceOffset;
+};
+Texture2D<float4> sourceImage : register(t0);
+float4 main(float4 position : SV_Position) : SV_Target {
+    int2 pixel = int2(position.xy - sourceOffset.xy);
+    float alpha = sourceImage.Load(int3(pixel, 0)).a;
+    return float4(1.0 - saturate(alpha), 0.0, 0.0, 1.0);
+})";
+    ID3DBlob* code=nullptr;ID3DBlob* errors=nullptr;
+    const auto result=D3DCompile(source,sizeof(source)-1,"sfnp-copy-view-coverage",nullptr,nullptr,"main","ps_5_0",D3DCOMPILE_ENABLE_STRICTNESS|D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&code,&errors);
+    if(errors)errors->Release();
+    const bool okay=SUCCEEDED(result)&&code&&SUCCEEDED(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,output));
+    if(code)code->Release();
+    return okay;
+}
+bool drawCopyViewCoverage(ID3D11DeviceContext* context,ID3D11RenderTargetView* target,
+    ID3D11PixelShader* shader,NativeDraw draw,UINT count,UINT start)noexcept{
+    if(!context||!target||!shader||!draw||count!=3||start)return false;
+    D3D11_RENDER_TARGET_VIEW_DESC desc{};target->GetDesc(&desc);
+    if(desc.Format!=DXGI_FORMAT_R8_UNORM||desc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D)return false;
+    std::array<ID3D11RenderTargetView*,D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT> originals{};
+    ID3D11DepthStencilView* depth=nullptr;context->OMGetRenderTargets(static_cast<UINT>(originals.size()),originals.data(),&depth);
+    if(depth){depth->Release();for(auto* rt:originals)if(rt)rt->Release();return false;}
+    ID3D11PixelShader* originalShader=nullptr;context->PSGetShader(&originalShader,nullptr,nullptr);
+    ID3D11BlendState* originalBlend=nullptr;FLOAT factors[4]{};UINT mask=0;context->OMGetBlendState(&originalBlend,factors,&mask);
+    context->OMSetRenderTargets(1,&target,nullptr);context->OMSetBlendState(nullptr,factors,mask);context->PSSetShader(shader,nullptr,0);
+    draw(context,count,start);
+    UINT originalCount=0;for(UINT i=0;i<originals.size();++i)if(originals[i])originalCount=i+1;
+    context->PSSetShader(originalShader,nullptr,0);context->OMSetRenderTargets(originalCount,originals.data(),nullptr);context->OMSetBlendState(originalBlend,factors,mask);
+    if(originalShader)originalShader->Release();
     if(originalBlend)originalBlend->Release();
     for(auto* rt:originals)if(rt)rt->Release();
     return true;

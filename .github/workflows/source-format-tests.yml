@@ -5,6 +5,10 @@ on:
     paths:
       - 'pc/stream-bridge-source-contract.h'
       - 'pc/stream-bridge-native-draw.h'
+      - 'pc/stream-bridge-native-composition.h'
+      - 'pc/stream-bridge-native-shader.h'
+      - 'pc/stream-bridge-sender-provider-shaders.*'
+      - 'tests/test_stream_bridge_native_composition*'
       - 'pc/stream-bridge-sender-provider-coverage-render.*'
       - 'tests/test_stream_bridge_sender_provider_coverage_gpu.cpp'
       - 'pc/stream-bridge-sender-provider-sourceipc.*'
@@ -14,6 +18,10 @@ on:
     paths:
       - 'pc/stream-bridge-source-contract.h'
       - 'pc/stream-bridge-native-draw.h'
+      - 'pc/stream-bridge-native-composition.h'
+      - 'pc/stream-bridge-native-shader.h'
+      - 'pc/stream-bridge-sender-provider-shaders.*'
+      - 'tests/test_stream_bridge_native_composition*'
       - 'pc/stream-bridge-sender-provider-coverage-render.*'
       - 'tests/test_stream_bridge_sender_provider_coverage_gpu.cpp'
       - 'pc/stream-bridge-sender-provider-sourceipc.*'
@@ -40,6 +48,10 @@ jobs:
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_sender_provider_coverage_gpu.cpp pc/stream-bridge-sender-provider-coverage-render.cpp /Fe:build\coverage.exe /Fo:build\ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_native_composition.cpp /Fe:build\composition.exe /Fo:build\ /link
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_native_composition_windows.cpp pc/stream-bridge-sender-provider-shaders.cpp pc/stream-bridge-sender-provider-coverage-render.cpp /Fe:build\composition-gpu.exe /Fo:build\ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib
+          if errorlevel 1 exit /b 1
       - name: Exercise kernel pipe PID, source readiness, EOF and reconnect
         shell: cmd
         run: |
@@ -53,6 +65,17 @@ jobs:
           build\coverage.exe >build\coverage.log 2>&1
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\coverage.log
+          exit /b %SFNP_RESULT%
+      - name: Check exact native composition graph and pre-conversion source alpha
+        shell: cmd
+        run: |
+          build\composition.exe >build\composition.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\composition.log
+          if not "%SFNP_RESULT%"=="0" exit /b %SFNP_RESULT%
+          build\composition-gpu.exe >build\composition-gpu.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\composition-gpu.log
           exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()

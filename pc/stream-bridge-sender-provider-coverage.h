@@ -19,7 +19,7 @@ enum class CoverageGate : unsigned {
     None,Device,Context,Caller,DirectFrame,Lock,Prepared,DrawShape,FrameEpoch,
     ConstantBuffer,EyeSelector,SourceView,SourceShape,SharedResource,AmbiguousSource,
     RepeatedSource,MixedProcess,InteriorCopy,OutputDepth,OutputShape,BlendDraw,
-    CopyPair,StageFull,InputReceipt,RawWitness,Readback,Inventory,Encoder,SourceContract,CoverageSession,StageReceipt,RleEncode,FrameCertificate,SourceRevoked,QueryPending,QueryError,Count
+    CopyPair,StageFull,InputReceipt,RawWitness,Readback,Inventory,Encoder,SourceContract,CoverageSession,StageReceipt,RleEncode,FrameCertificate,SourceRevoked,QueryPending,QueryError,NativeShader,Composition,CompositionWrite,Count
 };
 inline const char* coverageGateName(CoverageGate gate)noexcept{
     switch(gate){
@@ -38,6 +38,9 @@ inline const char* coverageGateName(CoverageGate gate)noexcept{
     case CoverageGate::RawWitness:return "source-alpha-witness";case CoverageGate::Readback:return "readback";
     case CoverageGate::Inventory:return "source-inventory";case CoverageGate::Encoder:return "native-encoder";
     case CoverageGate::SourceContract:return "source-format-contract";
+    case CoverageGate::NativeShader:return "native-shader-identity";
+    case CoverageGate::Composition:return "native-composition-chain";
+    case CoverageGate::CompositionWrite:return "native-composition-write";
     case CoverageGate::CoverageSession:return "coverage-session";case CoverageGate::StageReceipt:return "staging-receipt";
     case CoverageGate::RleEncode:return "coverage-rle";case CoverageGate::FrameCertificate:return "frame-certificate";case CoverageGate::SourceRevoked:return "source-format-revoked";case CoverageGate::QueryPending:return "readback-query-pending";case CoverageGate::QueryError:return "readback-query-error";default:return "unknown";}
 }
@@ -47,6 +50,8 @@ enum class CoverageSignal : unsigned {
     DeviceOpened,ContextsReady,OtherDraws,NativeMaps,InventoryRefreshes,Count
 };
 struct CoverageGateStats {
+    std::uint64_t nativeShaderDevices=0,nativeShadersRecognized=0,nativeShadersRefused=0;
+    bool nativeShaderFactory=false;
     std::uint32_t lastDrawVertices=0,lastDrawStart=0,lastDrawTopology=0;
     std::uint64_t drawShapesSupported=0,drawShapesRefused=0;
     bool lastDrawAdaptive=false,lastDrawShapeSupported=false;
@@ -207,7 +212,9 @@ public:
     ~CoverageContextFacade();
     CoverageContextFacade(const CoverageContextFacade&)=delete;
     CoverageContextFacade& operator=(const CoverageContextFacade&)=delete;
-    bool prepare(ID3D11DeviceContext*,const std::array<std::uintptr_t,4>& callbacks)noexcept;
+    static constexpr std::array<unsigned,17> WriteSlots{{12,20,21,38,39,40,46,48,50,57,58,115,116,117,118,132,133}};
+    bool prepare(ID3D11DeviceContext*,const std::array<std::uintptr_t,4>& callbacks,
+                 const std::array<std::uintptr_t,17>& writes={})noexcept;
     bool publish()noexcept;
     bool restore()noexcept;
     bool installed()const noexcept;
