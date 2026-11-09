@@ -12,7 +12,7 @@ namespace stream_bridge::sender {
 struct NativeExecutableRange {std::uint32_t begin=0,size=0;};
 struct NativeImageLayout {
     std::uint64_t preferredBase=0;
-    std::uint32_t imageSize=0,getProcAddress=0,directTable=0;
+    std::uint32_t imageSize=0,getProcAddress=0,createDevice=0,directTable=0;
     std::array<std::uint32_t,8> directMethods{};
     std::array<NativeExecutableRange,8> executable{};
     unsigned executableCount=0;
@@ -41,6 +41,11 @@ class NativePeImage {
     }
     bool string(std::uint32_t rva,const char* text)const noexcept {
         const auto n=std::strlen(text)+1;const auto* p=at(rva,n);return p&&!std::memcmp(p,text,n);
+    }
+    bool dllName(std::uint32_t rva,const char* text)const noexcept {
+        const auto n=std::strlen(text)+1;const auto* p=at(rva,n);if(!p)return false;
+        for(std::size_t i=0;i<n;++i){const auto c=p[i]>='A'&&p[i]<='Z'?p[i]-'A'+'a':p[i];if(c!=static_cast<unsigned char>(text[i]))return false;}
+        return true;
     }
     bool nameContains(std::uint32_t rva,const char* part)const {
         if(rva>size_||size_-rva<160)return false;
@@ -98,7 +103,7 @@ public:
             if((s.flags&0x80000000u)||s.size>s.rawSize||result.executableCount==result.executable.size()){why="unsupported executable mapping";return false;}
             result.executable[result.executableCount++]={s.rva,s.size};}}
         if(!result.executableCount){why="native executable mapping missing";return false;}
-        unsigned imports=0;bool terminated=false;
+        unsigned imports=0,deviceImports=0;bool terminated=false;
         for(unsigned i=0;i<256&&i*20+20<=importBytes_;++i){const auto r=imports_+i*20;std::uint32_t names=0,dll=0,slots=0;
             if(!value(r,names)||!value(r+12,dll)||!value(r+16,slots)){why="invalid import directory";return false;}
             if(!names&&!dll&&!slots){terminated=true;break;}
@@ -108,9 +113,10 @@ public:
                 if(!item){end=true;break;}if(item>>63)continue;
                 if(item>0xffffffffu-2){why="invalid native import RVA";return false;}
                 if(string(std::uint32_t(item)+2,"GetProcAddress")){result.getProcAddress=slots+k*8;++imports;}
+                if(string(std::uint32_t(item)+2,"D3D11CreateDevice")&&dllName(dll,"d3d11.dll")){result.createDevice=slots+k*8;++deviceImports;}
             }if(!end){why="native import bound exceeded";return false;}
         }
-        if(!terminated||imports!=1||!at(result.getProcAddress,8)){why="public GetProcAddress import missing or ambiguous";return false;}
+        if(!terminated||imports!=1||deviceImports>1||!at(result.getProcAddress,8)){why="public GetProcAddress import missing or ambiguous";return false;}
         // The versioned public interface must exist in the image. A new table
         // with additional methods does not silently inherit this ABI.
         const char version[]="IVRDriverDirectModeComponent_009";bool versionFound=false;

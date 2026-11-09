@@ -10,6 +10,8 @@
 #include "stream-bridge-sender-provider-coverage-stages.h"
 #include "stream-bridge-source-contract.h"
 #include "stream-bridge-native-draw.h"
+#include "stream-bridge-native-composition.h"
+#include "stream-bridge-sender-provider-shaders.h"
 #include <d3d11_4.h>
 #include <cstring>
 #include <cmath>
@@ -21,6 +23,11 @@ static_assert(unsigned(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)==NativeTriangleLis
               unsigned(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP)==NativeTriangleStrip,"public D3D primitive ABI");
 namespace {
 template<class T> void release(T*& p){if(p){p->Release();p=nullptr;}}
+template<class T>struct Held {
+    T* value=nullptr;~Held(){release(value);}T** out()noexcept{return &value;}
+    T* operator->()const noexcept{return value;}operator T*()const noexcept{return value;}
+    Held()=default;Held(const Held&)=delete;Held& operator=(const Held&)=delete;
+};
 template<class To,class From> To bits(From from){static_assert(sizeof(To)==sizeof(From),"Win64 function pointers");To to{};std::memcpy(&to,&from,sizeof to);return to;}
 IUnknown* identity(IUnknown* resource){IUnknown* value=nullptr;if(resource)resource->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&value));return value;}
 bool same(IUnknown* a,IUnknown* b){auto x=identity(a),y=identity(b);const bool yes=x&&x==y;release(x);release(y);return yes;}
@@ -31,6 +38,8 @@ constexpr unsigned StageCount=4,MaxOpened=64*3;
 std::uint64_t clockMicros()noexcept{return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());}
 std::uint64_t elapsedMicros(std::uint64_t start,std::uint64_t end)noexcept{return start&&end>=start?end-start:0;}
 struct MultithreadScope{ID3D11Multithread* value;explicit MultithreadScope(ID3D11Multithread* p):value(p){if(value)value->Enter();}~MultithreadScope(){if(value)value->Leave();}};
+thread_local unsigned companionCommands=0;
+struct CompanionCommands {CompanionCommands(){++companionCommands;}~CompanionCommands(){--companionCommands;}};
 }
 struct CoverageContextFacade::Impl {
     ID3D11DeviceContext* context=nullptr;ID3D11Multithread* multithread=nullptr;
@@ -53,7 +62,7 @@ CoverageContextFacade::~CoverageContextFacade(){
     if(impl_->allocation)VirtualFree(impl_->allocation,0,MEM_RELEASE);
     release(impl_->multithread);release(impl_->context);
 }
-bool CoverageContextFacade::prepare(ID3D11DeviceContext* context,const std::array<std::uintptr_t,4>& callbacks)noexcept{
+bool CoverageContextFacade::prepare(ID3D11DeviceContext* context,const std::array<std::uintptr_t,4>& callbacks,const std::array<std::uintptr_t,17>& writes)noexcept{
     auto& s=*impl_;if(s.prepared||s.context||!context||(reinterpret_cast<std::uintptr_t>(context)&7u))return false;
     for(auto callback:callbacks)if(!callback)return false;
     // The exact public ABI size is selected by the highest supported same-
@@ -87,6 +96,7 @@ bool CoverageContextFacade::prepare(ID3D11DeviceContext* context,const std::arra
         std::memcpy(thunk+6,&source,sizeof source);s.expected[i]=thunk;
     }
     const unsigned slots[4]{13,14,15,47};for(unsigned i=0;i<4;++i)s.expected[slots[i]]=reinterpret_cast<void*>(callbacks[i]);
+    for(unsigned i=0;i<writes.size();++i)if(writes[i]&&WriteSlots[i]<s.count)s.expected[WriteSlots[i]]=reinterpret_cast<void*>(writes[i]);
     std::memcpy(s.facade,s.expected.data(),s.count*sizeof(void*));
     DWORD old=0;if(!VirtualProtect(code,page,PAGE_EXECUTE_READ,&old)||!FlushInstructionCache(GetCurrentProcess(),code,page))return false;
     // Only the generated forwarding instructions become RX. The object-local
@@ -135,6 +145,7 @@ struct SenderCoverage::Impl {
     ID3D11Multithread* multithread=nullptr;CoverageContextFacade facade;
     SourceContract sourceContract;
     SourceAlphaProbe sourceAlpha;
+    NativeShaders nativeShaders;
     MaskContentPublication maskContent;
     capture::Writer maskCapture;
     static constexpr unsigned TemporalLanes=2;
@@ -150,6 +161,8 @@ struct SenderCoverage::Impl {
     ID3D11Texture2D* target=nullptr;ID3D11RenderTargetView* targetView=nullptr;ID3D11BlendState* blend=nullptr;
     std::uint32_t width=0,height=0;std::uint64_t activeSerial=0,activeEpoch=0;unsigned drawBits=0;std::uint64_t activeContract=0;bool invalid=false,poolReady=false;
     IUnknown* nativeOutput=nullptr;std::uint32_t activePid=0;
+    ID3D11PixelShader* copyCoverageShader=nullptr;
+    NativeComposition composition;IUnknown* intermediate=nullptr;IUnknown* nativeChroma=nullptr;std::atomic<bool> stagedComposition{false};
     struct Opened {vr::SharedTextureHandle_t handle=0;std::uint64_t generation=0;std::uint32_t pid=0;ID3D11Texture2D* texture=nullptr;};
     std::array<Opened,MaxOpened> opened{};std::uint64_t inventoryEpoch=0;
     struct Constant {ID3D11Resource* resource=nullptr;void* pointer=nullptr;std::array<std::uint8_t,128> bytes{};std::uint64_t present=0;bool valid=false;};
@@ -380,7 +393,9 @@ struct SenderCoverage::Impl {
         if(!multithread->GetMultithreadProtected())return false;
         Impl* expected=nullptr;if(!instance.compare_exchange_strong(expected,this)&&expected!=this)return false;
         const std::array<std::uintptr_t,4> callbacks{{bits<std::uintptr_t>(&draw),bits<std::uintptr_t>(&map),bits<std::uintptr_t>(&unmap),bits<std::uintptr_t>(&copy)}};
-        if(!facade.prepare(context,callbacks)||!facade.publish())return false;
+        std::array<std::uintptr_t,17> writes{};
+        if(adaptive)writes={{bits<std::uintptr_t>(&drawIndexed),bits<std::uintptr_t>(&drawIndexedInstanced),bits<std::uintptr_t>(&drawInstanced),bits<std::uintptr_t>(&drawAuto),bits<std::uintptr_t>(&drawIndexedIndirect),bits<std::uintptr_t>(&drawIndirect),bits<std::uintptr_t>(&copyRegion),bits<std::uintptr_t>(&update),bits<std::uintptr_t>(&clearTarget),bits<std::uintptr_t>(&resolve),bits<std::uintptr_t>(&execute),bits<std::uintptr_t>(&copyRegion1),bits<std::uintptr_t>(&update1),bits<std::uintptr_t>(&discardResource),bits<std::uintptr_t>(&discardView),bits<std::uintptr_t>(&clearView),bits<std::uintptr_t>(&discardView1)}};
+        if(!facade.prepare(context,callbacks,writes)||!facade.publish())return false;
         enabled=true;gates.signal(CoverageSignal::ContextsReady);return true;
     }
     bool dispatchOwned()const noexcept{return context&&multithread&&multithread->GetMultithreadProtected()&&facade.installed();}
@@ -413,10 +428,11 @@ struct SenderCoverage::Impl {
         D3D11_QUERY_DESC query{};query.Query=D3D11_QUERY_EVENT;
         for(auto& slot:all){auto& gpu=slot->resources;gpu.context=context;if(FAILED(device->CreateTexture2D(&desc,nullptr,&gpu.texture))||FAILED(device->CreateQuery(&query,&gpu.completion)))return false;}
         if(!blend&&!createTransmittanceBlend(device,&blend))return false;
+        if(adaptive&&!copyCoverageShader)(void)createCopyViewCoverageShader(device,&copyCoverageShader);
         // Optional diagnostics use independent tiny staging/query storage.
         // Failure never withdraws valid native coverage or source permission.
         (void)sourceAlpha.prepare(device);
-        width=w;height=h;activeSerial=0;release(nativeOutput);
+        width=w;height=h;activeSerial=0;stagedComposition=false;release(nativeOutput);release(intermediate);release(nativeChroma);
         for(auto& slot:all)slot.publish(Stages::Phase::Free);
         poolReady=true;prepared=true;hevcDirty.store(hevcRequested,std::memory_order_release);return true;
     }
@@ -466,6 +482,61 @@ struct SenderCoverage::Impl {
         }
         inventoryEpoch=inventory.epoch;prepared=target&&targetView&&blend;
     }
+    bool beginFrame(ID3D11DeviceContext* ctx,const DirectFrame& frame){
+        if(!prepared)return gates.refuse(CoverageGate::Prepared);
+        if(frame.registryEpoch!=inventoryEpoch||frame.presentSerial==failedSerial||!frame.layerCount||frame.layerCount>4)return gates.refuse(CoverageGate::FrameEpoch);
+        if(activeSerial!=frame.presentSerial){
+            activeSerial=frame.presentSerial;activeEpoch=frame.registryEpoch;drawBits=0;activeContract=0;invalid=false;activePid=0;
+            release(nativeOutput);release(intermediate);release(nativeChroma);stagedComposition=false;
+            if(!composition.begin(frame.presentSerial,frame.registryEpoch,width,height,(1u<<(2*frame.layerCount))-1))return gates.refuse(CoverageGate::Composition);
+            const float one[4]{1,1,1,1};ctx->ClearRenderTargetView(targetView,one);
+        }
+        return !invalid&&activeEpoch==frame.registryEpoch;
+    }
+    void invalidateWrite(ID3D11DeviceContext* ctx,ID3D11Resource* resource,bool all=false){
+        if(ctx!=context||!adaptive||!enabled||companionCommands||!stagedComposition.load(std::memory_order_acquire))return;
+        Held<IUnknown> token;if(resource)token.value=identity(resource);
+        std::unique_lock<std::mutex> lock(mutex,std::try_to_lock);
+        if(!lock){if(const auto* frame=DirectModeBoundary::currentFrame())failedSerial=frame->presentSerial;else prepared=false;return;}
+        if(all||composition.contains(reinterpret_cast<std::uintptr_t>(token.value))){
+            composition.invalidate();invalid=true;failedSerial=activeSerial;gates.refuse(CoverageGate::CompositionWrite);
+        }
+    }
+    void invalidateView(ID3D11DeviceContext* ctx,ID3D11View* view){
+        if(!view||companionCommands||!stagedComposition.load(std::memory_order_acquire))return;
+        Held<ID3D11Resource> resource;view->GetResource(resource.out());invalidateWrite(ctx,resource);
+    }
+    void invalidateTargets(ID3D11DeviceContext* ctx){
+        if(companionCommands||!stagedComposition.load(std::memory_order_acquire))return;
+        std::array<ID3D11RenderTargetView*,8> views{};ctx->OMGetRenderTargets(static_cast<UINT>(views.size()),views.data(),nullptr);
+        for(auto* view:views)if(view){invalidateView(ctx,view);view->Release();}
+    }
+    // All methods retain the public argument list and forward once. Unknown
+    // writes revoke only the graph they can modify; they never rewrite RGB.
+#define SFNP_GUARDED_WRITE(Name,Slot,Parameters,Arguments,Observe) \
+    static void STDMETHODCALLTYPE Name Parameters { \
+        auto& s=*instance.load();MultithreadScope protect(ctx==s.context?s.multithread:nullptr); \
+        if(ctx==s.context&&s.adaptive&&!companionCommands){Observe;} \
+        const auto original=bits<decltype(&Name)>(s.facade.originalFunction(Slot));original Arguments; \
+    }
+    SFNP_GUARDED_WRITE(drawIndexed,12,(ID3D11DeviceContext* ctx,UINT count,UINT start,INT base),(ctx,count,start,base),s.invalidateTargets(ctx))
+    SFNP_GUARDED_WRITE(drawIndexedInstanced,20,(ID3D11DeviceContext* ctx,UINT count,UINT instances,UINT start,INT base,UINT first),(ctx,count,instances,start,base,first),s.invalidateTargets(ctx))
+    SFNP_GUARDED_WRITE(drawInstanced,21,(ID3D11DeviceContext* ctx,UINT count,UINT instances,UINT start,UINT first),(ctx,count,instances,start,first),s.invalidateTargets(ctx))
+    SFNP_GUARDED_WRITE(drawAuto,38,(ID3D11DeviceContext* ctx),(ctx),s.invalidateTargets(ctx))
+    SFNP_GUARDED_WRITE(drawIndexedIndirect,39,(ID3D11DeviceContext* ctx,ID3D11Buffer* buffer,UINT offset),(ctx,buffer,offset),s.invalidateTargets(ctx))
+    SFNP_GUARDED_WRITE(drawIndirect,40,(ID3D11DeviceContext* ctx,ID3D11Buffer* buffer,UINT offset),(ctx,buffer,offset),s.invalidateTargets(ctx))
+    SFNP_GUARDED_WRITE(copyRegion,46,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,UINT x,UINT y,UINT z,ID3D11Resource* src,UINT sourceSub,const D3D11_BOX* box),(ctx,dst,sub,x,y,z,src,sourceSub,box),s.invalidateWrite(ctx,dst))
+    SFNP_GUARDED_WRITE(update,48,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,const D3D11_BOX* box,const void* source,UINT row,UINT depth),(ctx,dst,sub,box,source,row,depth),s.invalidateWrite(ctx,dst))
+    SFNP_GUARDED_WRITE(clearTarget,50,(ID3D11DeviceContext* ctx,ID3D11RenderTargetView* target,const FLOAT* colour),(ctx,target,colour),s.invalidateView(ctx,target))
+    SFNP_GUARDED_WRITE(resolve,57,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,ID3D11Resource* src,UINT sourceSub,DXGI_FORMAT format),(ctx,dst,sub,src,sourceSub,format),s.invalidateWrite(ctx,dst))
+    SFNP_GUARDED_WRITE(execute,58,(ID3D11DeviceContext* ctx,ID3D11CommandList* commands,BOOL restore),(ctx,commands,restore),s.invalidateWrite(ctx,nullptr,true))
+    SFNP_GUARDED_WRITE(copyRegion1,115,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,UINT x,UINT y,UINT z,ID3D11Resource* src,UINT sourceSub,const D3D11_BOX* box,UINT flags),(ctx,dst,sub,x,y,z,src,sourceSub,box,flags),s.invalidateWrite(ctx,dst))
+    SFNP_GUARDED_WRITE(update1,116,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,const D3D11_BOX* box,const void* source,UINT row,UINT depth,UINT flags),(ctx,dst,sub,box,source,row,depth,flags),s.invalidateWrite(ctx,dst))
+    SFNP_GUARDED_WRITE(discardResource,117,(ID3D11DeviceContext* ctx,ID3D11Resource* resource),(ctx,resource),s.invalidateWrite(ctx,resource))
+    SFNP_GUARDED_WRITE(discardView,118,(ID3D11DeviceContext* ctx,ID3D11View* view),(ctx,view),s.invalidateView(ctx,view))
+    SFNP_GUARDED_WRITE(clearView,132,(ID3D11DeviceContext* ctx,ID3D11View* view,const FLOAT* colour,const D3D11_RECT* rects,UINT count),(ctx,view,colour,rects,count),s.invalidateView(ctx,view))
+    SFNP_GUARDED_WRITE(discardView1,133,(ID3D11DeviceContext* ctx,ID3D11View* view,const D3D11_RECT* rects,UINT count),(ctx,view,rects,count),s.invalidateView(ctx,view))
+#undef SFNP_GUARDED_WRITE
     bool luma(ID3D11DeviceContext* ctx,UINT count,UINT start,const DirectFrame& frame){
         if(!prepared)return gates.refuse(CoverageGate::Prepared);
         D3D11_PRIMITIVE_TOPOLOGY topology=D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
@@ -473,9 +544,7 @@ struct SenderCoverage::Impl {
         const bool shape=nativeCoverageDrawShape(adaptive,count,start,unsigned(topology));
         gates.drawShape(count,start,unsigned(topology),adaptive,shape);
         if(!shape)return gates.refuse(CoverageGate::DrawShape);
-        if(frame.registryEpoch!=inventoryEpoch||frame.presentSerial==failedSerial)return gates.refuse(CoverageGate::FrameEpoch);
-        if(activeSerial!=frame.presentSerial){activeSerial=frame.presentSerial;activeEpoch=frame.registryEpoch;drawBits=0;activeContract=0;invalid=false;activePid=0;release(nativeOutput);const float one[4]{1,1,1,1};ctx->ClearRenderTargetView(targetView,one);}
-        if(invalid||activeEpoch!=frame.registryEpoch)return gates.refuse(CoverageGate::FrameEpoch);
+        if(!beginFrame(ctx,frame))return false;
         Constant* cb=nullptr;
         if(!adaptive){ID3D11Buffer* buffer=nullptr;ctx->PSGetConstantBuffers(2,1,&buffer);
             for(auto& entry:constants)if(entry.valid&&entry.present==frame.presentSerial&&same(entry.resource,buffer))cb=&entry;
@@ -529,6 +598,145 @@ struct SenderCoverage::Impl {
         drawBits|=sourceBit;activePid=pid;gates.signal(CoverageSignal::EyeDraws);
         if(drawBits==((1u<<(2*frame.layerCount))-1)){preparedPid=pid;if(state!=7)state=6;gates.signal(CoverageSignal::CompletePairs);}return true;
     }
+    struct DrawTarget {
+        Held<ID3D11RenderTargetView> view;Held<ID3D11DepthStencilView> depth;
+        Held<ID3D11Resource> resource;Held<ID3D11Texture2D> texture;
+        D3D11_RENDER_TARGET_VIEW_DESC viewDesc{};D3D11_TEXTURE2D_DESC desc{};
+        bool read(ID3D11DeviceContext* ctx){
+            ctx->OMGetRenderTargets(1,view.out(),depth.out());if(!view||depth)return false;
+            view->GetDesc(&viewDesc);view->GetResource(resource.out());
+            if(!resource||FAILED(resource->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(texture.out()))))return false;
+            texture->GetDesc(&desc);
+            return desc.ArraySize==1&&desc.MipLevels==1&&desc.SampleDesc.Count==1&&desc.Usage==D3D11_USAGE_DEFAULT&&!desc.CPUAccessFlags
+                &&!(desc.BindFlags&D3D11_BIND_UNORDERED_ACCESS)&&!(desc.MiscFlags&D3D11_RESOURCE_MISC_TILED)
+                &&viewDesc.ViewDimension==D3D11_RTV_DIMENSION_TEXTURE2D&&!viewDesc.Texture2D.MipSlice;
+        }
+    };
+    static bool viewport(ID3D11DeviceContext* ctx,unsigned width,unsigned height,CompositionRect& rect){
+        UINT count=1;D3D11_VIEWPORT view{};ctx->RSGetViewports(&count,&view);if(count!=1)return false;
+        const float values[]{view.TopLeftX,view.TopLeftY,view.Width,view.Height};
+        for(float value:values)if(!std::isfinite(value)||value<0||value>16384||std::floor(value)!=value)return false;
+        rect={unsigned(view.TopLeftX),unsigned(view.TopLeftY),unsigned(view.Width),unsigned(view.Height)};
+        if(!rect.width||!rect.height||rect.x>width||rect.width>width-rect.x||rect.y>height||rect.height>height-rect.y)return false;
+        Held<ID3D11RasterizerState> raster;ctx->RSGetState(raster.out());
+        if(raster){D3D11_RASTERIZER_DESC desc{};raster->GetDesc(&desc);
+            if(desc.FillMode!=D3D11_FILL_SOLID||desc.ScissorEnable||
+               (desc.CullMode!=D3D11_CULL_NONE&&(desc.CullMode!=D3D11_CULL_BACK||desc.FrontCounterClockwise)))return false;
+            Held<ID3D11RasterizerState2> extended;
+            if(SUCCEEDED(raster->QueryInterface(__uuidof(ID3D11RasterizerState2),reinterpret_cast<void**>(extended.out())))){
+                D3D11_RASTERIZER_DESC2 actual{};extended->GetDesc2(&actual);
+                if(actual.ForcedSampleCount||actual.ConservativeRaster!=D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF)return false;
+            }else{
+                Held<ID3D11RasterizerState1> version1;
+                if(SUCCEEDED(raster->QueryInterface(__uuidof(ID3D11RasterizerState1),reinterpret_cast<void**>(version1.out())))){
+                    D3D11_RASTERIZER_DESC1 actual{};version1->GetDesc1(&actual);if(actual.ForcedSampleCount)return false;
+                }
+            }
+        }
+        Held<ID3D11GeometryShader> geometry;Held<ID3D11HullShader> hull;Held<ID3D11DomainShader> domain;
+        ctx->GSGetShader(geometry.out(),nullptr,nullptr);ctx->HSGetShader(hull.out(),nullptr,nullptr);ctx->DSGetShader(domain.out(),nullptr,nullptr);
+        if(geometry||hull||domain)return false;
+        Held<ID3D11Predicate> predicate;BOOL predication=FALSE;ctx->GetPredication(predicate.out(),&predication);if(predicate)return false;
+        Held<ID3D11Device> owner;ctx->GetDevice(owner.out());
+        const UINT uavCount=owner&&owner->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1?64u:8u;
+        std::array<ID3D11UnorderedAccessView*,64> uavs{};ctx->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,0,uavCount,uavs.data());
+        bool unordered=false;for(UINT i=0;i<uavCount;++i)if(uavs[i]){unordered=true;uavs[i]->Release();}
+        if(unordered)return false;
+        std::array<ID3D11Buffer*,4> outputs{};ctx->SOGetTargets(static_cast<UINT>(outputs.size()),outputs.data());bool streamOutput=false;
+        for(auto* buffer:outputs)if(buffer){streamOutput=true;buffer->Release();}
+        if(streamOutput)return false;
+        Held<ID3D11BlendState> blendState;FLOAT factors[4]{};UINT samples=0;ctx->OMGetBlendState(blendState.out(),factors,&samples);
+        if(samples!=0xffffffffu)return false;
+        if(blendState){D3D11_BLEND_DESC desc{};blendState->GetDesc(&desc);const auto& rt=desc.RenderTarget[0];
+            if(desc.AlphaToCoverageEnable||(rt.RenderTargetWriteMask&7u)!=7u)return false;
+            if(rt.BlendEnable&&(rt.BlendOp!=D3D11_BLEND_OP_ADD||
+                (rt.SrcBlend!=D3D11_BLEND_ONE&&rt.SrcBlend!=D3D11_BLEND_SRC_ALPHA)||
+                (rt.DestBlend!=D3D11_BLEND_ZERO&&rt.DestBlend!=D3D11_BLEND_INV_SRC_ALPHA)))return false;
+        }
+        return true;
+    }
+    // -1 refuses the frame, 0 leaves the existing direct-to-planar route in
+    // charge, 1 handled an exact edge of the separately composed native path.
+    int stagedDraw(ID3D11DeviceContext* ctx,UINT count,UINT start,const DirectFrame& frame){
+        Held<ID3D11PixelShader> pixel;ctx->PSGetShader(pixel.out(),nullptr,nullptr);
+        const auto kind=nativeShaders.identify(pixel);
+        const bool copyView=kind==NativeShader::CopyView||kind==NativeShader::CopyViewCas;
+        DrawTarget targetState;const bool targetOkay=targetState.read(ctx);
+        if(!copyView&&(!stagedComposition||activeSerial!=frame.presentSerial)){
+            if(targetOkay&&targetState.desc.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&targetState.desc.Width==width&&targetState.desc.Height==height){gates.refuse(CoverageGate::NativeShader);return -1;}
+            return 0;
+        }
+        if(kind==NativeShader::Unknown){
+            if(targetState.resource&&(same(targetState.resource,intermediate)||same(targetState.resource,nativeChroma)||same(targetState.resource,nativeOutput))){gates.refuse(CoverageGate::NativeShader);return -1;}
+            return 0;
+        }
+        if(!targetOkay||!beginFrame(ctx,frame)){gates.refuse(CoverageGate::Composition);return -1;}
+        Held<ID3D11VertexShader> vertex;ctx->VSGetShader(vertex.out(),nullptr,nullptr);
+        D3D11_PRIMITIVE_TOPOLOGY topology{};ctx->IAGetPrimitiveTopology(&topology);
+        const bool shape=count==3&&!start&&topology==D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+        gates.drawShape(count,start,unsigned(topology),true,shape);
+        if(!shape||nativeShaders.identify(vertex)!=NativeShader::FullscreenVertex){gates.refuse(CoverageGate::NativeShader);return -1;}
+        const unsigned sourceSlot=kind==NativeShader::ChromaPack?1u:0u;
+        Held<ID3D11ShaderResourceView> view;ctx->PSGetShaderResources(sourceSlot,1,view.out());
+        Held<ID3D11Resource> source;Held<ID3D11Texture2D> texture;D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc{};D3D11_TEXTURE2D_DESC sourceDesc{};
+        if(view){view->GetDesc(&viewDesc);view->GetResource(source.out());}
+        if(!source||FAILED(source->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(texture.out())))){gates.refuse(CoverageGate::SourceView);return -1;}
+        texture->GetDesc(&sourceDesc);
+        if(viewDesc.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D||viewDesc.Texture2D.MostDetailedMip||sourceDesc.ArraySize!=1||sourceDesc.MipLevels!=1||sourceDesc.SampleDesc.Count!=1){gates.refuse(CoverageGate::SourceShape);return -1;}
+        CompositionRect rect{};const auto& output=targetState.desc;
+        if(!viewport(ctx,output.Width,output.Height,rect)){gates.refuse(CoverageGate::Composition);return -1;}
+        const auto fail=[&](CoverageGate gate){gates.refuse(gate);return -1;};
+        if(copyView){
+            if(!copyCoverageShader||output.Width!=width||output.Height!=height||output.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||targetState.viewDesc.Format!=output.Format)return fail(CoverageGate::OutputShape);
+            const bool rgba=viewDesc.Format==DXGI_FORMAT_R8G8B8A8_UNORM||viewDesc.Format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+            const bool bgra=viewDesc.Format==DXGI_FORMAT_B8G8R8A8_UNORM||viewDesc.Format==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            gates.source(sourceDesc.Width,sourceDesc.Height,unsigned(viewDesc.Format));
+            gates.nativeSourceShape({sourceDesc.ArraySize,sourceDesc.MipLevels,sourceDesc.SampleDesc.Count,unsigned(viewDesc.ViewDimension),unsigned(sourceDesc.Format),0,1,0});
+            if(!rgba&&!bgra)return fail(CoverageGate::SourceShape);
+            unsigned sourceBit=0;std::uint32_t pid=0;
+            for(unsigned layer=0;layer<frame.layerCount;++layer)for(unsigned eye=0;eye<2;++eye){
+                const auto& requested=frame.layers[layer][eye];SharedTextureShape sourceShape{};if(!decodeSwapTextureSetDesc(requested.description,sourceShape))continue;
+                for(const auto& known:opened)if(known.handle==requested.submitted.hTexture&&known.generation==requested.swapGeneration&&submittedSharedResource(source,known.texture,{known.handle,known.generation,known.pid},{requested.submitted.hTexture,requested.swapGeneration,requested.processId},sourceShape)){
+                    if(sourceBit)return fail(CoverageGate::AmbiguousSource);
+                    sourceBit=1u<<(2*layer+eye);pid=requested.processId;
+                }
+            }
+            if(!sourceBit)return fail(CoverageGate::SharedResource);
+            if(activePid&&activePid!=pid)return fail(CoverageGate::MixedProcess);
+            const auto declared=sourceContract.snapshot(pid);
+            if(drawBits&&activeContract!=declared)return fail(CoverageGate::SourceContract);
+            if(!intermediate)intermediate=identity(targetState.resource);
+            if(!same(targetState.resource,intermediate)||!composition.image(reinterpret_cast<std::uintptr_t>(intermediate))||!composition.draw(sourceBit,rect))return fail(CoverageGate::Composition);
+            if(!drawCopyViewCoverage(ctx,targetView,copyCoverageShader,forwardDraw,count,start))return fail(CoverageGate::BlendDraw);
+            stagedComposition=true;activePid=pid;activeContract=declared;drawBits|=sourceBit;gates.signal(CoverageSignal::EyeDraws);
+            return 1;
+        }
+        if(!stagedComposition||!composition.complete())return fail(CoverageGate::Composition);
+        if(kind==NativeShader::Chroma||kind==NativeShader::ChromaLegacy){
+            if(!same(source,intermediate)||sourceDesc.Width!=width||sourceDesc.Height!=height||sourceDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||viewDesc.Format!=sourceDesc.Format||
+               output.Width!=width/2||output.Height!=height/2||rect.x||rect.y||rect.width!=output.Width||rect.height!=output.Height)return fail(CoverageGate::Composition);
+            const auto format=targetState.viewDesc.Format;
+            if(format!=DXGI_FORMAT_R32G32_FLOAT&&format!=DXGI_FORMAT_R16G16_FLOAT&&format!=DXGI_FORMAT_R16G16_UNORM&&format!=DXGI_FORMAT_R8G8_UNORM)return fail(CoverageGate::OutputShape);
+            if(!nativeChroma)nativeChroma=identity(targetState.resource);
+            if(!same(targetState.resource,nativeChroma)||!composition.chroma(reinterpret_cast<std::uintptr_t>(intermediate),reinterpret_cast<std::uintptr_t>(nativeChroma)))return fail(CoverageGate::Composition);
+            return 1;
+        }
+        const bool luma=kind==NativeShader::Luma||kind==NativeShader::LumaLegacy;
+        const bool pack=kind==NativeShader::ChromaPack;
+        if(!luma&&!pack)return fail(CoverageGate::NativeShader);
+        if(output.Width!=width||output.Height!=height||(output.Format!=DXGI_FORMAT_NV12&&output.Format!=DXGI_FORMAT_P010))return fail(CoverageGate::OutputShape);
+        const auto expectedView=output.Format==DXGI_FORMAT_NV12?(luma?DXGI_FORMAT_R8_UNORM:DXGI_FORMAT_R8G8_UNORM):(luma?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R16G16_UNORM);
+        if(targetState.viewDesc.Format!=expectedView||rect.x||rect.y||rect.width!=(luma?width:width/2)||rect.height!=(luma?height:height/2))return fail(CoverageGate::OutputShape);
+        if(!nativeOutput)nativeOutput=identity(targetState.resource);
+        if(!same(targetState.resource,nativeOutput))return fail(CoverageGate::Composition);
+        const auto outputToken=reinterpret_cast<std::uintptr_t>(nativeOutput);
+        if(luma){
+            if(!same(source,intermediate)||sourceDesc.Width!=width||sourceDesc.Height!=height||sourceDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||viewDesc.Format!=sourceDesc.Format||!composition.luma(reinterpret_cast<std::uintptr_t>(intermediate),outputToken))return fail(CoverageGate::Composition);
+        }else if(!same(source,nativeChroma)||sourceDesc.Width!=width/2||sourceDesc.Height!=height/2||!composition.pack(reinterpret_cast<std::uintptr_t>(nativeChroma),outputToken))return fail(CoverageGate::Composition);
+        gates.output(output.Width,output.Height,unsigned(output.Format));
+        if(composition.ready(frame.presentSerial,frame.registryEpoch,outputToken)){preparedPid=activePid;if(state!=7)state=6;gates.signal(CoverageSignal::CompletePairs);}
+        return 1;
+    }
     static void STDMETHODCALLTYPE draw(ID3D11DeviceContext* ctx,UINT count,UINT start){
         auto& s=*instance.load();const auto* frame=DirectModeBoundary::currentFrame();s.gates.signal(CoverageSignal::HookDraws);
         const bool caller=s.site(__builtin_return_address(0),0x9f3865);
@@ -536,14 +744,22 @@ struct SenderCoverage::Impl {
         const bool ours=ctx==s.context&&s.enabled&&caller&&frame;
         if(!ours){
             if(caller){if(ctx!=s.context)s.gates.refuse(CoverageGate::Context);else if(!s.enabled)s.gates.refuse(CoverageGate::Prepared);else s.gates.refuse(CoverageGate::DirectFrame);}
+            MultithreadScope protect(ctx==s.context?s.multithread:nullptr);
+            if(ctx==s.context&&s.adaptive&&!companionCommands)s.invalidateTargets(ctx);
             forwardDraw(ctx,count,start);return;
         }
         s.gates.signal(CoverageSignal::SourceFrames);
         MultithreadScope protect(s.multithread);forwardDraw(ctx,count,start);
+        CompanionCommands ownCommands;
         // Luma/chroma selection comes from the actual public planar view. The
         // native shader and every geometry/UV/constant binding remain native.
-        if(s.adaptive&&!nativeLumaTarget(ctx))return;
+        const bool planar=s.adaptive&&nativeLumaTarget(ctx);
         std::unique_lock<std::mutex> lock(s.mutex,std::try_to_lock);if(!lock){s.gates.refuse(CoverageGate::Lock);s.failedSerial=frame->presentSerial;return;}
+        if(s.adaptive){
+            const auto handled=s.stagedDraw(ctx,count,start,*frame);
+            if(handled){if(handled<0){s.invalid=true;s.failedSerial=frame->presentSerial;}return;}
+            if(!planar)return;
+        }
         if(!s.luma(ctx,count,start,*frame)){s.invalid=true;s.failedSerial=frame->presentSerial;}
     }
     static HRESULT STDMETHODCALLTYPE map(ID3D11DeviceContext* ctx,ID3D11Resource* resource,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* output){
@@ -568,6 +784,8 @@ struct SenderCoverage::Impl {
     }
     static void STDMETHODCALLTYPE copy(ID3D11DeviceContext* ctx,ID3D11Resource* destination,ID3D11Resource* source){
         auto& s=*instance.load();const auto* frame=DirectModeBoundary::currentFrame();
+        MultithreadScope protectContext(ctx==s.context?s.multithread:nullptr);
+        if(ctx==s.context&&s.adaptive&&!companionCommands)s.invalidateWrite(ctx,destination);
         const bool caller=s.site(__builtin_return_address(0),0xa217fb);if(caller)s.gates.signal(CoverageSignal::NativeCopies);
         // Invalidate the preceding unconsumed copy for this destination even
         // when the new copy is unrecognized or its metadata lock is busy.
@@ -580,7 +798,8 @@ struct SenderCoverage::Impl {
         // No source, destination, format or resource content is rewritten.
         if(ctx!=s.context||!s.enabled||!caller||!frame){if(caller)s.gates.refuse(ctx!=s.context?CoverageGate::Context:CoverageGate::DirectFrame);forwardCopy(ctx,destination,source);return;}
         std::unique_lock<std::mutex> lock(s.mutex,std::try_to_lock);if(!lock){s.gates.refuse(CoverageGate::Lock);forwardCopy(ctx,destination,source);return;}
-        if(!s.prepared||s.invalid||frame->presentSerial!=s.activeSerial||frame->presentSerial==s.failedSerial||frame->registryEpoch!=s.activeEpoch||!same(source,s.nativeOutput)||s.drawBits!=((1u<<(2*frame->layerCount))-1)){s.gates.refuse(CoverageGate::CopyPair);forwardCopy(ctx,destination,source);return;}
+        if(!s.prepared||s.invalid||frame->presentSerial!=s.activeSerial||frame->presentSerial==s.failedSerial||frame->registryEpoch!=s.activeEpoch||!same(source,s.nativeOutput)||s.drawBits!=((1u<<(2*frame->layerCount))-1)||
+           (s.stagedComposition&&!s.composition.ready(frame->presentSerial,frame->registryEpoch,reinterpret_cast<std::uintptr_t>(s.nativeOutput)))){s.gates.refuse(CoverageGate::CopyPair);forwardCopy(ctx,destination,source);return;}
         const auto authority=s.sourceContract.cameraAuthority();
         const bool ordinary=s.sourceContract.ordinaryPicture(authority,s.activePid);
         if(!ordinary&&!s.sourceCurrent(s.activeContract,s.activePid)){s.gates.refuse(CoverageGate::SourceContract);forwardCopy(ctx,destination,source);return;}
@@ -613,7 +832,7 @@ struct SenderCoverage::Impl {
             const auto texture=s.maskSurfaces.textures()[free.index()];
             bool reusable=s.maskEncoder.canStage(texture);
             if(s.hevcTemporalPrepared.load(std::memory_order_acquire))for(auto& encoder:s.temporalEncoders)reusable=encoder.canStage(texture)&&reusable;
-            if(reusable)gpu.hevcSurfaceReady=s.maskSurfaces.write(ctx,static_cast<unsigned>(free.index()));
+            if(reusable){CompanionCommands ownCommands;gpu.hevcSurfaceReady=s.maskSurfaces.write(ctx,static_cast<unsigned>(free.index()));}
         }
         const CoveragePublication publication{[](void* value)noexcept{static_cast<Stages::Claim*>(value)->publish(Stages::Phase::Captured);},&free};
         copyCoverageBeforeNative(ctx,destination,source,gpu.texture,s.target,gpu.completion,forwardCopy,forwardEnd,forwardFlush,publication);
@@ -631,7 +850,9 @@ bool SenderCoverage::configure(std::uintptr_t module,const NativeImageLayout& la
     for(unsigned i=0;i<layout.executableCount;++i){const auto& range=layout.executable[i];
         if(!range.size||range.begin>layout.imageSize||range.size>layout.imageSize-range.begin)return false;
     }
-    impl_->module=module;impl_->nativeLayout=layout;impl_->adaptive=true;return true;
+    impl_->module=module;impl_->nativeLayout=layout;impl_->adaptive=true;
+    if(layout.createDevice)(void)impl_->nativeShaders.arm(module+layout.createDevice);
+    return true;
 }
 void SenderCoverage::tick()noexcept{
     auto& s=*impl_;s.maskCapture.poll();const auto encoders=s.boundary.encoderStates();
@@ -705,7 +926,7 @@ void SenderCoverage::stop()noexcept{
     s.hevcPeerReady.store(false,std::memory_order_release);
     s.maskCapture.stop(); // Cold owner only; no disk work or joining in native callbacks.
     std::lock_guard<std::mutex> lock(s.mutex);s.stopped=true;
-    s.facade.restore();
+    s.facade.restore();s.nativeShaders.stop();
     // No COM or staging release while a cached callback/borrowed AU can exist.
 }
 SenderCoverage::Readiness SenderCoverage::readiness()const noexcept{
@@ -716,6 +937,8 @@ bool SenderCoverage::ready(std::uint32_t pid)const noexcept{return impl_->enable
 bool SenderCoverage::operational(std::uint32_t pid)const noexcept{return ready(pid)&&impl_->lastPid==pid;}
 CoverageGateStats SenderCoverage::gateStats()const noexcept{
     auto& s=*impl_;auto result=s.gates.snapshot();
+    const auto shaders=s.nativeShaders.stats();result.nativeShaderFactory=shaders.factory;result.nativeShaderDevices=shaders.devices;
+    result.nativeShadersRecognized=shaders.recognized;result.nativeShadersRefused=shaders.refused;
     // Enabled publishes the immutable context/facade. They are retained until
     // process exit; reading public dispatch metadata needs no render lock.
     if(!s.enabled)return result;
