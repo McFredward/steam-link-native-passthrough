@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-sender-provider-coverage.h"
+#include "pc/stream-bridge-native-draw.h"
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
@@ -7,7 +8,32 @@ using namespace stream_bridge::sender;
 namespace {
 unsigned checks=0;void check(bool value,const char* why){++checks;if(!value)throw std::runtime_error(why);}
 void run(){
+    check(nativeCoverageDrawShape(false,4,0,0),"legacy pinned quad remains unchanged");
+    check(!nativeCoverageDrawShape(false,3,0,NativeTriangleList)&&!nativeCoverageDrawShape(false,4,4,NativeTriangleStrip),
+          "legacy pinned lane does not inherit adaptive geometry admission");
+    for(const auto start:{0u,3u,4u,512u}){
+        check(nativeCoverageDrawShape(true,3,start,NativeTriangleList),"adaptive triangle retains original start vertex");
+        check(nativeCoverageDrawShape(true,6,start,NativeTriangleList),"adaptive triangle-list quad is bounded");
+        check(nativeCoverageDrawShape(true,4,start,NativeTriangleStrip),"adaptive strip quad retains native offset");
+        check(nativeCoverageDrawShape(true,3,start,NativeTriangleStrip),"single strip triangle is replayed without new geometry");
+    }
+    for(const auto count:{0u,1u,2u,5u,7u,100000u})
+        check(!nativeCoverageDrawShape(true,count,0,NativeTriangleList)&&!nativeCoverageDrawShape(true,count,0,NativeTriangleStrip),
+              "unsupported primitive size never authorizes an optional replay");
+    for(const auto topology:{0u,1u,2u,3u,10u,33u})
+        check(!nativeCoverageDrawShape(true,3,0,topology),"unknown point/line/patch topology remains unsupported");
+    check(!nativeCoverageDrawShape(true,3,std::numeric_limits<std::uint32_t>::max()-1,NativeTriangleList),"vertex interval cannot wrap");
     CoverageGateCounters counters;auto cold=counters.snapshot();
+    counters.drawShape(3,4,NativeTriangleList,true,true);
+    const auto geometry=counters.snapshot();
+    check(geometry.lastDrawVertices==3&&geometry.lastDrawStart==4&&geometry.lastDrawTopology==NativeTriangleList&&
+          geometry.lastDrawAdaptive&&geometry.lastDrawShapeSupported&&geometry.drawShapesSupported==1&&geometry.drawShapesRefused==0,
+          "cold report retains actual native draw arguments");
+    check(!geometry.eyeDraws&&!geometry.completePairs&&!geometry.certifiedMasks&&!geometry.lastSourceWidth,
+          "draw observations alone never supply eye, source or mask proof");
+    const std::array<std::uint32_t,8> nativeShape{{2,1,1,5,27,1,1,0}};counters.nativeSourceShape(nativeShape);
+    check(counters.snapshot().nativeSourceShape==nativeShape&&!counters.snapshot().certifiedMasks,
+          "public source-view diagnostics retain exact shape without admitting an array or mask");
     CoverageSourceReportBudget sourceReports;
     check(!sourceReports.observe(cold)&&!sourceReports.observe(cold,true),"source diagnostics have no empty periodic or final report");
     SourceContract source;
