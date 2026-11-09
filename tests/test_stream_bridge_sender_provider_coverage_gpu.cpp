@@ -18,9 +18,14 @@ void STDMETHODCALLTYPE observeDraw(ID3D11DeviceContext* context,UINT count,UINT 
 const char Shader[]=R"(
 cbuffer C:register(b0){float4 value;};
 float4 vs_main(uint id:SV_VertexID):SV_Position {id=id%3u;float2 p=float2(-1.0,-1.0);if(id==1u)p.y=3.0;if(id==2u)p.x=3.0;return float4(p,0.0,1.0);}
-float4 vs_input(float2 point:POSITION):SV_Position {return float4(point,0.0,1.0);}
+float4 vs_input(float2 xy:POSITION):SV_Position {return float4(xy,0.0,1.0);}
 float4 ps_main():SV_Target {return value;}
 )";
+HRESULT compileFixture(const char* entry,const char* target,ID3DBlob** output){
+ Com<ID3DBlob> errors;const auto result=D3DCompile(Shader,sizeof Shader,nullptr,nullptr,nullptr,entry,target,0,0,output,errors.out());
+ if(FAILED(result)&&errors.p)std::fwrite(errors->GetBufferPointer(),1,errors->GetBufferSize(),stderr);
+ return result;
+}
 std::vector<unsigned char> read(ID3D11DeviceContext* c,ID3D11Texture2D* native,ID3D11Texture2D* staging){c->CopyResource(staging,native);D3D11_MAPPED_SUBRESOURCE m{};check(SUCCEEDED(c->Map(staging,0,D3D11_MAP_READ,0,&m)),"actual GPU readback");std::vector<unsigned char> r(Width*Height);for(UINT y=0;y<Height;++y)std::memcpy(r.data()+y*Width,static_cast<const unsigned char*>(m.pData)+y*m.RowPitch,Width);c->Unmap(staging,0);return r;}
 void planarTargets(ID3D11Device* device,ID3D11DeviceContext* context){
  for(auto format:{DXGI_FORMAT_NV12,DXGI_FORMAT_P010}){
@@ -46,7 +51,7 @@ void run(){
  if(FAILED(result))result=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),&level,ctx.out());
  check(SUCCEEDED(result)&&level>=D3D_FEATURE_LEVEL_11_0,"actual D3D11 device");
  planarTargets(device.p,ctx.p);
- Com<ID3DBlob> vsBytes,psBytes;check(SUCCEEDED(D3DCompile(Shader,sizeof Shader,nullptr,nullptr,nullptr,"vs_main","vs_5_0",0,0,vsBytes.out(),nullptr)),"own VS compiled");check(SUCCEEDED(D3DCompile(Shader,sizeof Shader,nullptr,nullptr,nullptr,"ps_main","ps_5_0",0,0,psBytes.out(),nullptr)),"own native-like PS compiled");
+ Com<ID3DBlob> vsBytes,psBytes;check(SUCCEEDED(compileFixture("vs_main","vs_5_0",vsBytes.out())),"own VS compiled");check(SUCCEEDED(compileFixture("ps_main","ps_5_0",psBytes.out())),"own native-like PS compiled");
  Com<ID3D11VertexShader> vs;Com<ID3D11PixelShader> ps;device->CreateVertexShader(vsBytes->GetBufferPointer(),vsBytes->GetBufferSize(),nullptr,vs.out());device->CreatePixelShader(psBytes->GetBufferPointer(),psBytes->GetBufferSize(),nullptr,ps.out());check(vs.p&&ps.p,"actual shader objects");
  D3D11_TEXTURE2D_DESC td{};td.Width=Width;td.Height=Height;td.MipLevels=td.ArraySize=td.SampleDesc.Count=1;td.Format=DXGI_FORMAT_R8_UNORM;td.Usage=D3D11_USAGE_DEFAULT;td.BindFlags=D3D11_BIND_RENDER_TARGET;
  Com<ID3D11Texture2D> coverage,ordinary,staging;check(SUCCEEDED(device->CreateTexture2D(&td,nullptr,coverage.out()))&&SUCCEEDED(device->CreateTexture2D(&td,nullptr,ordinary.out())),"actual single-channel R8 targets");
@@ -73,7 +78,7 @@ void run(){
  for(const auto geometry:{Geometry{3,3,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST},
                           Geometry{4,4,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP},
                           Geometry{6,6,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST}}){
-  Com<ID3DBlob> bytes;check(SUCCEEDED(D3DCompile(Shader,sizeof Shader,nullptr,nullptr,nullptr,"vs_input","vs_5_0",0,0,bytes.out(),nullptr)),"owned alternate native geometry compiled");
+  Com<ID3DBlob> bytes;check(SUCCEEDED(compileFixture("vs_input","vs_5_0",bytes.out())),"owned alternate native geometry compiled");
   Com<ID3D11VertexShader> vertex;check(SUCCEEDED(device->CreateVertexShader(bytes->GetBufferPointer(),bytes->GetBufferSize(),nullptr,vertex.out())),"actual alternate native VS");
   // StartVertexLocation advances actual vertex-buffer input; SV_VertexID
   // itself starts at zero in D3D11. The prefix is deliberately offscreen.
