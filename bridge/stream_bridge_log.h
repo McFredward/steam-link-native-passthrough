@@ -29,7 +29,13 @@ inline bool readCold(const std::filesystem::path& path,Level& level) {
 inline void configureCold(const std::filesystem::path& defaults,const std::filesystem::path& overridePath) noexcept {
     Level level=Level::Important;
     try {readCold(defaults,level);readCold(overridePath,level);}catch(...){/* Logging never changes native admission. */}
-    Level overrideLevel{};if(parse(std::getenv("SFNP_LOG_LEVEL"),overrideLevel))level=overrideLevel;
+    Level overrideLevel{};
+#if defined(_MSC_VER)
+    char environment[32]{};std::size_t required=0;
+    if(::getenv_s(&required,environment,sizeof environment,"SFNP_LOG_LEVEL")==0&&parse(environment,overrideLevel))level=overrideLevel;
+#else
+    if(parse(std::getenv("SFNP_LOG_LEVEL"),overrideLevel))level=overrideLevel;
+#endif
     current.store(level,std::memory_order_relaxed);
 }
 }
