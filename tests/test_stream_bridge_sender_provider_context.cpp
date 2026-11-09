@@ -2,6 +2,7 @@
 #include "pc/stream-bridge-native-shader.h"
 #include <d3d11_4.h>
 #include <d3dcompiler.h>
+#include <dbghelp.h>
 #include <cstdio>
 #include <algorithm>
 #include <functional>
@@ -15,6 +16,19 @@ using namespace stream_bridge;
 using namespace stream_bridge::sender;
 namespace {
 unsigned checks=0;
+LONG WINAPI fixtureException(EXCEPTION_POINTERS* exception){
+    const auto process=GetCurrentProcess(),thread=GetCurrentThread();SymInitialize(process,nullptr,TRUE);
+    auto context=*exception->ContextRecord;STACKFRAME64 frame{};
+    frame.AddrPC.Offset=context.Rip;frame.AddrPC.Mode=AddrModeFlat;frame.AddrFrame.Offset=context.Rbp;frame.AddrFrame.Mode=AddrModeFlat;frame.AddrStack.Offset=context.Rsp;frame.AddrStack.Mode=AddrModeFlat;
+    std::fprintf(stderr,"Owned context fixture exception: 0x%08lx\n",static_cast<unsigned long>(exception->ExceptionRecord->ExceptionCode));
+    for(unsigned i=0;i<16&&frame.AddrPC.Offset;++i){
+        struct Symbol{SYMBOL_INFO info;char name[255];} symbol{};symbol.info.SizeOfStruct=sizeof(SYMBOL_INFO);symbol.info.MaxNameLen=255;DWORD64 displacement=0;
+        if(SymFromAddr(process,frame.AddrPC.Offset,&displacement,&symbol.info))std::fprintf(stderr,"  %s + %llu\n",symbol.info.Name,static_cast<unsigned long long>(displacement));
+        else std::fprintf(stderr,"  PC 0x%llx\n",static_cast<unsigned long long>(frame.AddrPC.Offset));
+        if(!StackWalk64(IMAGE_FILE_MACHINE_AMD64,process,thread,&frame,&context,nullptr,SymFunctionTableAccess64,SymGetModuleBase64,nullptr))break;
+    }
+    std::fflush(stderr);return EXCEPTION_EXECUTE_HANDLER;
+}
 void check(bool value,const char* why){++checks;if(!value)throw std::runtime_error(why);}
 template<class T>struct Com{T* p=nullptr;~Com(){if(p)p->Release();}T** out(){return &p;}T* operator->()const{return p;}};
 using NativeUnmap=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,UINT);
@@ -313,6 +327,7 @@ void run(bool changeProtection,bool adaptive=false){
 #include "stream_bridge_sender_composition_fixture.h"
 }
 int main(int argc,char** argv){try{
+SetErrorMode(SEM_FAILCRITICALERRORS|SEM_NOGPFAULTERRORBOX);SetUnhandledExceptionFilter(fixtureException);
 const bool changed=argc==2&&std::strcmp(argv[1],"--protection-change")==0;
 const bool facade=argc==2&&std::strcmp(argv[1],"--facade")==0;
 const bool adaptive=argc==2&&std::strcmp(argv[1],"--adaptive")==0;

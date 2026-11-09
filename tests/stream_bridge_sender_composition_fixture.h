@@ -79,6 +79,8 @@ NVENCSTATUS NVENCAPI compositionUnregister(void*,NV_ENC_REGISTERED_PTR){return N
 NVENCSTATUS NVENCAPI compositionEncode(void*,NV_ENC_PIC_PARAMS*){return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI compositionFactory(NV_ENCODE_API_FUNCTION_LIST* api){factory(api);api->nvEncRegisterResource=compositionRegister;api->nvEncMapInputResource=compositionMap;api->nvEncUnmapInputResource=compositionUnmap;api->nvEncUnregisterResource=compositionUnregister;api->nvEncEncodePicture=compositionEncode;return NV_ENC_SUCCESS;}
 void runComposition(){
+    const auto mark=[](const char* stage){std::printf("Owned production composition: %s\n",stage);std::fflush(stdout);};
+    mark("compile owned shader contracts");
     static constexpr char shader[]=R"(
 cbuffer Parameters:register(b2){float4 unused0;float4 unused1;float4 offset;};
 Texture2D<float4> scene:register(t0);Texture2D<float2> uv:register(t1);
@@ -93,31 +95,35 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     const NativeShader kinds[]{NativeShader::FullscreenVertex,NativeShader::CopyView,NativeShader::Chroma,NativeShader::ChromaPack,NativeShader::Luma};
     std::array<Com<ID3DBlob>,6> code;std::array<ShaderFingerprint,5> pins{};
     for(unsigned i=0;i<code.size();++i){check(SUCCEEDED(D3DCompile(shader,sizeof shader-1,"sfnp-owned-production-graph",nullptr,nullptr,entries[i],i?"ps_5_0":"vs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,code[i].out(),nullptr)),"owned production graph shader");if(i<pins.size()){pins[i].kind=kinds[i];check(dxbcFingerprint(code[i]->GetBufferPointer(),code[i]->GetBufferSize(),pins[i].hash),"owned actual shader signature contract");}}
+    mark("construct production observer");
     NvencBoundary boundary({{1}});DirectModeBoundary direct;ControlRuntime control;SenderCoverage coverage(direct,boundary,control,pins.data(),pins.size());
     NativeImageLayout layout;const auto module=reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));layout.imageSize=16*1024*1024;layout.executableCount=1;layout.executable[0]={0x1000,layout.imageSize-0x1000};
     HMODULE runtime=LoadLibraryW(L"d3d11.dll");check(runtime!=nullptr,"public native device runtime");static void* factorySlot=nullptr;factorySlot=pointerBits<void*>(GetProcAddress(runtime,"D3D11CreateDevice"));
     check(reinterpret_cast<std::uintptr_t>(&factorySlot)>module&&reinterpret_cast<std::uintptr_t>(&factorySlot)-module<layout.imageSize,"owned fixture import is inside the synthetic verified image");layout.createDevice=static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(&factorySlot)-module);
-    check(coverage.configure(module,layout),"actual production shader observer armed before owned native factory");
+    check(coverage.configure(module,layout),"actual production shader observer armed before owned native factory");mark("create native device");
     Com<ID3D11Device> device;Com<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level{};
     check(SUCCEEDED(pointerBits<decltype(&D3D11CreateDevice)>(factorySlot)(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),&level,context.out())),"native WARP device through production factory observer");
     Com<ID3D11Multithread> multithread;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11Multithread),reinterpret_cast<void**>(multithread.out()))),"actual native multithread interface");multithread->SetMultithreadProtected(TRUE);
+    mark("create actual native shader objects");
     CompositionFixture fixture;fixture.device=device.p;fixture.context=context.p;CompositionFixture::active=&fixture;
     check(SUCCEEDED(device->CreateVertexShader(code[0]->GetBufferPointer(),code[0]->GetBufferSize(),nullptr,fixture.vertex.out())),"production recognized native vertex shader");
     ID3D11PixelShader** pixels[]{fixture.copyPixel.out(),fixture.chromaPixel.out(),fixture.packPixel.out(),fixture.lumaPixel.out(),fixture.unknownPixel.out()};
     for(unsigned i=0;i<5;++i)check(SUCCEEDED(device->CreatePixelShader(code[i+1]->GetBufferPointer(),code[i+1]->GetBufferSize(),nullptr,pixels[i])),"production observed actual native pixel creation");
-    fixture.prepare();check(direct.prepare({CompositionFixture::create,CompositionFixture::destroy,CompositionFixture::destroyAll,CompositionFixture::next,CompositionFixture::submit,CompositionFixture::present,CompositionFixture::post,CompositionFixture::timing}),"typed DirectMode public callbacks");
+    mark("create native image graph");fixture.prepare();check(direct.prepare({CompositionFixture::create,CompositionFixture::destroy,CompositionFixture::destroyAll,CompositionFixture::next,CompositionFixture::submit,CompositionFixture::present,CompositionFixture::post,CompositionFixture::timing}),"typed DirectMode public callbacks");
     auto calls=direct.entryPoints();DirectMode::SwapTextureSetDesc_t desc{CompositionFixture::Width,CompositionFixture::Height/2,unsigned(DXGI_FORMAT_R8G8B8A8_UNORM),9};
     DirectMode::SwapTextureSet_t sets[2]{};const auto pid=GetCurrentProcessId();for(unsigned eye=0;eye<2;++eye)calls.create(&fixture,pid,&desc,&sets[eye]);
+    mark("open explicit fake NVENC ports");
     NV_ENCODE_API_FUNCTION_LIST api{};api.version=NV_ENCODE_API_FUNCTION_LIST_VER;check(boundary.create(compositionFactory,&api)==NV_ENC_SUCCESS,"production NVENC ports installed");
     NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS parameters{};parameters.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;parameters.device=device.p;parameters.deviceType=NV_ENC_DEVICE_TYPE_DIRECTX;void* encoder=nullptr;check(api.nvEncOpenEncodeSessionEx(&parameters,&encoder)==NV_ENC_SUCCESS,"production observes actual encoder device");
     NV_ENC_INITIALIZE_PARAMS init{};init.version=NV_ENC_INITIALIZE_PARAMS_VER;init.encodeGUID=NV_ENC_CODEC_HEVC_GUID;init.encodeWidth=init.darWidth=CompositionFixture::Width;init.encodeHeight=init.darHeight=CompositionFixture::Height;init.frameRateNum=90;init.frameRateDen=1;
-    check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");coverage.sourceProcess(pid);coverage.tick();
+    check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");mark("prepare production context and coverage pool");coverage.sourceProcess(pid);coverage.tick();
     check(coverage.gateStats().contextsReady==1&&coverage.readiness().prepared,"production pool and native context ready");
     NV_ENC_REGISTER_RESOURCE registered{};registered.version=NV_ENC_REGISTER_RESOURCE_VER;registered.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;registered.resourceToRegister=fixture.input.p;registered.width=CompositionFixture::Width;registered.height=CompositionFixture::Height;registered.bufferFormat=NV_ENC_BUFFER_FORMAT_NV12;
     check(api.nvEncRegisterResource(encoder,&registered)==NV_ENC_SUCCESS,"actual encoder input resource registered");
     DirectMode::SubmitLayerPerEye_t eyes[2]{};for(unsigned eye=0;eye<2;++eye){eyes[eye].hTexture=sets[eye].rSharedTextureHandles[0];eyes[eye].bounds={0,0,1,1};eyes[eye].mProjection.m[0][0]=eyes[eye].mProjection.m[1][1]=1;eyes[eye].mHmdPose.m[0][0]=eyes[eye].mHmdPose.m[1][1]=eyes[eye].mHmdPose.m[2][2]=1;}
     std::uint64_t timestamp=0;
     for(auto mode:{CompositionFixture::Mode::Valid,CompositionFixture::Mode::ClearImage,CompositionFixture::Mode::MissingTile,CompositionFixture::Mode::WrongEye,CompositionFixture::Mode::WrongChroma,CompositionFixture::Mode::WrongLuma,CompositionFixture::Mode::UnknownDraw,CompositionFixture::Mode::RegionWrite,CompositionFixture::Mode::DiscardImage,CompositionFixture::Mode::UnrelatedWrite,CompositionFixture::Mode::Valid}){
+        std::printf("Owned production composition: present mode %u\n",unsigned(mode));std::fflush(stdout);
         fixture.mode=mode;const bool valid=mode==CompositionFixture::Mode::Valid||mode==CompositionFixture::Mode::UnrelatedWrite;const auto before=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
         NV_ENC_MAP_INPUT_RESOURCE mapped{};mapped.version=NV_ENC_MAP_INPUT_RESOURCE_VER;mapped.registeredResource=registered.registeredResource;check(api.nvEncMapInputResource(encoder,&mapped)==NV_ENC_SUCCESS,"native input mapping");
         NV_ENC_PIC_PARAMS picture{};picture.version=NV_ENC_PIC_PARAMS_VER;picture.inputBuffer=mapped.mappedResource;picture.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;picture.inputWidth=CompositionFixture::Width;picture.inputHeight=CompositionFixture::Height;picture.inputTimeStamp=++timestamp;picture.outputBitstream=reinterpret_cast<NV_ENC_OUTPUT_PTR>(0x4040+timestamp*16);picture.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;
