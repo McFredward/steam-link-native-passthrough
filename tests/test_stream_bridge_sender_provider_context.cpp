@@ -27,6 +27,8 @@ LONG WINAPI fixtureException(EXCEPTION_POINTERS* exception){
         struct Symbol{SYMBOL_INFO info;char name[255];} symbol{};symbol.info.SizeOfStruct=sizeof(SYMBOL_INFO);symbol.info.MaxNameLen=255;DWORD64 displacement=0;
         if(SymFromAddr(process,frame.AddrPC.Offset,&displacement,&symbol.info))std::fprintf(stderr,"  %s + %llu\n",symbol.info.Name,static_cast<unsigned long long>(displacement));
         else std::fprintf(stderr,"  PC 0x%llx\n",static_cast<unsigned long long>(frame.AddrPC.Offset));
+        IMAGEHLP_LINE64 line{};line.SizeOfStruct=sizeof line;DWORD lineOffset=0;
+        if(SymGetLineFromAddr64(process,frame.AddrPC.Offset,&lineOffset,&line))std::fprintf(stderr,"    %s:%lu\n",line.FileName,static_cast<unsigned long>(line.LineNumber));
         if(!StackWalk64(IMAGE_FILE_MACHINE_AMD64,process,thread,&frame,&context,nullptr,SymFunctionTableAccess64,SymGetModuleBase64,nullptr))break;
     }
     std::fflush(stderr);return EXCEPTION_EXECUTE_HANDLER;
