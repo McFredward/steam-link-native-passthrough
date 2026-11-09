@@ -214,6 +214,14 @@ jobs:
       - name: Download exact offline Textual wheels for package checks
         if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows-auth'
         run: python -B tools/package_setup_textual.py --cache "${{ runner.temp }}/textual-wheels" --download
+      - name: Cache pinned public setup archives
+        if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows-auth'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ runner.temp }}/python-embed.zip
+            ${{ runner.temp }}/openssh-portable.zip
+          key: windows-setup-archives-v1-${{ hashFiles('packaging/setup-python.json', 'packaging/setup-openssh.json') }}
       - name: Execute the actual packaged portable Python without Frame access
         if: github.event_name != 'workflow_dispatch' || inputs.scope != 'windows-auth'
         shell: powershell
@@ -222,10 +230,41 @@ jobs:
           SFNP_UI_CASE: ${{ inputs.ui_case }}
         run: |
           $ErrorActionPreference = 'Stop'
+          function Get-PinnedSetupArchive($Name, $Pin, $Path) {
+            if (Test-Path -LiteralPath $Path -PathType Leaf) {
+              if ((Get-Item -LiteralPath $Path).Length -eq $Pin.bytes -and (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() -ceq $Pin.sha256) {
+                Write-Host "Using verified cached $Name archive."
+                return
+              }
+              Write-Host "Cached $Name archive failed verification; downloading it again."
+              Remove-Item -LiteralPath $Path -Force
+            }
+            $partial = "$Path.download"
+            try {
+              & curl.exe --fail --retry 4 --retry-delay 3 --retry-max-time 180 --location --silent --show-error --proto '=https' --proto-redir '=https' --connect-timeout 15 --max-time 60 --max-filesize 16777216 --output $partial $Pin.source_url
+              $downloadExit = $LASTEXITCODE
+              if ($downloadExit -ne 0) {
+                throw "$Name archive download failed (curl exit $downloadExit); see the transport/HTTP error above."
+              }
+              if (-not (Test-Path -LiteralPath $partial -PathType Leaf)) {
+                throw "$Name archive download produced no file."
+              }
+              $actualBytes = (Get-Item -LiteralPath $partial).Length
+              if ($actualBytes -ne $Pin.bytes) {
+                throw "$Name archive size differs from the pin: expected $($Pin.bytes), got $actualBytes bytes."
+              }
+              $actualHash = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actualHash -cne $Pin.sha256) {
+                throw "$Name archive SHA256 differs from the pin: expected $($Pin.sha256), got $actualHash."
+              }
+              Move-Item -LiteralPath $partial -Destination $Path -Force
+            } finally {
+              if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+            }
+          }
           $pin = Get-Content packaging/setup-python.json -Raw | ConvertFrom-Json
           $archive = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
-          & curl.exe --fail --retry 2 --retry-delay 2 --retry-max-time 120 --silent --show-error --proto '=https' --max-time 60 --max-filesize 16777216 --output $archive $pin.source_url
-          if ($LASTEXITCODE -ne 0 -or (Get-Item $archive).Length -ne $pin.bytes -or (Get-FileHash $archive).Hash.ToLowerInvariant() -cne $pin.sha256) { throw 'Official Python pin differs.' }
+          Get-PinnedSetupArchive 'Python' $pin $archive
           # Only the public Python archive: compare actual Win32 stat/fstat fields
           # when diagnosing runtime-specific file identity representations.
           @'
@@ -240,8 +279,7 @@ jobs:
           $package = Join-Path $env:RUNNER_TEMP 'setup-inspection.zip'
           $sshPin = Get-Content packaging/setup-openssh.json -Raw | ConvertFrom-Json
           $sshArchive = Join-Path $env:RUNNER_TEMP 'openssh-portable.zip'
-          & curl.exe --fail --retry 2 --retry-delay 2 --retry-max-time 120 --location --silent --show-error --proto '=https' --proto-redir '=https' --max-time 60 --max-filesize 16777216 --output $sshArchive $sshPin.source_url
-          if ($LASTEXITCODE -ne 0 -or (Get-Item $sshArchive).Length -ne $sshPin.bytes -or (Get-FileHash $sshArchive).Hash.ToLowerInvariant() -cne $sshPin.sha256) { throw 'Official OpenSSH pin differs.' }
+          Get-PinnedSetupArchive 'OpenSSH' $sshPin $sshArchive
           python -B tools/package_setup_inspection.py --python-zip $archive --openssh-zip $sshArchive --textual-wheels (Join-Path $env:RUNNER_TEMP 'textual-wheels') --output $package
           if ($LASTEXITCODE -ne 0) { throw 'Inspection packaging failed.' }
           $tokens=$null; $parseErrors=$null
