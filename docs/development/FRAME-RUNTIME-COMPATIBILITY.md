@@ -1,4 +1,12 @@
-# Runtime compatibility and candidate0.3.24
+# Runtime compatibility and candidate0.3.25
+
+Candidate0.3.25 contains PC0.3.14 and unchanged Frame0.3.10. The latest headset
+run confirms the Frame pipeline is prepared and authenticated pictures arrive,
+but no masks are produced because PC admission stops at its fixed draw shape.
+The PC update supports bounded native triangle/quad replays and original start
+vertices, with new draw/source diagnostics. See
+[the observed gate and actual Windows GPU validation](PC-NATIVE-DRAW.md).
+Actual beta mask generation remains pending; this is a PC-only native update.
 
 Candidate0.3.24 contains Frame0.3.10 and unchanged PC0.3.13. The0.3.9 run passes
 device admission, then identifies an unsupported actual beta vertex shader.

@@ -1,0 +1,83 @@
+{
+  "actual_rejected_draw_arguments_observed": false,
+  "archive": {
+    "bytes": 20232934,
+    "sha256": "fc035b1533251a5fecd47e726f25eb9307f6f561981d65d7f42b9b1f6785c619"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3725848,
+      "sha256": "6253c6a8e9e26919d961fffd1b0e7d0252b53bff66b9ac0862d5ceb4b8ec3621"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2100224,
+      "sha256": "2125e73887a7d5a4fa071dc9fcb878f840b6d1814e3c042bdbfcbb969b746160"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.10",
+    "pc": "0.3.14"
+  },
+  "device_actions": false,
+  "frame_files_byte_identical": true,
+  "hardware_verified": false,
+  "host_ctest_suites": 44,
+  "new_diagnostics": [
+    "native draw arguments/topology",
+    "native source/SRV shape"
+  ],
+  "observed_gate": "PC draw-shape before source/eye/staging; Frame pipeline and authenticated roundtrip ready",
+  "pc_only_update": true,
+  "schema": "sfnp-pc-native-draw-candidate-v1",
+  "software_logs": {
+    "build-025-pc.log": {
+      "bytes": 173,
+      "sha256": "9d33fb8fe69103d4db3726f768b4f15715caa6c6e4de84f182014f25ec2b4eb8"
+    },
+    "coverage-gates-025-sanitized.log": {
+      "bytes": 57,
+      "sha256": "6ff4002605404882338056dd49f0c4721b11cc8c1fe6c328a8c7548bd7daae56"
+    },
+    "ctest-025.log": {
+      "bytes": 5942,
+      "sha256": "cb1d45489dbbbe9ec5acf5b5bd5a8f2122557f6cdac3799f76d9266112f773ff"
+    },
+    "installer-025-tests.log": {
+      "bytes": 488,
+      "sha256": "a6d23769999cc7c978b4777c1bdb957720ed0b7ebae8ff185dfbe9f19db57d80"
+    },
+    "package-025-tests.log": {
+      "bytes": 116,
+      "sha256": "8beb4309a26986050dfe5c217c27dd4bd4f2ac63eac278871b0d91ae0ba6345e"
+    },
+    "pc-only-025-tests.log": {
+      "bytes": 709,
+      "sha256": "48d31fb1da421f8b7110cb11b7bfb22f5b0053909268bc08eb8fa82053cee1d7"
+    },
+    "source-format-025-ci-pass.log": {
+      "bytes": 23261,
+      "sha256": "49e813225708874c0fa5514e18c8622e06209c42bfcb3657198b8d49ec05e054"
+    }
+  },
+  "source_revision": "a0a4c4cfa41f0129356f3a17e5fe5157f34b2135",
+  "version": "0.3.25",
+  "windows_gpu_checks": 26280,
+  "windows_gpu_ci": {
+    "conclusion": "success",
+    "headSha": "60c82d90ba41e276317dce9fed27c4d8774146f3",
+    "status": "completed",
+    "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42586397026"
+  }
+}
