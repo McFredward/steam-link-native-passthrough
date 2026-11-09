@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <chrono>
 #include <stdexcept>
+#include <string>
 namespace log=stream_bridge::logging;
 void check(bool value,const char* why){if(!value)throw std::runtime_error(why);}
 int main(){
