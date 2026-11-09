@@ -64,6 +64,8 @@ void run(){
     const D3D_FEATURE_LEVEL requested=D3D_FEATURE_LEVEL_11_0;D3D_FEATURE_LEVEL obtained{};
     check(SUCCEEDED(cachedFactory(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,&requested,1,D3D11_SDK_VERSION,device.out(),&obtained,context.out())),"original public WARP factory succeeds unchanged");
     check(obtained==requested&&observer.stats().devices==1&&observer.stats().factory,"shader observation is installed before the native device returns");
+    check(device->GetFeatureLevel()==obtained&&device->GetCreationFlags()==0,"ordinary native device getters remain valid after observation");
+    Com<ID3D11Device> parent;context->GetDevice(parent.out());check(parent.p&&parent->GetFeatureLevel()==obtained,"context-returned native device retains its complete dispatch");
     Com<ID3D11VertexShader> vs;Com<ID3D11PixelShader> ps,unknown,coverage;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out())),"actual native VS creation forwarded");
     check(SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual native PS creation forwarded");
