@@ -181,7 +181,8 @@ struct SenderCoverage::Impl {
         key.inputTimestamp=e.inputTimestamp;key.width=e.width;key.height=e.height;return key;
     }
     static std::atomic<Impl*> instance;
-    Impl(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c):direct(d),boundary(b),control(c){}
+    Impl(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c,const ShaderFingerprint* contracts,std::size_t count):
+        direct(d),boundary(b),control(c),nativeShaders(contracts?contracts:nativeShaderContracts().data(),contracts?count:nativeShaderContracts().size()){}
     bool sourceCurrent(std::uint64_t receipt,std::uint32_t pid)noexcept{
         const auto observed=sourceContract.inspect(receipt,pid);
         if(!observed.current())gates.sourceRefusal(observed);
@@ -840,7 +841,7 @@ struct SenderCoverage::Impl {
     }
 };
 std::atomic<SenderCoverage::Impl*> SenderCoverage::Impl::instance{nullptr};
-SenderCoverage::SenderCoverage(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c):impl_(new Impl(d,b,c)){
+SenderCoverage::SenderCoverage(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c,const ShaderFingerprint* contracts,std::size_t count):impl_(new Impl(d,b,c,contracts,count)){
     b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get()});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));},[](void* context)noexcept{return static_cast<Impl*>(context)->lastControlledMetadata.load(std::memory_order_relaxed);}});
 }
 SenderCoverage::~SenderCoverage(){stop();(void)impl_.release();} // callbacks/COM retained until process exit

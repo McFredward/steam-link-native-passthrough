@@ -14,6 +14,7 @@ on:
       - 'tests/test_stream_bridge_sender_provider_directmode.cpp'
       - 'tests/test_stream_bridge_sender_shared_resource.cpp'
       - 'tests/test_stream_bridge_sender_provider_context.cpp'
+      - 'tests/stream_bridge_sender_composition_fixture.h'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
       - 'tests/test_stream_bridge_sender_context_layout.c'
       - '.github/workflows/sender-resource-tests.yml'
@@ -29,6 +30,7 @@ on:
       - 'tests/test_stream_bridge_sender_provider_directmode.cpp'
       - 'tests/test_stream_bridge_sender_shared_resource.cpp'
       - 'tests/test_stream_bridge_sender_provider_context.cpp'
+      - 'tests/stream_bridge_sender_composition_fixture.h'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
       - 'tests/test_stream_bridge_sender_context_layout.c'
       - '.github/workflows/sender-resource-tests.yml'
@@ -218,6 +220,10 @@ jobs:
       - name: Exercise actual facade API and production observer from cold context
         shell: cmd
         run: |
+          build\native-context.exe --composition >build\context-composition.log 2>&1
+          set "SFNP_COMPOSITION_RESULT=%ERRORLEVEL%"
+          type build\context-composition.log
+          if not "%SFNP_COMPOSITION_RESULT%"=="0" exit /b %SFNP_COMPOSITION_RESULT%
           build\native-context.exe --adaptive >build\context-adaptive.log 2>&1
           set "SFNP_ADAPTIVE_RESULT=%ERRORLEVEL%"
           type build\context-adaptive.log
