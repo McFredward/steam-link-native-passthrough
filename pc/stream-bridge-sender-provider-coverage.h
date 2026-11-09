@@ -13,6 +13,7 @@
 #include <limits>
 struct ID3D11DeviceContext;
 namespace stream_bridge::sender {
+struct ShaderFingerprint;
 // Diagnostic metadata only, never a permission or a GPU-frame identity. Fixed
 // storage and one non-retrying CAS per sample keep render callbacks bounded.
 enum class CoverageGate : unsigned {
@@ -237,7 +238,8 @@ struct HevcMaskStats {
 class SenderCoverage {
 public:
     struct Readiness {bool enabled=false,prepared=false;std::uint32_t preparedPid=0,capturedPid=0;};
-    SenderCoverage(DirectModeBoundary&,NvencBoundary&,ControlRuntime&);
+    SenderCoverage(DirectModeBoundary&,NvencBoundary&,ControlRuntime&,
+                   const ShaderFingerprint* contracts=nullptr,std::size_t contractCount=0);
     ~SenderCoverage();
     SenderCoverage(const SenderCoverage&)=delete;
     SenderCoverage& operator=(const SenderCoverage&)=delete;

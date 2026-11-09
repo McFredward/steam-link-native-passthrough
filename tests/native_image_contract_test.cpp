@@ -36,6 +36,13 @@ void peChecks(){
         check(result.getProcAddress==0x2280+shift&&result.directTable==0x3008+shift&&result.directMethods[7]==0x11e0+shift,"derived bindings come from actual image");
         check(result.containsCode(0x1100)&&!result.containsCode(0x3008),"only executable ranges admit callers");
     }
+    for(const char* dll:{"d3d11.dll","D3D11.DLL","D3d11.DlL","different.dll"}){
+        auto f=pe();f.put(276,60);f.put(0x2114,0x2240);f.put(0x2120,0x23c0);f.put(0x2124,0x22c0);
+        f.put(0x2240,0x2360,8);f.text(0x2362,"D3D11CreateDevice");f.text(0x23c0,dll);
+        stream_bridge::sender::NativeImageLayout result;
+        check(discover(f,result),"optional public device factory import retains existing image admission");
+        check(result.createDevice==(std::strcmp(dll,"different.dll")?0x22c0u:0u),"device observation binds the exact public D3D11 import, case-insensitive only for its DLL name");
+    }
     for(unsigned variant=0;variant<11;++variant){auto f=pe();stream_bridge::sender::NativeImageLayout result;
         if(variant==0)f.put(132,0xaa64,2);
         if(variant==1)f.text(0x2380,"IVRDriverDirectModeComponent_010");
