@@ -19,6 +19,8 @@ unsigned checks=0;
 LONG WINAPI fixtureException(EXCEPTION_POINTERS* exception){
     const auto process=GetCurrentProcess(),thread=GetCurrentThread();SymInitialize(process,nullptr,TRUE);
     auto context=*exception->ContextRecord;STACKFRAME64 frame{};
+    // A null indirect call has RIP=0; its caller is still on the owned stack.
+    if(!context.Rip){DWORD64 caller=0;SIZE_T read=0;if(ReadProcessMemory(process,reinterpret_cast<const void*>(context.Rsp),&caller,sizeof caller,&read)&&read==sizeof caller){context.Rip=caller;context.Rsp+=sizeof caller;}}
     frame.AddrPC.Offset=context.Rip;frame.AddrPC.Mode=AddrModeFlat;frame.AddrFrame.Offset=context.Rbp;frame.AddrFrame.Mode=AddrModeFlat;frame.AddrStack.Offset=context.Rsp;frame.AddrStack.Mode=AddrModeFlat;
     std::fprintf(stderr,"Owned context fixture exception: 0x%08lx\n",static_cast<unsigned long>(exception->ExceptionRecord->ExceptionCode));
     for(unsigned i=0;i<16&&frame.AddrPC.Offset;++i){
