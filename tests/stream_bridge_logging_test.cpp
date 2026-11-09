@@ -21,6 +21,13 @@ int main(){
         std::ofstream(defaults)<<std::string(10000,'D');log::configureCold(defaults,overridePath);
         check(!log::debug()&&log::enabled(log::Level::Important),"oversized files fall back quietly without native failure");
         for(const auto* value:{"","off","0","Debug payload","Debug\nextra"}){log::Level parsed{};check(!log::parse(value,parsed),"invalid values never disable errors or authorize other input");}
+#if defined(_MSC_VER)
+        check(::_putenv_s("SFNP_LOG_LEVEL","Debug")==0,"owned Windows environment override");log::configureCold(defaults,overridePath);
+        check(log::debug(),"bounded Windows CRT environment read preserves valid overrides");
+        check(::_putenv_s("SFNP_LOG_LEVEL",std::string(512,'D').c_str())==0,"owned oversized Windows environment value");log::configureCold(defaults,overridePath);
+        check(!log::debug()&&log::enabled(log::Level::Important),"oversized Windows environment value preserves fallback without allocation or invalid-parameter failure");
+        check(::_putenv_s("SFNP_LOG_LEVEL","")==0,"owned Windows test environment restored");
+#endif
         std::puts("Native logging defaults, overrides and bounded malformed input PASS");return 0;
     }catch(const std::exception& e){std::fprintf(stderr,"%s\n",e.what());return 1;}
 }
