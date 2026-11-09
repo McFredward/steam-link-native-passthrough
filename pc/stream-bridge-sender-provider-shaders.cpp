@@ -38,6 +38,7 @@ struct NativeShaders::Impl {
         if(kind==NativeShader::Unknown){++refused;return;}
         IUnknown* identity=nullptr;if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return;
         std::lock_guard<std::mutex> guard(mutex);
+        if(stopped){identity->Release();return;}
         for(const auto& old:shaders)if(old.object.load(std::memory_order_acquire)==identity){identity->Release();return;}
         for(auto& slot:shaders)if(!slot.object.load(std::memory_order_relaxed)){
             slot.kind=kind;slot.object.store(identity,std::memory_order_release);++recognized;return;
@@ -122,7 +123,8 @@ NativeShaders::NativeShaders(const ShaderFingerprint* contracts,std::size_t coun
 }
 NativeShaders::~NativeShaders(){stop();if(impl_->published)(void)impl_.release();}
 bool NativeShaders::arm(std::uintptr_t address)noexcept{
-    auto& self=*impl_;if(!address||self.import||self.stopped)return false;
+    auto& self=*impl_;if(!address)return false;
+    std::unique_lock<std::mutex> guard(self.mutex);if(self.import||self.stopped)return false;
     const auto module=GetModuleHandleW(L"d3d11.dll");if(!module)return false;
     const auto original=GetProcAddress(module,"D3D11CreateDevice");if(!original)return false;
     void* observed=nullptr;auto** slot=reinterpret_cast<void**>(address);
@@ -133,7 +135,7 @@ bool NativeShaders::arm(std::uintptr_t address)noexcept{
     const auto previous=InterlockedCompareExchangePointer(slot,shaderBits<void*>(&Impl::createDevice),observed);
     DWORD ignored=0;const bool restored=VirtualProtect(slot,sizeof(void*),old,&ignored)!=0;
     if(previous!=observed)return false;
-    self.import=slot;self.published=true;if(!restored){stop();return false;}return true;
+    self.import=slot;self.published=true;if(!restored){guard.unlock();stop();return false;}return true;
 }
 bool NativeShaders::observeDevice(ID3D11Device* device)noexcept{return impl_->observe(device);}
 NativeShader NativeShaders::identify(ID3D11DeviceChild* shader)const noexcept{
