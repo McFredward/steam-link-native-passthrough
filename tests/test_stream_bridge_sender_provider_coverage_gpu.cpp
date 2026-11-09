@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-sender-provider-coverage-render.h"
+#include "pc/stream-bridge-native-draw.h"
 #include <d3dcompiler.h>
 #include <array>
 #include <vector>
@@ -10,9 +11,18 @@ namespace {
 unsigned checks=0;void check(bool b,const char* s){++checks;if(!b)throw std::runtime_error(s);}
 template<class T>struct Com{T* p=nullptr;~Com(){if(p)p->Release();}T** out(){return &p;}T* operator->(){return p;}};
 constexpr UINT Width=32,Height=16;
+NativeDraw observedOriginal=nullptr;UINT observedCount=0,observedStart=0,observedCalls=0;
+void STDMETHODCALLTYPE observeDraw(ID3D11DeviceContext* context,UINT count,UINT start){
+ ++observedCalls;observedCount=count;observedStart=start;observedOriginal(context,count,start);
+}
 const char Shader[]=R"(
 cbuffer C:register(b0){float4 value;};
-float4 vs_main(uint id:SV_VertexID):SV_Position {float2 p=float2(-1.0,-1.0);if(id==1u)p.y=3.0;if(id==2u)p.x=3.0;return float4(p,0.0,1.0);}
+float4 vs_main(uint id:SV_VertexID):SV_Position {id=id%3u;float2 p=float2(-1.0,-1.0);if(id==1u)p.y=3.0;if(id==2u)p.x=3.0;return float4(p,0.0,1.0);}
+float4 vs_quad(uint id:SV_VertexID):SV_Position {id=id%4u;return float4((id>=2u)?1.0:-1.0,(id%2u)?1.0:-1.0,0.0,1.0);}
+float4 vs_list(uint id:SV_VertexID):SV_Position {uint ids[6]={0u,1u,2u,2u,1u,3u};return vs_quad(ids[id%6u]);}
+float4 vs_offset3(uint id:SV_VertexID):SV_Position {if(id<3u)return float4(99.0,99.0,0.0,1.0);return vs_main(id-3u);}
+float4 vs_offset4(uint id:SV_VertexID):SV_Position {if(id<4u)return float4(99.0,99.0,0.0,1.0);return vs_quad(id-4u);}
+float4 vs_offset6(uint id:SV_VertexID):SV_Position {if(id<6u)return float4(99.0,99.0,0.0,1.0);return vs_list(id-6u);}
 float4 ps_main():SV_Target {return value;}
 )";
 std::vector<unsigned char> read(ID3D11DeviceContext* c,ID3D11Texture2D* native,ID3D11Texture2D* staging){c->CopyResource(staging,native);D3D11_MAPPED_SUBRESOURCE m{};check(SUCCEEDED(c->Map(staging,0,D3D11_MAP_READ,0,&m)),"actual GPU readback");std::vector<unsigned char> r(Width*Height);for(UINT y=0;y<Height;++y)std::memcpy(r.data()+y*Width,static_cast<const unsigned char*>(m.pData)+y*m.RowPitch,Width);c->Unmap(staging,0);return r;}
@@ -62,6 +72,25 @@ void run(){
  }
  ctx->ClearRenderTargetView(target.p,white);draw(0,0.25f);draw(1,0.5f);for(auto v:read(ctx.p,coverage.p,staging.p))check(std::abs(int(v)-96)<=1,"multi-layer transmittance uses product of inverse alpha");
  viewport.Width=Width/2.0f;ctx->RSSetViewports(1,&viewport);ctx->ClearRenderTargetView(target.p,white);draw(0,1);viewport.TopLeftX=Width/2.0f;ctx->RSSetViewports(1,&viewport);draw(0,0.5f);const auto stereo=read(ctx.p,coverage.p,staging.p);for(UINT y=0;y<Height;++y)for(UINT x=0;x<Width;++x)check(x<Width/2?stereo[y*Width+x]==0:std::abs(int(stereo[y*Width+x])-128)<=1,"native per-eye viewport retained without independent UV");
+ viewport.TopLeftX=0;viewport.Width=float(Width);ctx->RSSetViewports(1,&viewport);
+ struct Geometry{const char* entry;UINT count,start;D3D11_PRIMITIVE_TOPOLOGY topology;};
+ for(const auto geometry:{Geometry{"vs_offset3",3,3,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST},
+                          Geometry{"vs_offset4",4,4,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP},
+                          Geometry{"vs_offset6",6,6,D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST}}){
+  Com<ID3DBlob> bytes;check(SUCCEEDED(D3DCompile(Shader,sizeof Shader,nullptr,nullptr,nullptr,geometry.entry,"vs_5_0",0,0,bytes.out(),nullptr)),"owned alternate native geometry compiled");
+  Com<ID3D11VertexShader> vertex;check(SUCCEEDED(device->CreateVertexShader(bytes->GetBufferPointer(),bytes->GetBufferSize(),nullptr,vertex.out())),"actual alternate native VS");
+  ctx->VSSetShader(vertex.p,nullptr,0);ctx->IASetPrimitiveTopology(geometry.topology);
+  check(nativeCoverageDrawShape(true,geometry.count,geometry.start,unsigned(geometry.topology)),"production adaptive replay gate accepts bounded native geometry");
+  const FLOAT color[4]{0.8f,0.17f,0.83f,0.25f};ctx->UpdateSubresource(cb.p,0,nullptr,color,0,0);
+  ctx->ClearRenderTargetView(target.p,white);ctx->ClearRenderTargetView(original.p,black);
+  observedOriginal=nativeDraw;observedCalls=0;
+  check(drawTransmittance(ctx.p,target.p,blend.p,observeDraw,geometry.count,geometry.start),"production helper preserves original vertex count and nonzero start");
+  check(observedCalls==1&&observedCount==geometry.count&&observedStart==geometry.start,"exact native Draw arguments are forwarded once");
+  for(auto value:read(ctx.p,coverage.p,staging.p))check(std::abs(int(value)-191)<=1,"native triangle/quad alpha is retained at every covered pixel");
+  Com<ID3D11VertexShader> retained;ctx->VSGetShader(retained.out(),nullptr,nullptr);check(retained.p==vertex.p,"native VS binding remains unchanged");
+  D3D11_PRIMITIVE_TOPOLOGY topology{};ctx->IAGetPrimitiveTopology(&topology);check(topology==geometry.topology,"native primitive topology remains unchanged");
+  for(auto value:read(ctx.p,ordinary.p,staging.p))check(value==0,"native ordinary output remains untouched for every replay shape");
+ }
 }
 }
 int main(){try{run();std::printf("actual D3D11 R8 source-alpha companion: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"D3D11 companion failed after %u: %s\n",checks,e.what());return 1;}}

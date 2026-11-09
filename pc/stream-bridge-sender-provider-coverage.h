@@ -47,6 +47,10 @@ enum class CoverageSignal : unsigned {
     DeviceOpened,ContextsReady,OtherDraws,NativeMaps,InventoryRefreshes,Count
 };
 struct CoverageGateStats {
+    std::uint32_t lastDrawVertices=0,lastDrawStart=0,lastDrawTopology=0;
+    std::uint64_t drawShapesSupported=0,drawShapesRefused=0;
+    bool lastDrawAdaptive=false,lastDrawShapeSupported=false;
+    std::array<std::uint32_t,8> nativeSourceShape{}; // array, mips, samples, SRV dimension, storage format, slice, slice-count, mip.
     std::uint64_t hookDraws=0,nativeDraws=0,sourceFrames=0,constantMaps=0,constantCaptures=0,
         eyeDraws=0,completePairs=0,nativeCopies=0,capturedCopies=0,matchedInputs=0,certifiedMasks=0,
         deviceOpened=0,contextsReady=0,otherDraws=0,nativeMaps=0,inventoryRefreshes=0;
@@ -72,6 +76,14 @@ struct CoverageGateStats {
 class CoverageGateCounters {
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free,"render diagnostics must never use an atomic-library lock");
 public:
+    void nativeSourceShape(std::array<std::uint32_t,8> values)noexcept{
+        for(unsigned i=0;i<values.size();++i)nativeSourceShape_[i].store(values[i],std::memory_order_relaxed);
+    }
+    void drawShape(std::uint32_t vertices,std::uint32_t start,std::uint32_t topology,bool adaptive,bool supported)noexcept{
+        drawVertices_.store(vertices,std::memory_order_relaxed);drawStart_.store(start,std::memory_order_relaxed);
+        drawTopology_.store(topology,std::memory_order_relaxed);drawAdaptive_.store(adaptive,std::memory_order_relaxed);
+        drawSupported_.store(supported,std::memory_order_relaxed);increment(supported?drawShapesSupported_:drawShapesRefused_);
+    }
     static void increment(std::atomic<std::uint64_t>& value)noexcept{
         auto current=value.load(std::memory_order_relaxed);
         if(current!=std::numeric_limits<std::uint64_t>::max())
@@ -117,7 +129,13 @@ public:
         maximum(maxCopyAge_,copyAgeUs);maximum(maxReadbackDuration_,durationUs);
     }
     CoverageGateStats snapshot()const noexcept{
-        CoverageGateStats out;std::uint64_t* const values[]{&out.hookDraws,&out.nativeDraws,&out.sourceFrames,&out.constantMaps,&out.constantCaptures,
+        CoverageGateStats out;
+        out.lastDrawVertices=drawVertices_.load(std::memory_order_relaxed);out.lastDrawStart=drawStart_.load(std::memory_order_relaxed);
+        out.lastDrawTopology=drawTopology_.load(std::memory_order_relaxed);out.lastDrawAdaptive=drawAdaptive_.load(std::memory_order_relaxed);
+        out.lastDrawShapeSupported=drawSupported_.load(std::memory_order_relaxed);
+        out.drawShapesSupported=drawShapesSupported_.load(std::memory_order_relaxed);out.drawShapesRefused=drawShapesRefused_.load(std::memory_order_relaxed);
+        for(unsigned i=0;i<out.nativeSourceShape.size();++i)out.nativeSourceShape[i]=nativeSourceShape_[i].load(std::memory_order_relaxed);
+        std::uint64_t* const values[]{&out.hookDraws,&out.nativeDraws,&out.sourceFrames,&out.constantMaps,&out.constantCaptures,
             &out.eyeDraws,&out.completePairs,&out.nativeCopies,&out.capturedCopies,&out.matchedInputs,&out.certifiedMasks,
             &out.deviceOpened,&out.contextsReady,&out.otherDraws,&out.nativeMaps,&out.inventoryRefreshes};
         static_assert(sizeof values/sizeof values[0]==static_cast<unsigned>(CoverageSignal::Count),"all diagnostic signals are exposed");
@@ -138,6 +156,10 @@ public:
         return out;
     }
 private:
+    std::array<std::atomic<std::uint32_t>,8> nativeSourceShape_{};
+    std::atomic<std::uint32_t> drawVertices_{0},drawStart_{0},drawTopology_{0};
+    std::atomic<bool> drawAdaptive_{false},drawSupported_{false};
+    std::atomic<std::uint64_t> drawShapesSupported_{0},drawShapesRefused_{0};
     static void add(std::atomic<std::uint64_t>& value,std::uint64_t sample)noexcept{
         auto current=value.load(std::memory_order_relaxed);const auto remaining=std::numeric_limits<std::uint64_t>::max()-current;
         value.compare_exchange_strong(current,current+(sample<remaining?sample:remaining),std::memory_order_relaxed,std::memory_order_relaxed);

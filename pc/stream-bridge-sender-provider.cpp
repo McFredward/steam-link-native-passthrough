@@ -590,6 +590,15 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             std::snprintf(text,sizeof text,
                 "coverage context: hook-slots=0x%x, table-readable=%u, table-stable=%u, native-device-pointer=%u, facade-slots=%u, native-dispatch-mutations=%u",
                 stats.contextHookSlots,unsigned(stats.contextTableReadable),unsigned(stats.contextTableStable),unsigned(stats.nativeDeviceSame),stats.contextFacadeSlots,stats.nativeDispatchMutations);report(text,stream_bridge::logging::Level::Debug);
+            std::snprintf(text,sizeof text,
+                "coverage native draw: vertices/start/topology=%u/%u/%u; adaptive=%u; shape-supported=%u; supported/refused=%llu/%llu; original geometry and shader bindings retained",
+                stats.lastDrawVertices,stats.lastDrawStart,stats.lastDrawTopology,unsigned(stats.lastDrawAdaptive),unsigned(stats.lastDrawShapeSupported),
+                static_cast<unsigned long long>(stats.drawShapesSupported),static_cast<unsigned long long>(stats.drawShapesRefused));report(text,stream_bridge::logging::Level::Debug);
+            std::snprintf(text,sizeof text,
+                "coverage native source: extent=%ux%u; view/storage-format=%u/%u; array/mips/samples=%u/%u/%u; srv-dimension/first-slice/slice-count/mip=%u/%u/%u/%u; diagnostic metadata only",
+                stats.lastSourceWidth,stats.lastSourceHeight,stats.lastSourceFormat,stats.nativeSourceShape[4],
+                stats.nativeSourceShape[0],stats.nativeSourceShape[1],stats.nativeSourceShape[2],stats.nativeSourceShape[3],
+                stats.nativeSourceShape[5],stats.nativeSourceShape[6],stats.nativeSourceShape[7]);report(text,stream_bridge::logging::Level::Debug);
 
         };
         std::uint32_t reportedFailures=0;

@@ -9,6 +9,7 @@
 #include "stream-bridge-source-alpha-probe.h"
 #include "stream-bridge-sender-provider-coverage-stages.h"
 #include "stream-bridge-source-contract.h"
+#include "stream-bridge-native-draw.h"
 #include <d3d11_4.h>
 #include <cstring>
 #include <cmath>
@@ -16,6 +17,8 @@
 #include <chrono>
 
 namespace stream_bridge::sender {
+static_assert(unsigned(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST)==NativeTriangleList&&
+              unsigned(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP)==NativeTriangleStrip,"public D3D primitive ABI");
 namespace {
 template<class T> void release(T*& p){if(p){p->Release();p=nullptr;}}
 template<class To,class From> To bits(From from){static_assert(sizeof(To)==sizeof(From),"Win64 function pointers");To to{};std::memcpy(&to,&from,sizeof to);return to;}
@@ -465,7 +468,11 @@ struct SenderCoverage::Impl {
     }
     bool luma(ID3D11DeviceContext* ctx,UINT count,UINT start,const DirectFrame& frame){
         if(!prepared)return gates.refuse(CoverageGate::Prepared);
-        if(count!=4||start)return gates.refuse(CoverageGate::DrawShape);
+        D3D11_PRIMITIVE_TOPOLOGY topology=D3D11_PRIMITIVE_TOPOLOGY_UNDEFINED;
+        if(adaptive)ctx->IAGetPrimitiveTopology(&topology);
+        const bool shape=nativeCoverageDrawShape(adaptive,count,start,unsigned(topology));
+        gates.drawShape(count,start,unsigned(topology),adaptive,shape);
+        if(!shape)return gates.refuse(CoverageGate::DrawShape);
         if(frame.registryEpoch!=inventoryEpoch||frame.presentSerial==failedSerial)return gates.refuse(CoverageGate::FrameEpoch);
         if(activeSerial!=frame.presentSerial){activeSerial=frame.presentSerial;activeEpoch=frame.registryEpoch;drawBits=0;activeContract=0;invalid=false;activePid=0;release(nativeOutput);const float one[4]{1,1,1,1};ctx->ClearRenderTargetView(targetView,one);}
         if(invalid||activeEpoch!=frame.registryEpoch)return gates.refuse(CoverageGate::FrameEpoch);
@@ -483,6 +490,10 @@ struct SenderCoverage::Impl {
         if(view){view->GetResource(&resource);view->GetDesc(&viewDesc);}release(view);if(!resource)return gates.refuse(CoverageGate::SourceView);
         ID3D11Texture2D* sourceTexture=nullptr;resource->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(&sourceTexture));D3D11_TEXTURE2D_DESC sourceDesc{};if(sourceTexture)sourceTexture->GetDesc(&sourceDesc);release(sourceTexture);
         gates.source(sourceDesc.Width,sourceDesc.Height,static_cast<std::uint32_t>(viewDesc.Format));
+        std::uint32_t firstSlice=0,slices=0,mip=0;
+        if(viewDesc.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2D){slices=1;mip=viewDesc.Texture2D.MostDetailedMip;}
+        else if(viewDesc.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2DARRAY){firstSlice=viewDesc.Texture2DArray.FirstArraySlice;slices=viewDesc.Texture2DArray.ArraySize;mip=viewDesc.Texture2DArray.MostDetailedMip;}
+        gates.nativeSourceShape({sourceDesc.ArraySize,sourceDesc.MipLevels,sourceDesc.SampleDesc.Count,unsigned(viewDesc.ViewDimension),unsigned(sourceDesc.Format),firstSlice,slices,mip});
         const bool rgba=viewDesc.Format==DXGI_FORMAT_R8G8B8A8_UNORM||viewDesc.Format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
         const bool bgra=viewDesc.Format==DXGI_FORMAT_B8G8R8A8_UNORM||viewDesc.Format==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
         if((!rgba&&!bgra)||sourceDesc.ArraySize!=1||sourceDesc.MipLevels!=1||sourceDesc.SampleDesc.Count!=1||viewDesc.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D||viewDesc.Texture2D.MostDetailedMip){release(resource);return gates.refuse(CoverageGate::SourceShape);}
