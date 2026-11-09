@@ -9,6 +9,8 @@ namespace {
 unsigned checks=0;void check(bool value,const char* why){++checks;if(!value)throw std::runtime_error(why);}
 void run(){
     check(nativeCoverageDrawShape(false,4,0,0),"legacy pinned quad remains unchanged");
+    for(const auto topology:{0u,1u,4u,5u})
+        check(nativeCoverageDrawShape(true,4,0,topology),"existing adaptive quad admission is preserved independently of new topology checks");
     check(!nativeCoverageDrawShape(false,3,0,NativeTriangleList)&&!nativeCoverageDrawShape(false,4,4,NativeTriangleStrip),
           "legacy pinned lane does not inherit adaptive geometry admission");
     for(const auto start:{0u,3u,4u,512u}){
