@@ -19,7 +19,7 @@ topology. A3-vertex beta draw is a hypothesis, not an observed fact. This change
 removes the demonstrated fixed-shape restriction and adds the missing scalar
 diagnostics; it does not establish successful beta mask generation in advance.
 
-## Change intended for PC0.3.14
+## Change in PC0.3.14
 
 Every previously accepted4-vertex/zero-start call remains accepted. Additional
 adaptive forms are triangle lists with3 or6 vertices and triangle strips with3
@@ -56,8 +56,16 @@ nonzero starts, exact once-only arguments, native VS/topology retention,
 fractional alpha and untouched original RGB. The geometry controls are part
 of the existing Windows source-format gate; header-only changes trigger it.
 
-Validate that Windows run before packaging. The next delivery advances the PC
-component to0.3.14 and installer to0.3.25. Frame0.3.10, its shader programs,
+The actual Windows source-format/GPU run42586397026 passes on source commit
+60c82d90ba41e276317dce9fed27c4d8774146f3. Its nonzero-start controls use real
+vertex buffers with an offscreen prefix; zero-start negative controls ensure
+the intended geometry cannot be reached through rewritten draw arguments.
+SV_VertexID is zero-based in D3D11, so the test does not use it to infer a
+vertex-buffer offset. The Windows resource/readback and portable/ASan controls
+also pass.
+
+The delivery advances the PC component to0.3.14 and installer to0.3.25.
+Frame0.3.10, its shader programs,
 selector and decoder remain byte-identical. The existing PC-only update path
 must leave Frame files, settings and services running and untouched. Actual
 headset mask generation remains pending.
