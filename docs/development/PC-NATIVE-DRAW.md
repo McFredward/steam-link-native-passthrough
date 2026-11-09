@@ -21,10 +21,11 @@ diagnostics; it does not establish successful beta mask generation in advance.
 
 ## Change intended for PC0.3.14
 
-The adaptive route accepts triangle lists with3 or6 vertices and triangle
-strips with3 or4. Nonzero native start vertices are retained; a wrapping vertex
-interval, empty/other size or unsupported topology remains refused. The older
-pinned route keeps its4-vertex/zero-start contract.
+Every previously accepted4-vertex/zero-start call remains accepted. Additional
+adaptive forms are triangle lists with3 or6 vertices and triangle strips with3
+or4. Nonzero native start vertices are retained; a wrapping interval, empty or
+other new size/topology remains refused. The older pinned route keeps only its
+4-vertex/zero-start contract.
 
 The native draw still runs first. The optional replay uses exactly its original
 count and start, native shader programs, input data and viewport. It changes
