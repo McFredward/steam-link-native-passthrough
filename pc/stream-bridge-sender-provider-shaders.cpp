@@ -21,7 +21,7 @@ bool shaderRead(const void* from,void* to,std::size_t size)noexcept{SIZE_T used=
 struct NativeShaders::Impl {
     struct Table {
         void** address=nullptr;CreateVertex vertex=nullptr;CreatePixel pixel=nullptr;
-        void* wrappedVertex=nullptr;void* wrappedPixel=nullptr;
+        void* wrappedVertex=nullptr;void* wrappedPixel=nullptr;bool published=false,attached=false;
     };
     struct Device {std::atomic<ID3D11Device*> object{nullptr};Table* methods=nullptr;std::atomic<bool> active{false};};
     struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;};
@@ -56,44 +56,58 @@ struct NativeShaders::Impl {
         if(SUCCEEDED(result)&&output&&*output)self.retain(object,*output,code,size,linkage);
         SetLastError(error);return result;
     }
+    static bool writable(void** address,DWORD& old)noexcept{
+        MEMORY_BASIC_INFORMATION memory{};const auto first=reinterpret_cast<std::uintptr_t>(address+12);
+        if(!VirtualQuery(address+12,&memory,sizeof memory)||memory.State!=MEM_COMMIT||
+           memory.Protect&(PAGE_GUARD|PAGE_NOACCESS|PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY))return false;
+        const auto base=reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
+        if(first<base||first-base>memory.RegionSize||4*sizeof(void*)>memory.RegionSize-(first-base))return false;
+        return VirtualProtect(address+12,4*sizeof(void*),PAGE_READWRITE,&old)!=0;
+    }
     bool observe(ID3D11Device* object)noexcept{
         if(!object||stopped||object->GetCreationFlags()&D3D11_CREATE_DEVICE_SINGLETHREADED)return false;
         Impl* expected=nullptr;if(!instance.compare_exchange_strong(expected,this)&&expected!=this)return false;
-        std::lock_guard<std::mutex> guard(mutex);if(auto* old=find(object))return old->active.load(std::memory_order_acquire);
+        std::lock_guard<std::mutex> guard(mutex);if(stopped)return false;
+        if(auto* old=find(object))return old->active.load(std::memory_order_acquire);
         Device* device=nullptr;for(auto& entry:devices)if(!entry.object.load()){device=&entry;break;}
         if(!device){++refused;return false;}
         void** address=nullptr;std::array<void*,16> entries{};
         if(!shaderRead(object,&address,sizeof address)||!address||!shaderRead(address,entries.data(),sizeof entries)||!entries[12]||!entries[15])return false;
         Table* table=nullptr;for(auto& candidate:tables)if(candidate.address==address)table=&candidate;
-        if(table){
-            if(entries[12]!=table->wrappedVertex||entries[15]!=table->wrappedPixel)return false;
-            object->AddRef();device->methods=table;device->active=true;device->object.store(object,std::memory_order_release);++deviceCount;return true;
-        }
-        unsigned index=0;for(;index<tables.size()&&tables[index].address;++index){}
-        if(index==tables.size()){++refused;return false;}
-        table=&tables[index];table->address=address;table->vertex=shaderBits<CreateVertex>(entries[12]);table->pixel=shaderBits<CreatePixel>(entries[15]);
-        const std::array<void*,4> vertices{{shaderBits<void*>(&createVertex<0>),shaderBits<void*>(&createVertex<1>),shaderBits<void*>(&createVertex<2>),shaderBits<void*>(&createVertex<3>)}};
-        const std::array<void*,4> pixels{{shaderBits<void*>(&createPixel<0>),shaderBits<void*>(&createPixel<1>),shaderBits<void*>(&createPixel<2>),shaderBits<void*>(&createPixel<3>)}};
-        table->wrappedVertex=vertices[index];table->wrappedPixel=pixels[index];
-        // Only these two public cells change. Preserve the full native vptr,
-        // private method tail, RTTI and all other device entries. A shared
-        // table has its own callbacks/originals; unobserved devices only forward.
-        MEMORY_BASIC_INFORMATION memory{};
-        if(!VirtualQuery(address+12,&memory,sizeof memory)||memory.State!=MEM_COMMIT||memory.Protect&(PAGE_GUARD|PAGE_NOACCESS|PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY))return false;
-        DWORD old=0;if(!VirtualProtect(address+12,4*sizeof(void*),PAGE_READWRITE,&old))return false;
-        object->AddRef();device->methods=table;device->object.store(object,std::memory_order_release);
-        const bool vertex=InterlockedCompareExchangePointer(address+12,table->wrappedVertex,entries[12])==entries[12];
-        if(vertex)published=true;
-        const bool pixel=vertex&&InterlockedCompareExchangePointer(address+15,table->wrappedPixel,entries[15])==entries[15];
-        DWORD ignored=0;const bool protectedAgain=VirtualProtect(address+12,4*sizeof(void*),old,&ignored)!=0;
-        if(!pixel||!protectedAgain){
-            DWORD undo=0;if(VirtualProtect(address+12,4*sizeof(void*),PAGE_READWRITE,&undo)){
-                InterlockedCompareExchangePointer(address+12,entries[12],table->wrappedVertex);InterlockedCompareExchangePointer(address+15,entries[15],table->wrappedPixel);
-                VirtualProtect(address+12,4*sizeof(void*),old,&ignored);
+        if(table&&((entries[12]!=table->wrappedVertex&&entries[12]!=shaderBits<void*>(table->vertex))||
+                   (entries[15]!=table->wrappedPixel&&entries[15]!=shaderBits<void*>(table->pixel))))return false;
+        if(!table||entries[12]!=table->wrappedVertex||entries[15]!=table->wrappedPixel){
+            unsigned index=0;
+            if(table)index=static_cast<unsigned>(table-tables.data());
+            else{for(;index<tables.size()&&tables[index].address;++index){}if(index==tables.size()){++refused;return false;}}
+            // Admission precedes ownership: a refused executable/guarded page
+            // must never be changed by observation or by subsequent cleanup.
+            DWORD old=0;if(!writable(address,old))return false;
+            if(!table){
+                table=&tables[index];table->address=address;table->vertex=shaderBits<CreateVertex>(entries[12]);table->pixel=shaderBits<CreatePixel>(entries[15]);
+                const std::array<void*,4> vertices{{shaderBits<void*>(&createVertex<0>),shaderBits<void*>(&createVertex<1>),shaderBits<void*>(&createVertex<2>),shaderBits<void*>(&createVertex<3>)}};
+                const std::array<void*,4> pixels{{shaderBits<void*>(&createPixel<0>),shaderBits<void*>(&createPixel<1>),shaderBits<void*>(&createPixel<2>),shaderBits<void*>(&createPixel<3>)}};
+                table->wrappedVertex=vertices[index];table->wrappedPixel=pixels[index];
             }
-            return false;
+            // Preserve the complete native vptr/private tail/RTTI. Each shared
+            // table has its own originals; unobserved devices only forward.
+            const bool vertex=InterlockedCompareExchangePointer(address+12,table->wrappedVertex,entries[12])==entries[12];
+            if(vertex){table->published=true;table->attached=true;published=true;}
+            const bool pixel=vertex&&InterlockedCompareExchangePointer(address+15,table->wrappedPixel,entries[15])==entries[15];
+            DWORD ignored=0;const bool protectedAgain=VirtualProtect(address+12,4*sizeof(void*),old,&ignored)!=0;
+            if(!pixel||!protectedAgain){
+                DWORD undo=0;if(table->attached&&writable(address,undo)){
+                    InterlockedCompareExchangePointer(address+12,shaderBits<void*>(table->vertex),table->wrappedVertex);
+                    InterlockedCompareExchangePointer(address+15,shaderBits<void*>(table->pixel),table->wrappedPixel);
+                    table->attached=false;VirtualProtect(address+12,4*sizeof(void*),old,&ignored);
+                }
+                // Published callbacks may have been cached: retain their slot
+                // and originals, but permit a later retry after exact rollback.
+                if(!table->published)*table=Table{};
+                return false;
+            }
         }
-        device->active.store(true,std::memory_order_release);++deviceCount;return true;
+        object->AddRef();device->methods=table;device->active=true;device->object.store(object,std::memory_order_release);++deviceCount;return true;
     }
     static HRESULT WINAPI createDevice(IDXGIAdapter* adapter,D3D_DRIVER_TYPE type,HMODULE software,UINT flags,const D3D_FEATURE_LEVEL* levels,UINT count,UINT sdk,ID3D11Device** device,D3D_FEATURE_LEVEL* level,ID3D11DeviceContext** context){
         auto& self=*instance.load(std::memory_order_acquire);
@@ -136,11 +150,11 @@ void NativeShaders::stop()noexcept{
     if(self.import){DWORD old=0;if(VirtualProtect(self.import,sizeof(void*),PAGE_READWRITE,&old)){
         InterlockedCompareExchangePointer(self.import,shaderBits<void*>(self.originalFactory),shaderBits<void*>(&Impl::createDevice));DWORD ignored=0;VirtualProtect(self.import,sizeof(void*),old,&ignored);
     }}
-    for(auto& table:self.tables)if(table.address){DWORD old=0;
-        if(VirtualProtect(table.address+12,4*sizeof(void*),PAGE_READWRITE,&old)){
+    for(auto& table:self.tables)if(table.published&&table.attached){DWORD old=0;
+        if(Impl::writable(table.address,old)){
             InterlockedCompareExchangePointer(table.address+12,shaderBits<void*>(table.vertex),table.wrappedVertex);
             InterlockedCompareExchangePointer(table.address+15,shaderBits<void*>(table.pixel),table.wrappedPixel);
-            DWORD ignored=0;VirtualProtect(table.address+12,4*sizeof(void*),old,&ignored);
+            table.attached=false;DWORD ignored=0;VirtualProtect(table.address+12,4*sizeof(void*),old,&ignored);
         }
     }
 }

@@ -24,6 +24,8 @@ template<class T>struct Com {
 };
 template<class T,class U>T pointer(U value){static_assert(sizeof(T)==sizeof(U),"Win64 pointers");T result{};std::memcpy(&result,&value,sizeof result);return result;}
 void STDMETHODCALLTYPE countedDraw(ID3D11DeviceContext* ctx,UINT count,UINT start){++drawCalls;drawCount=count;drawStart=start;originalDraw(ctx,count,start);}
+ULONG STDMETHODCALLTYPE ownedRef(ID3D11Device*){return 1;}
+UINT STDMETHODCALLTYPE ownedFlags(ID3D11Device*){return 0;}
 constexpr unsigned Width=64,Height=64;
 constexpr char Shader[]=R"(
 cbuffer Parameters : register(b2) { float4 unused0; float4 unused1; float4 offset; };
@@ -121,7 +123,20 @@ void run(){
     }
     check(graph.complete()&&graph.chroma(100,200)&&graph.pack(200,300)&&graph.luma(100,300)&&graph.ready(17,23,300),"complete native graph reaches exact planar output");
     check(!drawCopyViewCoverage(context.p,maskTarget.p,coverage.p,countedDraw,4,0)&&!drawCopyViewCoverage(context.p,maskTarget.p,coverage.p,countedDraw,3,1),"unreviewed copy-view geometry refuses without drawing");
+    // Owned public-method admission control, with no native executable writes.
+    // Keep its storage valid for the process-lifetime cached-callback records.
+    static struct {void** table;} retryDevice{};
+    retryDevice.table=static_cast<void**>(VirtualAlloc(nullptr,4096,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE));
+    check(retryDevice.table!=nullptr,"owned method-table admission fixture");
+    for(unsigned slot=0;slot<43;++slot)retryDevice.table[slot]=pointer<void*>(&ownedRef);
+    retryDevice.table[38]=pointer<void*>(&ownedFlags);DWORD protection=0;
+    check(VirtualProtect(retryDevice.table,4096,PAGE_EXECUTE_READ,&protection)!=0,"owned executable-page refusal control");
+    auto* retryObject=reinterpret_cast<ID3D11Device*>(&retryDevice);
+    check(!observer.observeDevice(retryObject)&&observer.stats().devices==2,"executable method-table pages refuse without device publication");
+    check(VirtualProtect(retryDevice.table,4096,PAGE_READONLY,&protection)!=0&&observer.observeDevice(retryObject)&&observer.stats().devices==3,"failed admission leaves a clean slot for a valid retry of the same object and table");
     observer.stop();check(factorySlot==realFactory,"public factory import restored to its original owner");
+    MEMORY_BASIC_INFORMATION retryMemory{};
+    check(retryDevice.table[12]==pointer<void*>(&ownedRef)&&retryDevice.table[15]==pointer<void*>(&ownedRef)&&VirtualQuery(retryDevice.table,&retryMemory,sizeof retryMemory)&&retryMemory.Protect==PAGE_READONLY,"stop restores only owned method cells and original page protection");
     check(observer.identify(ps.p)==NativeShader::Unknown,"stopped observation grants no shader permission");
     Com<ID3D11PixelShader> after;check(SUCCEEDED(cachedPixel(device.p,psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,after.out())),"cached native shader callback remains a valid forwarding function after stop");
 }
