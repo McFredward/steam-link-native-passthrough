@@ -1,0 +1,309 @@
+{
+  "archive": {
+    "bytes": 20247067,
+    "sha256": "32fe9ca519046bfada8d1b5d433ca6cc0d1377b56ac97d207a0066a01f621a0c"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3725848,
+      "sha256": "6253c6a8e9e26919d961fffd1b0e7d0252b53bff66b9ac0862d5ceb4b8ec3621"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2129408,
+      "sha256": "a1a421a48f76f59429624d8247ebdd2d1e9fd0a077699feb388eccc952c7eee2"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.10",
+    "pc": "0.3.16"
+  },
+  "device_actions": false,
+  "fix": "Separate formatReady capability from ready/operational image proof; retain exact native source PID and accepted input checks",
+  "frame_files_byte_identical": true,
+  "hardware_verified": false,
+  "host_ctest_suites": 44,
+  "inherited_frame_validation_source": "86bfd834e248528c5bdde783b8d61c3584cedb2c",
+  "native_composition_gpu_checks": 8260,
+  "observed_cause": "Format negotiation waits for an application RGBA image that the app only enables after format permission",
+  "old_format_prerequisite_causally_reproduced": true,
+  "original_alpha_gpu_checks": 26280,
+  "pc_only_update": true,
+  "production_composition_checks": 167,
+  "public_context_facade_checks": 118396,
+  "schema": "sfnp-pc-source-format-startup-candidate-v1",
+  "software_logs": {
+    "build-027-pc.log": {
+      "bytes": 177,
+      "sha256": "d2f8378f11f00b5fe349d96496bf0f3ddd6039203f608a978d5733b83df2c959"
+    },
+    "ctest-027.log": {
+      "bytes": 5969,
+      "sha256": "59e991411d169f998c21ce655ca786cd5cef5e35af0c6c1e1410b923b695c56d"
+    },
+    "installer-027-tests.log": {
+      "bytes": 488,
+      "sha256": "324f5da8d1220cfc95008948f42a91f0b37ec80ee2336f56cf7b291972cec73c"
+    },
+    "package-027-tests.log": {
+      "bytes": 116,
+      "sha256": "f0f250b1aac94ef7bea4b24f5df401076e12c2a64d7ad7dbb5b599d8920d0b89"
+    },
+    "pc-only-027-tests.log": {
+      "bytes": 3378,
+      "sha256": "7abf1aca1310095862454ba0b2e579ec3b6682adaa3d5ad2ca1f57acadebbece"
+    },
+    "windows-resource-027-ci.log": {
+      "bytes": 122454,
+      "sha256": "27338be869113e78fd7de38e9ab3c6708ef310318e8569b104361d0263954218"
+    },
+    "windows-source-027-ci.log": {
+      "bytes": 27094,
+      "sha256": "986d70ceeb3095e5ab862c8f02981823ad626cac338c618993de424285324d28"
+    }
+  },
+  "source_revision": "34cdd52c0638a74601741a8dc1ef1869074d38c2",
+  "version": "0.3.27",
+  "windows_ci": {
+    "resource": {
+      "conclusion": "success",
+      "headSha": "22d42567ce0fc3871afb238342a7ecf89c6118b6",
+      "jobs": [
+        {
+          "completedAt": "2026-11-10T19:33:59Z",
+          "conclusion": "success",
+          "databaseId": 130076124588,
+          "name": "cleanup-continuity",
+          "startedAt": "2026-11-10T19:33:48Z",
+          "status": "completed",
+          "steps": [
+            {
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prepare pinned public DirectMode declarations",
+              "number": 3,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Check exact pairs through empty client cleanup and working Gloomhaven boundary",
+              "number": 4,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Restore only unnecessary epoch changes as a causal control",
+              "number": 5,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prove strict crop edges reproduce the observed Venture rejection",
+              "number": 6,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 12,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 13,
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42886509683/job/130076124588"
+        },
+        {
+          "completedAt": "2026-11-10T19:35:05Z",
+          "conclusion": "success",
+          "databaseId": 130076124927,
+          "name": "context-observer",
+          "startedAt": "2026-11-10T19:33:47Z",
+          "status": "completed",
+          "steps": [
+            {
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prepare pinned public SDK headers",
+              "number": 3,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile actual production context observer",
+              "number": 4,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Exercise actual facade API and production observer from cold context",
+              "number": 5,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prepare causal control using stale original native dispatch",
+              "number": 6,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile identical production facade with only fresh lookup removed",
+              "number": 7,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prove real native dispatch changes reject the stale-target control",
+              "number": 8,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Restore the former format bootstrap prerequisite as a causal control",
+              "number": 9,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile the identical production observer with only the old format prerequisite",
+              "number": 10,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Prove the old format prerequisite blocks compositor-to-game startup",
+              "number": 11,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/upload-artifact@v4",
+              "number": 12,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 24,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 25,
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42886509683/job/130076124927"
+        },
+        {
+          "completedAt": "2026-11-10T19:34:46Z",
+          "conclusion": "success",
+          "databaseId": 130076125213,
+          "name": "writable-context-shadow",
+          "startedAt": "2026-11-10T19:33:48Z",
+          "status": "completed",
+          "steps": [
+            {
+              "conclusion": "success",
+              "name": "Set up job",
+              "number": 1,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/checkout@v4",
+              "number": 2,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Compile independent full-public-ABI writable shadow experiment",
+              "number": 3,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actual WARP Draw Copy Readback Getter Flush and protection transitions",
+              "number": 4,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Run actions/upload-artifact@v4",
+              "number": 5,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Post Run actions/checkout@v4",
+              "number": 10,
+              "status": "completed"
+            },
+            {
+              "conclusion": "success",
+              "name": "Complete job",
+              "number": 11,
+              "status": "completed"
+            }
+          ],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42886509683/job/130076125213"
+        },
+        {
+          "completedAt": "2026-11-10T19:33:45Z",
+          "conclusion": "skipped",
+          "databaseId": 130076127647,
+          "name": "shared-resource",
+          "startedAt": "2026-11-10T19:33:46Z",
+          "status": "completed",
+          "steps": [],
+          "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42886509683/job/130076127647"
+        }
+      ],
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42886509683"
+    },
+    "source": {
+      "conclusion": "success",
+      "headSha": "22d42567ce0fc3871afb238342a7ecf89c6118b6",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/42886711500"
+    }
+  }
+}
