@@ -134,7 +134,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     check(permission.process()==pid&&answer[10]==1&&!coverage.ready(pid),"format-only reply bootstraps the actual app before its native source is ready and never claims operational coverage");
     coverage.sourceProcess(permission.process());
     const auto foreignBefore=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);const auto foreignAfter=coverage.gateStats();
-    check(foreignAfter.capturedCopies==foreignBefore.capturedCopies&&!foreignAfter.certifiedMasks&&!coverage.operational(pid),"a live application format lease never turns compositor-owned images into application mask authority");
+    check(foreignAfter.completePairs==foreignBefore.completePairs+1&&foreignAfter.capturedCopies==foreignBefore.capturedCopies&&!foreignAfter.certifiedMasks&&!coverage.operational(pid),"a complete compositor image under a live application format lease never becomes an application mask");
     fixture.eyeBase=2;for(unsigned eye=0;eye<2;++eye)eyes[eye].hTexture=sets[2+eye].rSharedTextureHandles[0];
     std::uint64_t timestamp=0;
     for(auto mode:{CompositionFixture::Mode::Valid,CompositionFixture::Mode::ClearImage,CompositionFixture::Mode::MissingTile,CompositionFixture::Mode::WrongEye,CompositionFixture::Mode::WrongChroma,CompositionFixture::Mode::WrongLuma,CompositionFixture::Mode::UnknownDraw,CompositionFixture::Mode::RegionWrite,CompositionFixture::Mode::DiscardImage,CompositionFixture::Mode::UnrelatedWrite,CompositionFixture::Mode::Valid}){
