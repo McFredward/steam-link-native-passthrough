@@ -1,5 +1,37 @@
 # Adaptive PC native draw and composition
 
+## PC0.3.16: separate format bootstrap from image readiness
+
+The November10 Battlemarked test of PC0.3.15 confirms one observed device,
+eight recognized shaders,37404 eye draws and9351 complete source pairs. No
+masks are transmitted. The registered application waits on its source-format
+pipe, while `preparedPid` remains the native compositor PID. The matched Frame
+snapshot receives6024 authenticated picture associations without masks and
+loads the correct unchanged Frame0.3.10 layer.
+
+The original `ready(applicationPid)` required an already prepared native image
+from that same application. An adapter that waits for its format reply before
+enabling native RGBA can therefore never bootstrap. The sender now uses a
+separate cold `formatReady`: capture enabled/prepared and actual registered
+swaps belonging to the kernel-validated requesting process. The IPC layer
+still requires a compatible peer. Existing `ready`/`operational` checks keep
+their original current-source requirement; no compositor PID is relabelled.
+Actual draw, source lease, eye, composition and encoder input checks are
+unchanged. A format-only reply never claims operational coverage.
+
+The production Windows fixture starts with separate compositor-owned and
+application-owned shared allocations. It renders compositor images before
+the format reply, grants only format to the registered application, refuses
+application mask authority for compositor images, then exercises the real
+application composition and all prior destructive-write negative controls.
+Withdrawal, swap removal and stop controls remain required. A second build
+restores only the former format prerequisite and must fail the bootstrap
+check. Its NVENC ports are explicitly synthetic; successful hardware mask
+generation and visual output still require a new headset test.
+
+Installer0.3.27 ships PC0.3.16 with byte-identical Frame0.3.10 files. This is a
+shared source bootstrap fix, not a Battlemarked-specific compositor bridge.
+
 ## PC0.3.15: capture alpha before native composition
 
 The subsequent matched run confirms `Draw(3,0)` with triangle-list topology.

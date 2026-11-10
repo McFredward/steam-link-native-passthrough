@@ -934,7 +934,8 @@ SenderCoverage::Readiness SenderCoverage::readiness()const noexcept{
     return {impl_->enabled.load(std::memory_order_relaxed),impl_->prepared.load(std::memory_order_relaxed),
             impl_->preparedPid.load(std::memory_order_relaxed),impl_->lastPid.load(std::memory_order_relaxed)};
 }
-bool SenderCoverage::ready(std::uint32_t pid)const noexcept{return impl_->enabled&&impl_->prepared&&impl_->preparedPid==pid&&impl_->direct.ownsProcess(pid);}
+bool SenderCoverage::formatReady(std::uint32_t pid)const noexcept{return impl_->enabled&&impl_->prepared&&impl_->direct.ownsProcess(pid);}
+bool SenderCoverage::ready(std::uint32_t pid)const noexcept{return formatReady(pid)&&impl_->preparedPid==pid;}
 bool SenderCoverage::operational(std::uint32_t pid)const noexcept{return ready(pid)&&impl_->lastPid==pid;}
 CoverageGateStats SenderCoverage::gateStats()const noexcept{
     auto& s=*impl_;auto result=s.gates.snapshot();

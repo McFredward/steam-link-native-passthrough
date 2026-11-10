@@ -63,6 +63,17 @@ particular frame has already passed encoder, decoder and compositor proof.
 Do not wait for a first mask before allowing the game to produce its first
 RGBA frame: that would create a circular dependency.
 
+PC0.3.16 separates the cold `formatReady` capability from `ready` and
+`operational` image observations. A prepared capture pool and the application's
+own registered DirectMode swaps permit format negotiation with the existing
+kernel-checked client and compatible peer. The most recently prepared image
+may still belong to the compositor while the application awaits its format
+reply. That image does not borrow the application's permission: exact source
+PID, resource, eye, current contract and accepted encoder input checks remain
+mandatory for every subsequent game mask. Zero/unknown processes, unprepared
+capture, incompatible peers, removed swaps and a stopped provider cannot earn
+a new format grant.
+
 The provider latches the validated live connection's format permission across
 encoder/pool reconfiguration. Every actual video frame still needs independent
 source/texture/encoder identity and an authenticated
