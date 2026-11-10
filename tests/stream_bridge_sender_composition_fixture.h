@@ -4,9 +4,9 @@
 struct CompositionFixture {
     static constexpr UINT Width=64,Height=64;
     enum class Mode {Valid,MissingTile,WrongEye,ClearImage,WrongChroma,WrongLuma,UnknownDraw,UnrelatedWrite,RegionWrite,DiscardImage};
-    ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;Mode mode=Mode::Valid;unsigned created=0;
-    std::array<std::array<Com<ID3D11Texture2D>,3>,2> sources;
-    std::array<Com<ID3D11ShaderResourceView>,2> eyes;
+    ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;Mode mode=Mode::Valid;unsigned created=0,eyeBase=0;
+    std::array<std::array<Com<ID3D11Texture2D>,3>,4> sources;
+    std::array<Com<ID3D11ShaderResourceView>,4> eyes;
     Com<ID3D11Texture2D> image,chroma,foreignChroma,planar,foreignPlanar,input,unrelated;
     Com<ID3D11RenderTargetView> imageTarget,chromaTarget,uvTarget,yTarget,foreignY,unrelatedTarget;
     Com<ID3D11ShaderResourceView> imageView,chromaView,foreignChromaView;
@@ -14,7 +14,7 @@ struct CompositionFixture {
     Com<ID3D11Buffer> constants;Com<ID3D11RasterizerState> raster;
     static CompositionFixture* active;
     static void create(void*,std::uint32_t,const DirectMode::SwapTextureSetDesc_t* requested,DirectMode::SwapTextureSet_t* output){
-        auto& self=*active;check(self.created<2,"bounded actual source sets");const auto eye=self.created++;
+        auto& self=*active;check(self.created<self.sources.size(),"bounded actual source sets");const auto eye=self.created++;
         D3D11_TEXTURE2D_DESC desc{};desc.Width=requested->nWidth;desc.Height=requested->nHeight;desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
         desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED;
         std::vector<std::uint8_t> bytes(std::size_t(desc.Width)*desc.Height*4);
@@ -57,7 +57,7 @@ struct CompositionFixture {
         std::puts("Owned production render: bindings ready");std::fflush(stdout);
         for(unsigned tile=0;tile<4;++tile){if(tile==3&&mode==Mode::MissingTile)continue;const unsigned eye=mode==Mode::WrongEye?0:tile/2;
             const D3D11_VIEWPORT viewport{0,float(tile*Height/4),float(Width),float(Height/4),0,1};context->RSSetViewports(1,&viewport);
-            float b[12]{};b[9]=float((tile/2)*Height/2);context->UpdateSubresource(constants.p,0,nullptr,b,0,0);context->PSSetShaderResources(0,1,&eyes[eye].p);
+            float b[12]{};b[9]=float((tile/2)*Height/2);context->UpdateSubresource(constants.p,0,nullptr,b,0,0);context->PSSetShaderResources(0,1,&eyes[eyeBase+eye].p);
             std::printf("Owned production render: draw tile %u\n",tile);std::fflush(stdout);context->Draw(3,0);
         }
         const FLOAT zero[4]{};
@@ -114,16 +114,28 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     for(unsigned i=0;i<5;++i)check(SUCCEEDED(device->CreatePixelShader(code[i+1]->GetBufferPointer(),code[i+1]->GetBufferSize(),nullptr,pixels[i])),"production observed actual native pixel creation");
     mark("create native image graph");fixture.prepare();check(direct.prepare({CompositionFixture::create,CompositionFixture::destroy,CompositionFixture::destroyAll,CompositionFixture::next,CompositionFixture::submit,CompositionFixture::present,CompositionFixture::post,CompositionFixture::timing}),"typed DirectMode public callbacks");
     auto calls=direct.entryPoints();DirectMode::SwapTextureSetDesc_t desc{CompositionFixture::Width,CompositionFixture::Height/2,unsigned(DXGI_FORMAT_R8G8B8A8_UNORM),9};
-    DirectMode::SwapTextureSet_t sets[2]{};const auto pid=GetCurrentProcessId();for(unsigned eye=0;eye<2;++eye)calls.create(&fixture,pid,&desc,&sets[eye]);
+    DirectMode::SwapTextureSet_t sets[4]{};const auto pid=GetCurrentProcessId();const auto compositorPid=pid==1?2u:1u;
+    for(unsigned eye=0;eye<4;++eye)calls.create(&fixture,eye<2?compositorPid:pid,&desc,&sets[eye]);
     mark("open explicit fake NVENC ports");
     NV_ENCODE_API_FUNCTION_LIST api{};api.version=NV_ENCODE_API_FUNCTION_LIST_VER;check(boundary.create(compositionFactory,&api)==NV_ENC_SUCCESS,"production NVENC ports installed");
     NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS parameters{};parameters.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;parameters.device=device.p;parameters.deviceType=NV_ENC_DEVICE_TYPE_DIRECTX;void* encoder=nullptr;check(api.nvEncOpenEncodeSessionEx(&parameters,&encoder)==NV_ENC_SUCCESS,"production observes actual encoder device");
     NV_ENC_INITIALIZE_PARAMS init{};init.version=NV_ENC_INITIALIZE_PARAMS_VER;init.encodeGUID=NV_ENC_CODEC_HEVC_GUID;init.encodeWidth=init.darWidth=CompositionFixture::Width;init.encodeHeight=init.darHeight=CompositionFixture::Height;init.frameRateNum=90;init.frameRateDen=1;
-    check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");mark("prepare production context and coverage pool");coverage.sourceProcess(pid);coverage.tick();
+    check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");mark("prepare production context and coverage pool");coverage.tick();
     check(coverage.gateStats().contextsReady==1&&coverage.readiness().prepared,"production pool and native context ready");
     NV_ENC_REGISTER_RESOURCE registered{};registered.version=NV_ENC_REGISTER_RESOURCE_VER;registered.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;registered.resourceToRegister=fixture.input.p;registered.width=CompositionFixture::Width;registered.height=CompositionFixture::Height;registered.bufferFormat=NV_ENC_BUFFER_FORMAT_NV12;
     check(api.nvEncRegisterResource(encoder,&registered)==NV_ENC_SUCCESS,"actual encoder input resource registered");
     DirectMode::SubmitLayerPerEye_t eyes[2]{};for(unsigned eye=0;eye<2;++eye){eyes[eye].hTexture=sets[eye].rSharedTextureHandles[0];eyes[eye].bounds={0,0,1,1};eyes[eye].mProjection.m[0][0]=eyes[eye].mProjection.m[1][1]=1;eyes[eye].mHmdPose.m[0][0]=eyes[eye].mHmdPose.m[1][1]=eyes[eye].mHmdPose.m[2][2]=1;}
+    calls.submit(&fixture,eyes);calls.present(&fixture,0);
+    check(coverage.readiness().preparedPid==compositorPid&&!coverage.ready(pid)&&!coverage.operational(pid),"compositor startup images do not establish an exact application source or operational coverage");
+    check(coverage.formatReady(pid)&&!coverage.formatReady(0)&&!coverage.formatReady(pid+16),"registered application may negotiate source format before its first RGBA frame; unknown and zero PIDs remain refused");
+    SourceIpcRequest app{};app.processId=pid;app.nonce[0]=9;SourceIpcPermission permission;SourceIpcState peer{};peer.binding[0]=7;peer.generation=4;
+    permission.update(app,pid,peer,coverage.formatReady(pid));check(!permission.process(),"prepared source format without a compatible peer cannot grant permission");
+    peer.compatible=true;const auto answer=permission.update(app,pid,peer,coverage.formatReady(pid));
+    check(permission.process()==pid&&answer[10]==1&&!coverage.ready(pid),"format-only reply bootstraps the actual app before its native source is ready and never claims operational coverage");
+    coverage.sourceProcess(permission.process());
+    const auto foreignBefore=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);const auto foreignAfter=coverage.gateStats();
+    check(foreignAfter.capturedCopies==foreignBefore.capturedCopies&&!foreignAfter.certifiedMasks&&!coverage.operational(pid),"a live application format lease never turns compositor-owned images into application mask authority");
+    fixture.eyeBase=2;for(unsigned eye=0;eye<2;++eye)eyes[eye].hTexture=sets[2+eye].rSharedTextureHandles[0];
     std::uint64_t timestamp=0;
     for(auto mode:{CompositionFixture::Mode::Valid,CompositionFixture::Mode::ClearImage,CompositionFixture::Mode::MissingTile,CompositionFixture::Mode::WrongEye,CompositionFixture::Mode::WrongChroma,CompositionFixture::Mode::WrongLuma,CompositionFixture::Mode::UnknownDraw,CompositionFixture::Mode::RegionWrite,CompositionFixture::Mode::DiscardImage,CompositionFixture::Mode::UnrelatedWrite,CompositionFixture::Mode::Valid}){
         std::printf("Owned production composition: present mode %u\n",unsigned(mode));std::fflush(stdout);
@@ -136,5 +148,8 @@ float4 other():SV_Target{return float4(0,0,0,1);}
         check(!after.certifiedMasks,"synthetic NVENC acceptance without a compatible peer cannot fabricate a mask certificate");
         check(api.nvEncUnmapInputResource(encoder,mapped.mappedResource)==NV_ENC_SUCCESS,"exact input retirement");
     }
-    check(coverage.gateStats().nativeShadersRecognized==5,"all actual production shader identities were observed at native creation");coverage.stop();direct.stop();
+    permission.reset();coverage.sourceProcess(0);const auto revoked=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
+    check(coverage.gateStats().capturedCopies==revoked.capturedCopies&&!coverage.gateStats().certifiedMasks,"source withdrawal refuses a new exact app image without borrowing its previous format lease");
+    calls.destroyAll(&fixture,pid);check(!coverage.formatReady(pid),"removing the application's registered swaps prevents new format admission");
+    check(coverage.gateStats().nativeShadersRecognized==5,"all actual production shader identities were observed at native creation");coverage.stop();check(!coverage.formatReady(compositorPid),"stopped coverage cannot grant source format");direct.stop();
 }

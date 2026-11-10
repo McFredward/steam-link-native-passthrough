@@ -254,6 +254,9 @@ public:
     bool takeHevcSyntaxTrace(MaskHevcSyntaxTrace&)noexcept; // Cold one-shot diagnostic only.
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
     void stop()noexcept;
+    // Cold format capability only: a game may need this permission before
+    // submitting its first independent RGBA eyes. No frame/mask authority.
+    bool formatReady(std::uint32_t processId)const noexcept;
     bool ready(std::uint32_t processId)const noexcept;
     Readiness readiness()const noexcept; // Cold diagnostics only, never permission.
     bool operational(std::uint32_t processId)const noexcept;

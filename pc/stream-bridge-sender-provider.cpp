@@ -184,7 +184,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
     void report(const char* status,stream_bridge::logging::Level level=stream_bridge::logging::Level::Important){if(log_&&stream_bridge::logging::enabled(level)){char text[stream_bridge::sender::RgbOutputLogBytes+64]{};std::snprintf(text,sizeof text,"Steam Link Native Passthrough: %s",status);log_->Log(text);}}
     std::uint32_t admissionPid_=0;ULONGLONG nextAdmissionReport_=0;
     bool sourceReady(std::uint32_t pid){
-        const bool ready=coverage_.ready(pid); // The original admission check.
+        // A capability reply must precede the game's first native RGBA eyes.
+        // Actual draws/copies still require their exact PID and source lease.
+        const bool ready=coverage_.formatReady(pid);
         if(ready)return true;
         const auto now=GetTickCount64();
         if(pid==admissionPid_&&now<nextAdmissionReport_)return false;
