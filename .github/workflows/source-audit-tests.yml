@@ -74,6 +74,7 @@ jobs:
           $log = Get-Content build/gnu/no-identity.log -Raw
           Write-Host $log
           if ($result -ne 1 -or $log -notmatch 'control=7: FAIL' -or $log -notmatch 'error=126 stage=5' -or $log -notmatch 'load/entry=1/0') { throw 'Missing-file-identity causal control failed for an unrelated reason' }
+          exit 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
