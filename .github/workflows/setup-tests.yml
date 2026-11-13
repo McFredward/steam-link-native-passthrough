@@ -4,6 +4,9 @@ on:
     branches: [dev, main]
     paths:
       - 'VERSION'
+      - 'PATCH_VERSIONS.json'
+      - 'distribution/steam-link-native-passthrough.zip'
+      - 'distribution/steam-link-native-passthrough.zip.receipt.json'
       - 'get.ps1'
       - 'get.sh'
       - 'get-preview.*'
@@ -52,6 +55,9 @@ on:
   pull_request:
     paths:
       - 'VERSION'
+      - 'PATCH_VERSIONS.json'
+      - 'distribution/steam-link-native-passthrough.zip'
+      - 'distribution/steam-link-native-passthrough.zip.receipt.json'
       - 'get.ps1'
       - 'get.sh'
       - 'get-preview.*'
