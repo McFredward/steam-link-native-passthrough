@@ -1,0 +1,174 @@
+{
+  "archive": {
+    "bytes": 20250873,
+    "sha256": "8af02f7203f66c8ace5754ccfa761e4da4f375c9b1d81e67412c9536a8310437"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726216,
+      "sha256": "a696e85542315f85760b369bcf2805a95ee537369a2b3852be5472297d7f40de"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2129408,
+      "sha256": "a1a421a48f76f59429624d8247ebdd2d1e9fd0a077699feb388eccc952c7eee2"
+    }
+  },
+  "change": "Authenticated ordinary images permit containing native allocations on either axis using each current coded size; original RGB/UV and all masked extent/current lease/kernel/uniqueness guards remain unchanged",
+  "component_versions": {
+    "frame": "0.3.12",
+    "pc": "0.3.16"
+  },
+  "current_picture_and_kernel_guards_unchanged": true,
+  "device_actions": false,
+  "diagnostics_only": false,
+  "hardware_verified": false,
+  "inherited_validation_source": "edc8e08e98db83e243340925405c285f7da3cb79",
+  "masked_admission_rules_unchanged": true,
+  "observed_failure": "Live lease and exact kernel match pass, but native1344x4864 versus coded1216x4864 fails extent equality",
+  "old_equality_control": {
+    "exit_status": 1,
+    "expected_failure": true,
+    "failure": "observed 1344-wide native allocation accepts the exact 1216-wide ordinary picture without mask storage",
+    "fixture_sha256": "20f862f5e84333f1bfe1fd6dca159bced1d143d5256cba87d4ab578bf1c19957",
+    "mutant_sha256": "3a4106c5f344f93b3f52e253a016529fcff062d54cbdfa35c74fd09077d77fe6",
+    "mutation": "Only disable ordinary native-allocation containment; all other source and checks remain identical",
+    "source_sha256": "85ab71cd52e995de842de8607ad19d48230cf9aaf74644874bbb03453a21f352"
+  },
+  "ordinary_video_fix_only": true,
+  "pc_artifact_byte_identical": true,
+  "renderer_profiles": {
+    "renderer-current-final": {
+      "fixture_sha256": "20f862f5e84333f1bfe1fd6dca159bced1d143d5256cba87d4ab578bf1c19957",
+      "input_hashes": {
+        "current-coverage.spv": "c2e3be45f55545f5246a13e91be6785cba15c50cad56ecfb47eb4fe59e02c7b8",
+        "frame-beta-active-vertex.spv": "9dbfb10bfa78f2b115ab8cb8c579479bf125492ac26f54719653451e1d814f1f",
+        "frame-beta-fragment.spv": "a42daff46b5a155bc66ba53361face163fb1bd39260cb374430c1732c0ecfd1f"
+      },
+      "results": {
+        "normal": {
+          "checks": 1227162,
+          "exit_status": 0,
+          "expected_negative": false
+        },
+        "sanitize": {
+          "checks": 1227162,
+          "exit_status": 0,
+          "expected_negative": false
+        }
+      },
+      "sources": {
+        "layer/native_presenter_pipeline.h": "ac497c4f7a49251ea439b419435e4b5e691b76e516a904569c72337b1aea84fa",
+        "layer/stream_bridge_artifacts.h": "b6d30a07162c733f0bdb1adf45b81177f5b4d1354c7cecf3bf4b288927cdf13f",
+        "layer/stream_bridge_coverage_gpu.cpp": "b9a8fd461c8bdac4380b07f768d192defc3ba7282d8d62f5ffbce3c62f1e4015",
+        "layer/stream_bridge_coverage_gpu.h": "5b9ba35ea89e8f4ae72a1fa8a7def4f56f54b37fc5eb95a7ad901b579bf2b571",
+        "layer/stream_bridge_process.h": "78ce858861efd5cc7134ee0a3dd1180c2f69d2f0c97df902366efd9ceeba6d9f",
+        "layer/stream_bridge_renderer.cpp": "85ab71cd52e995de842de8607ad19d48230cf9aaf74644874bbb03453a21f352",
+        "layer/stream_bridge_renderer.h": "473cb3a006f278a10cd37821ed35dce738e8cbbd49e3fc12a57ef26dd1698e1c",
+        "layer/submit_timeline_contract.h": "91806babfb37ab8f6339cba266c39c80f5aa4c384a705e004173d796bea068cd",
+        "tests/stream-bridge-coverage-gpu/pool_tests.cpp": "8814f7533cc5fc40541bd5746ab6b3f3dbb5e1ec07bbe51006a43b29a26c03f3"
+      }
+    },
+    "renderer-stable-final": {
+      "fixture_sha256": "20f862f5e84333f1bfe1fd6dca159bced1d143d5256cba87d4ab578bf1c19957",
+      "input_hashes": {
+        "distort_ps_achromatic_se2.spv": "f28dd5d22a570cbee64057da03d0418b80aee88a8eeed988b2f776e8d9a513f2",
+        "distort_vs_reproject_layered.spv": "94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5",
+        "stable-coverage.spv": "37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3"
+      },
+      "results": {
+        "normal": {
+          "checks": 1227162,
+          "exit_status": 0,
+          "expected_negative": false
+        },
+        "sanitize": {
+          "checks": 1227162,
+          "exit_status": 0,
+          "expected_negative": false
+        }
+      },
+      "sources": {
+        "layer/native_presenter_pipeline.h": "ac497c4f7a49251ea439b419435e4b5e691b76e516a904569c72337b1aea84fa",
+        "layer/stream_bridge_artifacts.h": "b6d30a07162c733f0bdb1adf45b81177f5b4d1354c7cecf3bf4b288927cdf13f",
+        "layer/stream_bridge_coverage_gpu.cpp": "b9a8fd461c8bdac4380b07f768d192defc3ba7282d8d62f5ffbce3c62f1e4015",
+        "layer/stream_bridge_coverage_gpu.h": "5b9ba35ea89e8f4ae72a1fa8a7def4f56f54b37fc5eb95a7ad901b579bf2b571",
+        "layer/stream_bridge_process.h": "78ce858861efd5cc7134ee0a3dd1180c2f69d2f0c97df902366efd9ceeba6d9f",
+        "layer/stream_bridge_renderer.cpp": "85ab71cd52e995de842de8607ad19d48230cf9aaf74644874bbb03453a21f352",
+        "layer/stream_bridge_renderer.h": "473cb3a006f278a10cd37821ed35dce738e8cbbd49e3fc12a57ef26dd1698e1c",
+        "layer/submit_timeline_contract.h": "91806babfb37ab8f6339cba266c39c80f5aa4c384a705e004173d796bea068cd",
+        "tests/stream-bridge-coverage-gpu/pool_tests.cpp": "8814f7533cc5fc40541bd5746ab6b3f3dbb5e1ec07bbe51006a43b29a26c03f3"
+      }
+    }
+  },
+  "resolution_matrix": {
+    "coded_sizes": 8,
+    "live_resolution_changes": 4,
+    "padding_patterns": 4
+  },
+  "schema": "sfnp-frame-ordinary-padding-candidate-v1",
+  "selector_and_codecs_byte_identical": true,
+  "software_logs": {
+    "build-arm-final.log": {
+      "bytes": 374,
+      "sha256": "c462809cb1809434903edbbcba54c2b3df836cc9c11d0d3dd67c254d54380566"
+    },
+    "build-arm.log": {
+      "bytes": 3008,
+      "sha256": "3ef546d3327a1368dabe62d2f4b30f1f468ceaad937c3df4b57b1ac20d3ec4d6"
+    },
+    "configure-arm.log": {
+      "bytes": 931,
+      "sha256": "e3a703de1e0e6104762278b51444f4fa82051cd37ec8a6244ddbf712a38d2b4e"
+    },
+    "installer-029-tests.log": {
+      "bytes": 488,
+      "sha256": "f687432a1f88fb3f0593b090407584110bd0a8b634de06131d30434ce4c76f08"
+    },
+    "ordinary-padding-control-build.log": {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "ordinary-padding-control.log": {
+      "bytes": 233,
+      "sha256": "2002f3e7b00e1723b71c866dacca15e294115a3f9d4ec1d95b5349d88d266faf"
+    },
+    "package-029-tests.log": {
+      "bytes": 117,
+      "sha256": "61bcafecdc4270eee51790f191b351bcdcdba7f59a5bf577ee7cf942584b6881"
+    },
+    "pc-only-029-tests.log": {
+      "bytes": 3379,
+      "sha256": "9d51d7b1afbf45999253ab4b48465b3507d540b20a5948572b9b33fdd9265374"
+    },
+    "renderer-current-final/normal.log": {
+      "bytes": 135,
+      "sha256": "807f009dbbac1cd8a78e4d9449c7164546993fcba3fd9d3ae6d4069808e782e7"
+    },
+    "renderer-current-final/sanitize.log": {
+      "bytes": 135,
+      "sha256": "807f009dbbac1cd8a78e4d9449c7164546993fcba3fd9d3ae6d4069808e782e7"
+    },
+    "renderer-stable-final/normal.log": {
+      "bytes": 135,
+      "sha256": "807f009dbbac1cd8a78e4d9449c7164546993fcba3fd9d3ae6d4069808e782e7"
+    },
+    "renderer-stable-final/sanitize.log": {
+      "bytes": 135,
+      "sha256": "807f009dbbac1cd8a78e4d9449c7164546993fcba3fd9d3ae6d4069808e782e7"
+    }
+  },
+  "source_revision": "2a7c1c518ad691e73e49ac22b689e8d85cfbad8e",
+  "version": "0.3.29"
+}
