@@ -9,19 +9,24 @@ authenticated coded video is1216x4864. There are no memory-generation or
 expired-lease refusals. This is evidence of different image extents; it does
 not independently establish physical row pitch, a crop offset or mask UVs.
 
-Frame0.3.12 permits the larger horizontal allocation only for an authenticated
+Frame0.3.12 permits a larger native allocation only for an authenticated
 ordinary-video picture. Its coded dimensions must be nonzero, its native width
-must contain the coded width and its height must agree. Every connection,
+and height must contain the actual coded width and height. Every connection,
 native lease, kernel, uniqueness, descriptor and draw-to-submit generation
 check remains mandatory. The ordinary path uses the original native RGB and
 UV mapping and no mask storage, so it needs no guessed mask coordinate change.
-Masked pictures retain exact width/height equality. Vertical padding, a smaller
-native allocation and an ordinary-to-masked transition cannot inherit this
-ordinary-video exception.
+Masked pictures retain exact width/height equality. A smaller native allocation
+and an ordinary-to-masked transition cannot inherit this ordinary-video
+exception. There are no fixed resolution or padding-size presets: current
+picture metadata supplies the dimensions, for Auto and manually selected
+SteamVR resolutions alike.
 
 The production fixture covers the observed1344/1216 shape through core Submit,
 Submit2 and KHR, verifies unchanged ordinary control values and rejects stale
-recordings. Negative cases retain masked extent, height, size, kernel, lease,
+recordings. Eight coded resolutions are exercised with no padding, horizontal
+padding, vertical padding and both axes. Live resolution changes reject the
+previous recorded lease and immediately admit the new exact picture. Negative
+cases retain masked extent, height, size, kernel, lease,
 uniqueness and source-transition checks. Restoring only width equality must
 reproduce the observed-shape failure. Old and beta native profiles are tested
 with sanitizers; these are software observations, not a headset result.

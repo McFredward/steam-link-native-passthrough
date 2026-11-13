@@ -436,15 +436,15 @@ struct Renderer::Impl {
             const bool exactExtent=coded.codedWidth==i->width&&coded.codedHeight==i->height;
             // Authenticated ordinary video uses the original native RGB/UV
             // mapping and never samples a mask. Its exact DMA image may have
-            // horizontal allocation padding beyond the coded video region.
+            // allocation padding beyond the coded video region on either axis.
             // Masked pictures retain equality until their UV mapping is proved.
             const bool ordinaryPadding=picture->ordinaryVideo&&coded.codedWidth&&coded.codedHeight&&
-                i->width>coded.codedWidth&&i->height==coded.codedHeight;
+                i->width>=coded.codedWidth&&i->height>=coded.codedHeight;
             if(!exactExtent&&!ordinaryPadding)continue;
             if(output)return refuse(ExactImageRefusal::Ambiguous);
             output=std::move(picture);
         }
-        if(output){++counts.exactImageMatches;if(output->ordinaryVideo&&output->metadata.descriptor.codedWidth!=i->width)++counts.ordinaryPaddedMatches;return true;}
+        if(output){++counts.exactImageMatches;if(output->ordinaryVideo&&(output->metadata.descriptor.codedWidth!=i->width||output->metadata.descriptor.codedHeight!=i->height))++counts.ordinaryPaddedMatches;return true;}
         return refuse(!present?ExactImageRefusal::NoPicture:!connected?ExactImageRefusal::Connection:!leased?ExactImageRefusal::Lease:!kernel?ExactImageRefusal::Kernel:ExactImageRefusal::Extent);
     }
     bool collect(VkCommandBuffer cb,bool& ordinary){
