@@ -19,6 +19,8 @@ enum class DrawRefusal:std::uint8_t {Unavailable,Busy,Command,Epoch,Pipeline,Ine
 enum class CollectRefusal:std::uint8_t {Command,Empty,Ineligible,Epoch,Lease,Descriptor,Image,Memory,Capacity,Camera,Count};
 enum class SubmitRefusal:std::uint8_t {Busy,Bounds,Shape,Extension,Flags,Count};
 enum class DescriptorRefusal:std::uint8_t {MissingAllocation,MissingEntry,InvalidEntry,MissingView,ViewSerial,Count};
+// Diagnostic-only breakdown of the unchanged exact decoded-image gate.
+enum class ExactImageRefusal:std::uint8_t {Image,Memory,MemoryGeneration,MemoryFd,NoPicture,Connection,Lease,Kernel,Extent,Ambiguous,Count};
 struct RendererStats {
     std::uint64_t metadata=0,maskNone=0,maskDecoded=0,maskRejected=0,uploadAccepted=0,uploadRefused=0,pictures=0;
     std::uint64_t maskOpaque=0,maskTransparent=0,maskMixed=0;
@@ -28,6 +30,8 @@ struct RendererStats {
     std::array<std::uint64_t,static_cast<std::size_t>(CollectRefusal::Count)> collectRefusals{};
     std::array<std::uint64_t,static_cast<std::size_t>(SubmitRefusal::Count)> submitRefusals{};
     std::array<std::uint64_t,static_cast<std::size_t>(DescriptorRefusal::Count)> descriptorRefusals{};
+    std::array<std::uint64_t,static_cast<std::size_t>(ExactImageRefusal::Count)> exactImageRefusals{};
+    std::uint64_t exactImageMatches=0,lastImageExtent=0,lastPictureExtent=0;
     std::uint64_t imageCapacityRefused=0,memoryCapacityRefused=0,viewCapacityRefused=0,descriptorCapacityRefused=0;
     std::uint64_t descriptorUntrackedWrites=0,descriptorUntrackedCopies=0;
     std::uint64_t collects=0,collected=0,coreSubmits=0,submits2=0;

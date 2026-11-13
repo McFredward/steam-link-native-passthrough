@@ -643,8 +643,39 @@ void ordinaryVideo(const std::vector<std::uint32_t>& vs,const std::vector<std::u
  }
  cameraRecovery=false;
 }
+void exactImageDiagnostics(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){
+ cameraRecovery=true;
+ const sr::ExactImageRefusal expected[]{sr::ExactImageRefusal::NoPicture,sr::ExactImageRefusal::Connection,sr::ExactImageRefusal::Lease,sr::ExactImageRefusal::Kernel,sr::ExactImageRefusal::Extent,sr::ExactImageRefusal::Ambiguous,sr::ExactImageRefusal::Memory,sr::ExactImageRefusal::MemoryGeneration};
+ for(unsigned mode=0;mode<9;++mode){
+  Integration f(vs,ps,1,true,true,false,false,false);
+  if(mode){
+   if(mode==3)++f.picture.metadata.lease.kernel[1];
+   if(mode==4)++f.picture.metadata.descriptor.codedWidth;
+   f.publish(sb::CoverageEncoding::None);f.picture.ordinaryVideo=true;consumer.picture(consumer.owner,f.picture);
+  }
+  if(mode==1)f.connection->store(false);
+  if(mode==2)leaseCurrent=false;
+  if(mode==5){f.picture.metadata.lease.slot=1;consumer.picture(consumer.owner,f.picture);}
+  if(mode==6||mode==7)f.renderer.memoryFreed(f.imported);
+  if(mode==7){
+   VkImportMemoryFdInfoKHR fd{VK_STRUCTURE_TYPE_IMPORT_MEMORY_FD_INFO_KHR};fd.handleType=VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;fd.fd=f.file;
+   VkMemoryAllocateInfo allocate{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};allocate.pNext=&fd;allocate.allocationSize=32;
+   auto preparation=f.renderer.memoryPreparing(allocate);f.renderer.memoryAllocated(f.imported,allocate,preparation,VK_SUCCESS);
+  }
+  f.record();const auto stats=f.renderer.statsCold();
+  if(mode<8){
+   check(stats.exactImageRefusals[static_cast<std::size_t>(expected[mode])]==1,"exact-image diagnostics name the actual failed condition without accepting the ordinary picture");
+   check(stats.ordinaryDraws==0&&stats.exactImageMatches==0,"diagnostic refusal never changes picture or mask permission");
+  }else{
+   check(stats.exactImageMatches==1&&stats.ordinaryDraws==1,"exact ordinary image still succeeds with diagnostic counters enabled");
+   check(stats.lastImageExtent==((std::uint64_t(16)<<32)|2)&&stats.lastPictureExtent==stats.lastImageExtent,"cold scalar extent diagnostics describe the actual sampled and coded image");
+  }
+ }
+ cameraRecovery=false;
+}
 void cameraOnlyRecovery(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){
  ordinaryVideo(vs,ps);
+ exactImageDiagnostics(vs,ps);
  cameraRecovery=true;
  {Integration f(vs,ps,1);auto exact=f.record();check(exact.coverage!=VK_NULL_HANDLE,"normal active source retains its exact mask");
   leaseCurrent=false;const auto before=f.vk.reads.size();check(f.submit(false)==VK_SUCCESS,"source loss preserves native queue submission");
