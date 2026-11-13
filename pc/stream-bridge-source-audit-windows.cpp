@@ -1,5 +1,6 @@
 #include "stream-bridge-source-audit-windows.h"
 #include "stream-bridge-source-audit-shared.h"
+#include "stream-bridge-source-audit-modules-windows.h"
 #include <tlhelp32.h>
 #include <sddl.h>
 #include <algorithm>
@@ -27,14 +28,6 @@ std::wstring processPath(HANDLE process){
 std::wstring modulePath(HMODULE module){
     std::vector<wchar_t> path(32768);const auto count=GetModuleFileNameW(module,path.data(),static_cast<DWORD>(path.size()));
     return count&&count<path.size()?std::wstring(path.data(),count):std::wstring{};
-}
-std::uintptr_t remoteModule(DWORD pid,const std::wstring& expected,std::size_t* bytes=nullptr)noexcept{
-    Handle snapshot;snapshot.reset(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32,pid));if(!snapshot)return 0;
-    MODULEENTRY32W entry{};entry.dwSize=sizeof entry;
-    if(Module32FirstW(snapshot.value,&entry))do{
-        if(!_wcsicmp(entry.szExePath,expected.c_str())){if(bytes)*bytes=entry.modBaseSize;return reinterpret_cast<std::uintptr_t>(entry.modBaseAddr);}
-    }while(Module32NextW(snapshot.value,&entry));
-    return 0;
 }
 bool sameUser(HANDLE left,HANDLE right){
     Handle a,b;
@@ -68,6 +61,8 @@ bool createPage(HANDLE& mapping,Page*& view){
 }
 }
 struct SourceAuditServer::Impl {
+    SourceAuditDiscovery discovery;
+    explicit Impl(SourceAuditDiscovery value):discovery(value){}
     mutable std::mutex mutex;HANDLE mapping=nullptr;Page* page=nullptr;
     Handle process,thread,sourceFile;DWORD target=0;std::uint64_t targetBirth=0;
     void* remoteArgument=nullptr;std::size_t remoteBytes=0;
@@ -122,21 +117,32 @@ struct SourceAuditServer::Impl {
         ownPath=modulePath(ownModule);if(ownPath.empty())return false;
         // Never call an RVA in a pre-existing module whose loaded revision
         // cannot be established from public module metadata alone.
-        if(remoteModule(pid,ownPath)){SetLastError(ERROR_ALREADY_EXISTS);return false;}
         sourceFile.reset(CreateFileW(ownPath.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr));
         if(!sourceFile)return false;
+        const auto prior=findModule(pid,ownPath,discovery,sourceFile.value);
+        if(prior.base||prior.matches){SetLastError(ERROR_ALREADY_EXISTS);return false;}
+        if(prior.error!=ERROR_MOD_NOT_FOUND){
+            if(prior.error==ERROR_BAD_LENGTH||prior.error==ERROR_PARTIAL_COPY){
+                if(!readinessDeadline)readinessDeadline=GetTickCount64()+3000;
+                if(GetTickCount64()<readinessDeadline){process.reset();sourceFile.reset();return true;}
+            }
+            SetLastError(prior.error);return false;
+        }
         const auto load=GetProcAddress(GetModuleHandleW(L"kernel32.dll"),"LoadLibraryW");HMODULE owner=nullptr;
         if(!load||!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,reinterpret_cast<LPCWSTR>(load),&owner))return false;
-        const auto ownerPath=modulePath(owner);std::size_t remoteSize=0;
-        const auto remoteBase=remoteModule(pid,ownerPath,&remoteSize);
+        const auto ownerPath=modulePath(owner);
+        const auto ownerImage=findModule(pid,ownerPath,discovery);
+        const auto remoteBase=ownerImage.base,remoteSize=ownerImage.bytes;
         const auto offset=reinterpret_cast<std::uintptr_t>(load)-reinterpret_cast<std::uintptr_t>(owner);
         if(!remoteBase){
             // CreateProcess can expose the new PID before its public system
             // module list is initialized. Nothing has been written yet, so
             // bounded read-only discovery can wait without replaying a call.
-            if(!readinessDeadline)readinessDeadline=GetTickCount64()+3000;
-            if(GetTickCount64()<readinessDeadline){process.reset();sourceFile.reset();return true;}
-            SetLastError(ERROR_MOD_NOT_FOUND);return false;
+            if(ownerImage.error==ERROR_BAD_LENGTH||ownerImage.error==ERROR_PARTIAL_COPY||ownerImage.error==ERROR_MOD_NOT_FOUND){
+                if(!readinessDeadline)readinessDeadline=GetTickCount64()+3000;
+                if(GetTickCount64()<readinessDeadline){process.reset();sourceFile.reset();return true;}
+            }
+            SetLastError(ownerImage.error);return false;
         }
         if(offset>=remoteSize){SetLastError(ERROR_INVALID_ADDRESS);return false;}
         if(!verify||!verify(expected.c_str(),executable.value)){SetLastError(ERROR_INVALID_EXE_SIGNATURE);return false;}
@@ -147,11 +153,29 @@ struct SourceAuditServer::Impl {
         if(!remoteArgument||!WriteProcessMemory(process.value,remoteArgument,ownPath.c_str(),remoteBytes,&used)||used!=remoteBytes)return false;
         thread.reset(CreateRemoteThread(process.value,nullptr,0,reinterpret_cast<LPTHREAD_START_ROUTINE>(remoteBase+offset),remoteArgument,0,nullptr));
         if(!thread)return false;
-        target=pid;local.pid=pid;local.state=2;phase=1;attempted=true;deadline=GetTickCount64()+3000;return true;
+        ++local.loadCalls;target=pid;local.pid=pid;local.state=2;phase=1;attempted=true;deadline=GetTickCount64()+3000;return true;
+    }
+    void startObserver(){
+        const auto module=findModule(target,ownPath,discovery,sourceFile.value);
+        local.discoveryError=module.error;local.discoveryEntries=module.entries;local.discoveryMatches=module.matches;
+        if(!module.base){
+            ++local.discoveryMisses;
+            if((module.error==ERROR_BAD_LENGTH||module.error==ERROR_PARTIAL_COPY||module.error==ERROR_MOD_NOT_FOUND)&&GetTickCount64()<deadline)return;
+            failed(module.error);return;
+        }
+        const auto offset=reinterpret_cast<std::uintptr_t>(&SFNP_CompositorSourceAuditStartV1)-reinterpret_cast<std::uintptr_t>(ownModule);
+        if(offset>=module.bytes){failed(ERROR_INVALID_ADDRESS);return;}
+        const Launch launch{Magic,birth(GetCurrentProcess()),GetCurrentProcessId(),0};
+        remoteArgument=VirtualAllocEx(process.value,nullptr,sizeof launch,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);SIZE_T used=0;
+        if(!remoteArgument||!WriteProcessMemory(process.value,remoteArgument,&launch,sizeof launch,&used)||used!=sizeof launch){failed(GetLastError());return;}
+        thread.reset(CreateRemoteThread(process.value,nullptr,0,reinterpret_cast<LPTHREAD_START_ROUTINE>(module.base+offset),remoteArgument,0,nullptr));
+        if(!thread){failed(GetLastError());return;}
+        ++local.entryCalls;phase=2;local.state=3;deadline=GetTickCount64()+3000;
     }
     void advance(){
         if(!process||WaitForSingleObject(process.value,0)==WAIT_OBJECT_0){failed(ERROR_PROCESS_ABORTED);return;}
         if(birth(process.value)!=targetBirth){failed(ERROR_INVALID_HANDLE);return;}
+        if(phase==4){startObserver();return;}
         if(WaitForSingleObject(thread.value,0)!=WAIT_OBJECT_0){if(GetTickCount64()>=deadline)failed(WAIT_TIMEOUT);return;}
         DWORD result=0;if(!GetExitCodeThread(thread.value,&result)){failed(GetLastError());return;}
         local.remoteResult=result;
@@ -160,18 +184,12 @@ struct SourceAuditServer::Impl {
         // A remote LoadLibrary thread exposes only DWORD exit status; never
         // reinterpret it as a 64-bit HMODULE. Module metadata below is checked.
         if(phase==2){if(!result){failed(ERROR_DLL_INIT_FAILED);return;}phase=3;local.state=3;return;}
-        std::size_t moduleBytes=0;const auto base=remoteModule(target,ownPath,&moduleBytes);
-        const auto offset=reinterpret_cast<std::uintptr_t>(&SFNP_CompositorSourceAuditStartV1)-reinterpret_cast<std::uintptr_t>(ownModule);
-        if(!base||offset>=moduleBytes){failed(ERROR_MOD_NOT_FOUND);return;}
-        const Launch launch{Magic,birth(GetCurrentProcess()),GetCurrentProcessId(),0};
-        remoteArgument=VirtualAllocEx(process.value,nullptr,sizeof launch,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);SIZE_T used=0;
-        if(!remoteArgument||!WriteProcessMemory(process.value,remoteArgument,&launch,sizeof launch,&used)||used!=sizeof launch){failed(GetLastError());return;}
-        thread.reset(CreateRemoteThread(process.value,nullptr,0,reinterpret_cast<LPTHREAD_START_ROUTINE>(base+offset),remoteArgument,0,nullptr));
-        if(!thread){failed(GetLastError());return;}
-        phase=2;local.state=3;deadline=GetTickCount64()+3000;
+        // Loading is complete, but Windows' public module snapshot can still
+        // report loader churn. Repeat only metadata discovery, never loading.
+        phase=4;deadline=GetTickCount64()+3000;startObserver();
     }
 };
-SourceAuditServer::SourceAuditServer():impl_(new Impl){}
+SourceAuditServer::SourceAuditServer(SourceAuditDiscovery discovery):impl_(new Impl(discovery)){}
 SourceAuditServer::~SourceAuditServer()=default;
 void SourceAuditServer::tick(VerifyFile verify,Inventory getInventory,void* opaque)noexcept{
     auto& s=*impl_;std::lock_guard<std::mutex> guard(s.mutex);if(s.stopped)return;
@@ -183,7 +201,7 @@ void SourceAuditServer::tick(VerifyFile verify,Inventory getInventory,void* opaq
                 publish(s.page->inventorySequence,s.page->inventory,inventory);s.inventoryEpoch=inventory.epoch;
             }
         }
-        if(s.phase==1||s.phase==2){s.advance();return;}
+        if(s.phase==1||s.phase==2||s.phase==4){s.advance();return;}
         if(s.attempted)return;
         if(now<s.nextScan)return;
         s.nextScan=now+50;
@@ -198,6 +216,9 @@ void SourceAuditServer::tick(VerifyFile verify,Inventory getInventory,void* opaq
 SourceAuditStatus SourceAuditServer::status()const noexcept{
     auto& s=*impl_;std::lock_guard<std::mutex> guard(s.mutex);SourceAuditStatus result=s.local,remote{};
     if(s.local.state!=8&&s.page&&s.target&&read(s.page->statusSequence,s.page->status,remote)&&remote.pid==s.target){
+        remote.discoveryError=s.local.discoveryError;remote.discoveryEntries=s.local.discoveryEntries;
+        remote.discoveryMatches=s.local.discoveryMatches;remote.discoveryMisses=s.local.discoveryMisses;
+        remote.loadCalls=s.local.loadCalls;remote.entryCalls=s.local.entryCalls;
         remote.sampleCount=std::min(remote.sampleCount,SourceAuditSamples);result=remote;
     }
     return result;

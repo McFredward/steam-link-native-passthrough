@@ -21,6 +21,64 @@ on:
 permissions:
   contents: read
 jobs:
+  gnu-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the distribution compiler and static runtime policy
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-win32
+          bash tests/build_source_audit_fixtures.sh build/gnu x86_64-w64-mingw32-g++-win32
+      - uses: actions/upload-artifact@v4
+        with:
+          name: owned-gnu-source-audit-fixtures
+          path: build/gnu
+  owned-gnu-windows-controls:
+    needs: gnu-fixtures
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: owned-gnu-source-audit-fixtures
+          path: build/gnu
+      - name: Run actual GNU binaries with normal and faulted public metadata
+        shell: pwsh
+        run: |
+          & build/gnu/audit-gpu.exe *>build/gnu/audit-gpu.log
+          $result = $LASTEXITCODE
+          Get-Content build/gnu/audit-gpu.log
+          if ($result -ne 0) { throw 'GNU production observer GPU control failed' }
+          foreach ($case in 1,2,3,4,5,6,7,8,9) {
+            & build/gnu/vrserver.exe $case normal *>"build/gnu/loader-case$case.log"
+            $result = $LASTEXITCODE
+            Get-Content "build/gnu/loader-case$case.log"
+            if ($result -ne 0) { throw "GNU loader case $case failed" }
+          }
+          & build/gnu/vrserver.exe 1 single *>build/gnu/loader-single.log
+          $result = $LASTEXITCODE
+          Get-Content build/gnu/loader-single.log
+          if ($result -ne 0) { throw 'GNU single-threaded loader failed' }
+      - name: Require one-shot discovery and lexical-only identity controls to fail
+        shell: pwsh
+        run: |
+          & build/gnu/no-retry/vrserver.exe 4 normal *>build/gnu/no-retry.log
+          $result = $LASTEXITCODE
+          $log = Get-Content build/gnu/no-retry.log -Raw
+          Write-Host $log
+          if ($result -ne 1 -or $log -notmatch 'control=4: FAIL' -or $log -notmatch 'error=24 stage=5' -or $log -notmatch 'load/entry=1/0') { throw 'Missing-retry causal control failed for an unrelated reason' }
+          & build/gnu/no-identity/vrserver.exe 7 normal *>build/gnu/no-identity.log
+          $result = $LASTEXITCODE
+          $log = Get-Content build/gnu/no-identity.log -Raw
+          Write-Host $log
+          if ($result -ne 1 -or $log -notmatch 'control=7: FAIL' -or $log -notmatch 'error=126 stage=5' -or $log -notmatch 'load/entry=1/0') { throw 'Missing-file-identity causal control failed for an unrelated reason' }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compositor-source-audit-gnu-evidence
+          path: build/gnu/*.log
   owned-windows-controls:
     runs-on: windows-2025
     timeout-minutes: 5
@@ -66,6 +124,15 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\loader-foreign-installation.log
           exit /b %SFNP_RESULT%
+      - name: Exercise module churn, path aliases and exact once-only loading
+        shell: pwsh
+        run: |
+          foreach ($case in 4,5,6,7,8,9) {
+            & build/vrserver.exe $case normal *>"build/loader-case$case.log"
+            $result = $LASTEXITCODE
+            Get-Content "build/loader-case$case.log"
+            if ($result -ne 0) { throw "MSVC loader case $case failed" }
+          }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

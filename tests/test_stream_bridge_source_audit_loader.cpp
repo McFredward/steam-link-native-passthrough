@@ -48,7 +48,7 @@ int main(int argc,char** argv){
         pass=run&&run(control);}
     // The test child is owned by this fixture. Negative cases never started
     // its observer; terminate that waiting fixture rather than wait15seconds.
-    if(control!=1)TerminateProcess(process.hProcess,0);
+    if(control!=1&&control!=4&&control!=6&&control!=7)TerminateProcess(process.hProcess,0);
     const auto waited=WaitForSingleObject(process.hProcess,5000);DWORD code=1;
     if(waited==WAIT_OBJECT_0)GetExitCodeProcess(process.hProcess,&code);
     else TerminateProcess(process.hProcess,1);
