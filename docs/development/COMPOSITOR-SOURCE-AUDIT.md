@@ -15,6 +15,46 @@ extent refusals. Both modes still lack PC coverage. These are ordinary-video
 observations, not headset MR acceptance or exact joins between independent
 PC/Frame counters.
 
+## PC0.3.18: reconcile completed-load module discovery
+
+The matched November13 evening test of PC0.3.17 reaches the new diagnostic,
+but reports state8/error126 at failed-stage2 with a nonzero32-bit loader
+result. Its observer entry never starts: devices, shaders, draws and samples
+remain zero. The original error combines an absent module and an out-of-range
+entry RVA, so the supplied logs do not prove which underlying condition caused
+this hardware failure. A DWORD loader result is not a Win64 HMODULE.
+
+The sender still produces4093 pairs and1245 matched inputs, with zero masks.
+The correct Frame0.3.12 receives4069 additional maskless associations and makes
+2896 additional padded ordinary draws without extent refusals. Only two new
+camera-only draws occur. Its counters are cumulative across the same compositor
+process; the total1620 camera-only count is not1620 new failures. This run logs
+Default stream views1216x1216; it contains no new quality-mode switch.
+
+The loader now performs a separate bounded metadata-reconciliation stage after
+its one completed DLL load. Windows module snapshots can fail or be incomplete
+while the loader is changing them. These observations are retried without
+repeating LoadLibrary or freeing arguments beneath an uncertain call. Alternate
+DOS/extended/UNC spellings are normalized, with kernel file identity as the
+fallback for other aliases. Missing, foreign, ambiguous or incomplete metadata
+never selects an entry. The DLL source stays protected against replacement.
+This file identity concerns only the observer DLL; it grants no GPU, frame,
+mask or camera authority. An invalid entry RVA has its own error now.
+
+Reporting includes the actual discovery error, enumerated/matching module
+counts, missed observations and separate load/entry call counts. The Windows
+gate now executes both MSVC and GNU/MinGW binaries with the distribution's
+static runtime policy. Owned controls cover transient and permanent metadata
+failures, extended paths, hardlink aliases, foreign files, ambiguity and
+once-only loading. Independently removing retry or file identity must reproduce
+the corresponding refusal. These controls address implementation gaps; they
+do not establish that the real compositor is observed yet or restore beta MR.
+
+Installer0.3.31 ships PC0.3.18 and byte-identical Frame0.3.12 artifacts/settings.
+A PC-only update must leave the running Frame untouched. Earlier capture paths,
+quality settings, native RGB and every source/frame/mask admission rule remain
+unchanged. A fresh real-compositor run is still required.
+
 ## Why another process must be observed
 
 The current producer sees compositor-owned stream tiles rather than the
