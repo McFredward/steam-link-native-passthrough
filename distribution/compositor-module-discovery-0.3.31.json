@@ -1,0 +1,197 @@
+{
+  "archive": {
+    "bytes": 20268164,
+    "sha256": "16ed12843b51abaaf400f857c0469c244c932d4c40e4cd36fb67656b906ba070"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726216,
+      "sha256": "a696e85542315f85760b369bcf2805a95ee537369a2b3852be5472297d7f40de"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2162688,
+      "sha256": "cf1989db914dc558fb06061e68920624c0c2c0ff87bd21a1ff2fd51dddc0bf70"
+    }
+  },
+  "change": "Reconcile module metadata after exactly one completed DLL load, normalize public path spellings and kernel file identities, and refuse incomplete/foreign/ambiguous results; no GPU/frame/mask authority changes",
+  "ci": {
+    "native": {
+      "conclusion": "success",
+      "databaseId": 43513127733,
+      "headSha": "d159cd9db45c328f64d484b9e48559f7e46c4e0f",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43513127733"
+    },
+    "observer": {
+      "conclusion": "success",
+      "databaseId": 43513561568,
+      "headSha": "03535af0d6e56f656162786571ded89425a308a5",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43513561568"
+    },
+    "shared_alpha": {
+      "conclusion": "success",
+      "databaseId": 43513127824,
+      "headSha": "d159cd9db45c328f64d484b9e48559f7e46c4e0f",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43513127824"
+    },
+    "source_format": {
+      "conclusion": "success",
+      "databaseId": 43513127747,
+      "headSha": "d159cd9db45c328f64d484b9e48559f7e46c4e0f",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43513127747"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.12",
+    "pc": "0.3.18"
+  },
+  "device_actions": false,
+  "diagnostics_only": true,
+  "frame_artifacts_and_settings_byte_identical": true,
+  "frame_mask_and_camera_admission_unchanged": true,
+  "hardware_verified": false,
+  "mixed_reality_fixed": false,
+  "observed_failure": "PC0.3.17 fails its single post-load module lookup at stage2/error126 with a nonzero32-bit loader result; no observer entry or source binding is observed",
+  "schema": "sfnp-compositor-module-discovery-candidate-v1",
+  "software_logs": {
+    "installer-tests.log": {
+      "bytes": 147,
+      "sha256": "f770c590d36a171406b76789f0cbed4c0a53a5e20a48e752d121859b47cea7ef"
+    },
+    "native-installer-tests.log": {
+      "bytes": 116,
+      "sha256": "40a642b32a794ca823c368e71d88680f70675aa35ea34071dd18dcaf4acc64d9"
+    },
+    "package-tests.log": {
+      "bytes": 116,
+      "sha256": "1b27e735d4506fae2c0ebb4fac233d7c5e86d1e4139e3c4149624d76de323170"
+    },
+    "pc-only-tests.log": {
+      "bytes": 3378,
+      "sha256": "e6269b3baba847180be4970c4cc70b049512d2f4accb29019cfcb25bad66025e"
+    },
+    "provider-build.log": {
+      "bytes": 196,
+      "sha256": "0f7602456d9cdef8a280ad01b842b832fa4e9b6a31f2cc3e2f3a100d7a7a1706"
+    },
+    "workflow-tests.log": {
+      "bytes": 10544,
+      "sha256": "ba5b9aea868842ac1158032d7c0ee182c073ada79bdcc809401d04fa03383108"
+    }
+  },
+  "source_revision": "659aacae54bd5400db7c159f74c44816c2aeca02",
+  "version": "0.3.31",
+  "windows_logs": {
+    "gnu/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "e611b182c0a9b64d0ce5b8e41b8a888d7b2b9c130986eae083ac8b499c16f7e4"
+    },
+    "gnu/loader-case1.log": {
+      "bytes": 209,
+      "sha256": "753f45a3dacd2919c101223801ea45f463fcde674ca575e98c84b2ed2f8e08b0"
+    },
+    "gnu/loader-case2.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "gnu/loader-case3.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "gnu/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "a1ff89e130a9b91e19f662fbd2e3f8f42dde02bb07ef15f1bb2fc850e9354f1e"
+    },
+    "gnu/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "660fcd7445b224350d7d0939f2df5a3753ad848b8773de607055aeaecdb0b2bb"
+    },
+    "gnu/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "4bfe5103de36f6e2bdbb73411eff46322874fdd18a337a05826a1763f32018f9"
+    },
+    "gnu/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "2158944d2ca82a1ceae9202d1145f805edc46ab496a8d4f7ada1579ed294781f"
+    },
+    "gnu/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "ec0452d687ca6f5deeff6c4c2d70e4490c637811d63cee55082b748ca194df16"
+    },
+    "gnu/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "96a736b88e683d25fdd6a459a2adeca55b1caa53c41ec5b2d46d6dc00269dd5f"
+    },
+    "gnu/loader-single.log": {
+      "bytes": 209,
+      "sha256": "1a2c5032908e5c60647ea4580eb4fb09f562328ab284ecc6a14cfbd6170a4deb"
+    },
+    "gnu/no-identity.log": {
+      "bytes": 224,
+      "sha256": "25b27b142146d98100cf18bbf1425ff4ea9b7376133ca2033b33bd41381a04d2"
+    },
+    "gnu/no-retry.log": {
+      "bytes": 219,
+      "sha256": "39804eab489464ffd9b199f7ea34f34c67108f5ea3bcb695bfe96507234f01c0"
+    },
+    "msvc/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "e611b182c0a9b64d0ce5b8e41b8a888d7b2b9c130986eae083ac8b499c16f7e4"
+    },
+    "msvc/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "b990c837ceb3b811974520a021bad633a9f68c8044b31d3ae852ee7c74c03708"
+    },
+    "msvc/loader-case5.log": {
+      "bytes": 220,
+      "sha256": "97f8295e7f7eef433da1c50a8d417b1aece95b45769dba8e75b4b32336e56cd8"
+    },
+    "msvc/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "8c22bfa7460da1e6bb3a76091c80e8143f514881470267fe712bc9be8bdb6086"
+    },
+    "msvc/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "697fe41413f459c87dbf711bd0e38997551dabbbfa2f42ccefab3a0a9de1ec9b"
+    },
+    "msvc/loader-case8.log": {
+      "bytes": 223,
+      "sha256": "362667c0eb91b1ce8d15fa57995b36589dfe6f3d3eba610e7c12135ea1b242f3"
+    },
+    "msvc/loader-case9.log": {
+      "bytes": 219,
+      "sha256": "070c341c4c1e80924d6febe9e44ef3330f962a3dad722e7e606f2d6116cde560"
+    },
+    "msvc/loader-foreign-installation.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "msvc/loader-normal.log": {
+      "bytes": 209,
+      "sha256": "cc47866a0870ce7e6aaa7eb4b104b5e6e4922abfaf1add51d11b1e0a26021bbd"
+    },
+    "msvc/loader-publisher-refusal.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "msvc/loader-single.log": {
+      "bytes": 209,
+      "sha256": "321dd9e6abb7f8377b7432e21780231f169f812bcd97888773b05aae7c02f6e4"
+    }
+  }
+}
