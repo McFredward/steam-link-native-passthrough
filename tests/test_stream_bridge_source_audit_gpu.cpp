@@ -62,6 +62,7 @@ constexpr unsigned W=37,H=23;
 constexpr char Program[]=R"(
 Texture2D<float4> scene:register(t0);Texture2D<float4> overlay:register(t1);
 float4 vs(uint id:SV_VertexID):SV_Position {float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
+float4 otherVs(uint id:SV_VertexID):SV_Position {float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0.25,1);}
 float4 ps(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))+overlay.Load(int3(int2(p.xy),0))*0.25;}
 float4 unreviewed(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))*float4(0.5,0.75,0.25,1)+overlay.Load(int3(int2(p.xy),0))*0.125;}
 )";
@@ -156,6 +157,15 @@ void run(){
     check(!unknownSample.shader&&unknownSample.vertexKind==unsigned(NativeShader::StreamVertex)&&unknownSample.programHashValid&&unknownSample.programHash==expectedHash,"unknown observations stay explicitly unknown and retain their exact fingerprint");
     context.p->VSSetShader(nullptr,nullptr,0);const auto noVertex=observer->serial;context.p->Draw(3,0);
     check(observer->serial==noVertex,"unreviewed pixels without a reviewed vertex never enter the bounded source observation");
+    Com<ID3DBlob> otherVertexCode;Com<ID3D11VertexShader> otherVertex;
+    check(SUCCEEDED(D3DCompile(Program,sizeof Program-1,nullptr,nullptr,nullptr,"otherVs","vs_5_0",0,0,otherVertexCode.out(),nullptr))&&
+        SUCCEEDED(device.p->CreateVertexShader(otherVertexCode.p->GetBufferPointer(),otherVertexCode.p->GetBufferSize(),nullptr,otherVertex.out())),"owned unreviewed vertex program");
+    context.p->VSSetShader(otherVertex.p,nullptr,0);const auto beforeOtherVertex=observer->serial;context.p->Draw(3,0);
+    check(observer->serial==beforeOtherVertex+2,"registered non-compositor bindings can be observed before a reviewed stream-vertex stage");
+    const auto& otherVertexSample=observer->status.samples[(observer->serial-1)%SourceAuditSamples];
+    check(!otherVertexSample.shader&&!otherVertexSample.vertexKind&&otherVertexSample.ownerMatches==1&&otherVertexSample.pid==102,"registered ownership remains diagnostic without promoting either unreviewed program");
+    const auto savedInventory=observer->inventory;observer->inventory={};const auto noOwner=observer->serial;context.p->Draw(3,0);
+    check(observer->serial==noOwner,"two unreviewed programs without a unique registered source are not sampled");observer->inventory=savedInventory;
     context.p->VSSetShader(vs.p,nullptr,0);
     Com<ID3D11ClassLinkage> linkage;Com<ID3D11PixelShader> linked;
     check(SUCCEEDED(device.p->CreateClassLinkage(linkage.out()))&&SUCCEEDED(device.p->CreatePixelShader(psCode.p->GetBufferPointer(),psCode.p->GetBufferSize(),linkage.p,linked.out())),"actual linked pixel creation with reviewed code bytes");

@@ -150,8 +150,9 @@ struct Observer {
         const auto kind=shaders.identify(shader.p);
         const bool reviewed=kind==NativeShader::StreamCombine||kind==NativeShader::StreamInset;
         Held<ID3D11VertexShader> vertex;ctx->VSGetShader(vertex.out(),nullptr,nullptr);
+        if(!vertex.p)return;
         const auto vertexKind=shaders.identify(vertex.p);
-        if(!reviewed&&(!shader.p||vertexKind!=NativeShader::StreamVertex))return;
+        const bool programCandidate=reviewed||vertexKind==NativeShader::StreamVertex;
         if(reviewed)++recognized;
         NativeShaderDescription program{};const bool hashValid=shaders.describe(shader.p,program)&&program.pixel;
 
@@ -166,6 +167,10 @@ struct Observer {
             if(SUCCEEDED(resource.p->QueryInterface(IID_IDXGIResource,reinterpret_cast<void**>(shared.out()))))
                 (void)shared.p->GetSharedHandle(&handle);
             auto sample=auditSource(inventory,reinterpret_cast<std::uintptr_t>(handle),shape.Width,shape.Height,unsigned(shape.Format),shape.SampleDesc.Count,shape.ArraySize);
+            // A registered non-compositor allocation can also expose earlier
+            // scene draws with other vertex programs. This is only a bounded
+            // ancestry diagnostic, never a source/eye/frame permission.
+            if(!programCandidate&&(sample.ownerMatches!=1||!sample.pid||sample.pid==status.pid))continue;
             sample.shader=unsigned(kind);sample.slot=slot;sample.vertexKind=unsigned(vertexKind);
             sample.command=call.command;sample.count=call.count;sample.instances=call.instances;sample.start=call.start;
             sample.firstInstance=call.firstInstance;sample.argumentOffset=call.argumentOffset;sample.baseVertex=call.baseVertex;

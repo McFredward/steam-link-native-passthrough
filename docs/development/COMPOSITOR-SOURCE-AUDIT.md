@@ -46,15 +46,18 @@ A draw with a reviewed stream pixel program remains observable. A draw with a
 reviewed stream vertex program can additionally report its unreviewed pixel
 fingerprint and bound SRV metadata. Such bindings do not prove that an unknown
 program uses those inputs, or establish original game eyes, frame lineage,
-coverage semantics or accepted encoder input. No shader body, image or camera
-data is recorded. At most32 scalar observations remain retained; cold reporting
+coverage semantics or accepted encoder input. A uniquely registered non-compositor allocation can also expose an earlier
+scene draw with other vertex programs; its owner label still grants no GPU or
+frame authority. Null vertex programs are not sampled. No shader body, image
+or camera data is recorded. At most32 scalar observations remain retained; cold reporting
 permits64 status pairs and128 sample pairs, with eight samples per registry
 epoch so startup diagnostics leave room for a later application allocation.
 
 Owned tests exercise all public argument lists, current native dispatch and
 cached forwarding after stop, plus actual WARP indexed, instanced and indirect
 RGBA output. Unreviewed pixels retain unknown semantics and unchanged output;
-unreviewed pixels without the reviewed vertex are not sampled. Default
+unreviewed pixels without a reviewed vertex or unique registered source are
+not sampled. Default
 coverage observers must not retain unknown program metadata. The checks run
 with both MSVC and the distribution's GNU/MinGW runtime policy.
 
