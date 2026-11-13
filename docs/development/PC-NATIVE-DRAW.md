@@ -1,5 +1,33 @@
 # Adaptive PC native draw and composition
 
+## November13 evening: compositor observation did not start
+
+The matched PC0.3.17 run reports a completed loader thread, then
+state8/error126 at failed-stage2. There are no observed compositor devices,
+programs, draws or source samples. The nonzero DWORD result is not a usable
+Win64 module pointer; the old error also merges missing-module and invalid-RVA
+cases, so the underlying hardware condition remains undetermined.
+
+The sender still reports4093 pairs,1245 inputs and zero masks. Frame0.3.12
+receives4069 new maskless associations, prepares1245 pictures and makes2896
+padded ordinary draws with zero extent refusals. Only two additional
+camera-only draws occur in the same cumulative Frame process. The supplied
+compositor log contains multiple sessions; the relevant one starts with
+PID16380 at22:26:33.442 local time and creates its device at22:26:33.518.
+The game confirms actual independent2D eye passes and ordinary-RGBA permission.
+This run reports Default1216-square stream views and no quality-mode switch.
+
+Installer0.3.31 / PC0.3.18 adds bounded post-load metadata reconciliation and
+module file-identity matching. The expanded
+[Windows gate](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43513561568)
+passes MSVC and production-policy GNU/MinGW controls, including exactly one
+load across transient failures, extended/hardlink aliases and strict foreign
+or ambiguous refusals. Removing retry or file identity must independently fail
+its corresponding control. See [observer scope](COMPOSITOR-SOURCE-AUDIT.md).
+Frame0.3.12 and all existing image/mask/camera admission rules are unchanged.
+This is still diagnostic delivery, not restored beta MR. A fresh real-compositor
+run must first establish that actual upstream bindings can be observed.
+
 ## November13: ordinary video restored, application source still missing
 
 The matched Battlemarked test of installer0.3.29 / PC0.3.16 / Frame0.3.12

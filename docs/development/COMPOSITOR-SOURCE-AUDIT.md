@@ -32,8 +32,8 @@ process; the total1620 camera-only count is not1620 new failures. This run logs
 Default stream views1216x1216; it contains no new quality-mode switch.
 
 The loader now performs a separate bounded metadata-reconciliation stage after
-its one completed DLL load. Windows module snapshots can fail or be incomplete
-while the loader is changing them. These observations are retried without
+its one completed DLL load. Windows documents [snapshot failures during loader changes](https://learn.microsoft.com/en-us/windows/win32/api/tlhelp32/nf-tlhelp32-createtoolhelp32snapshot),
+and module paths retain their [load-time spelling](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamea). These observations are retried without
 repeating LoadLibrary or freeing arguments beneath an uncertain call. Alternate
 DOS/extended/UNC spellings are normalized, with kernel file identity as the
 fallback for other aliases. Missing, foreign, ambiguous or incomplete metadata
