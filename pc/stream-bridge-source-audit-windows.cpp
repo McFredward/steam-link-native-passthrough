@@ -91,6 +91,10 @@ struct SourceAuditServer::Impl {
         // exit. Never free beneath the loader, terminate it, or replay it.
         if(remoteArgument&&process&&(!thread||WaitForSingleObject(thread.value,0)==WAIT_OBJECT_0))
             VirtualFreeEx(process.value,remoteArgument,0,MEM_RELEASE);
+        // Keep the source file immutable too while an uncertain loader may
+        // still open it. One bounded process-lifetime handle; Apply closes the
+        // parent SteamVR process before any future package replacement.
+        if(thread&&WaitForSingleObject(thread.value,0)!=WAIT_OBJECT_0)sourceFile.value=nullptr;
         remoteArgument=nullptr;thread.reset();process.reset();sourceFile.reset();
         if(page){UnmapViewOfFile(page);page=nullptr;}
         if(mapping){CloseHandle(mapping);mapping=nullptr;}

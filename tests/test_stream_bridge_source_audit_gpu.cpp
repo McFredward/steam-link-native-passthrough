@@ -40,11 +40,11 @@ void run(){
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"single-threaded native WARP device");
     const auto originalTable=*reinterpret_cast<void***>(context.p);
     std::array<void*,115> originalEntries{};std::memcpy(originalEntries.data(),originalTable,sizeof originalEntries);
-    nativeDraw=bits<Draw>(originalTable[13]);DWORD old=0,ignored=0;
-    check(Observer::writable(originalTable+13,old),"owned counting shim installation");
-    InterlockedExchangePointer(originalTable+13,bits<void*>(&counted));VirtualProtect(originalTable+13,sizeof(void*),old,&ignored);
+    DWORD old=0,ignored=0;
     auto* observer=new Observer(Launch{},contracts.data(),contracts.size());Observer::instance.store(observer);
     check(observer->shaders.observeDevice(device.p)&&observer->status.state==5,"same-caller context observation permits SINGLETHREADED without cross-thread D3D access");
+    nativeDraw=bits<Draw>(observer->tables[0].original);
+    observer->tables[0].original=bits<void*>(&counted);
     check(*reinterpret_cast<void***>(context.p)==originalTable,"entire native vptr, private tail and RTTI are preserved");
     for(unsigned i=0;i<originalEntries.size();++i)if(i!=13)check(originalEntries[i]==originalTable[i],"all other public context methods remain native");
     const auto cached=bits<Draw>(originalTable[13]);
@@ -73,7 +73,11 @@ void run(){
     context.p->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context.p->VSSetShader(vs.p,nullptr,0);context.p->PSSetShader(ps.p,nullptr,0);
     ID3D11ShaderResourceView* inputs[]{views[0].p,views[1].p};context.p->PSSetShaderResources(0,2,inputs);context.p->OMSetRenderTargets(1,&rtv.p,nullptr);
     counted(context.p,3,0);const auto baseline=pixels(context.p,target.p,staging.p);nativeDraws=0;
-    context.p->Draw(3,0);check(GetLastError()==1234&&nativeDraws==1&&lastCount==3&&!lastStart,"native draw executes exactly once with original arguments and LastError");
+    context.p->Draw(3,0);const auto drawError=GetLastError();
+    if(drawError!=1234||nativeDraws!=1||lastCount!=3||lastStart)
+        std::fprintf(stderr,"owned draw trace: native=%u args=%u/%u error=%lu observed=%llu dispatch-retained=%u\n",nativeDraws,lastCount,lastStart,
+            static_cast<unsigned long>(drawError),static_cast<unsigned long long>(observer->draws.load()),unsigned((*reinterpret_cast<void***>(context.p))[13]==bits<void*>(cached)));
+    check(drawError==1234&&nativeDraws==1&&lastCount==3&&!lastStart,"native draw executes exactly once with original arguments and LastError");
     check(baseline==pixels(context.p,target.p,staging.p),"observer leaves every native output byte unchanged");
     check(observer->status.sampleCount==2&&observer->recognized==1,"bounded observations contain both actual source slots");
     for(unsigned i=0;i<2;++i){const auto& s=observer->status.samples[i];check(s.slot==i&&s.pid==101+i&&s.ownerMatches==1&&s.width==W&&s.height==H&&s.outputWidth==W&&s.outputHeight==H,"bound source ownership and arbitrary physical extents come from actual views");}
