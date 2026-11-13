@@ -72,7 +72,7 @@ struct SourceAuditServer::Impl {
     Handle process,thread,sourceFile;DWORD target=0;std::uint64_t targetBirth=0;
     void* remoteArgument=nullptr;std::size_t remoteBytes=0;
     unsigned phase=0;bool stopped=false,attempted=false;
-    std::uint64_t nextScan=0,deadline=0,nextInventory=0,inventoryEpoch=0;
+    std::uint64_t nextScan=0,deadline=0,nextInventory=0,inventoryEpoch=0,readinessDeadline=0;
     std::wstring ownPath;HMODULE ownModule=nullptr;
     SourceAuditStatus local{};
     bool eligible(DWORD pid,HANDLE handle)const {
@@ -99,7 +99,7 @@ struct SourceAuditServer::Impl {
         if(page){UnmapViewOfFile(page);page=nullptr;}
         if(mapping){CloseHandle(mapping);mapping=nullptr;}
     }
-    void failed(DWORD error)noexcept{local.state=8;local.error=error;phase=0;attempted=true;}
+    void failed(DWORD error)noexcept{local.failureStage=phase+1;local.state=8;local.error=error;phase=0;attempted=true;}
     bool begin(DWORD pid,VerifyFile verify){
         // Inspect only public identity with query rights first. A compositor
         // belonging to another user/session/installation is never opened for
@@ -116,7 +116,6 @@ struct SourceAuditServer::Impl {
         if(_wcsicmp(processPath(process.value).c_str(),expected.c_str()))return false;
         Handle executable;executable.reset(CreateFileW(expected.c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_DELETE,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr));
         if(!executable)return false;
-        if(!verify||!verify(expected.c_str(),executable.value)){SetLastError(ERROR_INVALID_EXE_SIGNATURE);return false;}
         targetBirth=birth(process.value);if(!targetBirth)return false;
         if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             reinterpret_cast<LPCWSTR>(&SFNP_CompositorSourceAuditStartV1),&ownModule))return false;
@@ -131,7 +130,16 @@ struct SourceAuditServer::Impl {
         const auto ownerPath=modulePath(owner);std::size_t remoteSize=0;
         const auto remoteBase=remoteModule(pid,ownerPath,&remoteSize);
         const auto offset=reinterpret_cast<std::uintptr_t>(load)-reinterpret_cast<std::uintptr_t>(owner);
-        if(!remoteBase||offset>=remoteSize){SetLastError(ERROR_MOD_NOT_FOUND);return false;}
+        if(!remoteBase){
+            // CreateProcess can expose the new PID before its public system
+            // module list is initialized. Nothing has been written yet, so
+            // bounded read-only discovery can wait without replaying a call.
+            if(!readinessDeadline)readinessDeadline=GetTickCount64()+3000;
+            if(GetTickCount64()<readinessDeadline){process.reset();sourceFile.reset();return true;}
+            SetLastError(ERROR_MOD_NOT_FOUND);return false;
+        }
+        if(offset>=remoteSize){SetLastError(ERROR_INVALID_ADDRESS);return false;}
+        if(!verify||!verify(expected.c_str(),executable.value)){SetLastError(ERROR_INVALID_EXE_SIGNATURE);return false;}
         remoteBytes=(ownPath.size()+1)*sizeof(wchar_t);
         if(remoteBytes>65536){SetLastError(ERROR_BAD_LENGTH);return false;}
         remoteArgument=VirtualAllocEx(process.value,nullptr,remoteBytes,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
@@ -146,6 +154,7 @@ struct SourceAuditServer::Impl {
         if(birth(process.value)!=targetBirth){failed(ERROR_INVALID_HANDLE);return;}
         if(WaitForSingleObject(thread.value,0)!=WAIT_OBJECT_0){if(GetTickCount64()>=deadline)failed(WAIT_TIMEOUT);return;}
         DWORD result=0;if(!GetExitCodeThread(thread.value,&result)){failed(GetLastError());return;}
+        local.remoteResult=result;
         thread.reset();
         if(remoteArgument){VirtualFreeEx(process.value,remoteArgument,0,MEM_RELEASE);remoteArgument=nullptr;}
         // A remote LoadLibrary thread exposes only DWORD exit status; never
