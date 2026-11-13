@@ -1,0 +1,144 @@
+{
+  "archive": {
+    "bytes": 20265555,
+    "sha256": "41a7f827fc55dbb84a7ba1b2e458bd2651990d021ce0078d8587609686dbc46f"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726216,
+      "sha256": "a696e85542315f85760b369bcf2805a95ee537369a2b3852be5472297d7f40de"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2158592,
+      "sha256": "31829f05f83ac014aba627538a893fe1c3a56761e3d2e90e9b12e9271b16e7e2"
+    }
+  },
+  "change": "Observe actual upstream source bindings inside the same-user/session/installation compositor; metadata only, with no image/mask/frame authority",
+  "ci": {
+    "observer": {
+      "conclusion": "success",
+      "databaseId": 43427065342,
+      "headSha": "4e3d6356ef36f4d5b60ff8005de6ec1a5f160356",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43427065342"
+    },
+    "public_images": {
+      "conclusion": "success",
+      "databaseId": 43424957111,
+      "headSha": "4f3badb6e246a02405717796e5bd9b4e271015c1",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43424957111"
+    },
+    "resource": {
+      "conclusion": "success",
+      "databaseId": 43424957022,
+      "headSha": "4f3badb6e246a02405717796e5bd9b4e271015c1",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43424957022"
+    },
+    "setup": {
+      "conclusion": "success",
+      "databaseId": 43425616161,
+      "headSha": "7a7c410eb57b5b038305ffed5e0f79a850b55619",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43425616161"
+    },
+    "source_format": {
+      "conclusion": "success",
+      "databaseId": 43426415645,
+      "headSha": "a738f2dc36bee86d74df2704ff273d2033271a00",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43426415645"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.12",
+    "pc": "0.3.17"
+  },
+  "device_actions": false,
+  "diagnostics_only": true,
+  "frame_artifacts_and_settings_byte_identical": true,
+  "frame_mask_and_camera_admission_unchanged": true,
+  "hardware_verified": false,
+  "mixed_reality_fixed": false,
+  "observed_failure": "Both Default and Legacy produce compositor-owned stream views, ordinary native RGB and zero PC masks",
+  "schema": "sfnp-compositor-source-audit-candidate-v1",
+  "software_logs": {
+    "compile-final.log": {
+      "bytes": 191,
+      "sha256": "ea03d3104c2292c93424b97474c599ca593aa1c4375b2465e5bf2870e2433faf"
+    },
+    "current-compositor-import.log": {
+      "bytes": 71,
+      "sha256": "95b2ddf0028c265af7f9aa5357c0177676e96485653672513c4b601aa9542645"
+    },
+    "image-contract.log": {
+      "bytes": 59,
+      "sha256": "a33bdf66a287a0e47e9580ae9b2f080a6f9e74fe67207809be4b23b771785723"
+    },
+    "image-sanitized.log": {
+      "bytes": 59,
+      "sha256": "a33bdf66a287a0e47e9580ae9b2f080a6f9e74fe67207809be4b23b771785723"
+    },
+    "installer-tests.log": {
+      "bytes": 147,
+      "sha256": "7ac33b6d84523a18ceb3f5e1792d42d567382cd831363978c2ee0951a42f9dc2"
+    },
+    "native-installer-tests.log": {
+      "bytes": 116,
+      "sha256": "f44111f9cca6ffadfc92307894a73412c0476ff8b2a06b0d0e7733a64bbf55db"
+    },
+    "package-tests.log": {
+      "bytes": 116,
+      "sha256": "9040162da733370feb15d7e815d129f526dd4836976b695f7950af135d507f21"
+    },
+    "pc-only-tests.log": {
+      "bytes": 3378,
+      "sha256": "24a6125ed7cb424c0e9c5353c15993eff05beb334e7145887122df05e7ca87a5"
+    },
+    "previous-compositor-import.log": {
+      "bytes": 71,
+      "sha256": "89f3c5039f2477b8016480216034ac442747268656e8b01d1a6f5f3c548289a6"
+    },
+    "workflow-tests.log": {
+      "bytes": 10544,
+      "sha256": "8b21e406b370db197ff3c7b49c32fdae1d2a04e9f97c8a25ca54c861ca4db040"
+    }
+  },
+  "source_revision": "2b1690d1897c2920b62b952a23822674a07bf213",
+  "version": "0.3.30",
+  "windows_logs": {
+    "audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "e611b182c0a9b64d0ce5b8e41b8a888d7b2b9c130986eae083ac8b499c16f7e4"
+    },
+    "loader-foreign-installation.log": {
+      "bytes": 140,
+      "sha256": "1532e6a12f1ed0ec32658959b427342877260d3db5f02aa5bc989f0208b00343"
+    },
+    "loader-normal.log": {
+      "bytes": 143,
+      "sha256": "3cdec8cba71f8b8134c8c88a5a5b9a56d02239a5553adcb822665926ca170db3"
+    },
+    "loader-publisher-refusal.log": {
+      "bytes": 142,
+      "sha256": "cabf67616f478778fb7f016ff59218d9dbf5cc56582b5045df0549b525dd1e83"
+    },
+    "loader-single.log": {
+      "bytes": 143,
+      "sha256": "42d317c956b239a480faab6edfff1c69068083d6676fd0be949b3dc0b2885a88"
+    }
+  }
+}
