@@ -24,7 +24,7 @@ struct NativeShaders::Impl {
         void* wrappedVertex=nullptr;void* wrappedPixel=nullptr;bool published=false,attached=false;
     };
     struct Device {std::atomic<ID3D11Device*> object{nullptr};Table* methods=nullptr;std::atomic<bool> active{false};};
-    struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;};
+    struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;std::atomic<bool> linked{false};};
     std::array<Table,4> tables{};std::array<Device,4> devices{};std::array<Shader,64> shaders{};
     std::array<Shader,128> unknownPixels{};
     std::array<ShaderFingerprint,32> contracts{};std::size_t contractCount=0;
@@ -36,17 +36,26 @@ struct NativeShaders::Impl {
     static std::atomic<Impl*> instance;
     Device* find(ID3D11Device* object)noexcept{for(auto& slot:devices)if(slot.object.load(std::memory_order_acquire)==object)return &slot;return nullptr;}
     void retain(ID3D11Device* device,ID3D11DeviceChild* shader,const void* code,SIZE_T size,ID3D11ClassLinkage* linkage,bool pixel)noexcept{
-        auto* owner=find(device);if(stopped||!owner||!owner->active.load(std::memory_order_acquire)||!shader||linkage)return;
-        const auto kind=classifyNativeShader(code,size,contracts.data(),contractCount);
+        auto* owner=find(device);if(stopped||!owner||!owner->active.load(std::memory_order_acquire)||!shader)return;
+        if(linkage&&(!rememberUnknownPixels||!pixel))return;
+        // A digest of a linked program cannot recognize its bound class
+        // semantics. Explicit diagnostics may retain only an Unknown label.
+        const auto kind=linkage?NativeShader::Unknown:classifyNativeShader(code,size,contracts.data(),contractCount);
         if(kind==NativeShader::Unknown){++refused;if(!rememberUnknownPixels||!pixel)return;}
         std::array<std::uint8_t,32> hash{};if(!dxbcFingerprint(code,size,hash))return;
         IUnknown* identity=nullptr;if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return;
         std::lock_guard<std::mutex> guard(mutex);
         if(stopped){identity->Release();return;}
+        if(linkage)for(auto& known:shaders)if(known.object.load(std::memory_order_acquire)==identity){
+            // Native caching may return the same shader object for a linked
+            // creation. The explicit diagnostic keeps a conservative Unknown
+            // label rather than retaining its earlier unlinked recognition.
+            known.linked.store(true,std::memory_order_release);identity->Release();return;
+        }
         const auto keep=[&](auto& entries){
             for(const auto& old:entries)if(old.object.load(std::memory_order_acquire)==identity){identity->Release();return true;}
             for(auto& slot:entries)if(!slot.object.load(std::memory_order_relaxed)){
-                slot.kind=kind;slot.hash=hash;slot.pixel=pixel;slot.object.store(identity,std::memory_order_release);
+                slot.kind=kind;slot.hash=hash;slot.pixel=pixel;slot.linked=linkage!=nullptr;slot.object.store(identity,std::memory_order_release);
                 if(kind!=NativeShader::Unknown)++recognized;
                 return true;
             }
@@ -162,7 +171,7 @@ NativeShader NativeShaders::identify(ID3D11DeviceChild* shader)const noexcept{
     IUnknown* identity=nullptr;
     if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return NativeShader::Unknown;
     NativeShader result=NativeShader::Unknown;
-    for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)==identity){result=slot.kind;break;}
+    for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)==identity){if(!slot.linked.load(std::memory_order_acquire))result=slot.kind;break;}
     identity->Release();return result;
 }
 bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& out)const noexcept{
@@ -170,7 +179,8 @@ bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& 
     IUnknown* identity=nullptr;if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return false;
     const auto find=[&](const auto& entries){
         for(const auto& slot:entries)if(slot.object.load(std::memory_order_acquire)==identity){
-            out.kind=slot.kind;out.hash=slot.hash;out.pixel=slot.pixel;return true;
+            out.linked=slot.linked.load(std::memory_order_acquire);out.kind=out.linked?NativeShader::Unknown:slot.kind;
+            out.hash=slot.hash;out.pixel=slot.pixel;return true;
         }
         return false;
     };
@@ -179,6 +189,7 @@ bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& 
 NativeShaderStats NativeShaders::stats()const noexcept{
     NativeShaderStats out{impl_->deviceCount.load(),impl_->recognized.load(),impl_->refused.load(),impl_->import&&!impl_->stopped};
     for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)){
+        if(slot.linked.load(std::memory_order_acquire)){if(slot.pixel)++out.unknownPixels;continue;}
         if(slot.kind==NativeShader::StreamVertex)++out.streamKinds[0];
         if(slot.kind==NativeShader::StreamCombine)++out.streamKinds[1];
         if(slot.kind==NativeShader::StreamInset)++out.streamKinds[2];

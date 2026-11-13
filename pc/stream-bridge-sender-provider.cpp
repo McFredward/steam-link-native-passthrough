@@ -497,9 +497,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                         sample.width,sample.height,sample.format,sample.arraySize,sample.samples,sample.view,sample.viewFormat,
                         sample.outputWidth,sample.outputHeight,sample.outputFormat);
                     report(text,stream_bridge::logging::Level::Debug);
-                    std::snprintf(text,sizeof text,"compositor program sample: serial=%llu, command=%u, count/instances/start/base/first/argument-offset=%u/%u/%u/%d/%u/%u; vertex-kind=%u, pixel-kind=%u, fingerprint-valid=%u, pixel-fingerprint=%s; bindings only, unknown semantics and indirect counts are not inferred",
+                    std::snprintf(text,sizeof text,"compositor program sample: serial=%llu, command=%u, count/instances/start/base/first/argument-offset=%u/%u/%u/%d/%u/%u; vertex-kind=%u, pixel-kind=%u, linked=%u, fingerprint-valid=%u, pixel-fingerprint=%s; bindings only, unknown semantics and indirect counts are not inferred",
                         static_cast<unsigned long long>(sample.serial),sample.command,sample.count,sample.instances,sample.start,sample.baseVertex,
-                        sample.firstInstance,sample.argumentOffset,sample.vertexKind,sample.shader,sample.programHashValid,hash);
+                        sample.firstInstance,sample.argumentOffset,sample.vertexKind,sample.shader,sample.programLinked,sample.programHashValid,hash);
                     report(text,stream_bridge::logging::Level::Debug);++auditSamples;++auditEpochSamples;
                 }
             }

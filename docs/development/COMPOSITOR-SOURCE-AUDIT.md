@@ -38,7 +38,9 @@ Counters now distinguish stream vertex/combine/inset programs and retained
 unknown pixel identities. At most128 unknown pixel objects can retain an
 executable/signature digest in the explicit compositor diagnostic; ordinary
 coverage observers keep this option disabled. identify() still returns Unknown
-for them. Hashes do not recognize semantics or grant a source, frame or mask.
+for them. Linked pixels remain Unknown even with reviewed code bytes; their
+linkage is explicitly reported and does not become reviewed through a digest.
+Hashes do not recognize semantics or grant a source, frame or mask.
 
 A draw with a reviewed stream pixel program remains observable. A draw with a
 reviewed stream vertex program can additionally report its unreviewed pixel

@@ -83,6 +83,8 @@ void run(){
     check(observer.identify(vs.p)==NativeShader::FullscreenVertex&&observer.identify(ps.p)==NativeShader::CopyView&&observer.identify(unknown.p)==NativeShader::Unknown,"recognition belongs to the actual created COM objects");
     NativeShaderDescription description{};check(observer.describe(ps.p,description)&&description.kind==NativeShader::CopyView&&description.pixel&&description.hash==contracts[1].hash,"known shader diagnostics retain exact program identity");
     check(!observer.describe(unknown.p,description)&&description.kind==NativeShader::Unknown,"default coverage observer does not retain or recognize unknown program metadata");
+    Com<ID3D11ClassLinkage> linkage;Com<ID3D11PixelShader> linked;check(SUCCEEDED(device->CreateClassLinkage(linkage.out()))&&SUCCEEDED(device->CreatePixelShader(otherCode->GetBufferPointer(),otherCode->GetBufferSize(),linkage.p,linked.out())),"actual default-policy linked pixel fixture");
+    check(observer.identify(linked.p)==NativeShader::Unknown&&!observer.describe(linked.p,description),"default coverage retains its original linked-program refusal");
     check(createCopyViewCoverageShader(device.p,coverage.out()),"production alpha-only coverage shader compiled cold");
     const auto originalDeviceTable=*reinterpret_cast<void***>(device.p);const auto cachedPixel=pointer<HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const void*,SIZE_T,ID3D11ClassLinkage*,ID3D11PixelShader**)>(originalDeviceTable[15]);
     originalDraw=pointer<NativeDraw>((*reinterpret_cast<void***>(context.p))[13]);

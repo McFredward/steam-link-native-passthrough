@@ -169,7 +169,7 @@ struct Observer {
             sample.shader=unsigned(kind);sample.slot=slot;sample.vertexKind=unsigned(vertexKind);
             sample.command=call.command;sample.count=call.count;sample.instances=call.instances;sample.start=call.start;
             sample.firstInstance=call.firstInstance;sample.argumentOffset=call.argumentOffset;sample.baseVertex=call.baseVertex;
-            sample.programHashValid=hashValid;sample.programHash=program.hash;
+            sample.programHashValid=hashValid;sample.programHash=program.hash;sample.programLinked=program.linked;
             D3D11_SHADER_RESOURCE_VIEW_DESC vd{};view.p->GetDesc(&vd);sample.view=unsigned(vd.ViewDimension);sample.viewFormat=unsigned(vd.Format);
             Held<ID3D11RenderTargetView> out;ctx->OMGetRenderTargets(1,out.out(),nullptr);
             if(out.p){Held<ID3D11Resource> output;out.p->GetResource(output.out());Held<ID3D11Texture2D> target;
@@ -179,7 +179,7 @@ struct Observer {
             }
             const auto key=[](const SourceAuditSample& p){return std::make_tuple(p.inventoryEpoch,p.allocationGeneration,
                 p.shader,p.slot,p.pid,p.width,p.height,p.format,p.arraySize,p.samples,p.view,p.viewFormat,p.ownerMatches,
-                p.outputWidth,p.outputHeight,p.outputFormat,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash);};
+                p.outputWidth,p.outputHeight,p.outputFormat,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash,p.programLinked);};
             bool duplicate=false;
             for(const auto& previous:status.samples)if(previous.serial&&key(previous)==key(sample)){duplicate=true;break;}
             if(duplicate)continue;

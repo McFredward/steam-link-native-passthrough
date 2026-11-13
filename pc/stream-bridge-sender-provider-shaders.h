@@ -8,7 +8,7 @@ struct NativeShaderStats {
     std::uint64_t devices=0,recognized=0,refused=0;bool factory=false;
     std::array<std::uint64_t,3> streamKinds{};std::uint64_t unknownPixels=0;
 };
-struct NativeShaderDescription {NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;};
+struct NativeShaderDescription {NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false,linked=false;};
 // Observe public shader creation before the native encoder is initialized.
 // Recognition applies to actual returned COM objects, never to file names or
 // an assumption that separately created identical shaders share an identity.
