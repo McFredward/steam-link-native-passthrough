@@ -1,5 +1,33 @@
 # Adaptive PC native draw and composition
 
+## November13 late test: observation active, stream pixel bindings missing
+
+PC0.3.18 now reaches state5 with no discovery error, exactly one module match,
+one load and one observer entry. The real compositor device is observed before
+its rendering starts. There are18 recognized shader objects and36816 observed
+plain Draw calls, but zero reviewed stream pixel draws and source samples.
+The count does not separate vertex/combine/inset kinds. It therefore cannot
+prove whether the missing bindings use another draw family, other pixel logic
+or linked shader creation. Private static inspection identifies both indexed
+and plain drawing branches in the supplied renderer; it is not a live join.
+
+The sender has4439 pairs,2382 inputs and zero masks. The matching Frame process
+receives4414 new maskless associations, prepares2382 pictures and makes4798
+padded ordinary draws, with zero extent refusals and four new camera-only draws.
+Its baseline is the immediately preceding22:19UTC status; intervening activity
+makes the previous capture's totals an invalid baseline for this run.
+
+Installer0.3.32 / PC0.3.19 expands bounded diagnostics across raster families,
+records actual unreviewed pixel fingerprints and their linkage history, and
+also samples uniquely registered non-compositor bindings before stream-vertex
+processing. Linked or unknown programs never become reviewed through a hash.
+Default coverage observers keep unknown-program retention disabled. All actual
+render arguments, native RGB and source/frame/mask admission remain unchanged.
+The [MSVC/GNU Windows gate](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43524514657)
+passes230 owned controls, with the prior native resource and source-format
+checks also passing. Frame0.3.12 is byte-identical. See
+[scope and limits](COMPOSITOR-SOURCE-AUDIT.md); restored beta MR is still pending.
+
 ## November13 evening: compositor observation did not start
 
 The matched PC0.3.17 run reports a completed loader thread, then

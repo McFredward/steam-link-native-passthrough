@@ -40,6 +40,9 @@ executable/signature digest in the explicit compositor diagnostic; ordinary
 coverage observers keep this option disabled. identify() still returns Unknown
 for them. Linked pixels remain Unknown even with reviewed code bytes; their
 linkage is explicitly reported and does not become reviewed through a digest.
+The flag records observed creation history, including cached object reuse;
+it does not snapshot the class instances bound at a draw, and is meaningful
+only with an available program description.
 Hashes do not recognize semantics or grant a source, frame or mask.
 
 A draw with a reviewed stream pixel program remains observable. A draw with a
