@@ -29,29 +29,28 @@ struct Observer {
     Launch launch;Page* page=nullptr;HANDLE mapping=nullptr,parent=nullptr;
     NativeShaders shaders;
     std::mutex mutex;SourceAuditInventory inventory{};SourceAuditStatus status{};
-    struct Table {void** address=nullptr;void* original=nullptr;void* wrapper=nullptr;bool attached=false;};
-    std::array<Table,4> tables{};
-    std::array<std::atomic<ID3D11DeviceContext*>,4> contexts{};
+    struct Context {
+        ID3D11DeviceContext* object=nullptr;void** original=nullptr;void** facade=nullptr;
+        std::array<void*,149> expected{};unsigned count=0;void* allocation=nullptr;
+        bool owns()const noexcept {
+            void** current=nullptr;std::array<void*,149> observed{};
+            return object&&facade&&readable(object,&current,sizeof current)&&current==facade&&
+                readable(facade,observed.data(),count*sizeof(void*))&&std::memcmp(observed.data(),expected.data(),count*sizeof(void*))==0;
+        }
+        std::uintptr_t function(unsigned slot)const noexcept {
+            return original&&slot<count?reinterpret_cast<const volatile std::uintptr_t*>(original)[slot]:0;
+        }
+    };
+    std::array<Context,4> contexts{};
+    std::array<std::atomic<ID3D11DeviceContext*>,4> activeContexts{};
     std::atomic<bool> stopped{false};std::atomic<std::uint64_t> draws{0},recognized{0},dropped{0};
     std::uint64_t serial=0;
     static std::atomic<Observer*> instance;
     explicit Observer(const Launch& value,const ShaderFingerprint* contracts=Contracts.data(),std::size_t count=Contracts.size()):
         launch(value),shaders(contracts,count,deviceObserved,this,true){}
-    static bool writable(void** slot,DWORD& protection)noexcept {
-        MEMORY_BASIC_INFORMATION memory{};
-        if(!VirtualQuery(slot,&memory,sizeof memory)||memory.State!=MEM_COMMIT||
-            memory.Protect&(PAGE_GUARD|PAGE_NOACCESS|PAGE_EXECUTE|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY))return false;
-        const auto offset=reinterpret_cast<std::uintptr_t>(slot)-reinterpret_cast<std::uintptr_t>(memory.BaseAddress);
-        if(offset>memory.RegionSize||sizeof(void*)>memory.RegionSize-offset)return false;
-        return VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&protection)!=0;
-    }
     void detach()noexcept {
-        for(auto& table:tables){DWORD old=0;
-            if(table.attached&&writable(table.address+13,old)){
-                InterlockedCompareExchangePointer(table.address+13,table.original,table.wrapper);
-                DWORD ignored=0;(void)VirtualProtect(table.address+13,sizeof(void*),old,&ignored);table.attached=false;
-            }
-        }
+        for(auto& context:contexts)if(context.owns())
+            InterlockedCompareExchangePointer(reinterpret_cast<void**>(context.object),context.original,context.facade);
     }
     static void deviceObserved(ID3D11Device* device,void* opaque)noexcept {
         auto& s=*static_cast<Observer*>(opaque);
@@ -59,45 +58,61 @@ struct Observer {
     }
     void attachContext(ID3D11Device* device){
         std::lock_guard<std::mutex> guard(mutex);if(stopped)return;
-        Held<ID3D11DeviceContext> context;device->GetImmediateContext(context.out());
-        if(!context.p){status.state=8;status.error=ERROR_INVALID_HANDLE;return;}
-        unsigned free=0;
-        for(;free<contexts.size();++free){const auto old=contexts[free].load(std::memory_order_acquire);
-            if(old==context.p)return;
-            if(!old)break;}
-        if(free==contexts.size()){status.state=8;status.error=ERROR_TOO_MANY_NAMES;return;}
-        void** address=nullptr;void* originalDraw=nullptr;
-        if(!readable(context.p,&address,sizeof address)||!address||!readable(address+13,&originalDraw,sizeof originalDraw)||!originalDraw){
+        Held<ID3D11DeviceContext> native;device->GetImmediateContext(native.out());
+        if(!native.p){status.state=8;status.error=ERROR_INVALID_HANDLE;return;}
+        unsigned index=0;
+        for(;index<contexts.size();++index){if(contexts[index].object==native.p)return;if(!contexts[index].object)break;}
+        if(index==contexts.size()){status.state=8;status.error=ERROR_TOO_MANY_NAMES;return;}
+        auto& ctx=contexts[index];ctx.object=native.p;native.p=nullptr;ctx.count=115;
+        const std::array<GUID,4> versions{{__uuidof(ID3D11DeviceContext4),__uuidof(ID3D11DeviceContext3),__uuidof(ID3D11DeviceContext2),__uuidof(ID3D11DeviceContext1)}};
+        const unsigned lengths[4]{149,147,144,134};
+        for(unsigned i=0;i<versions.size();++i){void* alias=nullptr;
+            if(SUCCEEDED(ctx.object->QueryInterface(versions[i],&alias))){
+                const bool same=alias==ctx.object;if(alias)static_cast<IUnknown*>(alias)->Release();
+                if(!same){status.state=8;status.error=ERROR_NOT_SUPPORTED;return;}ctx.count=lengths[i];break;
+            }
+        }
+        std::uintptr_t prefix=0;
+        if(!readable(ctx.object,&ctx.original,sizeof ctx.original)||!ctx.original||
+            !readable(ctx.original,ctx.expected.data(),ctx.count*sizeof(void*))||!readable(ctx.original-1,&prefix,sizeof prefix)){
             status.state=8;status.error=ERROR_NOACCESS;return;
         }
-        // Executed synchronously before the native factory publishes this
-        // device/context. No cold thread calls a SINGLETHREADED D3D interface.
-        // Retain the complete native vptr, private tail and RTTI. A shared table
-        // may serve other contexts; those calls forward without observation.
-        Table* table=nullptr;
-        for(auto& candidate:tables)if(candidate.address==address)table=&candidate;
-        if(table&&originalDraw!=table->wrapper){status.state=8;status.error=ERROR_BUSY;return;}
-        if(!table){unsigned index=0;for(;index<tables.size()&&tables[index].address;++index){}
-            if(index==tables.size()){status.state=8;status.error=ERROR_TOO_MANY_NAMES;return;}
-            DWORD old=0;
-            if(!writable(address+13,old)){status.state=8;status.error=ERROR_NOACCESS;return;}
-            const std::array<void*,4> wrappers{{bits<void*>(&draw<0>),bits<void*>(&draw<1>),bits<void*>(&draw<2>),bits<void*>(&draw<3>)}};
-            table=&tables[index];table->address=address;table->original=originalDraw;table->wrapper=wrappers[index];
-            const bool attached=InterlockedCompareExchangePointer(address+13,table->wrapper,originalDraw)==originalDraw;
-            table->attached=attached;
-            DWORD ignored=0;const bool protectedAgain=VirtualProtect(address+13,sizeof(void*),old,&ignored)!=0;
-            if(!attached||!protectedAgain){detach();status.state=8;status.error=ERROR_BUSY;return;}
+        for(unsigned i=0;i<ctx.count;++i)if(!ctx.expected[i]){status.state=8;status.error=ERROR_INVALID_DATA;return;}
+        SYSTEM_INFO system{};GetSystemInfo(&system);const auto bytes=std::size_t(system.dwPageSize);
+        if(bytes<ctx.count*16||bytes<(ctx.count+1)*sizeof(void*)){status.state=8;status.error=ERROR_NOT_SUPPORTED;return;}
+        ctx.allocation=VirtualAlloc(nullptr,2*bytes,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);
+        if(!ctx.allocation){status.state=8;status.error=GetLastError();return;}
+        ctx.facade=static_cast<void**>(ctx.allocation)+1;ctx.facade[-1]=reinterpret_cast<void*>(prefix);
+        auto* code=static_cast<unsigned char*>(ctx.allocation)+bytes;
+        for(unsigned i=0;i<ctx.count;++i){const unsigned char thunk[16]{0xf3,0x0f,0x1e,0xfa,0x48,0xb8,0,0,0,0,0,0,0,0,0xff,0x20};
+            std::memcpy(code+i*16,thunk,16);const auto address=reinterpret_cast<std::uintptr_t>(ctx.original+i);
+            std::memcpy(code+i*16+6,&address,8);ctx.expected[i]=code+i*16;
         }
-        contexts[free].store(context.p,std::memory_order_release);context.p=nullptr;
+        const std::array<void*,4> draws{{bits<void*>(&draw<0>),bits<void*>(&draw<1>),bits<void*>(&draw<2>),bits<void*>(&draw<3>)}};
+        ctx.expected[13]=draws[index];std::memcpy(ctx.facade,ctx.expected.data(),ctx.count*sizeof(void*));DWORD old=0;
+        if(!VirtualProtect(code,bytes,PAGE_EXECUTE_READ,&old)||!FlushInstructionCache(GetCurrentProcess(),code,bytes)){
+            status.state=8;status.error=GetLastError();return;
+        }
+        MEMORY_BASIC_INFORMATION memory{};
+        if(!VirtualQuery(ctx.object,&memory,sizeof memory)||memory.State!=MEM_COMMIT||memory.Protect&(PAGE_GUARD|PAGE_NOACCESS)){
+            status.state=8;status.error=ERROR_NOACCESS;return;
+        }
+        const auto access=memory.Protect&0xffu;
+        if(access!=PAGE_READWRITE&&access!=PAGE_WRITECOPY&&access!=PAGE_EXECUTE_READWRITE&&access!=PAGE_EXECUTE_WRITECOPY){status.state=8;status.error=ERROR_NOACCESS;return;}
+        // Same-caller metadata policy: no multithread-protection changes or cold
+        // D3D calls. Like the sender facade, forwarding follows each CURRENT
+        // native method cell after runtime first-use dispatch specialization.
+        activeContexts[index].store(ctx.object,std::memory_order_release);
+        if(InterlockedCompareExchangePointer(reinterpret_cast<void**>(ctx.object),ctx.facade,ctx.original)!=ctx.original){
+            activeContexts[index].store(nullptr,std::memory_order_release);status.state=8;status.error=ERROR_BUSY;return;
+        }
         status.state=5;
     }
     template<unsigned Index>static void STDMETHODCALLTYPE draw(ID3D11DeviceContext* ctx,UINT count,UINT start){
         auto& s=*instance.load(std::memory_order_acquire);
-        bits<void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT)>(s.tables[Index].original)(ctx,count,start);
+        bits<void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT)>(s.contexts[Index].function(13))(ctx,count,start);
         struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error;
-        ++s.draws;if(s.stopped)return;
-        bool observed=false;for(auto& known:s.contexts)if(known.load(std::memory_order_acquire)==ctx){observed=true;break;}
-        if(!observed)return;
+        ++s.draws;if(s.stopped||ctx!=s.activeContexts[Index].load(std::memory_order_acquire))return;
         try{s.inspect(ctx);}catch(...){++s.dropped;}
     }
     void inspect(ID3D11DeviceContext* ctx){

@@ -41,11 +41,12 @@ arrival: no observed device means no upstream observation, not an empty mask.
 
 On the actual device-creation caller, it attaches metadata-only Draw forwarding
 to at most four native immediate contexts. SINGLETHREADED interfaces are used
-only on their original caller. The full native vptr, private interface tail,
-RTTI and other context methods remain untouched. Shared method tables forward
-foreign contexts without granting diagnostic ownership. Stop restores only
-still-owned cells; cached callbacks remain native-only forwarders with retained
-originals until process exit.
+only on their original caller. A writable object-local table retains every advertised public context method
+and its RTTI prefix. Every other method forwards through its current native
+cell, including runtime first-use dispatch changes. Native shared tables are
+not modified. Foreign contexts keep their original dispatch. Stop restores
+only an entirely owned object-local table; cached callbacks remain native-only
+forwarders with retained originals until process exit.
 
 Recognized stream-combine/inset draws record actual SRV resource shapes,
 format, output shape and a unique registered-allocation owner when available.
@@ -63,7 +64,7 @@ Windows controls build entirely owned DLL/EXE fixtures, exercise the actual
 asynchronous loader for normal and SINGLETHREADED WARP devices, and require
 publisher and foreign-installation refusals. A separate real-WARP control uses
 owned programs and images with the production observer: once-only native draw
-arguments/LastError, arbitrary extents, complete native dispatch retention,
+arguments/LastError, arbitrary extents, complete advertised native dispatch retention and first-use specialization,
 unchanged RGBA bytes, nonblocking diagnostic contention, foreign contexts and
 cached callbacks after stop.
 
