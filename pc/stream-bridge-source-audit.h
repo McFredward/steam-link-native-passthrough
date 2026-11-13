@@ -21,7 +21,7 @@ struct SourceAuditSample {
     std::uint32_t outputWidth=0,outputHeight=0,outputFormat=0;
 };
 struct SourceAuditStatus {
-    std::uint32_t pid=0,state=0,error=0,sampleCount=0;
+    std::uint32_t pid=0,state=0,error=0,sampleCount=0,failureStage=0,remoteResult=0;
     std::uint64_t devices=0,shaders=0,draws=0,recognizedDraws=0,dropped=0;
     std::array<SourceAuditSample,SourceAuditSamples> samples{};
 };

@@ -24,8 +24,8 @@ extern "C" __declspec(dllexport) BOOL WINAPI AuditFixtureRun(DWORD expected){
     if(expected==1)pass=pass&&verifications==1;
     if(expected==2)pass=pass&&verifications==1&&!state.pid;
     server.stop();
-    std::printf("owned loader control=%lu: %s; state=%u error=%u devices=%llu draws=%llu verifier=%u\n",
-        static_cast<unsigned long>(expected),pass?"PASS":"FAIL",state.state,state.error,
+    std::printf("owned loader control=%lu: %s; pid=%u state=%u error=%u stage=%u remote-result=%u devices=%llu draws=%llu verifier=%u\n",
+        static_cast<unsigned long>(expected),pass?"PASS":"FAIL",state.pid,state.state,state.error,state.failureStage,state.remoteResult,
         static_cast<unsigned long long>(state.devices),static_cast<unsigned long long>(state.draws),verifications);
     return pass?TRUE:FALSE;
 }

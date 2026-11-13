@@ -467,8 +467,8 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             const auto stats=coverage_.gateStats();
             if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&auditReports<64){
                 const auto audit=sourceAudit_.status();char text[448]{};
-                std::snprintf(text,sizeof text,"compositor source audit: pid=%u, state=%u, error=%u; devices/shaders/draws/recognized/dropped=%llu/%llu/%llu/%llu/%llu; diagnostic only, no frame/mask authority",
-                    audit.pid,audit.state,audit.error,static_cast<unsigned long long>(audit.devices),
+                std::snprintf(text,sizeof text,"compositor source audit: pid=%u, state=%u, error=%u, failed-stage=%u, remote-result=%u; devices/shaders/draws/recognized/dropped=%llu/%llu/%llu/%llu/%llu; diagnostic only, no frame/mask authority",
+                    audit.pid,audit.state,audit.error,audit.failureStage,audit.remoteResult,static_cast<unsigned long long>(audit.devices),
                     static_cast<unsigned long long>(audit.shaders),static_cast<unsigned long long>(audit.draws),
                     static_cast<unsigned long long>(audit.recognizedDraws),static_cast<unsigned long long>(audit.dropped));
                 report(text,stream_bridge::logging::Level::Debug);++auditReports;
