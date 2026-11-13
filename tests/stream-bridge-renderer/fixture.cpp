@@ -692,7 +692,7 @@ void ordinaryPadding(const std::vector<std::uint32_t>& vs,const std::vector<std:
   f.record();leaseCurrent=false;check(submit()==VK_SUCCESS&&f.vk.recoveryReads.back()==1,"native lease retirement still suppresses a previously accepted padded ordinary recording");
  }
  for(unsigned mode=0;mode<8;++mode){
-  Integration f(vs,ps,1,true,true,false,false,false);resize(f,mode==1?8u:32u,mode==2?4u:2u);
+  Integration f(vs,ps,1,true,true,false,false,false);resize(f,mode==1?8u:32u,mode==2?1u:2u);
   if(mode==3)++f.picture.metadata.lease.kernel[1];
   if(mode==6)f.picture.metadata.descriptor.codedWidth=0;
   f.picture.ordinaryVideo=mode!=0;f.publish(mode?sb::CoverageEncoding::None:sb::CoverageEncoding::Raw);consumer.picture(consumer.owner,f.picture);
@@ -706,6 +706,27 @@ void ordinaryPadding(const std::vector<std::uint32_t>& vs,const std::vector<std:
   const auto expected=mode==3?sr::ExactImageRefusal::Kernel:mode==4?sr::ExactImageRefusal::Lease:mode==5?sr::ExactImageRefusal::Ambiguous:sr::ExactImageRefusal::Extent;
   check(after.exactImageRefusals[static_cast<std::size_t>(expected)]==before.exactImageRefusals[static_cast<std::size_t>(expected)]+1,"ordinary padding cannot bypass masked extent, smaller allocation, height, zero size, kernel, lease or unique-picture proof");
   check(after.ordinaryDraws==before.ordinaryDraws&&after.selected==before.selected,"refused padded picture gains neither ordinary video nor mask permission");
+ }
+ const std::array<std::array<unsigned,2>,8> resolutions{{{{640,480}},{{960,3840}},{{1024,4096}},{{1216,4864}},{{1440,5760}},{{1920,1080}},{{2560,1440}},{{3840,2160}}}};
+ const std::array<std::array<unsigned,2>,4> padding{{{{0,0}},{{64,0}},{{0,32}},{{128,64}}}};
+ for(const auto& size:resolutions)for(const auto& extra:padding){
+  Integration f(vs,ps,1,true,true,false,false,false);resize(f,size[0]+extra[0],size[1]+extra[1]);
+  f.picture.metadata.descriptor.codedWidth=static_cast<std::uint16_t>(size[0]);f.picture.metadata.descriptor.codedHeight=static_cast<std::uint16_t>(size[1]);
+  f.publish(sb::CoverageEncoding::None);f.picture.ordinaryVideo=true;consumer.picture(consumer.owner,f.picture);
+  check(f.record().ready&&f.renderer.statsCold().ordinaryDraws==1&&f.renderer.statsCold().ordinaryPaddedMatches==unsigned(extra[0]||extra[1]),"actual per-picture dimensions support arbitrary valid resolutions with horizontal vertical or no allocation padding");
+  check(f.submit(false)==VK_SUCCESS&&f.vk.reads.back()==0&&f.vk.recoveryReads.back()==0,"resolution and allocation padding never rewrite native ordinary RGB or UV controls");
+ }
+ {
+  Integration f(vs,ps,1,true,true,false,false,false);resize(f,4096,4096);f.picture.ordinaryVideo=true;
+  bool previous=false;
+  for(const auto& size:std::array<std::array<unsigned,2>,4>{{{{1920,1080}},{{2560,1440}},{{1280,720}},{{3840,2160}}}}){
+   if(previous){++f.picture.metadata.descriptor.sourceFrame;f.picture.metadata.lease.sequence=++leaseSequence;}
+   f.picture.metadata.descriptor.codedWidth=static_cast<std::uint16_t>(size[0]);f.picture.metadata.descriptor.codedHeight=static_cast<std::uint16_t>(size[1]);
+   f.publish(sb::CoverageEncoding::None);consumer.picture(consumer.owner,f.picture);
+   if(previous)check(f.submit(false)==VK_SUCCESS&&f.vk.recoveryReads.back()==1,"resolution change cannot reuse the previous picture's recorded lease");
+   check(f.record().ready&&f.submit(false)==VK_SUCCESS&&f.vk.reads.back()==0&&f.vk.recoveryReads.back()==0,"resolution changes immediately use the new exact picture without a previous-size cache");
+   previous=true;
+  }
  }
  cameraRecovery=false;
 }
