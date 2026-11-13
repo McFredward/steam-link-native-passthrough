@@ -15,6 +15,52 @@ extent refusals. Both modes still lack PC coverage. These are ordinary-video
 observations, not headset MR acceptance or exact joins between independent
 PC/Frame counters.
 
+## PC0.3.19: raster families and unreviewed program identities
+
+The next matched PC0.3.18 headset run confirms successful module discovery and
+one load/entry call. One actual device and18 recognized shader objects are
+observed. The plain-Draw callback forwards36816 calls, but none binds a reviewed
+stream-combine/inset pixel program, and no source samples are recorded. The old
+counter does not separate the recognized objects by shader kind, so neither
+wrong Windows pixel fingerprints nor an indexed/deferred drawing route has
+been established as the hardware cause. Frame0.3.12 receives4414 additional
+maskless associations, prepares2382 pictures and makes4798 padded ordinary
+draws, with zero extent refusals and four additional camera-only draws.
+
+The diagnostic now forwards all seven public raster draw families, retaining
+each argument including negative bases, instance offsets and opaque indirect
+buffers. It never reads an indirect argument buffer. ExecuteCommandList is
+counted separately without assigning its current post-replay bindings to the
+recorded commands. Each callback still forwards once through the current
+native method cell, preserving LastError and all native render state.
+
+Counters now distinguish stream vertex/combine/inset programs and retained
+unknown pixel identities. At most128 unknown pixel objects can retain an
+executable/signature digest in the explicit compositor diagnostic; ordinary
+coverage observers keep this option disabled. identify() still returns Unknown
+for them. Hashes do not recognize semantics or grant a source, frame or mask.
+
+A draw with a reviewed stream pixel program remains observable. A draw with a
+reviewed stream vertex program can additionally report its unreviewed pixel
+fingerprint and bound SRV metadata. Such bindings do not prove that an unknown
+program uses those inputs, or establish original game eyes, frame lineage,
+coverage semantics or accepted encoder input. No shader body, image or camera
+data is recorded. At most32 scalar observations remain retained; cold reporting
+permits64 status pairs and128 sample pairs, with eight samples per registry
+epoch so startup diagnostics leave room for a later application allocation.
+
+Owned tests exercise all public argument lists, current native dispatch and
+cached forwarding after stop, plus actual WARP indexed, instanced and indirect
+RGBA output. Unreviewed pixels retain unknown semantics and unchanged output;
+unreviewed pixels without the reviewed vertex are not sampled. Default
+coverage observers must not retain unknown program metadata. The checks run
+with both MSVC and the distribution's GNU/MinGW runtime policy.
+
+Installer0.3.32 ships PC0.3.19 and byte-identical Frame0.3.12 artifacts/settings.
+These remain diagnostics; functional beta MR and exact upstream image/mask
+lineage are still not established. The earlier capture paths, Default/Legacy
+choice and Auto/manual resolutions remain unchanged.
+
 ## PC0.3.18: reconcile completed-load module discovery
 
 The matched November13 evening test of PC0.3.17 reaches the new diagnostic,
@@ -94,7 +140,7 @@ They contain no pixels, logged handles, shader bodies or constant-buffer
 contents. Numerical handle ancestry remains a diagnostic label, not a kernel
 lease or a current-frame association. Rendering never waits for diagnostic
 locks; contention drops observations. At most32 scalar samples are retained,
-and provider reporting has a separate64-message budget.
+and provider reporting has separate bounded status/sample budgets described above.
 
 ## Validation and remaining work
 
