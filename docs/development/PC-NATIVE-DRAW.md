@@ -19,8 +19,9 @@ resource layouts, including three sources for reproject-x and multisample input
 for resolve. On-disk presence and conditional alpha-one logic do not establish
 live execution or the selected constants.
 
-The unchanged Frame0.3.12 receives4782 new maskless associations after23:24:02 UTC,
-makes5766 additional ordinary draws and two camera-only draws after23:24:12,
+The unchanged Frame0.3.12 receives4781 new maskless certificates and4782
+decoded-image associations after23:24:13.503 UTC, makes5766 additional ordinary
+draws and two camera-only draws after23:24:12,
 with zero extent refusals. The renderer metadata baseline is older23:23:42;
 its6368 metadata and2680 picture deltas include that preceding interval. These
 independent counters are not exact joins with the PC's2681 inputs.
