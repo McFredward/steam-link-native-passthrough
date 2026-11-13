@@ -41,6 +41,9 @@ on:
       # Bounded lifecycle-only repairs have their own production-code gate.
       - '.github/workflows/stream-lifecycle-tests.yml'
       - '.github/workflows/sender-resource-tests.yml'
+      # Owned compositor-observer fixtures have their own MSVC/GNU Windows gate.
+      - '.github/workflows/source-audit-tests.yml'
+      - 'tests/*source_audit*'
       # These Windows-only fixtures have their own actual WARP gate.
       - 'tests/test_stream_bridge_sender_context_layout.c'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
@@ -93,6 +96,9 @@ on:
       - '.github/workflows/mask-tests.yml'
       - '.github/workflows/stream-lifecycle-tests.yml'
       - '.github/workflows/sender-resource-tests.yml'
+      # Owned compositor-observer fixtures have their own MSVC/GNU Windows gate.
+      - '.github/workflows/source-audit-tests.yml'
+      - 'tests/*source_audit*'
       # These Windows-only fixtures have their own actual WARP gate.
       - 'tests/test_stream_bridge_sender_context_layout.c'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
