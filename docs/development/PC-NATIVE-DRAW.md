@@ -68,12 +68,29 @@ association or every bound shader constant.
 
 Valve's [SteamVR2.19.1 announcement](https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1847920302249669)
 documents the new system-layer rendering pipeline and the
-Steam Link > Advanced > Stream Quality > Default/Legacy comparison. A
-controlled headset comparison should keep the same beta, application and
-render resolution while changing only that quality selection. No result
-has yet been supplied for this comparison. Legacy is an investigation
-control, not completed support for the new Default pipeline. The patch does
-not change this setting or the player's resolution.
+Steam Link > Advanced > Stream Quality > Default/Legacy comparison. The
+subsequent matched control changes only this quality selection: Legacy uses
+1152-square stream views and1152x4608 video, and Default uses1216-square views
+and1216x4864 video. Both produce zero PC masks. Frame0.3.12 records4478 new
+ordinary draws, including3008 exact-extent and1470 padded-allocation matches,
+with zero extent refusals. Legacy therefore does not restore the older source
+route on this beta. It is an investigation control, not a compatibility
+requirement. The patch changes neither this setting nor the player's resolution.
+
+The next diagnostic step is described in
+[Compositor source observation](COMPOSITOR-SOURCE-AUDIT.md). It observes actual
+upstream bindings inside vrcompositor without adding any source, mask or
+current-frame authority. No successful headset MR result is established yet.
+
+Installer0.3.30 ships this diagnostic as PC0.3.17 with byte-identical
+Frame0.3.12 files. The real-WARP observation controls pass182 checks, including
+first-use dispatch specialization and unchanged native RGBA. The actual
+asynchronous loader passes normal and SINGLETHREADED owned-process controls,
+plus publisher and foreign-installation refusals in Windows
+[run43427065342](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43427065342).
+These fixtures deliberately wait for observation before creating their device;
+real-compositor arrival timing and source bindings still require a headset run.
+The diagnostic cannot create coverage or repair black MR by itself.
 
 The four original stream-view shader assets were also retrieved read-only
 from the same Frame runtime build into ignored private storage. Their
