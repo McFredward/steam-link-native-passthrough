@@ -16,7 +16,9 @@
 #include "stream-bridge-sender-provider-coverage.h"
 #include "stream-bridge-mask-config.h"
 #include "stream-bridge-sender-provider-sourceipc.h"
+#include "stream-bridge-source-audit-windows.h"
 #include "bridge/stream_bridge_log.h"
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdio>
@@ -52,6 +54,18 @@ std::atomic<NvencFactory> originalFactory{nullptr};
 std::atomic<unsigned> bootstrapStatus{0};
 NvencBoundary& boundary(){static auto* value=new NvencBoundary(ExpectedHash);return *value;}
 stream_bridge::sender::DirectModeBoundary& directMode(){static auto* value=new stream_bridge::sender::DirectModeBoundary;return *value;}
+bool sourceAuditInventory(std::uint64_t previous,stream_bridge::sender::SourceAuditInventory& out,void*){
+    using namespace stream_bridge::sender;
+    const auto revision=directMode().inventoryRevision();if(!revision||revision==previous)return false;
+    const auto original=directMode().inventory();if(!original.valid||original.epoch!=revision)return false;
+    out.epoch=revision;unsigned used=0;
+    for(const auto& swap:original.swaps)if(swap.generation){
+        SharedTextureShape shape{};if(!decodeSwapTextureSetDesc(swap.description,shape))continue;
+        for(const auto handle:swap.handles)if(handle&&used<out.allocations.size())
+            out.allocations[used++]={handle,swap.generation,swap.processId,shape.width,shape.height,shape.format,shape.samples,shape.arraySize};
+    }
+    return true;
+}
 HMODULE nvencLifetime=nullptr; // Never released while public callbacks can exist.
 std::mutex factoryMutex;
 template<class To,class From> To pointerBits(From from){static_assert(sizeof(To)==sizeof(From),"Win64 pointers");To to{};std::memcpy(&to,&from,sizeof(to));return to;}
@@ -173,6 +187,7 @@ bool loadedCodeMatches(HMODULE module,const stream_bridge::sender::NativePeImage
     }return true;
 }
 class Provider final:public vr::IServerTrackedDeviceProvider {
+    stream_bridge::sender::SourceAuditServer sourceAudit_;
     std::mutex mutex_;std::condition_variable changed_;std::thread worker_;
     bool stopped_=false,initialized_=false;void** slot_=nullptr;HMODULE source_=nullptr;HANDLE file_=INVALID_HANDLE_VALUE;
     vr::IVRDriverContext* context_=nullptr;vr::IVRDriverLog* log_=nullptr;
@@ -434,6 +449,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         // callback. Refusal populations distinguish the actual first gate from
         // secondary frame-epoch/copy failures without guessing source support.
         std::uint64_t seenSignals=0,seenRefusals=0,nextGateSample=1;
+        unsigned auditReports=0;std::uint64_t auditSerial=0;
         unsigned gateTransitions=0,gateSamples=0;
         stream_bridge::sender::CoverageSourceReportBudget sourceReports;
         unsigned alphaReports=0,alphaSources=0;
@@ -449,6 +465,24 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             // on every 8 ms worker tick instead of this cold five-second cadence.
             nextGateReport=now+std::chrono::seconds(5);
             const auto stats=coverage_.gateStats();
+            if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&auditReports<64){
+                const auto audit=sourceAudit_.status();char text[448]{};
+                std::snprintf(text,sizeof text,"compositor source audit: pid=%u, state=%u, error=%u; devices/shaders/draws/recognized/dropped=%llu/%llu/%llu/%llu/%llu; diagnostic only, no frame/mask authority",
+                    audit.pid,audit.state,audit.error,static_cast<unsigned long long>(audit.devices),
+                    static_cast<unsigned long long>(audit.shaders),static_cast<unsigned long long>(audit.draws),
+                    static_cast<unsigned long long>(audit.recognizedDraws),static_cast<unsigned long long>(audit.dropped));
+                report(text,stream_bridge::logging::Level::Debug);++auditReports;
+                auto samples=audit.samples;
+                std::sort(samples.begin(),samples.end(),[](const auto& a,const auto& b){return a.serial<b.serial;});
+                for(const auto& sample:samples)if(sample.serial>auditSerial&&auditReports<64){
+                    std::snprintf(text,sizeof text,"compositor source sample: serial=%llu, shader/slot=%u/%u; owner-pid=%u, unique-owners=%u, registry/allocation=%llu/%llu; source=%ux%u/f%u array/samples=%u/%u, srv/view=%u/%u; output=%ux%u/f%u; scalar ancestry only, not current eye/frame proof",
+                        static_cast<unsigned long long>(sample.serial),sample.shader,sample.slot,sample.pid,sample.ownerMatches,
+                        static_cast<unsigned long long>(sample.inventoryEpoch),static_cast<unsigned long long>(sample.allocationGeneration),
+                        sample.width,sample.height,sample.format,sample.arraySize,sample.samples,sample.view,sample.viewFormat,
+                        sample.outputWidth,sample.outputHeight,sample.outputFormat);
+                    report(text,stream_bridge::logging::Level::Debug);auditSerial=sample.serial;++auditReports;
+                }
+            }
             stream_bridge::sender::MaskHevcSyntaxTrace syntax{};
             if(coverage_.takeHevcSyntaxTrace(syntax)){
                 char detail[720]{};
@@ -636,6 +670,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     if(encoder.peerConfirmed&&encoder.probeObserved&&runtime_.control().peerVerified()&&runtime_.control().localConfig(config,authority)){state.binding=authority.channel.binding;state.generation=encoder.generation;state.compatible=true;}
                     sourceIpc_.tick(state);
                 }
+                if(request_.explicitlyEnabled&&stream_bridge::logging::debug())sourceAudit_.tick(valvePublisher,sourceAuditInventory);
             }catch(...){sourceIpc_.stop();coverage_.stop();runtime_.stop();report("worker refused; ordinary video",stream_bridge::logging::Level::Warning);break;}
             const auto* coverageState=coverage_.stateName();if(request_.explicitlyEnabled&&coverageState!=lastCoverage){lastCoverage=coverageState;reportState(coverageState);}
             if(runtime_.state()!=last){
@@ -663,7 +698,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         reportHevc(true);
         reportCoverage(true);
         reportFailure();
-        sourceIpc_.stop();runtime_.stop();
+        sourceAudit_.stop();sourceIpc_.stop();runtime_.stop();
     }
 public:
     vr::EVRInitError Init(vr::IVRDriverContext* context)override{

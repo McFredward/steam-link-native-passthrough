@@ -10,8 +10,11 @@ struct NativeShaderStats {std::uint64_t devices=0,recognized=0,refused=0;bool fa
 // an assumption that separately created identical shaders share an identity.
 class NativeShaders {
 public:
+    using DeviceObserved=void(*)(ID3D11Device*,void*)noexcept;
     NativeShaders(const ShaderFingerprint* contracts=nativeShaderContracts().data(),
-                  std::size_t count=nativeShaderContracts().size());
+                  std::size_t count=nativeShaderContracts().size(),
+                  DeviceObserved observer=nullptr,void* opaque=nullptr,
+                  bool readOnlySingleThreaded=false);
     ~NativeShaders();
     NativeShaders(const NativeShaders&)=delete;
     NativeShaders& operator=(const NativeShaders&)=delete;

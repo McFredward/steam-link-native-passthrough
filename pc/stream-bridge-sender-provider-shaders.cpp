@@ -28,6 +28,7 @@ struct NativeShaders::Impl {
     std::array<Table,4> tables{};std::array<Device,4> devices{};std::array<Shader,64> shaders{};
     std::array<ShaderFingerprint,32> contracts{};std::size_t contractCount=0;
     std::mutex mutex;std::atomic<bool> stopped{false},published{false};
+    DeviceObserved observer=nullptr;void* observerOpaque=nullptr;bool readOnlySingleThreaded=false;
     std::atomic<std::uint64_t> deviceCount{0},recognized{0},refused{0};
     void** import=nullptr;DeviceFactory originalFactory=nullptr;
     static std::atomic<Impl*> instance;
@@ -66,7 +67,7 @@ struct NativeShaders::Impl {
         return VirtualProtect(address+12,4*sizeof(void*),PAGE_READWRITE,&old)!=0;
     }
     bool observe(ID3D11Device* object)noexcept{
-        if(!object||stopped||object->GetCreationFlags()&D3D11_CREATE_DEVICE_SINGLETHREADED)return false;
+        if(!object||stopped||(!readOnlySingleThreaded&&(object->GetCreationFlags()&D3D11_CREATE_DEVICE_SINGLETHREADED)))return false;
         Impl* expected=nullptr;if(!instance.compare_exchange_strong(expected,this)&&expected!=this)return false;
         std::lock_guard<std::mutex> guard(mutex);if(stopped)return false;
         if(auto* old=find(object))return old->active.load(std::memory_order_acquire);
@@ -113,13 +114,16 @@ struct NativeShaders::Impl {
     static HRESULT WINAPI createDevice(IDXGIAdapter* adapter,D3D_DRIVER_TYPE type,HMODULE software,UINT flags,const D3D_FEATURE_LEVEL* levels,UINT count,UINT sdk,ID3D11Device** device,D3D_FEATURE_LEVEL* level,ID3D11DeviceContext** context){
         auto& self=*instance.load(std::memory_order_acquire);
         const auto result=self.originalFactory(adapter,type,software,flags,levels,count,sdk,device,level,context);const auto error=GetLastError();
-        if(SUCCEEDED(result)&&device&&*device)(void)self.observe(*device);
+        if(SUCCEEDED(result)&&device&&*device&&self.observe(*device)&&self.observer)
+            self.observer(*device,self.observerOpaque);
         SetLastError(error);return result;
     }
 };
 std::atomic<NativeShaders::Impl*> NativeShaders::Impl::instance{nullptr};
-NativeShaders::NativeShaders(const ShaderFingerprint* contracts,std::size_t count):impl_(new Impl){
+NativeShaders::NativeShaders(const ShaderFingerprint* contracts,std::size_t count,
+    DeviceObserved observer,void* opaque,bool readOnlySingleThreaded):impl_(new Impl){
     if(contracts&&count<=impl_->contracts.size()){std::copy_n(contracts,count,impl_->contracts.begin());impl_->contractCount=count;}
+    impl_->observer=observer;impl_->observerOpaque=opaque;impl_->readOnlySingleThreaded=readOnlySingleThreaded;
 }
 NativeShaders::~NativeShaders(){stop();if(impl_->published)(void)impl_.release();}
 bool NativeShaders::arm(std::uintptr_t address)noexcept{
@@ -137,7 +141,11 @@ bool NativeShaders::arm(std::uintptr_t address)noexcept{
     if(previous!=observed)return false;
     self.import=slot;self.published=true;if(!restored){guard.unlock();stop();return false;}return true;
 }
-bool NativeShaders::observeDevice(ID3D11Device* device)noexcept{return impl_->observe(device);}
+bool NativeShaders::observeDevice(ID3D11Device* device)noexcept{
+    const bool observed=impl_->observe(device);
+    if(observed&&impl_->observer)impl_->observer(device,impl_->observerOpaque);
+    return observed;
+}
 NativeShader NativeShaders::identify(ID3D11DeviceChild* shader)const noexcept{
     if(!shader||impl_->stopped)return NativeShader::Unknown;
     IUnknown* identity=nullptr;

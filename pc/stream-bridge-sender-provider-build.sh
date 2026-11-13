@@ -31,6 +31,8 @@ x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
   "$sender_repo/pc/stream-bridge-sender-provider-runtime.cpp" \
   "$sender_repo/pc/stream-bridge-sender-provider-coverage.cpp" \
   "$sender_repo/pc/stream-bridge-sender-provider-shaders.cpp" \
+  "$sender_repo/pc/stream-bridge-source-audit-windows.cpp" \
+  "$sender_repo/pc/stream-bridge-source-audit-observer.cpp" \
   "$sender_repo/pc/stream-bridge-mask-capture.cpp" \
   "$sender_repo/pc/stream-bridge-sender-provider-coverage-render.cpp" \
   "$sender_repo/pc/stream-bridge-mask-hevc.cpp" \
