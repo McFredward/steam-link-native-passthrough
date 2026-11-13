@@ -97,6 +97,31 @@ public:
     bool executable(std::uint32_t rva)const noexcept {
         for(unsigned i=0;i<sectionCount_;++i){const auto&s=sections_[i];if((s.flags&0x20000000u)&&rva>=s.rva&&rva-s.rva<s.size)return true;}return false;
     }
+    // Independent of the DirectMode/NVENC sender contract. A compositor has
+    // its own public device factory and need not contain a driver RTTI table.
+    // Only resolves a unique named public import; it grants no frame access.
+    bool deviceFactoryImport(std::uint32_t& output)const noexcept {
+        output=0;std::uint32_t found=0;unsigned matches=0;bool terminated=false;
+        for(unsigned i=0;i<256&&i*20+20<=importBytes_;++i){
+            const auto r=imports_+i*20;std::uint32_t names=0,dll=0,slots=0;
+            if(!value(r,names)||!value(r+12,dll)||!value(r+16,slots))return false;
+            if(!names&&!dll&&!slots){terminated=true;break;}
+            if(!names||!slots||names>size_||slots>size_)return false;
+            bool end=false;
+            for(unsigned k=0;k<4096;++k){std::uint64_t item=0;
+                if(k*8>size_-names||k*8>size_-slots||!at(slots+k*8,8)||!value(names+k*8,item))return false;
+                if(!item){end=true;break;}
+                if(item>>63)continue;
+                if(item>0xffffffffu-2)return false;
+                if(dllName(dll,"d3d11.dll")&&string(std::uint32_t(item)+2,"D3D11CreateDevice")){
+                    found=slots+k*8;++matches;
+                }
+            }
+            if(!end)return false;
+        }
+        if(!terminated||matches!=1)return false;
+        output=found;return true;
+    }
     bool discover(NativeImageLayout& out,const char*& why)const {
         NativeImageLayout result;result.imageSize=size_;result.preferredBase=base_;
         for(unsigned i=0;i<sectionCount_;++i){const auto&s=sections_[i];if(s.flags&0x20000000u){

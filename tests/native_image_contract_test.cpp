@@ -1,5 +1,6 @@
 // Entirely synthetic public PE/ELF fixtures; no Valve code or disassembly.
 #include "../pc/stream-bridge-native-image.h"
+#include "../pc/stream-bridge-source-audit.h"
 #include "../receiver/stream_bridge_native_elf.h"
 #include "../layer/native_shader_contract.h"
 #include <cstdio>
@@ -58,6 +59,58 @@ void peChecks(){
         check(!discover(f,result),"changed ABI, malformed bounds, foreign method or ambiguous table is refused");
     }
 }
+void compositorImportChecks(){
+    using stream_bridge::sender::NativePeImage;
+    for(unsigned shift:{0u,128u}){
+        auto f=pe(shift);f.text(0x2300,"D3D11.dll");f.text(0x2342,"D3D11CreateDevice");
+        // A compositor has no DirectMode RTTI or NVENC/GetProcAddress contract.
+        std::memset(f.data.data()+0x2380,0,0x500);
+        NativePeImage parser;std::uint32_t slot=99;
+        check(parser.open(f.data.data(),f.data.size())&&parser.deviceFactoryImport(slot)&&slot==0x2280+shift,
+            "compositor resolves its unique public factory without driver RTTI or a fixed offset");
+    }
+    for(unsigned variant=0;variant<9;++variant){
+        auto f=pe();f.text(0x2300,"d3d11.dll");f.text(0x2342,"D3D11CreateDevice");
+        if(variant==0)f.text(0x2300,"different.dll");
+        if(variant==1)f.text(0x2342,"D3D11CreateDeviceAndSwapChain");
+        if(variant==2)f.put(0x2200,0x8000000000000012ull,8); // An ordinal cannot establish this named API.
+        if(variant==3)f.put(0x2208,0x2340,8); // Duplicate import.
+        if(variant==4)f.put(0x2100,0xfffffff8u);
+        if(variant==5)f.put(0x2110,0xfffffff8u);
+        if(variant==6)f.put(0x2200,0xfffffff8u,8);
+        if(variant==7)f.put(276,20); // Directory has no bounded null descriptor.
+        if(variant==8)f.put(0x2114,0x2240); // Nonzero next descriptor with missing fields.
+        NativePeImage parser;std::uint32_t slot=99;
+        check(parser.open(f.data.data(),f.data.size())&&!parser.deviceFactoryImport(slot)&&!slot,
+            "missing, ambiguous, ordinal or malformed compositor import is refused without stale output");
+    }
+}
+void auditChecks(){
+    using namespace stream_bridge::sender;
+    SourceAuditInventory inventory{};inventory.epoch=7;
+    inventory.allocations[0]={42,8,101,321,654,29,1,1};
+    const auto sample=[&]{return auditSource(inventory,42,321,654,29,1,1);};
+    auto s=sample();check(s.ownerMatches==1&&s.pid==101&&s.allocationGeneration==8&&s.inventoryEpoch==7,
+        "diagnostic identity retains the unique registered allocation and original arbitrary shape");
+    inventory.allocations[1]=inventory.allocations[0];inventory.allocations[1].pid=202;
+    s=sample();check(s.ownerMatches==2&&!s.pid&&!s.allocationGeneration,"duplicate numerical handles never choose a preferred owner");
+    inventory.allocations[1]={};
+    for(unsigned field=0;field<8;++field){auto changed=inventory;
+        auto& a=changed.allocations[0];
+        if(field==0)a.generation=0;
+        if(field==1)a.pid=0;
+        if(field==2)++a.width;
+        if(field==3)++a.height;
+        if(field==4)++a.format;
+        if(field==5)++a.samples;
+        if(field==6)++a.arraySize;
+        if(field==7)changed.epoch=0;
+        s=auditSource(changed,42,321,654,29,1,1);
+        check(!s.ownerMatches&&!s.pid&&!s.allocationGeneration,"unregistered generation or mismatching physical shape has no diagnostic owner");
+    }
+    s=auditSource(inventory,0,321,654,29,1,1);
+    check(!s.ownerMatches&&!s.pid,"nonshared resources have no guessed allocation owner");
+}
 Fixture elf(unsigned shift=0){
     Fixture f;std::memcpy(f.data.data(),"\177ELF\2\1\1",7);f.put(16,3,2);f.put(18,183,2);f.put(32,64,8);f.put(54,56,2);f.put(56,3,2);
     f.put(64,1);f.put(68,5);f.put(72,0,8);f.put(80,0,8);f.put(96,0x1000,8);f.put(104,0x1000,8);
@@ -104,4 +157,4 @@ void shaderChecks(){
     debug.assign(input,input+12);debug[9]=31;check(!s::normalize(debug.data(),debug.size()*4,contract,output,64,used),"undefined executable dependency is refused");
 }
 }
-int main(){try{peChecks();elfChecks();shaderChecks();std::printf("public native image and shader contracts: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"contract failure after %u: %s\n",checks,e.what());return 1;}}
+int main(){try{peChecks();compositorImportChecks();auditChecks();elfChecks();shaderChecks();std::printf("public native image and shader contracts: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"contract failure after %u: %s\n",checks,e.what());return 1;}}

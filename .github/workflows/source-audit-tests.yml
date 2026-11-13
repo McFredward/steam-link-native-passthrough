@@ -1,0 +1,73 @@
+name: Compositor source observation
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-sender-provider-shaders.*'
+      - 'pc/stream-bridge-native-image.h'
+      - 'pc/stream-bridge-native-shader.h'
+      - 'tests/*source_audit*'
+      - '.github/workflows/source-audit-tests.yml'
+  pull_request:
+    paths:
+      - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-sender-provider-shaders.*'
+      - 'pc/stream-bridge-native-image.h'
+      - 'pc/stream-bridge-native-shader.h'
+      - 'tests/*source_audit*'
+      - '.github/workflows/source-audit-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  owned-windows-controls:
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Build production observer and loader with owned fixtures
+        shell: cmd
+        run: |
+          mkdir build
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_source_audit_gpu.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build\audit-gpu.exe /Fo:build\ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. /LD tests/source_audit_loader_fixture.cpp pc/stream-bridge-source-audit-windows.cpp pc/stream-bridge-source-audit-observer.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build\audit_fixture.dll /Fo:build\ /link advapi32.lib d3d11.lib dxgi.lib dxguid.lib uuid.lib
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_source_audit_loader.cpp /Fe:build\vrserver.exe /Fo:build\ /link d3d11.lib dxgi.lib uuid.lib
+          if errorlevel 1 exit /b 1
+          copy build\vrserver.exe build\vrcompositor.exe >nul
+          mkdir build\decoy
+          copy build\vrserver.exe build\decoy\vrcompositor.exe >nul
+      - name: Check native RGBA and dispatch preservation on SINGLETHREADED WARP
+        shell: cmd
+        run: |
+          build\audit-gpu.exe >build\audit-gpu.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\audit-gpu.log
+          exit /b %SFNP_RESULT%
+      - name: Exercise actual asynchronous owned DLL load and refusal paths
+        shell: cmd
+        run: |
+          build\vrserver.exe 1 normal >build\loader-normal.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\loader-normal.log
+          if not "%SFNP_RESULT%"=="0" exit /b %SFNP_RESULT%
+          build\vrserver.exe 1 single >build\loader-single.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\loader-single.log
+          if not "%SFNP_RESULT%"=="0" exit /b %SFNP_RESULT%
+          build\vrserver.exe 2 normal >build\loader-publisher-refusal.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\loader-publisher-refusal.log
+          if not "%SFNP_RESULT%"=="0" exit /b %SFNP_RESULT%
+          build\vrserver.exe 3 normal >build\loader-foreign-installation.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\loader-foreign-installation.log
+          exit /b %SFNP_RESULT%
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compositor-source-audit-evidence
+          path: build/*.log
