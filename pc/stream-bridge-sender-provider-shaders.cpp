@@ -24,38 +24,48 @@ struct NativeShaders::Impl {
         void* wrappedVertex=nullptr;void* wrappedPixel=nullptr;bool published=false,attached=false;
     };
     struct Device {std::atomic<ID3D11Device*> object{nullptr};Table* methods=nullptr;std::atomic<bool> active{false};};
-    struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;};
+    struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;};
     std::array<Table,4> tables{};std::array<Device,4> devices{};std::array<Shader,64> shaders{};
+    std::array<Shader,128> unknownPixels{};
     std::array<ShaderFingerprint,32> contracts{};std::size_t contractCount=0;
     std::mutex mutex;std::atomic<bool> stopped{false},published{false};
     DeviceObserved observer=nullptr;void* observerOpaque=nullptr;bool readOnlySingleThreaded=false;
+    bool rememberUnknownPixels=false;
     std::atomic<std::uint64_t> deviceCount{0},recognized{0},refused{0};
     void** import=nullptr;DeviceFactory originalFactory=nullptr;
     static std::atomic<Impl*> instance;
     Device* find(ID3D11Device* object)noexcept{for(auto& slot:devices)if(slot.object.load(std::memory_order_acquire)==object)return &slot;return nullptr;}
-    void retain(ID3D11Device* device,ID3D11DeviceChild* shader,const void* code,SIZE_T size,ID3D11ClassLinkage* linkage)noexcept{
+    void retain(ID3D11Device* device,ID3D11DeviceChild* shader,const void* code,SIZE_T size,ID3D11ClassLinkage* linkage,bool pixel)noexcept{
         auto* owner=find(device);if(stopped||!owner||!owner->active.load(std::memory_order_acquire)||!shader||linkage)return;
         const auto kind=classifyNativeShader(code,size,contracts.data(),contractCount);
-        if(kind==NativeShader::Unknown){++refused;return;}
+        if(kind==NativeShader::Unknown){++refused;if(!rememberUnknownPixels||!pixel)return;}
+        std::array<std::uint8_t,32> hash{};if(!dxbcFingerprint(code,size,hash))return;
         IUnknown* identity=nullptr;if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return;
         std::lock_guard<std::mutex> guard(mutex);
         if(stopped){identity->Release();return;}
-        for(const auto& old:shaders)if(old.object.load(std::memory_order_acquire)==identity){identity->Release();return;}
-        for(auto& slot:shaders)if(!slot.object.load(std::memory_order_relaxed)){
-            slot.kind=kind;slot.object.store(identity,std::memory_order_release);++recognized;return;
-        }
-        identity->Release();++refused;
+        const auto keep=[&](auto& entries){
+            for(const auto& old:entries)if(old.object.load(std::memory_order_acquire)==identity){identity->Release();return true;}
+            for(auto& slot:entries)if(!slot.object.load(std::memory_order_relaxed)){
+                slot.kind=kind;slot.hash=hash;slot.pixel=pixel;slot.object.store(identity,std::memory_order_release);
+                if(kind!=NativeShader::Unknown)++recognized;
+                return true;
+            }
+            return false;
+        };
+        if(kind==NativeShader::Unknown){if(keep(unknownPixels))return;}
+        else if(keep(shaders))return;
+        identity->Release();if(kind!=NativeShader::Unknown)++refused;
     }
     template<unsigned Index>static HRESULT STDMETHODCALLTYPE createVertex(ID3D11Device* object,const void* code,SIZE_T size,ID3D11ClassLinkage* linkage,ID3D11VertexShader** output){
         auto& self=*instance.load(std::memory_order_acquire);
         const auto result=self.tables[Index].vertex(object,code,size,linkage,output);const auto error=GetLastError();
-        if(SUCCEEDED(result)&&output&&*output)self.retain(object,*output,code,size,linkage);
+        if(SUCCEEDED(result)&&output&&*output)self.retain(object,*output,code,size,linkage,false);
         SetLastError(error);return result;
     }
     template<unsigned Index>static HRESULT STDMETHODCALLTYPE createPixel(ID3D11Device* object,const void* code,SIZE_T size,ID3D11ClassLinkage* linkage,ID3D11PixelShader** output){
         auto& self=*instance.load(std::memory_order_acquire);
         const auto result=self.tables[Index].pixel(object,code,size,linkage,output);const auto error=GetLastError();
-        if(SUCCEEDED(result)&&output&&*output)self.retain(object,*output,code,size,linkage);
+        if(SUCCEEDED(result)&&output&&*output)self.retain(object,*output,code,size,linkage,true);
         SetLastError(error);return result;
     }
     static bool writable(void** address,DWORD& old)noexcept{
@@ -121,9 +131,10 @@ struct NativeShaders::Impl {
 };
 std::atomic<NativeShaders::Impl*> NativeShaders::Impl::instance{nullptr};
 NativeShaders::NativeShaders(const ShaderFingerprint* contracts,std::size_t count,
-    DeviceObserved observer,void* opaque,bool readOnlySingleThreaded):impl_(new Impl){
+    DeviceObserved observer,void* opaque,bool readOnlySingleThreaded,bool rememberUnknownPixels):impl_(new Impl){
     if(contracts&&count<=impl_->contracts.size()){std::copy_n(contracts,count,impl_->contracts.begin());impl_->contractCount=count;}
     impl_->observer=observer;impl_->observerOpaque=opaque;impl_->readOnlySingleThreaded=readOnlySingleThreaded;
+    impl_->rememberUnknownPixels=rememberUnknownPixels;
 }
 NativeShaders::~NativeShaders(){stop();if(impl_->published)(void)impl_.release();}
 bool NativeShaders::arm(std::uintptr_t address)noexcept{
@@ -154,7 +165,23 @@ NativeShader NativeShaders::identify(ID3D11DeviceChild* shader)const noexcept{
     for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)==identity){result=slot.kind;break;}
     identity->Release();return result;
 }
-NativeShaderStats NativeShaders::stats()const noexcept{return {impl_->deviceCount.load(),impl_->recognized.load(),impl_->refused.load(),impl_->import&&!impl_->stopped};}
+bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& out)const noexcept{
+    out={};if(!shader||impl_->stopped)return false;
+    IUnknown* identity=nullptr;if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return false;
+    const auto find=[&](const auto& entries){for(const auto& slot:entries)if(slot.object.load(std::memory_order_acquire)==identity){
+        out.kind=slot.kind;out.hash=slot.hash;out.pixel=slot.pixel;return true;}return false;};
+    const bool found=find(impl_->shaders)||find(impl_->unknownPixels);identity->Release();return found;
+}
+NativeShaderStats NativeShaders::stats()const noexcept{
+    NativeShaderStats out{impl_->deviceCount.load(),impl_->recognized.load(),impl_->refused.load(),impl_->import&&!impl_->stopped};
+    for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)){
+        if(slot.kind==NativeShader::StreamVertex)++out.streamKinds[0];
+        if(slot.kind==NativeShader::StreamCombine)++out.streamKinds[1];
+        if(slot.kind==NativeShader::StreamInset)++out.streamKinds[2];
+    }
+    for(const auto& slot:impl_->unknownPixels)if(slot.object.load(std::memory_order_acquire))++out.unknownPixels;
+    return out;
+}
 void NativeShaders::stop()noexcept{
     auto& self=*impl_;self.stopped=true;std::lock_guard<std::mutex> guard(self.mutex);
     if(self.import){DWORD old=0;if(VirtualProtect(self.import,sizeof(void*),PAGE_READWRITE,&old)){

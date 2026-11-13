@@ -44,10 +44,11 @@ struct Observer {
     std::array<Context,4> contexts{};
     std::array<std::atomic<ID3D11DeviceContext*>,4> activeContexts{};
     std::atomic<bool> stopped{false};std::atomic<std::uint64_t> draws{0},recognized{0},dropped{0};
+    std::array<std::atomic<std::uint64_t>,8> rasterCalls{};
     std::uint64_t serial=0;
     static std::atomic<Observer*> instance;
     explicit Observer(const Launch& value,const ShaderFingerprint* contracts=Contracts.data(),std::size_t count=Contracts.size()):
-        launch(value),shaders(contracts,count,deviceObserved,this,true){}
+        launch(value),shaders(contracts,count,deviceObserved,this,true,true){}
     void detach()noexcept {
         for(auto& context:contexts)if(context.owns())
             InterlockedCompareExchangePointer(reinterpret_cast<void**>(context.object),context.original,context.facade);
@@ -88,8 +89,13 @@ struct Observer {
             std::memcpy(code+i*16,thunk,16);const auto address=reinterpret_cast<std::uintptr_t>(ctx.original+i);
             std::memcpy(code+i*16+6,&address,8);ctx.expected[i]=code+i*16;
         }
-        const std::array<void*,4> callbacks{{bits<void*>(&draw<0>),bits<void*>(&draw<1>),bits<void*>(&draw<2>),bits<void*>(&draw<3>)}};
-        ctx.expected[13]=callbacks[index];std::memcpy(ctx.facade,ctx.expected.data(),ctx.count*sizeof(void*));DWORD old=0;
+#define SFNP_AUDIT_ATTACH(Slot,Name) {const std::array<void*,4> callbacks{{bits<void*>(&Name<0>),bits<void*>(&Name<1>),bits<void*>(&Name<2>),bits<void*>(&Name<3>)}};ctx.expected[Slot]=callbacks[index];}
+        SFNP_AUDIT_ATTACH(12,drawIndexed) SFNP_AUDIT_ATTACH(13,draw)
+        SFNP_AUDIT_ATTACH(20,drawIndexedInstanced) SFNP_AUDIT_ATTACH(21,drawInstanced)
+        SFNP_AUDIT_ATTACH(38,drawAuto) SFNP_AUDIT_ATTACH(39,drawIndexedIndirect)
+        SFNP_AUDIT_ATTACH(40,drawIndirect) SFNP_AUDIT_ATTACH(58,execute)
+#undef SFNP_AUDIT_ATTACH
+        std::memcpy(ctx.facade,ctx.expected.data(),ctx.count*sizeof(void*));DWORD old=0;
         if(!VirtualProtect(code,bytes,PAGE_EXECUTE_READ,&old)||!FlushInstructionCache(GetCurrentProcess(),code,bytes)){
             status.state=8;status.error=GetLastError();return;
         }
@@ -108,20 +114,49 @@ struct Observer {
         }
         status.state=5;
     }
-    template<unsigned Index>static void STDMETHODCALLTYPE draw(ID3D11DeviceContext* ctx,UINT count,UINT start){
-        auto& s=*instance.load(std::memory_order_acquire);
-        bits<void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT)>(s.contexts[Index].function(13))(ctx,count,start);
-        struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error;
-        ++s.draws;if(s.stopped||ctx!=s.activeContexts[Index].load(std::memory_order_acquire))return;
-        try{s.inspect(ctx);}catch(...){++s.dropped;}
+    struct Raster {
+        std::uint32_t command=0,count=0,instances=0,start=0,firstInstance=0,argumentOffset=0;
+        std::int32_t baseVertex=0;
+    };
+    template<unsigned Index>void afterRaster(ID3D11DeviceContext* ctx,unsigned counter,const Raster& call)noexcept{
+        ++draws;++rasterCalls[counter];if(stopped||ctx!=activeContexts[Index].load(std::memory_order_acquire))return;
+        try{inspect(ctx,call);}catch(...){++dropped;}
     }
-    void inspect(ID3D11DeviceContext* ctx){
-        Held<ID3D11PixelShader> shader;ctx->PSGetShader(shader.out(),nullptr,nullptr);
+#define SFNP_AUDIT_RASTER(Name,Slot,Counter,Parameters,Arguments,Call) \
+    template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
+        auto& s=*instance.load(std::memory_order_acquire); \
+        bits<decltype(&Name<Index>)>(s.contexts[Index].function(Slot)) Arguments; \
+        struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error; \
+        s.afterRaster<Index>(ctx,Counter,Call); \
+    }
+    SFNP_AUDIT_RASTER(drawIndexed,12,0,(ID3D11DeviceContext* ctx,UINT count,UINT start,INT base),(ctx,count,start,base),(Raster{12,count,1,start,0,0,base}))
+    SFNP_AUDIT_RASTER(draw,13,1,(ID3D11DeviceContext* ctx,UINT count,UINT start),(ctx,count,start),(Raster{13,count,1,start,0,0,0}))
+    SFNP_AUDIT_RASTER(drawIndexedInstanced,20,2,(ID3D11DeviceContext* ctx,UINT count,UINT instances,UINT start,INT base,UINT first),(ctx,count,instances,start,base,first),(Raster{20,count,instances,start,first,0,base}))
+    SFNP_AUDIT_RASTER(drawInstanced,21,3,(ID3D11DeviceContext* ctx,UINT count,UINT instances,UINT start,UINT first),(ctx,count,instances,start,first),(Raster{21,count,instances,start,first,0,0}))
+    SFNP_AUDIT_RASTER(drawAuto,38,4,(ID3D11DeviceContext* ctx),(ctx),(Raster{38,0,0,0,0,0,0}))
+    SFNP_AUDIT_RASTER(drawIndexedIndirect,39,5,(ID3D11DeviceContext* ctx,ID3D11Buffer* args,UINT offset),(ctx,args,offset),(Raster{39,0,0,0,0,offset,0}))
+    SFNP_AUDIT_RASTER(drawIndirect,40,6,(ID3D11DeviceContext* ctx,ID3D11Buffer* args,UINT offset),(ctx,args,offset),(Raster{40,0,0,0,0,offset,0}))
+#undef SFNP_AUDIT_RASTER
+    template<unsigned Index>static void STDMETHODCALLTYPE execute(ID3D11DeviceContext* ctx,ID3D11CommandList* commands,BOOL restore){
+        auto& s=*instance.load(std::memory_order_acquire);
+        bits<decltype(&execute<Index>)>(s.contexts[Index].function(58))(ctx,commands,restore);
+        struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error;
+        // Current bindings after a replay do not prove the command list's
+        // sources. Count this boundary without assigning it image ancestry.
+        ++s.rasterCalls[7];
+    }
+    void inspect(ID3D11DeviceContext* ctx,const Raster& call){
+        Held<ID3D11PixelShader> shader;ctx->PSGetShader(shader.out(),nullptr,nullptr);if(!shader.p)return;
         const auto kind=shaders.identify(shader.p);
-        if(kind!=NativeShader::StreamCombine&&kind!=NativeShader::StreamInset)return;
-        ++recognized;
+        const bool reviewed=kind==NativeShader::StreamCombine||kind==NativeShader::StreamInset;
+        Held<ID3D11VertexShader> vertex;ctx->VSGetShader(vertex.out(),nullptr,nullptr);
+        const auto vertexKind=shaders.identify(vertex.p);
+        if(!reviewed&&(!shader.p||vertexKind!=NativeShader::StreamVertex))return;
+        if(reviewed)++recognized;
+        NativeShaderDescription program{};const bool hashValid=shaders.describe(shader.p,program)&&program.pixel;
+
         std::unique_lock<std::mutex> guard(mutex,std::try_to_lock);if(!guard){++dropped;return;}
-        for(unsigned slot=0;slot<(kind==NativeShader::StreamCombine?2u:1u);++slot){
+        for(unsigned slot=0;slot<(kind==NativeShader::StreamInset?1u:2u);++slot){
             Held<ID3D11ShaderResourceView> view;ctx->PSGetShaderResources(slot,1,view.out());if(!view.p)continue;
             Held<ID3D11Resource> resource;view.p->GetResource(resource.out());if(!resource.p)continue;
             Held<ID3D11Texture2D> texture;
@@ -131,7 +166,10 @@ struct Observer {
             if(SUCCEEDED(resource.p->QueryInterface(IID_IDXGIResource,reinterpret_cast<void**>(shared.out()))))
                 (void)shared.p->GetSharedHandle(&handle);
             auto sample=auditSource(inventory,reinterpret_cast<std::uintptr_t>(handle),shape.Width,shape.Height,unsigned(shape.Format),shape.SampleDesc.Count,shape.ArraySize);
-            sample.shader=unsigned(kind);sample.slot=slot;
+            sample.shader=unsigned(kind);sample.slot=slot;sample.vertexKind=unsigned(vertexKind);
+            sample.command=call.command;sample.count=call.count;sample.instances=call.instances;sample.start=call.start;
+            sample.firstInstance=call.firstInstance;sample.argumentOffset=call.argumentOffset;sample.baseVertex=call.baseVertex;
+            sample.programHashValid=hashValid;sample.programHash=program.hash;
             D3D11_SHADER_RESOURCE_VIEW_DESC vd{};view.p->GetDesc(&vd);sample.view=unsigned(vd.ViewDimension);sample.viewFormat=unsigned(vd.Format);
             Held<ID3D11RenderTargetView> out;ctx->OMGetRenderTargets(1,out.out(),nullptr);
             if(out.p){Held<ID3D11Resource> output;out.p->GetResource(output.out());Held<ID3D11Texture2D> target;
@@ -141,7 +179,7 @@ struct Observer {
             }
             const auto key=[](const SourceAuditSample& p){return std::make_tuple(p.inventoryEpoch,p.allocationGeneration,
                 p.shader,p.slot,p.pid,p.width,p.height,p.format,p.arraySize,p.samples,p.view,p.viewFormat,p.ownerMatches,
-                p.outputWidth,p.outputHeight,p.outputFormat);};
+                p.outputWidth,p.outputHeight,p.outputFormat,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash);};
             bool duplicate=false;
             for(const auto& previous:status.samples)if(previous.serial&&key(previous)==key(sample)){duplicate=true;break;}
             if(duplicate)continue;
@@ -183,6 +221,8 @@ struct Observer {
         if(read(page->inventorySequence,page->inventory,fresh))inventory=fresh;
         const auto stats=shaders.stats();status.devices=stats.devices;status.shaders=stats.recognized;
         status.draws=draws.load();status.recognizedDraws=recognized.load();status.dropped=dropped.load();
+        status.streamShaderKinds=stats.streamKinds;status.unknownPixelPrograms=stats.unknownPixels;
+        for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();
         publish(page->statusSequence,page->status,status);
     }
     void run()noexcept{

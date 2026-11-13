@@ -449,7 +449,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         // callback. Refusal populations distinguish the actual first gate from
         // secondary frame-epoch/copy failures without guessing source support.
         std::uint64_t seenSignals=0,seenRefusals=0,nextGateSample=1;
-        unsigned auditReports=0;std::uint64_t auditSerial=0;
+        unsigned auditReports=0,auditSamples=0,auditEpochSamples=0;std::uint64_t auditSerial=0,auditEpoch=0;
         unsigned gateTransitions=0,gateSamples=0;
         stream_bridge::sender::CoverageSourceReportBudget sourceReports;
         unsigned alphaReports=0,alphaSources=0;
@@ -465,23 +465,42 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             // on every 8 ms worker tick instead of this cold five-second cadence.
             nextGateReport=now+std::chrono::seconds(5);
             const auto stats=coverage_.gateStats();
-            if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&auditReports<64){
-                const auto audit=sourceAudit_.status();char text[512]{};
+            if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&(auditReports<64||auditSamples<128)){
+                const auto audit=sourceAudit_.status();char text[896]{};
+                if(auditReports<64){
                 std::snprintf(text,sizeof text,"compositor source audit: pid=%u, state=%u, error=%u, failed-stage=%u, remote-result=%u; discovery error/entries/matches/misses=%u/%u/%u/%u, load/entry-calls=%u/%u; devices/shaders/draws/recognized/dropped=%llu/%llu/%llu/%llu/%llu; diagnostic only, no frame/mask authority",
                     audit.pid,audit.state,audit.error,audit.failureStage,audit.remoteResult,
                     audit.discoveryError,audit.discoveryEntries,audit.discoveryMatches,audit.discoveryMisses,audit.loadCalls,audit.entryCalls,static_cast<unsigned long long>(audit.devices),
                     static_cast<unsigned long long>(audit.shaders),static_cast<unsigned long long>(audit.draws),
                     static_cast<unsigned long long>(audit.recognizedDraws),static_cast<unsigned long long>(audit.dropped));
-                report(text,stream_bridge::logging::Level::Debug);++auditReports;
+                report(text,stream_bridge::logging::Level::Debug);
+                std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown programs remain diagnostic only",
+                    static_cast<unsigned long long>(audit.streamShaderKinds[0]),static_cast<unsigned long long>(audit.streamShaderKinds[1]),
+                    static_cast<unsigned long long>(audit.streamShaderKinds[2]),static_cast<unsigned long long>(audit.unknownPixelPrograms),
+                    static_cast<unsigned long long>(audit.rasterCalls[0]),static_cast<unsigned long long>(audit.rasterCalls[1]),
+                    static_cast<unsigned long long>(audit.rasterCalls[2]),static_cast<unsigned long long>(audit.rasterCalls[3]),
+                    static_cast<unsigned long long>(audit.rasterCalls[4]),static_cast<unsigned long long>(audit.rasterCalls[5]),
+                    static_cast<unsigned long long>(audit.rasterCalls[6]),static_cast<unsigned long long>(audit.rasterCalls[7]));
+                report(text,stream_bridge::logging::Level::Debug);++auditReports;}
                 auto samples=audit.samples;
                 std::sort(samples.begin(),samples.end(),[](const auto& a,const auto& b){return a.serial<b.serial;});
-                for(const auto& sample:samples)if(sample.serial>auditSerial&&auditReports<64){
+                for(const auto& sample:samples)if(sample.serial>auditSerial&&auditSamples<128){
+                    auditSerial=sample.serial;
+                    if(auditEpoch!=sample.inventoryEpoch){auditEpoch=sample.inventoryEpoch;auditEpochSamples=0;}
+                    if(auditEpochSamples>=8)continue;
+                    constexpr char digits[]="0123456789abcdef";char hash[65]{};
+                    if(sample.programHashValid){for(unsigned j=0;j<32;++j){hash[2*j]=digits[sample.programHash[j]>>4];hash[2*j+1]=digits[sample.programHash[j]&15];}}
+                    else std::strcpy(hash,"unavailable");
                     std::snprintf(text,sizeof text,"compositor source sample: serial=%llu, shader/slot=%u/%u; owner-pid=%u, unique-owners=%u, registry/allocation=%llu/%llu; source=%ux%u/f%u array/samples=%u/%u, srv/view=%u/%u; output=%ux%u/f%u; scalar ancestry only, not current eye/frame proof",
                         static_cast<unsigned long long>(sample.serial),sample.shader,sample.slot,sample.pid,sample.ownerMatches,
                         static_cast<unsigned long long>(sample.inventoryEpoch),static_cast<unsigned long long>(sample.allocationGeneration),
                         sample.width,sample.height,sample.format,sample.arraySize,sample.samples,sample.view,sample.viewFormat,
                         sample.outputWidth,sample.outputHeight,sample.outputFormat);
-                    report(text,stream_bridge::logging::Level::Debug);auditSerial=sample.serial;++auditReports;
+                    report(text,stream_bridge::logging::Level::Debug);
+                    std::snprintf(text,sizeof text,"compositor program sample: serial=%llu, command=%u, count/instances/start/base/first/argument-offset=%u/%u/%u/%d/%u/%u; vertex-kind=%u, pixel-kind=%u, fingerprint-valid=%u, pixel-fingerprint=%s; bindings only, unknown semantics and indirect counts are not inferred",
+                        static_cast<unsigned long long>(sample.serial),sample.command,sample.count,sample.instances,sample.start,sample.baseVertex,
+                        sample.firstInstance,sample.argumentOffset,sample.vertexKind,sample.shader,sample.programHashValid,hash);
+                    report(text,stream_bridge::logging::Level::Debug);++auditSamples;++auditEpochSamples;
                 }
             }
             stream_bridge::sender::MaskHevcSyntaxTrace syntax{};
