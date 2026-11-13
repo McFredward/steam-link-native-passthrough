@@ -1,0 +1,150 @@
+{
+  "admission_rules_unchanged": true,
+  "archive": {
+    "bytes": 20249640,
+    "sha256": "f9461def18273c2e02ff3097e2a49e10f201e49afb813bd2feadb5cb0f368629"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726536,
+      "sha256": "cf1835c22d0d1e267a19582094ecd2ffdcf91d55d2be8fda0e3f5697b4b24ecf"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2129408,
+      "sha256": "a1a421a48f76f59429624d8247ebdd2d1e9fd0a077699feb388eccc952c7eee2"
+    }
+  },
+  "change": "Exclusive memory/connection/lease/kernel/extent/ambiguity counters and approximate scalar extents; accepted-image rules remain unchanged",
+  "component_versions": {
+    "frame": "0.3.11",
+    "pc": "0.3.16"
+  },
+  "device_actions": false,
+  "diagnostics_only": true,
+  "hardware_verified": false,
+  "inherited_validation_source": "34cdd52c0638a74601741a8dc1ef1869074d38c2",
+  "observed_failure": "Ordinary decoded pictures reach the renderer, but its exact selected-image gate refuses every draw; camera-only recovery hides game pixels",
+  "pc_artifact_byte_identical": true,
+  "renderer_profiles": {
+    "renderer-current": {
+      "fixture_sha256": "38d1e0de86c3cf86db952b6684cb801c3687c95eddebffcffaef0a0ff002d332",
+      "input_hashes": {
+        "current-coverage.spv": "c2e3be45f55545f5246a13e91be6785cba15c50cad56ecfb47eb4fe59e02c7b8",
+        "frame-beta-active-vertex.spv": "9dbfb10bfa78f2b115ab8cb8c579479bf125492ac26f54719653451e1d814f1f",
+        "frame-beta-fragment.spv": "a42daff46b5a155bc66ba53361face163fb1bd39260cb374430c1732c0ecfd1f"
+      },
+      "results": {
+        "normal": {
+          "checks": 385208,
+          "exit_status": 0,
+          "expected_negative": false
+        },
+        "sanitize": {
+          "checks": 385208,
+          "exit_status": 0,
+          "expected_negative": false
+        }
+      },
+      "sources": {
+        "layer/native_presenter_pipeline.h": "ac497c4f7a49251ea439b419435e4b5e691b76e516a904569c72337b1aea84fa",
+        "layer/stream_bridge_artifacts.h": "b6d30a07162c733f0bdb1adf45b81177f5b4d1354c7cecf3bf4b288927cdf13f",
+        "layer/stream_bridge_coverage_gpu.cpp": "b9a8fd461c8bdac4380b07f768d192defc3ba7282d8d62f5ffbce3c62f1e4015",
+        "layer/stream_bridge_coverage_gpu.h": "5b9ba35ea89e8f4ae72a1fa8a7def4f56f54b37fc5eb95a7ad901b579bf2b571",
+        "layer/stream_bridge_process.h": "78ce858861efd5cc7134ee0a3dd1180c2f69d2f0c97df902366efd9ceeba6d9f",
+        "layer/stream_bridge_renderer.cpp": "9b5298a05ef754d7b9df4d3353e58ed42aff418750716aa3ae41f6c4d7d5dce5",
+        "layer/stream_bridge_renderer.h": "50444bbf984cacee7c4d53d10bf5761a28530c637492d316a96bd31577352974",
+        "layer/submit_timeline_contract.h": "91806babfb37ab8f6339cba266c39c80f5aa4c384a705e004173d796bea068cd",
+        "tests/stream-bridge-coverage-gpu/pool_tests.cpp": "8814f7533cc5fc40541bd5746ab6b3f3dbb5e1ec07bbe51006a43b29a26c03f3"
+      }
+    },
+    "renderer-stable-full-vs": {
+      "fixture_sha256": "38d1e0de86c3cf86db952b6684cb801c3687c95eddebffcffaef0a0ff002d332",
+      "input_hashes": {
+        "distort_ps_achromatic_se2.spv": "f28dd5d22a570cbee64057da03d0418b80aee88a8eeed988b2f776e8d9a513f2",
+        "distort_vs_reproject_layered.spv": "94abc0c24124e8b4a301e7f1df5a4c8c0e8b0eb50e4c6ea78f3521370a6897c5",
+        "stable-coverage.spv": "37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3"
+      },
+      "results": {
+        "normal": {
+          "checks": 385208,
+          "exit_status": 0,
+          "expected_negative": false
+        },
+        "sanitize": {
+          "checks": 385208,
+          "exit_status": 0,
+          "expected_negative": false
+        }
+      },
+      "sources": {
+        "layer/native_presenter_pipeline.h": "ac497c4f7a49251ea439b419435e4b5e691b76e516a904569c72337b1aea84fa",
+        "layer/stream_bridge_artifacts.h": "b6d30a07162c733f0bdb1adf45b81177f5b4d1354c7cecf3bf4b288927cdf13f",
+        "layer/stream_bridge_coverage_gpu.cpp": "b9a8fd461c8bdac4380b07f768d192defc3ba7282d8d62f5ffbce3c62f1e4015",
+        "layer/stream_bridge_coverage_gpu.h": "5b9ba35ea89e8f4ae72a1fa8a7def4f56f54b37fc5eb95a7ad901b579bf2b571",
+        "layer/stream_bridge_process.h": "78ce858861efd5cc7134ee0a3dd1180c2f69d2f0c97df902366efd9ceeba6d9f",
+        "layer/stream_bridge_renderer.cpp": "9b5298a05ef754d7b9df4d3353e58ed42aff418750716aa3ae41f6c4d7d5dce5",
+        "layer/stream_bridge_renderer.h": "50444bbf984cacee7c4d53d10bf5761a28530c637492d316a96bd31577352974",
+        "layer/submit_timeline_contract.h": "91806babfb37ab8f6339cba266c39c80f5aa4c384a705e004173d796bea068cd",
+        "tests/stream-bridge-coverage-gpu/pool_tests.cpp": "8814f7533cc5fc40541bd5746ab6b3f3dbb5e1ec07bbe51006a43b29a26c03f3"
+      }
+    }
+  },
+  "schema": "sfnp-frame-image-diagnostics-candidate-v1",
+  "selector_and_codecs_byte_identical": true,
+  "software_logs": {
+    "build-arm-final.log": {
+      "bytes": 205,
+      "sha256": "318ee9e2d8a8145ffe6e569c7f8727bce14ef27a7af89ee2987c4bf572e40156"
+    },
+    "build-arm.log": {
+      "bytes": 3008,
+      "sha256": "ddd6524e74462e03ba7a24f17d579cc08b25b48086ea283c0c0e820ec41366ab"
+    },
+    "configure-arm.log": {
+      "bytes": 921,
+      "sha256": "3f819911cb8642046d3c9a7bb086a50380615f6ee70d52f3723ee7d3e0e17d67"
+    },
+    "installer-028-tests.log": {
+      "bytes": 488,
+      "sha256": "78454abe7f54d0b79e233b1647d5c298c84f84f10b0cd5890cd8d2374925707b"
+    },
+    "package-028-tests.log": {
+      "bytes": 116,
+      "sha256": "0cf9281afa666347afed008cfc8c57bd9d246071c0dd1de1e3cc916af8244bba"
+    },
+    "pc-only-028-tests.log": {
+      "bytes": 3379,
+      "sha256": "27fedc44c4bad6257194cb7e1432f2b066c4bc9c6ef371cef094e007e8346135"
+    },
+    "renderer-current/normal.log": {
+      "bytes": 134,
+      "sha256": "7ba4583cf4186ab1b16ab5ba3ea1863f8648b9ddcfc57bce91360e3d75beecfa"
+    },
+    "renderer-current/sanitize.log": {
+      "bytes": 134,
+      "sha256": "7ba4583cf4186ab1b16ab5ba3ea1863f8648b9ddcfc57bce91360e3d75beecfa"
+    },
+    "renderer-stable-full-vs/normal.log": {
+      "bytes": 134,
+      "sha256": "7ba4583cf4186ab1b16ab5ba3ea1863f8648b9ddcfc57bce91360e3d75beecfa"
+    },
+    "renderer-stable-full-vs/sanitize.log": {
+      "bytes": 134,
+      "sha256": "7ba4583cf4186ab1b16ab5ba3ea1863f8648b9ddcfc57bce91360e3d75beecfa"
+    }
+  },
+  "source_revision": "edc8e08e98db83e243340925405c285f7da3cb79",
+  "version": "0.3.28"
+}
