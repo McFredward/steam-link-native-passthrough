@@ -673,9 +673,46 @@ void exactImageDiagnostics(const std::vector<std::uint32_t>& vs,const std::vecto
  }
  cameraRecovery=false;
 }
+void ordinaryPadding(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){
+ const auto resize=[](Integration& f,unsigned width,unsigned height){
+  f.renderer.viewDestroyed(f.view);f.renderer.imageDestroyed(f.image);
+  VkExternalMemoryImageCreateInfo external{VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO};external.handleTypes=VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT;
+  VkImageCreateInfo image{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};image.pNext=&external;image.imageType=VK_IMAGE_TYPE_2D;image.extent={width,height,1};image.mipLevels=image.arrayLayers=1;image.samples=VK_SAMPLE_COUNT_1_BIT;image.format=VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+  f.renderer.imageCreated(f.image,image);f.renderer.imageBound(f.image,f.imported,0);
+  VkImageViewCreateInfo view{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};view.image=f.image;view.viewType=VK_IMAGE_VIEW_TYPE_2D;view.subresourceRange={VK_IMAGE_ASPECT_COLOR_BIT,0,1,0,1};f.renderer.viewCreated(f.view,view);f.writeView(f.view);
+ };
+ cameraRecovery=true;
+ for(unsigned mode=0;mode<3;++mode){
+  Integration f(vs,ps,1,true,true,false,false,false);resize(f,1344,4864);
+  f.picture.metadata.descriptor.codedWidth=1216;f.picture.metadata.descriptor.codedHeight=4864;
+  f.publish(sb::CoverageEncoding::None);f.picture.ordinaryVideo=true;consumer.picture(consumer.owner,f.picture);
+  const auto draw=f.record();check(draw.ready&&!draw.coverage&&f.renderer.statsCold().ordinaryPaddedMatches==1,"observed 1344-wide native allocation accepts the exact 1216-wide ordinary picture without mask storage");
+  const auto submit=[&]{if(!mode)return f.submit(false);VkCommandBufferSubmitInfo command{VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO};command.commandBuffer=f.cb;command.deviceMask=1;VkSubmitInfo2 info{VK_STRUCTURE_TYPE_SUBMIT_INFO_2};info.commandBufferInfoCount=1;info.pCommandBufferInfos=&command;return f.renderer.submit2(f.vk.queue,1,&info,VK_NULL_HANDLE,mode==2);};
+  check(submit()==VK_SUCCESS&&f.vk.reads.back()==0&&f.vk.recoveryReads.back()==0,"core Submit2 and KHR preserve native ordinary RGB and UV mapping for the larger allocation");
+  f.record();leaseCurrent=false;check(submit()==VK_SUCCESS&&f.vk.recoveryReads.back()==1,"native lease retirement still suppresses a previously accepted padded ordinary recording");
+ }
+ for(unsigned mode=0;mode<8;++mode){
+  Integration f(vs,ps,1,true,true,false,false,false);resize(f,mode==1?8u:32u,mode==2?4u:2u);
+  if(mode==3)++f.picture.metadata.lease.kernel[1];
+  if(mode==6)f.picture.metadata.descriptor.codedWidth=0;
+  f.picture.ordinaryVideo=mode!=0;f.publish(mode?sb::CoverageEncoding::None:sb::CoverageEncoding::Raw);consumer.picture(consumer.owner,f.picture);
+  if(mode==4)leaseCurrent=false;
+  if(mode==5){f.picture.metadata.lease.slot=1;consumer.picture(consumer.owner,f.picture);}
+  if(mode==7){
+   check(f.record().ready&&f.renderer.statsCold().ordinaryPaddedMatches==1,"ordinary padded picture precedes masked transition on the same imported resource");
+   ++f.picture.metadata.descriptor.sourceFrame;f.picture.metadata.lease.sequence=++leaseSequence;f.picture.ordinaryVideo=false;f.publish();consumer.picture(consumer.owner,f.picture);
+  }
+  const auto before=f.renderer.statsCold();f.record();const auto after=f.renderer.statsCold();
+  const auto expected=mode==3?sr::ExactImageRefusal::Kernel:mode==4?sr::ExactImageRefusal::Lease:mode==5?sr::ExactImageRefusal::Ambiguous:sr::ExactImageRefusal::Extent;
+  check(after.exactImageRefusals[static_cast<std::size_t>(expected)]==before.exactImageRefusals[static_cast<std::size_t>(expected)]+1,"ordinary padding cannot bypass masked extent, smaller allocation, height, zero size, kernel, lease or unique-picture proof");
+  check(after.ordinaryDraws==before.ordinaryDraws&&after.selected==before.selected,"refused padded picture gains neither ordinary video nor mask permission");
+ }
+ cameraRecovery=false;
+}
 void cameraOnlyRecovery(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){
  ordinaryVideo(vs,ps);
  exactImageDiagnostics(vs,ps);
+ ordinaryPadding(vs,ps);
  cameraRecovery=true;
  {Integration f(vs,ps,1);auto exact=f.record();check(exact.coverage!=VK_NULL_HANDLE,"normal active source retains its exact mask");
   leaseCurrent=false;const auto before=f.vk.reads.size();check(f.submit(false)==VK_SUCCESS,"source loss preserves native queue submission");
