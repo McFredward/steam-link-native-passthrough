@@ -1,5 +1,55 @@
 # Adaptive PC native draw and composition
 
+## November13: ordinary video restored, application source still missing
+
+The matched Battlemarked test of installer0.3.29 / PC0.3.16 / Frame0.3.12
+confirms the expected Frame layer is installed and mapped in the running
+compositor. Native images remain1344x4864 and coded video1216x4864. There are
+6720 exact ordinary-image matches, all using the ordinary-padding exception,
+6720 ordinary draws and zero extent refusals. The preceding test had zero
+ordinary draws and8962 extent refusals. These are hardware observations of
+ordinary video recovery, not successful mixed reality.
+
+The PC still reports5062 complete source pairs, zero captured mask copies,
+3317 matched encoder inputs and zero masks. Frame receives3983 authenticated
+associations, all without coverage, with zero certificate refusals. Its3316
+prepared pictures are one fewer than the PC input counter; these independent
+observations are not an exact frame join. The black areas are now consistent
+with ordinary native RGB without a game mask, rather than the former Frame
+extent rejection.
+
+The game log confirms two actual independent2D OpenXR render passes, a live
+ordinary-RGBA format grant and active URP coverage. Native observations still
+identify1216x1216 compositor-owned sources. The runtime creates four such
+compositor allocations before the game starts; application-owned4280x4280
+typeless allocations are registered after the MultiPass switch. Successful
+format admission and allocation registration do not establish that the
+application images reach the observed producer draw.
+
+There is a hardware counterexample to treating the game integration as never
+supported: the retained October22 SteamVR2.18.4 Battlemarked test used the
+same public OpenXR MultiPass strategy and produced12312 masks. Its original
+application source was4040x4040. Both runs register packed17 array metadata
+before switching to packed9 independent eyes. The old runtime created the
+system and application allocations without the four additional1216-square
+allocations seen before the current game launch.
+
+The OpenVR Submit-only supersample-filter guard is absent from Battlemarked's
+OpenXR path in both the successful old and current cases. Its absence is a
+fact, not proof that filtering caused the regression. Likewise, the supplied
+current driver references the reviewed graphics copy-view programs; the
+presence of external compute shader files alone does not prove their use.
+
+The unresolved boundary is the current application-eye transfer through
+SteamVR's client/compositor to the producer resources. The current private
+driver and logs establish only the producer side. Matching current
+`bin/vrclient_x64.dll` and `bin/win64/vrcompositor.exe`, with the runtime's
+version record, are needed for the upstream comparison; the retained older
+client/compositor pair is not evidence of current instructions or behavior.
+Do not relabel compositor ownership as application authority, reuse a latest
+mask, force an Auto resolution, or call another diagnostic candidate a
+functional MR fix without a new demonstrated association.
+
 ## PC0.3.16: separate format bootstrap from image readiness
 
 The November10 Battlemarked test of PC0.3.15 confirms one observed device,
