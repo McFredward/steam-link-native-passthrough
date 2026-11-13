@@ -10,10 +10,32 @@ using namespace stream_bridge::sender::source_audit;
 namespace {
 unsigned checks=0,nativeDraws=0;UINT lastCount=0,lastStart=0;
 using Draw=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT);
-Draw nativeDraw=nullptr;
 void check(bool yes,const char* why){++checks;if(!yes)throw std::runtime_error(why);}
-void STDMETHODCALLTYPE counted(ID3D11DeviceContext* ctx,UINT count,UINT start){
-    ++nativeDraws;lastCount=count;lastStart=start;nativeDraw(ctx,count,start);SetLastError(1234);
+void STDMETHODCALLTYPE fakeDraw(ID3D11DeviceContext*,UINT count,UINT start){++nativeDraws;lastCount=count;lastStart=start;SetLastError(1234);}
+void STDMETHODCALLTYPE nextDraw(ID3D11DeviceContext*,UINT count,UINT start){++nativeDraws;lastCount=count;lastStart=start;SetLastError(4321);}
+HRESULT STDMETHODCALLTYPE fakeQuery(ID3D11DeviceContext*,REFIID,void** out){*out=nullptr;return E_NOINTERFACE;}
+ULONG STDMETHODCALLTYPE fakeRef(ID3D11DeviceContext*){return 1;}
+void STDMETHODCALLTYPE noShader(ID3D11DeviceContext*,ID3D11PixelShader** out,ID3D11ClassInstance**,UINT*){*out=nullptr;SetLastError(999);}
+ID3D11DeviceContext* fakeContext=nullptr;
+void STDMETHODCALLTYPE getFakeContext(ID3D11Device*,ID3D11DeviceContext** out){*out=fakeContext;}
+void dispatchControls(){
+    static std::array<void*,116> storage{};auto* table=storage.data()+1;
+    for(unsigned i=0;i<115;++i)table[i]=bits<void*>(&fakeRef);
+    table[0]=bits<void*>(&fakeQuery);table[13]=bits<void*>(&fakeDraw);table[74]=bits<void*>(&noShader);
+    static struct {void** table;} object{table};fakeContext=reinterpret_cast<ID3D11DeviceContext*>(&object);
+    static std::array<void*,43> deviceTable{};deviceTable[40]=bits<void*>(&getFakeContext);
+    static struct {void** table;} device{deviceTable.data()};
+    auto* observer=new Observer(Launch{});Observer::instance.store(observer);observer->attachContext(reinterpret_cast<ID3D11Device*>(&device));
+    check(observer->status.state==5&&observer->contexts[0].count==115,"owned base-context ABI admission");
+    const auto cached=bits<Draw>(observer->contexts[0].facade[13]);nativeDraws=0;
+    fakeContext->Draw(17,9);check(nativeDraws==1&&lastCount==17&&lastStart==9&&GetLastError()==1234,"native arguments and LastError survive diagnostic getters exactly once");
+    table[13]=bits<void*>(&nextDraw);fakeContext->Draw(19,7);
+    check(nativeDraws==2&&lastCount==19&&lastStart==7&&GetLastError()==4321,"forwarding follows changed current native dispatch without a stale target");
+    observer->stopped=true;auto& ctx=observer->contexts[0];ctx.facade[1]=bits<void*>(&fakeRef);observer->detach();
+    check(object.table==ctx.facade,"stop preserves a separately modified object-local facade");
+    ctx.facade[1]=ctx.expected[1];observer->detach();
+    check(object.table==table,"stop restores only an entirely owned facade");
+    cached(fakeContext,23,5);check(nativeDraws==3&&lastCount==23&&lastStart==5&&GetLastError()==4321,"cached callback forwards through the current native target after stop");
 }
 template<class T>struct Com {T* p=nullptr;~Com(){if(p)p->Release();}T** out(){return &p;}};
 constexpr unsigned W=37,H=23;
@@ -39,15 +61,12 @@ void run(){
     Com<ID3D11Device> device;Com<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"single-threaded native WARP device");
     const auto originalTable=*reinterpret_cast<void***>(context.p);
-    std::array<void*,115> originalEntries{};std::memcpy(originalEntries.data(),originalTable,sizeof originalEntries);
-    DWORD old=0,ignored=0;
     auto* observer=new Observer(Launch{},contracts.data(),contracts.size());Observer::instance.store(observer);
     check(observer->shaders.observeDevice(device.p)&&observer->status.state==5,"same-caller context observation permits SINGLETHREADED without cross-thread D3D access");
-    nativeDraw=bits<Draw>(observer->tables[0].original);
-    observer->tables[0].original=bits<void*>(&counted);
-    check(*reinterpret_cast<void***>(context.p)==originalTable,"entire native vptr, private tail and RTTI are preserved");
-    for(unsigned i=0;i<originalEntries.size();++i)if(i!=13)check(originalEntries[i]==originalTable[i],"all other public context methods remain native");
-    const auto cached=bits<Draw>(originalTable[13]);
+    auto& dispatch=observer->contexts[0];
+    check(dispatch.original==originalTable&&dispatch.owns(),"object-local dispatch retains the native table and all advertised public methods");
+    for(unsigned i=0;i<dispatch.count;++i)if(i!=13)check(dispatch.function(i)==reinterpret_cast<std::uintptr_t>(originalTable[i]),"every public forwarder resolves its current native method");
+    const auto cached=bits<Draw>(dispatch.facade[13]);
     Com<ID3D11VertexShader> vs;Com<ID3D11PixelShader> ps;
     check(SUCCEEDED(device.p->CreateVertexShader(vsCode.p->GetBufferPointer(),vsCode.p->GetBufferSize(),nullptr,vs.out()))&&
           SUCCEEDED(device.p->CreatePixelShader(psCode.p->GetBufferPointer(),psCode.p->GetBufferSize(),nullptr,ps.out())),"native shader creation forwards");
@@ -72,12 +91,14 @@ void run(){
     const D3D11_VIEWPORT viewport{0,0,float(W),float(H),0,1};context.p->RSSetViewports(1,&viewport);
     context.p->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context.p->VSSetShader(vs.p,nullptr,0);context.p->PSSetShader(ps.p,nullptr,0);
     ID3D11ShaderResourceView* inputs[]{views[0].p,views[1].p};context.p->PSSetShaderResources(0,2,inputs);context.p->OMSetRenderTargets(1,&rtv.p,nullptr);
-    counted(context.p,3,0);const auto baseline=pixels(context.p,target.p,staging.p);nativeDraws=0;
-    context.p->Draw(3,0);const auto drawError=GetLastError();
-    if(drawError!=1234||nativeDraws!=1||lastCount!=3||lastStart)
-        std::fprintf(stderr,"owned draw trace: native=%u args=%u/%u error=%lu observed=%llu dispatch-retained=%u\n",nativeDraws,lastCount,lastStart,
-            static_cast<unsigned long>(drawError),static_cast<unsigned long long>(observer->draws.load()),unsigned((*reinterpret_cast<void***>(context.p))[13]==bits<void*>(cached)));
-    check(drawError==1234&&nativeDraws==1&&lastCount==3&&!lastStart,"native draw executes exactly once with original arguments and LastError");
+    Com<ID3D11BlendState> additive;D3D11_BLEND_DESC blend{};auto& targetBlend=blend.RenderTarget[0];
+    targetBlend.BlendEnable=TRUE;targetBlend.SrcBlend=targetBlend.DestBlend=targetBlend.SrcBlendAlpha=targetBlend.DestBlendAlpha=D3D11_BLEND_ONE;
+    targetBlend.BlendOp=targetBlend.BlendOpAlpha=D3D11_BLEND_OP_ADD;targetBlend.RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;
+    check(SUCCEEDED(device.p->CreateBlendState(&blend,additive.out())),"additive output makes duplicate native draws observable");
+    context.p->OMSetBlendState(additive.p,nullptr,0xffffffffu);const FLOAT zero[4]{};context.p->ClearRenderTargetView(rtv.p,zero);
+    bits<Draw>(dispatch.function(13))(context.p,3,0);const auto baseline=pixels(context.p,target.p,staging.p);
+    context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+    check(observer->draws==1&&dispatch.owns(),"native first-use specialization preserves object-local observation");
     check(baseline==pixels(context.p,target.p,staging.p),"observer leaves every native output byte unchanged");
     check(observer->status.sampleCount==2&&observer->recognized==1,"bounded observations contain both actual source slots");
     for(unsigned i=0;i<2;++i){const auto& s=observer->status.samples[i];check(s.slot==i&&s.pid==101+i&&s.ownerMatches==1&&s.width==W&&s.height==H&&s.outputWidth==W&&s.outputHeight==H,"bound source ownership and arbitrary physical extents come from actual views");}
@@ -86,18 +107,17 @@ void run(){
     std::thread cold([&]{std::lock_guard<std::mutex> guard(observer->mutex);locked=true;while(!done)SwitchToThread();});
     while(!locked)SwitchToThread();
     context.p->Draw(3,0);done=true;cold.join();
-    check(observer->dropped==drops+1&&nativeDraws==2,"cold diagnostic contention never blocks or duplicates native drawing");
+    check(observer->dropped==drops+1&&observer->draws==2,"cold diagnostic contention never blocks or duplicates native drawing");
     Com<ID3D11Device> foreign;Com<ID3D11DeviceContext> foreignContext;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,foreign.out(),nullptr,foreignContext.out())),"independent unobserved native device");
     const auto observations=observer->recognized.load();foreignContext.p->Draw(0,0);
-    check(observer->recognized==observations&&nativeDraws==3&&lastCount==0,"other contexts sharing the native table only forward");
+    check(observer->recognized==observations&&observer->draws==2,"other contexts sharing the native table only forward");
     observer->stopped=true;observer->detach();observer->shaders.stop();
-    check(originalTable[13]==bits<void*>(&counted),"stop restores only the exact owned method cell");
-    const auto serial=observer->serial;cached(context.p,3,0);
-    check(nativeDraws==4&&observer->serial==serial&&GetLastError()==1234,"cached callback remains a native-only forwarder after stop");
+    check(*reinterpret_cast<void***>(context.p)==originalTable,"stop restores the exact owned object vptr without changing its native table");
+    const auto serial=observer->serial;context.p->ClearRenderTargetView(rtv.p,zero);cached(context.p,3,0);
+    check(observer->draws==3&&observer->serial==serial,"cached callback remains a native-only forwarder after stop");
     check(baseline==pixels(context.p,target.p,staging.p),"stop preserves all native RGBA output bytes");
-    check(Observer::writable(originalTable+13,old),"counting shim restoration");
-    InterlockedExchangePointer(originalTable+13,bits<void*>(nativeDraw));VirtualProtect(originalTable+13,sizeof(void*),old,&ignored);
+
 }
 }
-int main(){try{run();std::printf("source audit owned WARP: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"source audit failed after %u: %s\n",checks,e.what());return 1;}}
+int main(){try{dispatchControls();run();std::printf("source audit owned WARP: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"source audit failed after %u: %s\n",checks,e.what());return 1;}}
