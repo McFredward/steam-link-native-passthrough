@@ -6,16 +6,22 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <tlhelp32.h>
 #include "stream-bridge-source-audit.h"
 #include <memory>
 
 namespace stream_bridge::sender {
+struct SourceAuditDiscovery {
+    decltype(&CreateToolhelp32Snapshot) snapshot=&CreateToolhelp32Snapshot;
+    decltype(&Module32FirstW) first=&Module32FirstW;
+    decltype(&Module32NextW) next=&Module32NextW;
+};
 // Dev diagnostics only. No format, frame, mask or camera authority is added.
 class SourceAuditServer {
 public:
     using VerifyFile=bool(*)(const wchar_t*,HANDLE);
     using Inventory=bool(*)(std::uint64_t,SourceAuditInventory&,void*);
-    SourceAuditServer();~SourceAuditServer();
+    explicit SourceAuditServer(SourceAuditDiscovery={});~SourceAuditServer();
     void tick(VerifyFile,Inventory=nullptr,void* opaque=nullptr)noexcept;
     SourceAuditStatus status()const noexcept;
     void stop()noexcept;
