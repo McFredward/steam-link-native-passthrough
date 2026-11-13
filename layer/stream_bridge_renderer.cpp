@@ -184,6 +184,8 @@ struct Renderer::Impl {
         std::atomic<std::uint64_t> metadata{0},maskNone{0},maskDecoded{0},maskRejected{0},uploadAccepted{0},uploadRefused{0},pictures{0};
         std::atomic<std::uint64_t> maskOpaque{0},maskTransparent{0},maskMixed{0};
         std::atomic<std::uint64_t> cameraOnlyDraws{0},ordinaryDraws{0},ordinarySubmits{0};
+        std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(ExactImageRefusal::Count)> exactImageRefusals{};
+        std::atomic<std::uint64_t> exactImageMatches{0},lastImageExtent{0},lastPictureExtent{0};
         std::atomic<std::uint64_t> begins{0},draws{0},selected{0},guardAttempts{0},guardAccepted{0},guardRefused{0},opaqueSubmits{0};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(DrawRefusal::Count)> refusals{};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(CollectRefusal::Count)> collectRefusals{};
@@ -209,6 +211,7 @@ struct Renderer::Impl {
         COUNT(metadata) COUNT(maskNone) COUNT(maskDecoded) COUNT(maskRejected) COUNT(uploadAccepted) COUNT(uploadRefused) COUNT(pictures)
         COUNT(maskOpaque) COUNT(maskTransparent) COUNT(maskMixed)
         COUNT(cameraOnlyDraws) COUNT(ordinaryDraws) COUNT(ordinarySubmits) COUNT(begins) COUNT(draws) COUNT(selected) COUNT(guardAttempts) COUNT(guardAccepted) COUNT(guardRefused) COUNT(opaqueSubmits)
+        COUNT(exactImageMatches) COUNT(lastImageExtent) COUNT(lastPictureExtent)
         COUNT(collects) COUNT(collected) COUNT(coreSubmits) COUNT(submits2) COUNT(firstNextType) COUNT(firstRefusedNextType)
         COUNT(imageCapacityRefused) COUNT(memoryCapacityRefused) COUNT(viewCapacityRefused) COUNT(descriptorCapacityRefused)
         COUNT(descriptorUntrackedWrites) COUNT(descriptorUntrackedCopies)
@@ -218,6 +221,7 @@ struct Renderer::Impl {
         for(std::size_t n=0;n<out.collectRefusals.size();++n)out.collectRefusals[n]=counts.collectRefusals[n].load(std::memory_order_relaxed);
         for(std::size_t n=0;n<out.submitRefusals.size();++n)out.submitRefusals[n]=counts.submitRefusals[n].load(std::memory_order_relaxed);
         for(std::size_t n=0;n<out.descriptorRefusals.size();++n)out.descriptorRefusals[n]=counts.descriptorRefusals[n].load(std::memory_order_relaxed);
+        for(std::size_t n=0;n<out.exactImageRefusals.size();++n)out.exactImageRefusals[n]=counts.exactImageRefusals[n].load(std::memory_order_relaxed);
         const auto gpu=pool.statusCold();out.pending=gpu.pending;out.copying=gpu.copying;out.ready=gpu.ready;out.quarantined=gpu.quarantined;
         out.poolUploaded=gpu.uploaded;out.poolRefused=gpu.refused;out.pipelines=admittedPipelines.load(std::memory_order_acquire);
         out.prepared=out.pipelines!=0;out.lost=lost.load(std::memory_order_acquire);return out;
@@ -245,6 +249,10 @@ struct Renderer::Impl {
             static_cast<unsigned long long>(s.guardAccepted),static_cast<unsigned long long>(s.guardAttempts),static_cast<unsigned long long>(s.guardRefused),static_cast<unsigned long long>(s.opaqueSubmits),s.pipelines,unsigned(s.lost));
         std::fprintf(stderr,"[Steam Link Native Passthrough] renderer camera-only recovery: recorded=%llu; current-grant=%u; no game pixels or stale coverage\n",static_cast<unsigned long long>(s.cameraOnlyDraws),unsigned(cameraOnlyRecoveryReady()));
         std::fprintf(stderr,"[Steam Link Native Passthrough] renderer ordinary video: recorded=%llu; submit-guards=%llu; exact decoded image proof required\n",static_cast<unsigned long long>(s.ordinaryDraws),static_cast<unsigned long long>(s.ordinarySubmits));
+        const auto exact=[&](ExactImageRefusal r){return static_cast<unsigned long long>(s.exactImageRefusals[static_cast<std::size_t>(r)]);};
+        std::fprintf(stderr,"[Steam Link Native Passthrough] renderer exact image: matched=%llu; refused image/memory/generation/fd/no-picture/connection/lease/kernel/extent/ambiguous=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; last image/coded=%ux%u/%ux%u; scalar diagnostics only, no frame authority\n",
+            static_cast<unsigned long long>(s.exactImageMatches),exact(ExactImageRefusal::Image),exact(ExactImageRefusal::Memory),exact(ExactImageRefusal::MemoryGeneration),exact(ExactImageRefusal::MemoryFd),exact(ExactImageRefusal::NoPicture),exact(ExactImageRefusal::Connection),exact(ExactImageRefusal::Lease),exact(ExactImageRefusal::Kernel),exact(ExactImageRefusal::Extent),exact(ExactImageRefusal::Ambiguous),
+            std::uint32_t(s.lastImageExtent>>32),std::uint32_t(s.lastImageExtent),std::uint32_t(s.lastPictureExtent>>32),std::uint32_t(s.lastPictureExtent));
         std::fprintf(stderr,"[Steam Link Native Passthrough] coverage content: fully-opaque/fully-transparent/mixed=%llu/%llu/%llu; exact pre-draw storage retained; no image capture\n",
             static_cast<unsigned long long>(s.maskOpaque),static_cast<unsigned long long>(s.maskTransparent),static_cast<unsigned long long>(s.maskMixed));
         std::fprintf(stderr,"[Steam Link Native Passthrough] descriptor flow: allocated/refused=%llu/%llu; pool-retire/set-retire=%llu/%llu; unknown-updates/copies=%llu/%llu\n",
@@ -404,10 +412,32 @@ struct Renderer::Impl {
     }
     static void tick(void* owner) noexcept{auto& p=*static_cast<Impl*>(owner);p.retirePictures();p.pool.reapCold();p.reportCold();}
     bool matchingImage(std::uint64_t image,std::shared_ptr<const LocalPicture>& output){
-        const auto* i=find(images,image);if(!i)return false;const auto* m=find(memories,i->memory);if(!m||m->generation!=i->memoryGeneration||m->duplicate<0)return false;
         output.reset();
-        for(const auto& slot:pictures){auto picture=std::atomic_load_explicit(&slot,std::memory_order_acquire);if(picture&&current(*picture)&&picture->metadata.lease.kernel==local::KernelIdentity{{m->device,m->inode}}&&picture->metadata.descriptor.codedWidth==i->width&&picture->metadata.descriptor.codedHeight==i->height){if(output)return false;output=std::move(picture);}}
-        return output!=nullptr;
+        const auto refuse=[&](ExactImageRefusal why){++counts.exactImageRefusals[static_cast<std::size_t>(why)];return false;};
+        counts.lastImageExtent=counts.lastPictureExtent=0;
+        const auto* i=find(images,image);if(!i)return refuse(ExactImageRefusal::Image);
+        counts.lastImageExtent=(std::uint64_t(i->width)<<32)|i->height;
+        const auto* m=i->memory?find(memories,i->memory):nullptr;
+        if(!m)return refuse(ExactImageRefusal::Memory);
+        if(m->generation!=i->memoryGeneration)return refuse(ExactImageRefusal::MemoryGeneration);
+        if(m->duplicate<0)return refuse(ExactImageRefusal::MemoryFd);
+        bool present=false,connected=false,leased=false,kernel=false;
+        for(const auto& slot:pictures){
+            auto picture=std::atomic_load_explicit(&slot,std::memory_order_acquire);if(!picture)continue;
+            present=true;
+            if(!picture->leases||!picture->connection||!picture->connection->load(std::memory_order_acquire))continue;
+            connected=true;if(!picture->leases->current(picture->metadata.lease))continue;
+            leased=true;
+            const auto extent=(std::uint64_t(picture->metadata.descriptor.codedWidth)<<32)|picture->metadata.descriptor.codedHeight;
+            if(!kernel)counts.lastPictureExtent=extent;
+            if(picture->metadata.lease.kernel!=local::KernelIdentity{{m->device,m->inode}})continue;
+            kernel=true;counts.lastPictureExtent=extent;
+            if(picture->metadata.descriptor.codedWidth!=i->width||picture->metadata.descriptor.codedHeight!=i->height)continue;
+            if(output)return refuse(ExactImageRefusal::Ambiguous);
+            output=std::move(picture);
+        }
+        if(output){++counts.exactImageMatches;return true;}
+        return refuse(!present?ExactImageRefusal::NoPicture:!connected?ExactImageRefusal::Connection:!leased?ExactImageRefusal::Lease:!kernel?ExactImageRefusal::Kernel:ExactImageRefusal::Extent);
     }
     bool collect(VkCommandBuffer cb,bool& ordinary){
         ordinary=false;
