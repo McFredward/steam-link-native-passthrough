@@ -1,5 +1,40 @@
 # Adaptive PC native draw and composition
 
+## November14: missing startup observation, Windows shader folder inspected
+
+The new PC0.3.19 test starts a fresh compositor at00:24:15.142 CET. Its native
+log reports device creation at00:24:15.336 and two completed shader loads. The
+observer loads/enters exactly once and stays armed at state4, but devices,
+programs and every raster-family counter remain zero. This test cannot identify
+the active stream stage. Existing telemetry does not prove whether the factory
+was missed or its device could not be attached. Sender coverage still produces
+zero masks; the latest source is a compositor-owned1216-square tile.
+
+The supplied Windows shader folder rules out a mismatch of the four previously
+inspected stream_view assets: PC and Frame bytes match exactly. The common
+vertex fingerprint also appears in unrelated resolve/resampling assets, so its
+recognition alone cannot establish the stream pipeline. Additional multiview
+pixel and reprojection vertex assets have distinct reviewed fingerprints and
+resource layouts, including three sources for reproject-x and multisample input
+for resolve. On-disk presence and conditional alpha-one logic do not establish
+live execution or the selected constants.
+
+The unchanged Frame0.3.12 receives4782 new maskless associations after23:24:02 UTC,
+makes5766 additional ordinary draws and two camera-only draws after23:24:12,
+with zero extent refusals. The renderer metadata baseline is older23:23:42;
+its6368 metadata and2680 picture deltas include that preceding interval. These
+independent counters are not exact joins with the PC's2681 inputs.
+
+Installer0.3.33 / PC0.3.20 moves discovery to an independent cold worker before
+native sender attachment and encoder preparation, records actual factory call,
+creation and attachment-refusal counts, and recognizes the extra programs only
+for bounded diagnostics. The
+[MSVC/GNU Windows gate](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43528421330)
+passes246 owned GPU controls plus independent-worker and deliberate-late-arrival
+loader controls. A late observer remains explicitly unobserved. Frame files,
+ordinary capture and all source/frame/mask/camera admission remain unchanged.
+Successful beta MR and the full requested compatibility matrix remain pending.
+
 ## November13 late test: observation active, stream pixel bindings missing
 
 PC0.3.18 now reaches state5 with no discovery error, exactly one module match,
