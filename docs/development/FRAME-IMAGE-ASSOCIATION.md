@@ -1,4 +1,38 @@
-# Frame exact-image association diagnostics
+# Frame image association and ordinary video padding
+
+## Frame0.3.12: larger native ordinary-video allocation
+
+The next November13 test loads the expected Frame0.3.11 diagnostic layer.
+The matched counters identify8962 extent refusals after a live lease and exact
+imported DMA kernel match. The sampled Vulkan image is1344x4864 while the
+authenticated coded video is1216x4864. There are no memory-generation or
+expired-lease refusals. This is evidence of different image extents; it does
+not independently establish physical row pitch, a crop offset or mask UVs.
+
+Frame0.3.12 permits the larger horizontal allocation only for an authenticated
+ordinary-video picture. Its coded dimensions must be nonzero, its native width
+must contain the coded width and its height must agree. Every connection,
+native lease, kernel, uniqueness, descriptor and draw-to-submit generation
+check remains mandatory. The ordinary path uses the original native RGB and
+UV mapping and no mask storage, so it needs no guessed mask coordinate change.
+Masked pictures retain exact width/height equality. Vertical padding, a smaller
+native allocation and an ordinary-to-masked transition cannot inherit this
+ordinary-video exception.
+
+The production fixture covers the observed1344/1216 shape through core Submit,
+Submit2 and KHR, verifies unchanged ordinary control values and rejects stale
+recordings. Negative cases retain masked extent, height, size, kernel, lease,
+uniqueness and source-transition checks. Restoring only width equality must
+reproduce the observed-shape failure. Old and beta native profiles are tested
+with sanitizers; these are software observations, not a headset result.
+
+Installer0.3.29 delivers Frame0.3.12 with byte-identical PC0.3.16, selector and
+codec libraries. The new `padded-ordinary` counter identifies this accepted
+path. The PC still transmits no game masks in the supplied test, so this is an
+ordinary-video availability fix, not a claim that native mixed reality or
+compositor-to-application source lineage is solved.
+
+## Frame0.3.11: exact-image diagnostics
 
 The November13 Battlemarked test uses PC0.3.16 and Frame0.3.10 on the current
 SteamVR beta path. Source-format negotiation now succeeds and the game enables

@@ -185,7 +185,7 @@ struct Renderer::Impl {
         std::atomic<std::uint64_t> maskOpaque{0},maskTransparent{0},maskMixed{0};
         std::atomic<std::uint64_t> cameraOnlyDraws{0},ordinaryDraws{0},ordinarySubmits{0};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(ExactImageRefusal::Count)> exactImageRefusals{};
-        std::atomic<std::uint64_t> exactImageMatches{0},lastImageExtent{0},lastPictureExtent{0};
+        std::atomic<std::uint64_t> exactImageMatches{0},ordinaryPaddedMatches{0},lastImageExtent{0},lastPictureExtent{0};
         std::atomic<std::uint64_t> begins{0},draws{0},selected{0},guardAttempts{0},guardAccepted{0},guardRefused{0},opaqueSubmits{0};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(DrawRefusal::Count)> refusals{};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(CollectRefusal::Count)> collectRefusals{};
@@ -211,7 +211,7 @@ struct Renderer::Impl {
         COUNT(metadata) COUNT(maskNone) COUNT(maskDecoded) COUNT(maskRejected) COUNT(uploadAccepted) COUNT(uploadRefused) COUNT(pictures)
         COUNT(maskOpaque) COUNT(maskTransparent) COUNT(maskMixed)
         COUNT(cameraOnlyDraws) COUNT(ordinaryDraws) COUNT(ordinarySubmits) COUNT(begins) COUNT(draws) COUNT(selected) COUNT(guardAttempts) COUNT(guardAccepted) COUNT(guardRefused) COUNT(opaqueSubmits)
-        COUNT(exactImageMatches) COUNT(lastImageExtent) COUNT(lastPictureExtent)
+        COUNT(exactImageMatches) COUNT(ordinaryPaddedMatches) COUNT(lastImageExtent) COUNT(lastPictureExtent)
         COUNT(collects) COUNT(collected) COUNT(coreSubmits) COUNT(submits2) COUNT(firstNextType) COUNT(firstRefusedNextType)
         COUNT(imageCapacityRefused) COUNT(memoryCapacityRefused) COUNT(viewCapacityRefused) COUNT(descriptorCapacityRefused)
         COUNT(descriptorUntrackedWrites) COUNT(descriptorUntrackedCopies)
@@ -250,8 +250,8 @@ struct Renderer::Impl {
         std::fprintf(stderr,"[Steam Link Native Passthrough] renderer camera-only recovery: recorded=%llu; current-grant=%u; no game pixels or stale coverage\n",static_cast<unsigned long long>(s.cameraOnlyDraws),unsigned(cameraOnlyRecoveryReady()));
         std::fprintf(stderr,"[Steam Link Native Passthrough] renderer ordinary video: recorded=%llu; submit-guards=%llu; exact decoded image proof required\n",static_cast<unsigned long long>(s.ordinaryDraws),static_cast<unsigned long long>(s.ordinarySubmits));
         const auto exact=[&](ExactImageRefusal r){return static_cast<unsigned long long>(s.exactImageRefusals[static_cast<std::size_t>(r)]);};
-        std::fprintf(stderr,"[Steam Link Native Passthrough] renderer exact image: matched=%llu; refused image/memory/generation/fd/no-picture/connection/lease/kernel/extent/ambiguous=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; last image/coded=%ux%u/%ux%u; scalar diagnostics only, no frame authority\n",
-            static_cast<unsigned long long>(s.exactImageMatches),exact(ExactImageRefusal::Image),exact(ExactImageRefusal::Memory),exact(ExactImageRefusal::MemoryGeneration),exact(ExactImageRefusal::MemoryFd),exact(ExactImageRefusal::NoPicture),exact(ExactImageRefusal::Connection),exact(ExactImageRefusal::Lease),exact(ExactImageRefusal::Kernel),exact(ExactImageRefusal::Extent),exact(ExactImageRefusal::Ambiguous),
+        std::fprintf(stderr,"[Steam Link Native Passthrough] renderer exact image: matched=%llu; padded-ordinary=%llu; refused image/memory/generation/fd/no-picture/connection/lease/kernel/extent/ambiguous=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; last image/coded=%ux%u/%ux%u; scalar diagnostics only, no frame authority\n",
+            static_cast<unsigned long long>(s.exactImageMatches),static_cast<unsigned long long>(s.ordinaryPaddedMatches),exact(ExactImageRefusal::Image),exact(ExactImageRefusal::Memory),exact(ExactImageRefusal::MemoryGeneration),exact(ExactImageRefusal::MemoryFd),exact(ExactImageRefusal::NoPicture),exact(ExactImageRefusal::Connection),exact(ExactImageRefusal::Lease),exact(ExactImageRefusal::Kernel),exact(ExactImageRefusal::Extent),exact(ExactImageRefusal::Ambiguous),
             std::uint32_t(s.lastImageExtent>>32),std::uint32_t(s.lastImageExtent),std::uint32_t(s.lastPictureExtent>>32),std::uint32_t(s.lastPictureExtent));
         std::fprintf(stderr,"[Steam Link Native Passthrough] coverage content: fully-opaque/fully-transparent/mixed=%llu/%llu/%llu; exact pre-draw storage retained; no image capture\n",
             static_cast<unsigned long long>(s.maskOpaque),static_cast<unsigned long long>(s.maskTransparent),static_cast<unsigned long long>(s.maskMixed));
@@ -432,11 +432,19 @@ struct Renderer::Impl {
             if(!kernel)counts.lastPictureExtent=extent;
             if(picture->metadata.lease.kernel!=local::KernelIdentity{{m->device,m->inode}})continue;
             kernel=true;counts.lastPictureExtent=extent;
-            if(picture->metadata.descriptor.codedWidth!=i->width||picture->metadata.descriptor.codedHeight!=i->height)continue;
+            const auto& coded=picture->metadata.descriptor;
+            const bool exactExtent=coded.codedWidth==i->width&&coded.codedHeight==i->height;
+            // Authenticated ordinary video uses the original native RGB/UV
+            // mapping and never samples a mask. Its exact DMA image may have
+            // horizontal allocation padding beyond the coded video region.
+            // Masked pictures retain equality until their UV mapping is proved.
+            const bool ordinaryPadding=picture->ordinaryVideo&&coded.codedWidth&&coded.codedHeight&&
+                i->width>coded.codedWidth&&i->height==coded.codedHeight;
+            if(!exactExtent&&!ordinaryPadding)continue;
             if(output)return refuse(ExactImageRefusal::Ambiguous);
             output=std::move(picture);
         }
-        if(output){++counts.exactImageMatches;return true;}
+        if(output){++counts.exactImageMatches;if(output->ordinaryVideo&&output->metadata.descriptor.codedWidth!=i->width)++counts.ordinaryPaddedMatches;return true;}
         return refuse(!present?ExactImageRefusal::NoPicture:!connected?ExactImageRefusal::Connection:!leased?ExactImageRefusal::Lease:!kernel?ExactImageRefusal::Kernel:ExactImageRefusal::Extent);
     }
     bool collect(VkCommandBuffer cb,bool& ordinary){

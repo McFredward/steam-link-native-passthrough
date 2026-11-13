@@ -31,7 +31,7 @@ struct RendererStats {
     std::array<std::uint64_t,static_cast<std::size_t>(SubmitRefusal::Count)> submitRefusals{};
     std::array<std::uint64_t,static_cast<std::size_t>(DescriptorRefusal::Count)> descriptorRefusals{};
     std::array<std::uint64_t,static_cast<std::size_t>(ExactImageRefusal::Count)> exactImageRefusals{};
-    std::uint64_t exactImageMatches=0,lastImageExtent=0,lastPictureExtent=0;
+    std::uint64_t exactImageMatches=0,ordinaryPaddedMatches=0,lastImageExtent=0,lastPictureExtent=0;
     std::uint64_t imageCapacityRefused=0,memoryCapacityRefused=0,viewCapacityRefused=0,descriptorCapacityRefused=0;
     std::uint64_t descriptorUntrackedWrites=0,descriptorUntrackedCopies=0;
     std::uint64_t collects=0,collected=0,coreSubmits=0,submits2=0;
