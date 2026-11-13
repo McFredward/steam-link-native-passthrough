@@ -339,6 +339,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
     void run(){
         bootstrapStatus.store(1);
         if(!configure()){bootstrapStatus.store(3);return;}
+        struct AuditLifetime{stream_bridge::sender::SourceAuditServer& server;~AuditLifetime(){server.stop();}} auditLifetime{sourceAudit_};
+        if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&
+            !sourceAudit_.start(valvePublisher,sourceAuditInventory))
+            report("compositor source discovery worker unavailable",stream_bridge::logging::Level::Debug);
         bool attached=false;
         for(;;){
             {std::lock_guard<std::mutex> guard(mutex_);if(stopped_)return;}
@@ -481,6 +485,13 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     static_cast<unsigned long long>(audit.rasterCalls[2]),static_cast<unsigned long long>(audit.rasterCalls[3]),
                     static_cast<unsigned long long>(audit.rasterCalls[4]),static_cast<unsigned long long>(audit.rasterCalls[5]),
                     static_cast<unsigned long long>(audit.rasterCalls[6]),static_cast<unsigned long long>(audit.rasterCalls[7]));
+                report(text,stream_bridge::logging::Level::Debug);
+                std::snprintf(text,sizeof text,"compositor multiview audit: inner/downscale-x/downscale-y/reproject-x/reproject-y/resolve/vertex-x/vertex-y=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; factory calls/created/refused=%llu/%llu/%llu; program identities only, no coverage authority",
+                    static_cast<unsigned long long>(audit.multiViewShaderKinds[0]),static_cast<unsigned long long>(audit.multiViewShaderKinds[1]),
+                    static_cast<unsigned long long>(audit.multiViewShaderKinds[2]),static_cast<unsigned long long>(audit.multiViewShaderKinds[3]),
+                    static_cast<unsigned long long>(audit.multiViewShaderKinds[4]),static_cast<unsigned long long>(audit.multiViewShaderKinds[5]),
+                    static_cast<unsigned long long>(audit.multiViewShaderKinds[6]),static_cast<unsigned long long>(audit.multiViewShaderKinds[7]),
+                    static_cast<unsigned long long>(audit.factoryCalls),static_cast<unsigned long long>(audit.factoryCreated),static_cast<unsigned long long>(audit.factoryRefused));
                 report(text,stream_bridge::logging::Level::Debug);++auditReports;}
                 auto samples=audit.samples;
                 std::sort(samples.begin(),samples.end(),[](const auto& a,const auto& b){return a.serial<b.serial;});
@@ -690,7 +701,6 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     if(encoder.peerConfirmed&&encoder.probeObserved&&runtime_.control().peerVerified()&&runtime_.control().localConfig(config,authority)){state.binding=authority.channel.binding;state.generation=encoder.generation;state.compatible=true;}
                     sourceIpc_.tick(state);
                 }
-                if(request_.explicitlyEnabled&&stream_bridge::logging::debug())sourceAudit_.tick(valvePublisher,sourceAuditInventory);
             }catch(...){sourceIpc_.stop();coverage_.stop();runtime_.stop();report("worker refused; ordinary video",stream_bridge::logging::Level::Warning);break;}
             const auto* coverageState=coverage_.stateName();if(request_.explicitlyEnabled&&coverageState!=lastCoverage){lastCoverage=coverageState;reportState(coverageState);}
             if(runtime_.state()!=last){

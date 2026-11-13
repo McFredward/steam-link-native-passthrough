@@ -18,10 +18,18 @@ template<class To,class From>To bits(From value)noexcept{static_assert(sizeof(To
 template<class T>void release(T*& p)noexcept{if(p)p->Release();p=nullptr;}
 template<class T>struct Held{T* p=nullptr;~Held(){release(p);}T** out()noexcept{return &p;}};
 bool readable(const void* from,void* to,std::size_t bytes)noexcept{SIZE_T count=0;return ReadProcessMemory(GetCurrentProcess(),from,to,bytes,&count)&&count==bytes;}
-const std::array<ShaderFingerprint,3> Contracts{{
+const std::array<ShaderFingerprint,11> Contracts{{
     {NativeShader::StreamVertex,shaderDigest("5f33e43e2f388b7d2b0baa2fe89d9fd64062c9781c622ea6183bc67af70fc0fa")},
     {NativeShader::StreamCombine,shaderDigest("c359fa168f4e80e54395bf0587de803139839cf79f204e783384b5b3a9865e28")},
-    {NativeShader::StreamInset,shaderDigest("d9f935dcb136936ad3f61f79629ba20e1dd1db861d62490800bd051a67a01442")}
+    {NativeShader::StreamInset,shaderDigest("d9f935dcb136936ad3f61f79629ba20e1dd1db861d62490800bd051a67a01442")},
+    {NativeShader::MultiViewInner,shaderDigest("f8dc71b5055fca7daeccf1e9fe62b804b1ea12bb1f5be758656bdcde5d44eb50")},
+    {NativeShader::MultiViewDownscaleX,shaderDigest("458eb4a8e711033adbc3e010f046014b42a9b70da5e40d32a088de370f26b853")},
+    {NativeShader::MultiViewDownscaleY,shaderDigest("19d23135a8b403887043c106fb6aa998ad666a483959a9ee97a1d76bca744e69")},
+    {NativeShader::MultiViewReprojectX,shaderDigest("c74f8931dbadf4c791c38cbb3290baa1db666ea23c33193b304718dd9f3a6c7e")},
+    {NativeShader::MultiViewReprojectY,shaderDigest("675da9edd13d0f410d2f60e83446a483a653e1cdea0fcae1607791715c868a72")},
+    {NativeShader::MultiViewResolve,shaderDigest("c48e8ffff836b55f565dcc0001bbf5f4d5ff3e77498b249a16d6c7a327bda4be")},
+    {NativeShader::MultiViewVertexX,shaderDigest("d6ae45c3e426a9ccfe41e60e0de3c4d8f7f30db3891c42576e78cd0e1d84170c")},
+    {NativeShader::MultiViewVertexY,shaderDigest("a6fb3a02dba65a6a14ad212d731569e5949482b3a3e19f515d81dc54fb880be5")}
 }};
 // Metadata-only same-caller observer. It never draws, copies a GPU image,
 // changes thread protection, blocks a graphics thread or grants source output.
@@ -148,16 +156,20 @@ struct Observer {
     void inspect(ID3D11DeviceContext* ctx,const Raster& call){
         Held<ID3D11PixelShader> shader;ctx->PSGetShader(shader.out(),nullptr,nullptr);if(!shader.p)return;
         const auto kind=shaders.identify(shader.p);
-        const bool reviewed=kind==NativeShader::StreamCombine||kind==NativeShader::StreamInset;
+        const bool multi=kind>=NativeShader::MultiViewInner&&kind<=NativeShader::MultiViewResolve;
+        const bool reviewed=kind==NativeShader::StreamCombine||kind==NativeShader::StreamInset||multi;
         Held<ID3D11VertexShader> vertex;ctx->VSGetShader(vertex.out(),nullptr,nullptr);
         if(!vertex.p)return;
         const auto vertexKind=shaders.identify(vertex.p);
-        const bool programCandidate=reviewed||vertexKind==NativeShader::StreamVertex;
+        const bool programCandidate=reviewed||vertexKind==NativeShader::StreamVertex||
+            vertexKind==NativeShader::MultiViewVertexX||vertexKind==NativeShader::MultiViewVertexY;
         if(reviewed)++recognized;
         NativeShaderDescription program{};const bool hashValid=shaders.describe(shader.p,program)&&program.pixel;
 
         std::unique_lock<std::mutex> guard(mutex,std::try_to_lock);if(!guard){++dropped;return;}
-        for(unsigned slot=0;slot<(kind==NativeShader::StreamInset?1u:2u);++slot){
+        const unsigned sourceSlots=kind==NativeShader::MultiViewReprojectX?3u:
+            (kind==NativeShader::StreamInset||multi?1u:2u);
+        for(unsigned slot=0;slot<sourceSlots;++slot){
             Held<ID3D11ShaderResourceView> view;ctx->PSGetShaderResources(slot,1,view.out());if(!view.p)continue;
             Held<ID3D11Resource> resource;view.p->GetResource(resource.out());if(!resource.p)continue;
             Held<ID3D11Texture2D> texture;
@@ -227,6 +239,8 @@ struct Observer {
         const auto stats=shaders.stats();status.devices=stats.devices;status.shaders=stats.recognized;
         status.draws=draws.load();status.recognizedDraws=recognized.load();status.dropped=dropped.load();
         status.streamShaderKinds=stats.streamKinds;status.unknownPixelPrograms=stats.unknownPixels;
+        status.multiViewShaderKinds=stats.multiViewKinds;
+        status.factoryCalls=stats.factoryCalls;status.factoryCreated=stats.factoryCreated;status.factoryRefused=stats.factoryRefused;
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();
         publish(page->statusSequence,page->status,status);
     }

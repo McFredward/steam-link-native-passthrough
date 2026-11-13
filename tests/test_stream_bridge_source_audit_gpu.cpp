@@ -60,11 +60,14 @@ void dispatchControls(){
 template<class T>struct Com {T* p=nullptr;~Com(){if(p)p->Release();}T** out(){return &p;}};
 constexpr unsigned W=37,H=23;
 constexpr char Program[]=R"(
-Texture2D<float4> scene:register(t0);Texture2D<float4> overlay:register(t1);
+Texture2D<float4> scene:register(t0);Texture2D<float4> overlay:register(t1);Texture2D<float4> auxiliary:register(t2);
 float4 vs(uint id:SV_VertexID):SV_Position {float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
 float4 otherVs(uint id:SV_VertexID):SV_Position {float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0.25,1);}
+float4 multiVs(uint id:SV_VertexID):SV_Position {float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0.5,1);}
 float4 ps(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))+overlay.Load(int3(int2(p.xy),0))*0.25;}
 float4 unreviewed(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))*float4(0.5,0.75,0.25,1)+overlay.Load(int3(int2(p.xy),0))*0.125;}
+float4 multiPs(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))*0.625;}
+float4 multi3Ps(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))*0.5+overlay.Load(int3(int2(p.xy),0))*0.125+auxiliary.Load(int3(int2(p.xy),0))*0.0625;}
 )";
 std::vector<unsigned char> pixels(ID3D11DeviceContext* ctx,ID3D11Texture2D* image,ID3D11Texture2D* staging){
     ctx->CopyResource(staging,image);D3D11_MAPPED_SUBRESOURCE mapped{};
@@ -74,12 +77,19 @@ std::vector<unsigned char> pixels(ID3D11DeviceContext* ctx,ID3D11Texture2D* imag
     ctx->Unmap(staging,0);return out;
 }
 void run(){
-    Com<ID3DBlob> vsCode,psCode;
+    Com<ID3DBlob> vsCode,psCode,multiVertexCode,multiPixelCode,multi3PixelCode;
     check(SUCCEEDED(D3DCompile(Program,sizeof Program-1,nullptr,nullptr,nullptr,"vs","vs_5_0",0,0,vsCode.out(),nullptr))&&
           SUCCEEDED(D3DCompile(Program,sizeof Program-1,nullptr,nullptr,nullptr,"ps","ps_5_0",0,0,psCode.out(),nullptr)),"owned stream programs compile");
-    std::array<ShaderFingerprint,2> contracts{};contracts[0].kind=NativeShader::StreamVertex;contracts[1].kind=NativeShader::StreamCombine;
+    check(SUCCEEDED(D3DCompile(Program,sizeof Program-1,nullptr,nullptr,nullptr,"multiVs","vs_5_0",0,0,multiVertexCode.out(),nullptr))&&
+          SUCCEEDED(D3DCompile(Program,sizeof Program-1,nullptr,nullptr,nullptr,"multiPs","ps_5_0",0,0,multiPixelCode.out(),nullptr)),"owned multiview program contracts compile");
+    check(SUCCEEDED(D3DCompile(Program,sizeof Program-1,nullptr,nullptr,nullptr,"multi3Ps","ps_5_0",0,0,multi3PixelCode.out(),nullptr)),"owned three-input reprojection identity compiles");
+    std::array<ShaderFingerprint,5> contracts{};contracts[0].kind=NativeShader::StreamVertex;contracts[1].kind=NativeShader::StreamCombine;
+    contracts[2].kind=NativeShader::MultiViewInner;contracts[3].kind=NativeShader::MultiViewVertexX;contracts[4].kind=NativeShader::MultiViewReprojectX;
     check(dxbcFingerprint(vsCode.p->GetBufferPointer(),vsCode.p->GetBufferSize(),contracts[0].hash)&&
           dxbcFingerprint(psCode.p->GetBufferPointer(),psCode.p->GetBufferSize(),contracts[1].hash),"owned actual shader identities");
+    check(dxbcFingerprint(multiPixelCode.p->GetBufferPointer(),multiPixelCode.p->GetBufferSize(),contracts[2].hash)&&
+          dxbcFingerprint(multiVertexCode.p->GetBufferPointer(),multiVertexCode.p->GetBufferSize(),contracts[3].hash),"owned multiview executable identities");
+    check(dxbcFingerprint(multi3PixelCode.p->GetBufferPointer(),multi3PixelCode.p->GetBufferSize(),contracts[4].hash),"owned three-input executable identity");
     Com<ID3D11Device> device;Com<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"single-threaded native WARP device");
     const auto originalTable=*reinterpret_cast<void***>(context.p);
@@ -166,6 +176,29 @@ void run(){
     check(!otherVertexSample.shader&&!otherVertexSample.vertexKind&&otherVertexSample.ownerMatches==1&&otherVertexSample.pid==102,"registered ownership remains diagnostic without promoting either unreviewed program");
     const auto savedInventory=observer->inventory;observer->inventory={};const auto noOwner=observer->serial;context.p->Draw(3,0);
     check(observer->serial==noOwner,"two unreviewed programs without a unique registered source are not sampled");observer->inventory=savedInventory;
+    Com<ID3D11PixelShader> multiPixel;Com<ID3D11VertexShader> multiVertex;
+    check(SUCCEEDED(device.p->CreatePixelShader(multiPixelCode.p->GetBufferPointer(),multiPixelCode.p->GetBufferSize(),nullptr,multiPixel.out()))&&
+          SUCCEEDED(device.p->CreateVertexShader(multiVertexCode.p->GetBufferPointer(),multiVertexCode.p->GetBufferSize(),nullptr,multiVertex.out())),"owned multiview shader creation forwards");
+    context.p->PSSetShader(multiPixel.p,nullptr,0);context.p->ClearRenderTargetView(rtv.p,zero);
+    bits<Draw>(dispatch.function(13))(context.p,3,0);const auto multiBaseline=pixels(context.p,target.p,staging.p);
+    const auto beforeMulti=observer->serial;context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+    check(observer->serial==beforeMulti+1&&multiBaseline==pixels(context.p,target.p,staging.p),"multiview pixel identity observes its actual single source with arbitrary vertex bindings and unchanged native RGBA");
+    const auto& multiSample=observer->status.samples[(observer->serial-1)%SourceAuditSamples];
+    check(multiSample.shader==unsigned(NativeShader::MultiViewInner)&&!multiSample.vertexKind&&!multiSample.slot&&multiSample.programHash==contracts[2].hash,"multiview observation retains the actual program and bound source without eye/frame inference");
+    Com<ID3D11PixelShader> multi3Pixel;
+    check(SUCCEEDED(device.p->CreatePixelShader(multi3PixelCode.p->GetBufferPointer(),multi3PixelCode.p->GetBufferSize(),nullptr,multi3Pixel.out())),"owned three-input pixel creation forwards");
+    ID3D11ShaderResourceView* threeInputs[]{views[0].p,views[1].p,views[0].p};context.p->PSSetShaderResources(0,3,threeInputs);
+    context.p->PSSetShader(multi3Pixel.p,nullptr,0);context.p->ClearRenderTargetView(rtv.p,zero);
+    bits<Draw>(dispatch.function(13))(context.p,3,0);const auto threeBaseline=pixels(context.p,target.p,staging.p);
+    const auto beforeThree=observer->serial;context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+    check(observer->serial==beforeThree+3&&threeBaseline==pixels(context.p,target.p,staging.p),"reproject-x observes all three actual source slots while retaining native RGBA");
+    check(observer->status.samples[(observer->serial-1)%SourceAuditSamples].slot==2,"third reprojection source is retained explicitly");
+    context.p->VSSetShader(multiVertex.p,nullptr,0);context.p->PSSetShader(unknown.p,nullptr,0);observer->inventory={};
+    const auto beforeMultiVertex=observer->serial;const auto beforeMultiRecognized=observer->recognized.load();context.p->Draw(3,0);
+    check(observer->serial==beforeMultiVertex+2&&observer->recognized==beforeMultiRecognized,"multiview vertex bindings can diagnose unreviewed pixels without promoting their semantics");
+    const auto multiviewStats=observer->shaders.stats();
+    check(multiviewStats.multiViewKinds[0]==1&&multiviewStats.multiViewKinds[3]==1&&multiviewStats.multiViewKinds[6]==1,"multiview object counts distinguish pixel and vertex contracts");
+    observer->inventory=savedInventory;
     context.p->VSSetShader(vs.p,nullptr,0);
     Com<ID3D11ClassLinkage> linkage;Com<ID3D11PixelShader> linked;
     check(SUCCEEDED(device.p->CreateClassLinkage(linkage.out()))&&SUCCEEDED(device.p->CreatePixelShader(psCode.p->GetBufferPointer(),psCode.p->GetBufferSize(),linkage.p,linked.out())),"actual linked pixel creation with reviewed code bytes");

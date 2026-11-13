@@ -8,7 +8,7 @@
 namespace {
 bool allowed=false,discoveryActive=false,duplicatePending=false;unsigned verifications=0,control=0,transient=0;
 std::wstring aliasPath,foreignPath;MODULEENTRY32W duplicate{};
-bool positive(unsigned value){return value==1||value==4||value==6||value==7;}
+bool positive(unsigned value){return value==1||value==4||value==6||value==7||value==10;}
 bool verify(const wchar_t*,HANDLE file){++verifications;LARGE_INTEGER bytes{};return allowed&&GetFileSizeEx(file,&bytes)&&bytes.QuadPart>=512;}
 HANDLE WINAPI snapshot(DWORD flags,DWORD pid){
     if(flags&(TH32CS_SNAPMODULE|TH32CS_SNAPMODULE32)){
@@ -45,6 +45,16 @@ extern "C" __declspec(dllexport) BOOL WINAPI AuditFixtureRun(DWORD expected){
     const auto system=GetSystemDirectoryW(path,32768);if(!system||system>=32768)return FALSE;foreignPath=std::wstring(path)+L"\\kernel32.dll";
     SourceAuditServer server(SourceAuditDiscovery{snapshot,first,next});
     const auto deadline=GetTickCount64()+12000;SourceAuditStatus state{};bool pass=false;
+    if(expected==10||expected==11){
+        // The sender/encoder caller is deliberately unavailable. Production
+        // discovery must progress without another tick on that caller.
+        if(!server.start(verify)||server.start(verify))return FALSE;
+        Sleep(2000);state=server.status();
+        if(expected==10)pass=state.devices&&state.draws&&state.state>=5&&state.state<8&&
+            state.factoryCalls==1&&state.factoryCreated==1&&!state.factoryRefused;
+        else pass=state.state==4&&!state.devices&&!state.draws&&!state.factoryCalls&&
+            verifications==1&&state.loadCalls==1&&state.entryCalls==1;
+    }else{
     do{
         discoveryActive=server.status().state==2;server.tick(verify);state=server.status();
         if(positive(expected)&&state.devices&&state.draws&&state.state>=5&&state.state<8){pass=true;break;}
@@ -55,11 +65,13 @@ extern "C" __declspec(dllexport) BOOL WINAPI AuditFixtureRun(DWORD expected){
         if(expected==9&&state.state==8&&state.error==ERROR_DUP_NAME&&state.failureStage==5){pass=true;break;}
         Sleep(10);
     }while(GetTickCount64()<deadline);
+    }
     if(positive(expected))pass=pass&&verifications==1&&state.loadCalls==1&&state.entryCalls==1;
     if(expected==4)pass=pass&&state.discoveryMisses==4;
     if(expected==2)pass=pass&&verifications==1&&!state.pid&&!state.loadCalls&&!state.entryCalls;
     if(expected==5||expected==8||expected==9)pass=pass&&state.loadCalls==1&&!state.entryCalls;
     server.stop();
+    if(expected==10||expected==11)pass=pass&&!server.start(verify);
     std::printf("owned loader control=%lu: %s; pid=%u state=%u error=%u stage=%u remote-result=%u; discovery error/entries/matches/misses=%u/%u/%u/%u, load/entry=%u/%u; devices=%llu draws=%llu verifier=%u\n",
         static_cast<unsigned long>(expected),pass?"PASS":"FAIL",state.pid,state.state,state.error,state.failureStage,state.remoteResult,
         state.discoveryError,state.discoveryEntries,state.discoveryMatches,state.discoveryMisses,state.loadCalls,state.entryCalls,

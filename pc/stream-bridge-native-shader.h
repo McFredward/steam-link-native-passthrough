@@ -8,7 +8,9 @@
 #include <cstring>
 namespace stream_bridge::sender {
 enum class NativeShader : unsigned {Unknown,FullscreenVertex,CopyView,CopyViewCas,Luma,LumaLegacy,Chroma,ChromaLegacy,ChromaPack,
-    StreamVertex,StreamCombine,StreamInset};
+    StreamVertex,StreamCombine,StreamInset,
+    MultiViewInner,MultiViewDownscaleX,MultiViewDownscaleY,MultiViewReprojectX,MultiViewReprojectY,MultiViewResolve,
+    MultiViewVertexX,MultiViewVertexY};
 struct ShaderFingerprint {NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};};
 inline bool dxbcFingerprint(const void* input,std::size_t size,std::array<std::uint8_t,32>& hash)noexcept{
     if(!input||size<44||size>65536)return false;

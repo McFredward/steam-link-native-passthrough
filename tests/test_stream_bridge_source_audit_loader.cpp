@@ -8,10 +8,16 @@
 #include <vector>
 using namespace stream_bridge::sender::source_audit;
 namespace {
-int target(DWORD server,bool single){
+int target(DWORD server,bool single,bool late){
     wchar_t key[96]{};if(!name(server,key))return 1;
     const auto deadline=GetTickCount64()+15000;HANDLE mapping=nullptr;Page* page=nullptr;
     ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;int result=1;
+    if(late){
+        if(FAILED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,nullptr,&context)))return 1;
+        const auto eventName=L"Local\\SfnpOwnedLateDevice."+std::to_wstring(server);
+        HANDLE ready=OpenEventW(EVENT_MODIFY_STATE,FALSE,eventName.c_str());if(!ready)return 1;
+        SetEvent(ready);CloseHandle(ready);
+    }
     while(GetTickCount64()<deadline){
         if(!mapping){mapping=OpenFileMappingW(FILE_MAP_READ|FILE_MAP_WRITE,FALSE,key);
             if(mapping)page=static_cast<Page*>(MapViewOfFile(mapping,FILE_MAP_READ|FILE_MAP_WRITE,0,0,sizeof(Page)));}
@@ -31,24 +37,28 @@ int target(DWORD server,bool single){
 }
 }
 int main(int argc,char** argv){
-    if(argc==4&&std::string(argv[1])=="target")return target(static_cast<DWORD>(std::stoul(argv[2])),std::string(argv[3])=="single");
+    if(argc==4&&std::string(argv[1])=="target")return target(static_cast<DWORD>(std::stoul(argv[2])),std::string(argv[3])=="single",std::string(argv[3])=="late");
     if(argc!=3)return 1;
     const DWORD control=static_cast<DWORD>(std::stoul(argv[1]));
     wchar_t file[32768]{};if(!GetModuleFileNameW(nullptr,file,32768))return 1;
     const std::wstring self=file;const auto slash=self.find_last_of(L"\\/");if(slash==std::wstring::npos)return 1;
     const auto directory=self.substr(0,slash+1);
     const auto child=directory+(control==3?L"decoy\\vrcompositor.exe":L"vrcompositor.exe");
-    const auto command=L"\""+child+L"\" target "+std::to_wstring(GetCurrentProcessId())+L" "+(std::string(argv[2])=="single"?L"single":L"normal");
+    const auto command=L"\""+child+L"\" target "+std::to_wstring(GetCurrentProcessId())+L" "+(control==11?L"late":std::string(argv[2])=="single"?L"single":L"normal");
+    HANDLE ready=nullptr;
+    if(control==11){const auto eventName=L"Local\\SfnpOwnedLateDevice."+std::to_wstring(GetCurrentProcessId());
+        ready=CreateEventW(nullptr,TRUE,FALSE,eventName.c_str());if(!ready)return 1;}
     std::vector<wchar_t> mutableCommand(command.begin(),command.end());mutableCommand.push_back(0);
     STARTUPINFOW startup{};startup.cb=sizeof startup;PROCESS_INFORMATION process{};
     if(!CreateProcessW(child.c_str(),mutableCommand.data(),nullptr,nullptr,FALSE,0,nullptr,directory.c_str(),&startup,&process))return 1;
+    if(ready){const auto wait=WaitForSingleObject(ready,5000);CloseHandle(ready);if(wait!=WAIT_OBJECT_0){TerminateProcess(process.hProcess,1);CloseHandle(process.hThread);CloseHandle(process.hProcess);return 1;}}
     const auto dll=LoadLibraryW((directory+L"audit_fixture.dll").c_str());bool pass=false;
     if(dll){using Run=BOOL(WINAPI*)(DWORD);Run run=nullptr;const auto symbol=GetProcAddress(dll,"AuditFixtureRun");
         static_assert(sizeof run==sizeof symbol,"Win64 function pointers");std::memcpy(&run,&symbol,sizeof run);
         pass=run&&run(control);}
     // The test child is owned by this fixture. Negative cases never started
     // its observer; terminate that waiting fixture rather than wait15seconds.
-    if(control!=1&&control!=4&&control!=6&&control!=7)TerminateProcess(process.hProcess,0);
+    if(control!=1&&control!=4&&control!=6&&control!=7&&control!=10&&control!=11)TerminateProcess(process.hProcess,0);
     const auto waited=WaitForSingleObject(process.hProcess,5000);DWORD code=1;
     if(waited==WAIT_OBJECT_0)GetExitCodeProcess(process.hProcess,&code);
     else TerminateProcess(process.hProcess,1);
