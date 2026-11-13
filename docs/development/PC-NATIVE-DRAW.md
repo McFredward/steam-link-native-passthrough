@@ -41,14 +41,62 @@ current driver references the reviewed graphics copy-view programs; the
 presence of external compute shader files alone does not prove their use.
 
 The unresolved boundary is the current application-eye transfer through
-SteamVR's client/compositor to the producer resources. The current private
-driver and logs establish only the producer side. Matching current
-`bin/vrclient_x64.dll` and `bin/win64/vrcompositor.exe`, with the runtime's
-version record, are needed for the upstream comparison; the retained older
-client/compositor pair is not evidence of current instructions or behavior.
+SteamVR's client/compositor to the producer resources. The upstream binary
+comparison below narrows it further; the retained older client/compositor
+pair remains historical comparison material rather than current runtime
+evidence.
 Do not relabel compositor ownership as application authority, reuse a latest
 mask, force an Auto resolution, or call another diagnostic candidate a
 functional MR fix without a new demonstrated association.
+
+### Current upstream binaries and stream-view control
+
+The subsequently supplied files identify runtime build1794004177:
+
+| Private input | Bytes | SHA256 |
+|---|---:|---|
+| `vrclient_x64.dll` |5694616|`bc7992bc9f408513c615d5e1dd52e0921e9533b52402966f9df6a021168de30a`|
+| `vrcompositor.exe` |3901592|`00d55a36d186fe4617e22fe7c3be1657e12be31382f5695de559141d5186c171`|
+
+Private static inspection connects the new stream-view allocation to the
+render thread, and its base/inset and combine stages to `RenderDistort`.
+The driver queries the `streamQuality` setting and selects its retained
+legacy mode for value1. The matched current log explicitly reports
+1216-square stream views and a1216x4864 atlas. These findings establish a new
+upstream processing route; they do not establish a live application-to-mask
+association or every bound shader constant.
+
+Valve's [SteamVR2.19.1 announcement](https://steamstore-a.akamaihd.net/news/externalpost/steam_community_announcements/1847920302249669)
+documents the new system-layer rendering pipeline and the
+Steam Link > Advanced > Stream Quality > Default/Legacy comparison. A
+controlled headset comparison should keep the same beta, application and
+render resolution while changing only that quality selection. No result
+has yet been supplied for this comparison. Legacy is an investigation
+control, not completed support for the new Default pipeline. The patch does
+not change this setting or the player's resolution.
+
+The four original stream-view shader assets were also retrieved read-only
+from the same Frame runtime build into ignored private storage. Their
+availability on Frame does not itself prove the Windows process's actual
+shader objects or bindings. A private software control translates the
+original combine DXBC to validated SPIR-V and executes it on owned RGBA
+images through lavapipe, with Khronos validation. Eighteen cases and88 checks
+pass with zero validation errors. For the tested brightness and transfer
+flags, the combine program's output alpha is
+`(preserve ? sceneAlpha : 1) * (1 - overlayAlpha) + overlayAlpha`.
+The same inputs retain identical RGB contributions across the two alpha
+policies. Thus this stage has an explicit opaque-versus-preserved-alpha
+choice; it is not evidence that every stream-view invocation destroys alpha.
+The inset program also contains an alpha-affecting processing selection.
+
+These are isolated original-program observations, not execution of the full
+Windows client/compositor/encoder chain or successful headset MR. Neither a
+shader fingerprint nor the existence of an alpha-preserving branch supplies
+the missing current source, eye, resource lineage and accepted-input proof.
+The supplied current and older client also retain the same conditional
+supersample-filter query; relocation alone does not establish a newly caused
+filter failure. No native component or installer version changes in this
+investigation.
 
 ## PC0.3.16: separate format bootstrap from image readiness
 
