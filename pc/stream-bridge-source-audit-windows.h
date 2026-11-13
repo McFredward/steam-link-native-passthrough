@@ -23,4 +23,4 @@ private:
 
 // The observer has no OpenVR provider/control listener. It forwards native
 // graphics calls and reports bounded scalar ancestry to the existing sender.
-extern "C" DWORD WINAPI SFNP_CompositorSourceAuditStartV1(void*)noexcept;
+extern "C" __declspec(dllexport) DWORD WINAPI SFNP_CompositorSourceAuditStartV1(void*)noexcept;
