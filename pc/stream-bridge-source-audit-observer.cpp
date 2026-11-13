@@ -88,8 +88,8 @@ struct Observer {
             std::memcpy(code+i*16,thunk,16);const auto address=reinterpret_cast<std::uintptr_t>(ctx.original+i);
             std::memcpy(code+i*16+6,&address,8);ctx.expected[i]=code+i*16;
         }
-        const std::array<void*,4> draws{{bits<void*>(&draw<0>),bits<void*>(&draw<1>),bits<void*>(&draw<2>),bits<void*>(&draw<3>)}};
-        ctx.expected[13]=draws[index];std::memcpy(ctx.facade,ctx.expected.data(),ctx.count*sizeof(void*));DWORD old=0;
+        const std::array<void*,4> callbacks{{bits<void*>(&draw<0>),bits<void*>(&draw<1>),bits<void*>(&draw<2>),bits<void*>(&draw<3>)}};
+        ctx.expected[13]=callbacks[index];std::memcpy(ctx.facade,ctx.expected.data(),ctx.count*sizeof(void*));DWORD old=0;
         if(!VirtualProtect(code,bytes,PAGE_EXECUTE_READ,&old)||!FlushInstructionCache(GetCurrentProcess(),code,bytes)){
             status.state=8;status.error=GetLastError();return;
         }
