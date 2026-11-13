@@ -4,6 +4,7 @@ on:
     branches: [dev]
     paths:
       - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-sender-provider.cpp'
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-image.h'
       - 'pc/stream-bridge-native-shader.h'
@@ -12,6 +13,7 @@ on:
   pull_request:
     paths:
       - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-sender-provider.cpp'
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-image.h'
       - 'pc/stream-bridge-native-shader.h'
@@ -51,7 +53,7 @@ jobs:
           $result = $LASTEXITCODE
           Get-Content build/gnu/audit-gpu.log
           if ($result -ne 0) { throw 'GNU production observer GPU control failed' }
-          foreach ($case in 1,2,3,4,5,6,7,8,9) {
+          foreach ($case in 1,2,3,4,5,6,7,8,9,10,11) {
             & build/gnu/vrserver.exe $case normal *>"build/gnu/loader-case$case.log"
             $result = $LASTEXITCODE
             Get-Content "build/gnu/loader-case$case.log"
@@ -61,6 +63,10 @@ jobs:
           $result = $LASTEXITCODE
           Get-Content build/gnu/loader-single.log
           if ($result -ne 0) { throw 'GNU single-threaded loader failed' }
+          & build/gnu/vrserver.exe 10 single *>build/gnu/loader-independent-single.log
+          $result = $LASTEXITCODE
+          Get-Content build/gnu/loader-independent-single.log
+          if ($result -ne 0) { throw 'GNU independent discovery failed' }
       - name: Require one-shot discovery and lexical-only identity controls to fail
         shell: pwsh
         run: |
@@ -128,12 +134,16 @@ jobs:
       - name: Exercise module churn, path aliases and exact once-only loading
         shell: pwsh
         run: |
-          foreach ($case in 4,5,6,7,8,9) {
+          foreach ($case in 4,5,6,7,8,9,10,11) {
             & build/vrserver.exe $case normal *>"build/loader-case$case.log"
             $result = $LASTEXITCODE
             Get-Content "build/loader-case$case.log"
             if ($result -ne 0) { throw "MSVC loader case $case failed" }
           }
+          & build/vrserver.exe 10 single *>build/loader-independent-single.log
+          $result = $LASTEXITCODE
+          Get-Content build/loader-independent-single.log
+          if ($result -ne 0) { throw 'MSVC independent discovery failed' }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

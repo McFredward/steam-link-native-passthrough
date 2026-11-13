@@ -32,6 +32,7 @@ struct NativeShaders::Impl {
     DeviceObserved observer=nullptr;void* observerOpaque=nullptr;bool readOnlySingleThreaded=false;
     bool rememberUnknownPixels=false;
     std::atomic<std::uint64_t> deviceCount{0},recognized{0},refused{0};
+    std::atomic<std::uint64_t> factoryCalls{0},factoryCreated{0},factoryRefused{0};
     void** import=nullptr;DeviceFactory originalFactory=nullptr;
     static std::atomic<Impl*> instance;
     Device* find(ID3D11Device* object)noexcept{for(auto& slot:devices)if(slot.object.load(std::memory_order_acquire)==object)return &slot;return nullptr;}
@@ -132,9 +133,13 @@ struct NativeShaders::Impl {
     }
     static HRESULT WINAPI createDevice(IDXGIAdapter* adapter,D3D_DRIVER_TYPE type,HMODULE software,UINT flags,const D3D_FEATURE_LEVEL* levels,UINT count,UINT sdk,ID3D11Device** device,D3D_FEATURE_LEVEL* level,ID3D11DeviceContext** context){
         auto& self=*instance.load(std::memory_order_acquire);
+        ++self.factoryCalls;
         const auto result=self.originalFactory(adapter,type,software,flags,levels,count,sdk,device,level,context);const auto error=GetLastError();
-        if(SUCCEEDED(result)&&device&&*device&&self.observe(*device)&&self.observer)
-            self.observer(*device,self.observerOpaque);
+        if(SUCCEEDED(result)&&device&&*device){
+            ++self.factoryCreated;
+            if(self.observe(*device)){if(self.observer)self.observer(*device,self.observerOpaque);}
+            else ++self.factoryRefused;
+        }
         SetLastError(error);return result;
     }
 };
@@ -188,11 +193,14 @@ bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& 
 }
 NativeShaderStats NativeShaders::stats()const noexcept{
     NativeShaderStats out{impl_->deviceCount.load(),impl_->recognized.load(),impl_->refused.load(),impl_->import&&!impl_->stopped};
+    out.factoryCalls=impl_->factoryCalls.load();out.factoryCreated=impl_->factoryCreated.load();out.factoryRefused=impl_->factoryRefused.load();
     for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)){
         if(slot.linked.load(std::memory_order_acquire)){if(slot.pixel)++out.unknownPixels;continue;}
         if(slot.kind==NativeShader::StreamVertex)++out.streamKinds[0];
         if(slot.kind==NativeShader::StreamCombine)++out.streamKinds[1];
         if(slot.kind==NativeShader::StreamInset)++out.streamKinds[2];
+        const auto kind=unsigned(slot.kind),first=unsigned(NativeShader::MultiViewInner);
+        if(kind>=first&&kind-first<out.multiViewKinds.size())++out.multiViewKinds[kind-first];
     }
     for(const auto& slot:impl_->unknownPixels)if(slot.object.load(std::memory_order_acquire))++out.unknownPixels;
     return out;

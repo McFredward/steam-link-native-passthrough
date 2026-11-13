@@ -15,6 +15,58 @@ extent refusals. Both modes still lack PC coverage. These are ordinary-video
 observations, not headset MR acceptance or exact joins between independent
 PC/Frame counters.
 
+## PC0.3.20: independent startup and actual Windows multiview identities
+
+The November14 00:24–00:25 CET run of PC0.3.19 starts a fresh compositor,
+loads the observer once and reaches the armed state4, but reports zero devices,
+shader objects and raster calls throughout. Native compositor logs confirm that
+its device and shaders were created. This is missing observation, not evidence
+of an empty scene, changed shader bytes or a failed Frame decoder. The previous
+PC0.3.18 run did observe the device; startup is therefore not reliable yet.
+The supplied counters do not distinguish a missed factory call from refusal to
+attach its returned device, so the candidate adds those separate counters.
+
+Discovery now starts immediately after explicit companion/debug configuration,
+before native sender attachment. Its own cold worker advances the asynchronous
+load/entry stages independently of coverage preparation, shader compilation,
+encoder setup and authentication. It makes no graphics calls on that worker.
+Stop joins the worker outside its mutex; failed native attachment also stops it.
+No process is suspended, restarted or given a replacement device. The public
+factory still has to be armed before the real device call: a late arrival is
+reported without inventing a device, replaying creation or reading an existing
+native object's private storage. This reduces a concrete scheduling dependency;
+it does not guarantee successful observation on every actual startup.
+
+The supplied Windows shader folder contains688 files. The four stream_view
+vertex/pixel assets are byte-identical to the previously inspected Frame files.
+Their canonical executable/signature digests match the existing contracts.
+The generic stream vertex digest also occurs in MSAA resolve, Lanczos resampling
+and several multiview vertex assets; that digest alone cannot identify a stream
+pipeline or the meaning of its pixel program.
+
+Six additional multiview pixel and two reprojection vertex identities are now
+recognized only by the explicit diagnostic. Private DXBC/translated-SPIR-V
+inspection establishes their bound resource layouts: three2D texture inputs for
+reproject-x, one multisample2D input for resolve and one ordinary2D input for
+the other pixel stages; distinct reprojection vertex programs; constants controlling
+coordinate mapping, filtering and alpha preservation. Inner, downscale-y and
+reproject-y can select alpha one instead of sampled alpha. Their presence on disk
+does not prove that they ran or that an alpha-preservation option was enabled.
+No native shader body/disassembly is distributed. Neither these new diagnostic
+labels nor their fingerprints are added to ordinary coverage contracts.
+
+Owned Windows controls now block the caller after starting discovery and require
+actual loader/device/draw progress on the independent worker, with normal and
+SINGLETHREADED WARP. A separate target creates its device before observer loading
+and must remain device/draw/factory-call zero. Duplicate start and restart after
+stop are refused. Actual multiview-labelled owned pixel and vertex bindings retain
+native RGBA bytes and do not grant source, eye, frame, mask or camera authority.
+
+Installer0.3.33 ships PC0.3.20; all Frame0.3.12 files/settings remain unchanged.
+This is startup/diagnostic work. Beta MR, Default/Legacy and arbitrary valid
+resolution support still need actual upstream lineage and a successful headset
+run. No such functional result is claimed by these controls.
+
 ## PC0.3.19: raster families and unreviewed program identities
 
 The next matched PC0.3.18 headset run confirms successful module discovery and

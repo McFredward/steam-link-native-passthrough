@@ -22,6 +22,9 @@ public:
     using VerifyFile=bool(*)(const wchar_t*,HANDLE);
     using Inventory=bool(*)(std::uint64_t,SourceAuditInventory&,void*);
     explicit SourceAuditServer(SourceAuditDiscovery={});~SourceAuditServer();
+    // Start before native sender/encoder preparation. Discovery must not wait
+    // behind shader compilation, authentication or a coverage-worker tick.
+    bool start(VerifyFile,Inventory=nullptr,void* opaque=nullptr)noexcept;
     void tick(VerifyFile,Inventory=nullptr,void* opaque=nullptr)noexcept;
     SourceAuditStatus status()const noexcept;
     void stop()noexcept;

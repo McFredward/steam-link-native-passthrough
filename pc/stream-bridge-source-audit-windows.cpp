@@ -9,6 +9,7 @@
 #include <mutex>
 #include <new>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace stream_bridge::sender {
@@ -64,6 +65,7 @@ struct SourceAuditServer::Impl {
     SourceAuditDiscovery discovery;
     explicit Impl(SourceAuditDiscovery value):discovery(value){}
     mutable std::mutex mutex;HANDLE mapping=nullptr;Page* page=nullptr;
+    std::thread worker;
     Handle process,thread,sourceFile;DWORD target=0;std::uint64_t targetBirth=0;
     void* remoteArgument=nullptr;std::size_t remoteBytes=0;
     unsigned phase=0;bool stopped=false,attempted=false;
@@ -190,7 +192,17 @@ struct SourceAuditServer::Impl {
     }
 };
 SourceAuditServer::SourceAuditServer(SourceAuditDiscovery discovery):impl_(new Impl(discovery)){}
-SourceAuditServer::~SourceAuditServer()=default;
+SourceAuditServer::~SourceAuditServer(){stop();}
+bool SourceAuditServer::start(VerifyFile verify,Inventory inventory,void* opaque)noexcept{
+    auto& s=*impl_;std::lock_guard<std::mutex> guard(s.mutex);
+    if(!verify||s.stopped||s.worker.joinable())return false;
+    try{s.worker=std::thread([this,verify,inventory,opaque]{
+        for(;;){
+            {std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->stopped)break;}
+            tick(verify,inventory,opaque);Sleep(2);
+        }
+    });return true;}catch(...){s.failed(ERROR_NOT_ENOUGH_MEMORY);return false;}
+}
 void SourceAuditServer::tick(VerifyFile verify,Inventory getInventory,void* opaque)noexcept{
     auto& s=*impl_;std::lock_guard<std::mutex> guard(s.mutex);if(s.stopped)return;
     try{
@@ -204,7 +216,7 @@ void SourceAuditServer::tick(VerifyFile verify,Inventory getInventory,void* opaq
         if(s.phase==1||s.phase==2||s.phase==4){s.advance();return;}
         if(s.attempted)return;
         if(now<s.nextScan)return;
-        s.nextScan=now+50;
+        s.nextScan=now+10;
         Handle snapshot;snapshot.reset(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0));if(!snapshot)return;
         PROCESSENTRY32W entry{};entry.dwSize=sizeof entry;
         if(Process32FirstW(snapshot.value,&entry))do{if(!_wcsicmp(entry.szExeFile,L"vrcompositor.exe")){
@@ -223,5 +235,10 @@ SourceAuditStatus SourceAuditServer::status()const noexcept{
     }
     return result;
 }
-void SourceAuditServer::stop()noexcept{std::lock_guard<std::mutex> guard(impl_->mutex);impl_->stop();}
+void SourceAuditServer::stop()noexcept{
+    // Do not join while holding the lock needed by the discovery worker.
+    std::thread worker;
+    {std::lock_guard<std::mutex> guard(impl_->mutex);impl_->stop();worker=std::move(impl_->worker);}
+    if(worker.joinable())worker.join();
+}
 } // namespace stream_bridge::sender
