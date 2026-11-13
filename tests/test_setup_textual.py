@@ -377,13 +377,16 @@ class TextualSetupTests(unittest.IsolatedAsyncioTestCase):
             app=UI.SetupApp(backend,lang)
             async with app.run_test(size=(80,24)) as pilot:
                 await until(pilot,lambda:app.prompt is not None)
-                await pilot.pause()
+                # Showing/focusing the actions schedules a scroll after layout.
+                # CPU idle alone can still observe that scroll in progress.
+                await pilot.wait_for_scheduled_animations()
                 body=app.query_one("#body")
                 for key in ("pc","frame"):
-                    self.assertTrue(body.content_region.contains_region(app.query_one("#"+key+"-card").region),key)
+                    self.assertTrue(body.content_region.contains_region(app.query_one("#"+key+"-card").region),
+                                    (lang,key,body.content_region,app.query_one("#"+key+"-card").region,body.scroll_y))
                     self.assertTrue(body.content_region.contains_region(app.query_one("#"+key+"-status").region),key)
                 self.assertEqual(body.scroll_y,0)
-                await pilot.press("end");await pilot.pause()
+                await pilot.press("end");await pilot.wait_for_scheduled_animations()
                 self.assertGreater(app.query_one(OptionList).scroll_y,0)
                 self.assertEqual(body.scroll_y,0)
                 for key in ("pc","frame"):

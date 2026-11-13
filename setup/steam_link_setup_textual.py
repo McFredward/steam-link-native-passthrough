@@ -1003,8 +1003,11 @@ class SetupApp(App[int]):
             text.append(description, style="not bold #93adbf")
             choices.add_option(Option(text, id=action))
         choices.highlighted = actions.index(recommended) if recommended in actions else 0
-        choices.focus()
-        choices.scroll_visible()
+        # Inventory/review styles change the available height. Scroll only
+        # after that layout, without a second focus-triggered animation using
+        # the previous geometry and pushing the version cards out of view.
+        choices.focus(scroll_visible=False)
+        self.call_after_refresh(choices.scroll_visible, animate=False)
 
     @on(OptionList.OptionSelected, "#actions")
     def action_selected(self, event: OptionList.OptionSelected):
