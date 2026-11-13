@@ -5,6 +5,8 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'VERSION'
+      # Component/package stamps are verified by the dedicated setup gate.
+      - 'PATCH_VERSIONS.json'
       # Archive/bootstrap updates do not change compiled native sources.
       - 'distribution/**'
       - '.github/workflows/pc-log-tests.yml'
@@ -61,6 +63,8 @@ on:
     paths-ignore:
       - '**/*.md'
       - 'VERSION'
+      # Component/package stamps are verified by the dedicated setup gate.
+      - 'PATCH_VERSIONS.json'
       # Archive/bootstrap updates do not change compiled native sources.
       - 'distribution/**'
       - '.github/workflows/pc-log-tests.yml'
