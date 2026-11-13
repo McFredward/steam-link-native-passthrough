@@ -168,8 +168,12 @@ NativeShader NativeShaders::identify(ID3D11DeviceChild* shader)const noexcept{
 bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& out)const noexcept{
     out={};if(!shader||impl_->stopped)return false;
     IUnknown* identity=nullptr;if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return false;
-    const auto find=[&](const auto& entries){for(const auto& slot:entries)if(slot.object.load(std::memory_order_acquire)==identity){
-        out.kind=slot.kind;out.hash=slot.hash;out.pixel=slot.pixel;return true;}return false;};
+    const auto find=[&](const auto& entries){
+        for(const auto& slot:entries)if(slot.object.load(std::memory_order_acquire)==identity){
+            out.kind=slot.kind;out.hash=slot.hash;out.pixel=slot.pixel;return true;
+        }
+        return false;
+    };
     const bool found=find(impl_->shaders)||find(impl_->unknownPixels);identity->Release();return found;
 }
 NativeShaderStats NativeShaders::stats()const noexcept{
