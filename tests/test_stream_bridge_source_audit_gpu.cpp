@@ -156,7 +156,15 @@ void run(){
     check(!unknownSample.shader&&unknownSample.vertexKind==unsigned(NativeShader::StreamVertex)&&unknownSample.programHashValid&&unknownSample.programHash==expectedHash,"unknown observations stay explicitly unknown and retain their exact fingerprint");
     context.p->VSSetShader(nullptr,nullptr,0);const auto noVertex=observer->serial;context.p->Draw(3,0);
     check(observer->serial==noVertex,"unreviewed pixels without a reviewed vertex never enter the bounded source observation");
-    context.p->VSSetShader(vs.p,nullptr,0);context.p->PSSetShader(ps.p,nullptr,0);
+    context.p->VSSetShader(vs.p,nullptr,0);
+    Com<ID3D11ClassLinkage> linkage;Com<ID3D11PixelShader> linked;
+    check(SUCCEEDED(device.p->CreateClassLinkage(linkage.out()))&&SUCCEEDED(device.p->CreatePixelShader(psCode.p->GetBufferPointer(),psCode.p->GetBufferSize(),linkage.p,linked.out())),"actual linked pixel creation with reviewed code bytes");
+    check(observer->shaders.identify(linked.p)==NativeShader::Unknown&&observer->shaders.describe(linked.p,description)&&description.linked&&description.pixel&&description.kind==NativeShader::Unknown,"linked pixel metadata remains Unknown even when its code hash is reviewed");
+    context.p->PSSetShader(linked.p,nullptr,0);context.p->ClearRenderTargetView(rtv.p,zero);bits<Draw>(dispatch.function(13))(context.p,3,0);
+    const auto linkedBaseline=pixels(context.p,target.p,staging.p);const auto linkedReviewed=observer->recognized.load();context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+    check(linkedBaseline==pixels(context.p,target.p,staging.p)&&observer->recognized==linkedReviewed,"linked semantics are never promoted and native output remains unchanged");
+    const auto& linkedSample=observer->status.samples[(observer->serial-1)%SourceAuditSamples];check(!linkedSample.shader&&linkedSample.programLinked&&linkedSample.programHashValid,"linked binding observations explicitly retain their unresolved linkage");
+    context.p->PSSetShader(ps.p,nullptr,0);
     const auto beforeContention=observer->draws.load();
     // Contention must drop diagnostics instead of waiting on a render thread.
     const auto drops=observer->dropped.load();std::atomic<bool> locked{false},done{false};

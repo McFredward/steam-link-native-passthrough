@@ -21,7 +21,7 @@ struct SourceAuditSample {
     std::uint32_t outputWidth=0,outputHeight=0,outputFormat=0;
     std::uint32_t command=0,count=0,instances=0,start=0,firstInstance=0,argumentOffset=0;
     std::int32_t baseVertex=0;
-    std::uint32_t vertexKind=0,programHashValid=0;
+    std::uint32_t vertexKind=0,programHashValid=0,programLinked=0;
     std::array<std::uint8_t,32> programHash{};
 };
 struct SourceAuditStatus {
