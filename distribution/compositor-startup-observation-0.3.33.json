@@ -1,0 +1,221 @@
+{
+  "archive": {
+    "bytes": 20275342,
+    "sha256": "cb7df1c9bbd3fa1834468a8bea875b3377e9cdcc753626a7adf62240a6e81b78"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726216,
+      "sha256": "a696e85542315f85760b369bcf2805a95ee537369a2b3852be5472297d7f40de"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2181632,
+      "sha256": "57471561abefee6863cc28ea72d7e21970d9ded5e573ac25a4952c9584735d95"
+    }
+  },
+  "change": "Start independent cold discovery before sender/encoder preparation; diagnose actual factory outcomes and Windows multiview program bindings; retain original capture and all native RGB/source/frame/mask admission rules",
+  "ci": {
+    "observer": {
+      "conclusion": "success",
+      "databaseId": 43528421330,
+      "headSha": "fca60071bf9b8efa5e56b468fc56db447dcc06b3",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43528421330"
+    },
+    "resource": {
+      "conclusion": "success",
+      "databaseId": 43528421381,
+      "headSha": "fca60071bf9b8efa5e56b468fc56db447dcc06b3",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43528421381"
+    },
+    "shared_alpha": {
+      "conclusion": "success",
+      "databaseId": 43528421331,
+      "headSha": "fca60071bf9b8efa5e56b468fc56db447dcc06b3",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43528421331"
+    },
+    "source_format": {
+      "conclusion": "success",
+      "databaseId": 43528421340,
+      "headSha": "fca60071bf9b8efa5e56b468fc56db447dcc06b3",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43528421340"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.12",
+    "pc": "0.3.20"
+  },
+  "device_actions": false,
+  "diagnostics_only": true,
+  "frame_artifacts_and_settings_byte_identical": true,
+  "frame_mask_and_camera_admission_unchanged": true,
+  "hardware_verified": false,
+  "mixed_reality_fixed": false,
+  "observed_failure": "PC0.3.19 reaches armed state4 but zero observed devices or raster calls despite native device creation; supplied Windows stream assets match existing fingerprints; masks remain zero",
+  "schema": "sfnp-compositor-startup-observation-candidate-v1",
+  "software_logs": {
+    "installer-tests.log": {
+      "bytes": 138,
+      "sha256": "35a7ef987504c1af63dc7e6e587f405c4fad0941936f53caa9b316b91630aa82"
+    },
+    "native-installer-tests.log": {
+      "bytes": 488,
+      "sha256": "7479de9de0957d2207f9badee56486d33fd3fead950862de246920f85e5d016f"
+    },
+    "package-tests.log": {
+      "bytes": 116,
+      "sha256": "f476af24a6632f0f0b86ebaf162eebcdfbd9a2bff6d602a90a6d7b0f163388a2"
+    },
+    "pc-only-tests.log": {
+      "bytes": 3378,
+      "sha256": "b40f2961b624b0afe1cf33087731b7c2266ff9e01454edbe83cd2cc8400ea81e"
+    },
+    "provider-build.log": {
+      "bytes": 202,
+      "sha256": "81750b044d5bbfea9b5e20a8b4325236f671e8e1cd7e8f570989c53c151045e8"
+    },
+    "workflow-tests.log": {
+      "bytes": 10544,
+      "sha256": "8d4b26bb843cab897bf98f568048e9542403cab8c64faa35486746fe080eaf7c"
+    }
+  },
+  "source_revision": "a949488eef4ac94f7ee38ec8c585b4da87ca348d",
+  "version": "0.3.33",
+  "windows_logs": {
+    "gnu/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "2d756a68fc6f6b42ca6ba4de0a5c34ffa16966e11e8b4f43238f824000710c07"
+    },
+    "gnu/loader-case1.log": {
+      "bytes": 209,
+      "sha256": "4b95be9163d271cbab7ad80c7d3825c98dc350529e443201752121d34724684a"
+    },
+    "gnu/loader-case10.log": {
+      "bytes": 210,
+      "sha256": "928279c76c760eac0a8b64d5f4b951b82df0571c14756a594545ace0e97400a9"
+    },
+    "gnu/loader-case11.log": {
+      "bytes": 210,
+      "sha256": "1121f8b37bdd2de0c985f1eb8843f9b478ab959179327f8387bfe3c449f8be5c"
+    },
+    "gnu/loader-case2.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "gnu/loader-case3.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "gnu/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "3c040be5ec5a9f6063f458a815d38f76c62af61b469b2a70b4e6c6d20fb04e17"
+    },
+    "gnu/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "ecdbc2e1e10bbd8f91bd8844d9efc303e0e2a6200273157a24e2e1ea88b34e70"
+    },
+    "gnu/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "57707d03d7e552972e96826c87bdcdad27143187590c81ed54f50220beccf18e"
+    },
+    "gnu/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "463a7a1c40fd8dad26a4f74a36757069eb0272568c527eb40815998fe42d0358"
+    },
+    "gnu/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "77f8605732f19cd33ae815add9f1849567a1aa0617e4a2378788f07ad4463ebd"
+    },
+    "gnu/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "d336809b1e8c21b698f6814a6c9226de5fbe51c029f23f4297c43343f2c73c2a"
+    },
+    "gnu/loader-independent-single.log": {
+      "bytes": 210,
+      "sha256": "8bca573ea787731d8973cf7d698027c6ccda5d68bcc387bd3776f97da4069902"
+    },
+    "gnu/loader-single.log": {
+      "bytes": 209,
+      "sha256": "e1a13ceb4d242015fcca0b12cb2ca7cf8c96787f882cafeb93732a708f00a70d"
+    },
+    "gnu/no-identity.log": {
+      "bytes": 224,
+      "sha256": "3abc3f02aebf31f4383c6c524395a44baa9695f1e8f532d4552c2943b15cec29"
+    },
+    "gnu/no-retry.log": {
+      "bytes": 219,
+      "sha256": "a908d49860c0f62a991308db5bd4ca529db87a44bb027f330252e395a0fb8ea4"
+    },
+    "msvc/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "2d756a68fc6f6b42ca6ba4de0a5c34ffa16966e11e8b4f43238f824000710c07"
+    },
+    "msvc/loader-case10.log": {
+      "bytes": 210,
+      "sha256": "b859c7e87fde3db380e974f6bc272dfe3eeceedf2da4596f58308ef081bc58c2"
+    },
+    "msvc/loader-case11.log": {
+      "bytes": 210,
+      "sha256": "ef42c0f33b518dc58edd39e33d1d30b71962920ce03d2c8340ab58400dd468ef"
+    },
+    "msvc/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "1700dc5bec13daa673705f9c1e865aa69259c94f6f81a5b6073e09b5d2aeaee9"
+    },
+    "msvc/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "7fe58717c4b0964f80fd248046d8012d52792d752e57dd97e739533e48427d1b"
+    },
+    "msvc/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "1d65b6111c878c21bc1fe4bdcce1f21a026ff6cb476ab815e1930ddb9fd4c77f"
+    },
+    "msvc/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "195c527d35d65a98eb60fd17d5bf38cdcaea8311bc75370dd3dc13b7e09b225e"
+    },
+    "msvc/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "9fd83e5ad8d5c5da9d428dc450d859a20e4df7670f2bbe516a270dcff3475699"
+    },
+    "msvc/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "f63c335e6d6a099653d5eea1296ba2a55bfaf8edd354ce8a765d462fedea1b17"
+    },
+    "msvc/loader-foreign-installation.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "msvc/loader-independent-single.log": {
+      "bytes": 210,
+      "sha256": "ed6c69879fc48f74065d3fe8dc50c20b89e195854b6728defd0a18d22588d19b"
+    },
+    "msvc/loader-normal.log": {
+      "bytes": 209,
+      "sha256": "50764225b9aac590e99a957bcf7cfb62ec51c5407f8d6f69031640fcc590e41d"
+    },
+    "msvc/loader-publisher-refusal.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "msvc/loader-single.log": {
+      "bytes": 209,
+      "sha256": "03bb2e7c1ffff46f04ca78a6f178a8fa6d8d746ae95785c2591e54d1c4de313d"
+    }
+  }
+}
