@@ -9,6 +9,7 @@ struct NativeShaderStats {
     std::array<std::uint64_t,3> streamKinds{};std::uint64_t unknownPixels=0;
     std::array<std::uint64_t,8> multiViewKinds{};
     std::uint64_t factoryCalls=0,factoryCreated=0,factoryRefused=0;
+    std::uint64_t unknownPixelOverflow=0;
 };
 struct NativeShaderDescription {NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false,linked=false;};
 // Observe public shader creation before the native encoder is initialized.

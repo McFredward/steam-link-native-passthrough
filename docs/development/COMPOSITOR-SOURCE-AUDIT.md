@@ -15,6 +15,61 @@ extent refusals. Both modes still lack PC coverage. These are ordinary-video
 observations, not headset MR acceptance or exact joins between independent
 PC/Frame counters.
 
+## PC0.3.21: direct planar conversion and startup program pressure
+
+The November14 morning capture contains two PC sessions. The later session
+includes PC0.3.20's multiview/factory telemetry and observes one real device,
+exactly one successful factory call and no attachment refusal. It sees actual
+DownscaleX and ReprojectX draws of4292-square sources. Some later2D source
+bindings match the registered game's PID24040 and allocation generations7/8.
+These are actual bindings, but numeric KMT ancestry alone remains diagnostic.
+There is no current-frame/eye transfer proof or operational mask from them.
+
+The sender reports25248 eye-draw events, zero complete pairs, zero captured
+copies/accepted coverage inputs, and zero masks. The first broad refusal is
+native-composition-chain, followed by failed-epoch/copy/input consequences.
+Frame0.3.12 receives new maskless metadata but its prepared-picture/ordinary
+counters do not advance; camera-only recovery increases4924. This matches the
+reported camera-only game instead of showing game elements over passthrough.
+The logs do not yet identify which conversion edge failed first.
+
+The existing graph accepted only RGB -> separate UV image -> packed planar UV,
+plus RGB -> planar luma. A reviewed native Chroma/ChromaLegacy program writing
+straight into an NV12/P010 UV view was refused because the planar resource has
+full luma dimensions while its UV viewport has half dimensions. The candidate
+supports that conversion explicitly, retaining the prior packed route. Both
+planes must still derive from the same complete current RGB composition and
+reach the same retained planar resource. Wrong sources, output aliases, repeat
+writes and mixing direct/packed paths revoke the candidate. No source/PID/eye,
+frame, encoder or camera admission is relaxed. This is a demonstrated code gap;
+its use by the hardware run remains unconfirmed until new edge telemetry.
+
+Owned WARP production controls exercise direct UV, either plane ordering, the
+prior packed path and wrong/mixed/repeated edges through the actual observer
+and an explicitly fake accepted NVENC input. Positive cases compare every byte
+of both native NV12 planes against native-only drawing with the same sources.
+These controls do not establish original game alpha in real compositor tiles,
+hardware encoding, decoded Frame composition or successful beta MR.
+
+The previous compositor unknown-pixel table was already at its128-object cap
+before game startup; several actual bound programs had no retained digest.
+A separate512-cell bounded identity table now uses retained canonical COM
+identities and empty-terminated hash probing. This avoids a full table scan on
+each bound-program query. Overflow is reported separately. A real WARP control
+creates140 distinct extra startup programs and requires the later bound pixel
+program's exact digest, Unknown label and unchanged native output. Ordinary
+coverage observers still disable unknown-program retention.
+
+Composition diagnostics now retain the first rejected edge in a presentation,
+including native source/output storage and view formats, dimensions, viewport,
+complete state and eye bits. Subsequent failed-frame fallout cannot overwrite
+that initial sample. These scalar fields are neither coherent GPU receipts nor
+source/frame permission. Shader bodies and native pixels remain private.
+
+Installer0.3.34 ships PC0.3.21 with unchanged Frame0.3.12 files/settings. Earlier
+native capture and conversion routes stay available. Functional beta MR,
+Default/Legacy and valid Auto/manual resolution acceptance remain pending.
+
 ## PC0.3.20: independent startup and actual Windows multiview identities
 
 The November14 00:24–00:25 CET run of PC0.3.19 starts a fresh compositor,

@@ -478,13 +478,13 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     static_cast<unsigned long long>(audit.shaders),static_cast<unsigned long long>(audit.draws),
                     static_cast<unsigned long long>(audit.recognizedDraws),static_cast<unsigned long long>(audit.dropped));
                 report(text,stream_bridge::logging::Level::Debug);
-                std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown programs remain diagnostic only",
+                std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown-retention-overflow=%llu; unknown programs remain diagnostic only",
                     static_cast<unsigned long long>(audit.streamShaderKinds[0]),static_cast<unsigned long long>(audit.streamShaderKinds[1]),
                     static_cast<unsigned long long>(audit.streamShaderKinds[2]),static_cast<unsigned long long>(audit.unknownPixelPrograms),
                     static_cast<unsigned long long>(audit.rasterCalls[0]),static_cast<unsigned long long>(audit.rasterCalls[1]),
                     static_cast<unsigned long long>(audit.rasterCalls[2]),static_cast<unsigned long long>(audit.rasterCalls[3]),
                     static_cast<unsigned long long>(audit.rasterCalls[4]),static_cast<unsigned long long>(audit.rasterCalls[5]),
-                    static_cast<unsigned long long>(audit.rasterCalls[6]),static_cast<unsigned long long>(audit.rasterCalls[7]));
+                    static_cast<unsigned long long>(audit.rasterCalls[6]),static_cast<unsigned long long>(audit.rasterCalls[7]),static_cast<unsigned long long>(audit.unknownPixelOverflow));
                 report(text,stream_bridge::logging::Level::Debug);
                 std::snprintf(text,sizeof text,"compositor multiview audit: inner/downscale-x/downscale-y/reproject-x/reproject-y/resolve/vertex-x/vertex-y=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; factory calls/created/refused=%llu/%llu/%llu; program identities only, no coverage authority",
                     static_cast<unsigned long long>(audit.multiViewShaderKinds[0]),static_cast<unsigned long long>(audit.multiViewShaderKinds[1]),
@@ -670,6 +670,13 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 stats.lastSourceWidth,stats.lastSourceHeight,stats.lastSourceFormat,stats.nativeSourceShape[4],
                 stats.nativeSourceShape[0],stats.nativeSourceShape[1],stats.nativeSourceShape[2],stats.nativeSourceShape[3],
                 stats.nativeSourceShape[5],stats.nativeSourceShape[6],stats.nativeSourceShape[7]);report(text,stream_bridge::logging::Level::Debug);
+            const auto& edge=stats.compositionRefusal;
+            if(edge[13]){
+                std::snprintf(text,sizeof text,"coverage composition refusal: kind=%u; source=%ux%u storage/view=%u/%u; output=%ux%u storage/view=%u/%u; viewport=%ux%u; graph-complete/eye-bits=%u/0x%x; step=%s; approximate scalars, no frame authority",
+                    edge[0],edge[1],edge[2],edge[3],edge[4],edge[5],edge[6],edge[7],edge[8],edge[9],edge[10],edge[11],edge[12],
+                    stream_bridge::sender::coverageGateName(static_cast<stream_bridge::sender::CoverageGate>(edge[13])));
+                report(text,stream_bridge::logging::Level::Debug);
+            }
 
         };
         std::uint32_t reportedFailures=0;

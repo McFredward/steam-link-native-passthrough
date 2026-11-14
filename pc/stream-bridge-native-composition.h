@@ -24,8 +24,12 @@ public:
     }
     bool complete()const noexcept{return valid_&&image_&&eyes_==required_&&area_==std::uint64_t(width_)*height_;}
     bool chroma(std::uintptr_t source,std::uintptr_t output)noexcept{
-        if(!complete()||source!=image_||!output||output==image_||chroma_)return refuse();
+        if(!complete()||source!=image_||!output||output==image_||chroma_||packed_)return refuse();
         chroma_=output;return true;
+    }
+    bool directChroma(std::uintptr_t source,std::uintptr_t output)noexcept{
+        if(!complete()||source!=image_||!output||output==image_||chroma_||packed_||(planar_&&planar_!=output))return refuse();
+        planar_=output;packed_=true;return true;
     }
     bool pack(std::uintptr_t source,std::uintptr_t output)noexcept{
         if(!complete()||!chroma_||source!=chroma_||!output||output==image_||output==chroma_||packed_||(planar_&&planar_!=output))return refuse();
