@@ -1,0 +1,135 @@
+#pragma once
+#include "stream-bridge-projected-alpha-sync.h"
+#include <bcrypt.h>
+#include <type_traits>
+
+namespace stream_bridge::sender::projected_alpha {
+// PRIVATE production transport, deliberately separate from SourceAudit.V1.
+// A verified loader duplicates an UNNAMED section handle into its exact peer.
+// No public mapping name, diagnostic record, PID guess or latest timestamp can
+// supply this channel. Possessing the channel is still not image authority:
+// native resource ancestry and actual image/lock proofs remain mandatory.
+constexpr std::uint64_t ChannelMagic=0x324c414e48435053ull;
+constexpr unsigned ChannelAllocations=192,ChannelImages=32;
+struct Allocation {
+    std::uint64_t handle=0,generation=0;
+    std::uint32_t pid=0,width=0,height=0,format=0,samples=0,arraySize=0;
+};
+struct Registry {
+    // Published ONLY from current, retained native opens plus the live
+    // kernel-validated application lease. Never copy a diagnostic inventory.
+    std::uint64_t sourceLease=0,revision=0;
+    std::array<Allocation,ChannelAllocations> retained{};
+};
+struct MaskRegistration {
+    Allocation native{};
+    std::uint64_t maskHandle=0,maskGeneration=0;
+};
+struct ImageWitness {
+    Allocation native{},scene{};
+    std::uint64_t sourceLease=0,maskHandle=0,maskGeneration=0;
+    std::uint64_t syncAllocation=0,producerScope=0,releaseKey=0,imageVersion=0;
+    // Not a frame counter. The producer invalidates BEFORE ANY native output
+    // write. A witness is published only for that exact RGB/coverage version
+    // under observed native ownership; it holds its sync allocation alive.
+    std::uint32_t complete=0,route=0;
+};
+template<class T>struct Row {
+    alignas(8) volatile LONG64 sequence=0;T value{};
+    bool publish(const T& next)noexcept{
+        const auto before=InterlockedCompareExchange64(&sequence,0,0);
+        if(before<0||(before&1)||before>std::numeric_limits<LONG64>::max()-2)return false;
+        InterlockedIncrement64(&sequence);MemoryBarrier();
+        std::memcpy(&value,&next,sizeof next);MemoryBarrier();InterlockedIncrement64(&sequence);return true;
+    }
+    bool read(T& output)const noexcept{
+        auto* seq=const_cast<volatile LONG64*>(&sequence);
+        const auto before=InterlockedCompareExchange64(seq,0,0);if(before<=0||(before&1))return false;
+        std::memcpy(&output,&value,sizeof output);MemoryBarrier();
+        return InterlockedCompareExchange64(seq,0,0)==before;
+    }
+};
+struct ChannelPage {
+    std::uint64_t magic=ChannelMagic,parentBirth=0,peerBirth=0;
+    std::array<std::uint8_t,16> cookie{};
+    std::uint32_t bytes=sizeof(ChannelPage),parentPid=0,peerPid=0,reserved=0;
+    volatile LONG bound=0,stopped=0,peerReady=0;
+    Row<Registry> registry{};
+    std::array<Row<MaskRegistration>,ChannelImages> registrations{};
+    std::array<Row<ImageWitness>,ChannelImages> witnesses{};
+};
+static_assert(std::is_trivially_copyable<Registry>::value&&std::is_trivially_copyable<ImageWitness>::value,
+    "fixed private production payloads");
+static_assert(sizeof(ChannelPage)<=32768,"bounded private section");
+struct ChannelLaunch {
+    std::uint64_t magic=ChannelMagic,parentBirth=0,peerBirth=0,mapping=0;
+    std::array<std::uint8_t,16> cookie{};
+    std::uint32_t parentPid=0,peerPid=0,bytes=sizeof(ChannelLaunch),reserved=0;
+};
+inline std::uint64_t processBirth(HANDLE process)noexcept{
+    FILETIME created{},exit{},kernel{},user{};
+    return GetProcessTimes(process,&created,&exit,&kernel,&user)?
+        (std::uint64_t(created.dwHighDateTime)<<32)|created.dwLowDateTime:0;
+}
+class ChannelParent {
+    HANDLE mapping_=nullptr;ChannelPage* page_=nullptr;
+public:
+    ChannelParent()=default;ChannelParent(const ChannelParent&)=delete;ChannelParent& operator=(const ChannelParent&)=delete;
+    ~ChannelParent(){stop();if(page_)UnmapViewOfFile(page_);if(mapping_)CloseHandle(mapping_);}
+    bool create()noexcept{
+        if(mapping_||page_)return false;
+        mapping_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(ChannelPage),nullptr);
+        if(!mapping_)return false;
+        page_=static_cast<ChannelPage*>(MapViewOfFile(mapping_,FILE_MAP_READ|FILE_MAP_WRITE,0,0,sizeof(ChannelPage)));
+        if(!page_)return false;
+        new(page_) ChannelPage{};page_->parentPid=GetCurrentProcessId();page_->parentBirth=processBirth(GetCurrentProcess());
+        if(!page_->parentBirth||BCryptGenRandom(nullptr,page_->cookie.data(),static_cast<ULONG>(page_->cookie.size()),BCRYPT_USE_SYSTEM_PREFERRED_RNG)!=0){stop();return false;}
+        return true;
+    }
+    // Call only after verifying the peer's user/session, publisher, exact file
+    // identity and process birth. The existing verified loader owns that check.
+    // One attempt; an uncertain duplicate is never blindly replayed.
+    bool duplicateToVerifiedPeer(HANDLE process,ChannelLaunch& launch)noexcept{
+        launch={};if(!page_||page_->peerPid||InterlockedCompareExchange(&page_->stopped,0,0))return false;
+        const auto pid=GetProcessId(process);const auto birth=processBirth(process);
+        if(!pid||!birth)return false;
+        page_->peerPid=pid;page_->peerBirth=birth;
+        HANDLE remote=nullptr;
+        if(!DuplicateHandle(GetCurrentProcess(),mapping_,process,&remote,0,FALSE,DUPLICATE_SAME_ACCESS))return false;
+        launch.parentPid=page_->parentPid;launch.parentBirth=page_->parentBirth;
+        launch.peerPid=pid;launch.peerBirth=birth;launch.cookie=page_->cookie;
+        launch.mapping=static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(remote));
+        InterlockedExchange(&page_->bound,1);return true;
+    }
+    ChannelPage* page()const noexcept{return page_;}
+    void stop()noexcept{if(page_)InterlockedExchange(&page_->stopped,1);}
+};
+class ChannelPeer {
+    HANDLE mapping_=nullptr,parent_=nullptr;ChannelPage* page_=nullptr;
+public:
+    ChannelPeer()=default;ChannelPeer(const ChannelPeer&)=delete;ChannelPeer& operator=(const ChannelPeer&)=delete;
+    ~ChannelPeer(){if(page_)UnmapViewOfFile(page_);if(mapping_)CloseHandle(mapping_);if(parent_)CloseHandle(parent_);}
+    bool open(const ChannelLaunch& launch)noexcept{
+        if(page_||mapping_||parent_||launch.magic!=ChannelMagic||launch.bytes!=sizeof(ChannelLaunch)||launch.reserved||
+            !launch.mapping||!launch.parentPid||!launch.parentBirth||launch.peerPid!=GetCurrentProcessId()||
+            launch.peerBirth!=processBirth(GetCurrentProcess()))return false;
+        const auto candidate=reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(launch.mapping));
+        auto* view=static_cast<ChannelPage*>(MapViewOfFile(candidate,FILE_MAP_READ|FILE_MAP_WRITE,0,0,sizeof(ChannelPage)));
+        if(!view)return false;
+        const bool matching=view->magic==ChannelMagic&&view->bytes==sizeof(ChannelPage)&&view->cookie==launch.cookie&&
+            view->parentPid==launch.parentPid&&view->parentBirth==launch.parentBirth&&
+            view->peerPid==launch.peerPid&&view->peerBirth==launch.peerBirth&&
+            InterlockedCompareExchange(&view->bound,0,0)==1&&!InterlockedCompareExchange(&view->stopped,0,0);
+        if(!matching){UnmapViewOfFile(view);return false;} // Never close an unverified caller's handle.
+        const auto parent=OpenProcess(SYNCHRONIZE|PROCESS_QUERY_LIMITED_INFORMATION,FALSE,launch.parentPid);
+        if(!parent||processBirth(parent)!=launch.parentBirth||WaitForSingleObject(parent,0)!=WAIT_TIMEOUT){
+            if(parent)CloseHandle(parent);
+            UnmapViewOfFile(view);return false;
+        }
+        page_=view;mapping_=candidate;parent_=parent;InterlockedExchange(&page_->peerReady,1);return true;
+    }
+    ChannelPage* page()const noexcept{return page_;}
+    bool active()const noexcept{return page_&&parent_&&!InterlockedCompareExchange(&page_->stopped,0,0)&&
+        WaitForSingleObject(parent_,0)==WAIT_TIMEOUT;}
+};
+} // namespace stream_bridge::sender::projected_alpha
