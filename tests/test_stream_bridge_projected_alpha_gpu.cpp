@@ -1,5 +1,6 @@
 #include "pc/stream-bridge-projected-alpha-replay.h"
 #include "pc/stream-bridge-projected-alpha-sync.h"
+#include "pc/stream-bridge-projected-alpha-kernels.h"
 #include <d3dcompiler.h>
 #include <array>
 #include <cstdint>
@@ -198,8 +199,10 @@ void run(UINT creationFlags,MutexObserver& mutexes){
     exportKernel("projected-alpha-clone64.dxbc",clone64.value);exportKernel("projected-alpha-clone80.dxbc",clone80.value);
     exportKernel("projected-alpha-clone32.dxbc",clone32.value);
     Replay replay;
-    check(replay.prepare(device.value,{clone64->GetBufferPointer(),clone64->GetBufferSize()},
-        {clone80->GetBufferPointer(),clone80->GetBufferSize()},{clone32->GetBufferPointer(),clone32->GetBufferSize()}),"cold bounded clone/state/blend preparation");
+    const Bytecode code64=exportDirectory?Bytecode{clone64->GetBufferPointer(),clone64->GetBufferSize()}:Bytecode{kernels::Clone64.data(),kernels::Clone64.size()};
+    const Bytecode code80=exportDirectory?Bytecode{clone80->GetBufferPointer(),clone80->GetBufferSize()}:Bytecode{kernels::Clone80.data(),kernels::Clone80.size()};
+    const Bytecode code32=exportDirectory?Bytecode{clone32->GetBufferPointer(),clone32->GetBufferSize()}:Bytecode{kernels::Clone32.data(),kernels::Clone32.size()};
+    check(replay.prepare(device.value,code64,code80,code32),"cold bounded clone/state/blend preparation");
     auto vsCode=compile(Fixture,"vertex","vs_5_0"),quadCode=compile(Fixture,"quad","vs_5_0"),ps64Code=compile(Fixture,"pixel64","ps_5_0"),
         ps80Code=compile(Fixture,"pixel","ps_5_0"),csCode=compile(Fixture,"compute","cs_5_0");
     Com<ID3D11VertexShader> vs,quad;Com<ID3D11PixelShader> ps64,ps80;Com<ID3D11ComputeShader> cs;

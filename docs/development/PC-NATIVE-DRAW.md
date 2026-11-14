@@ -476,3 +476,20 @@ uses the pinned Microsoft DXC parser with HLSL2016 and warnings as errors. This
 catches reserved HLSL identifiers before publication, but produces DXIL only
 for syntax validation. Actual Windows `D3DCompile`/D3D11 WARP execution is still
 required; the parser gate cannot certify a working D3D11 program or MR frame.
+
+Run43648134187 atc552fed passes95,342 projected-alpha checks including the
+four-sample reference control and64 real native lock transfers. All three
+workflows triggered by the preflight correction pass. The generated kernel
+header contains only the three owned compute programs from that successful
+run, with source/bytecode hashes and provenance. The fixture additionally runs
+those embedded programs so production preparation need not compile HLSL.
+
+The private-channel helper uses an unnamed kernel section duplicated by the
+verified loader into the exact peer process. It remains separate from the named,
+untrusted diagnostic page. Its launch is bound to both process instances and a
+private cookie, accepts one transfer and rejects mismatched peers or parent
+termination. Fixed, one-writer rows carry retained native allocations and
+image-version witnesses. Merely receiving a row or opening the private channel
+does not authorize a scene image. The owned cross-process fixture deliberately
+leaves its dummy witness incomplete. Live compositor ancestry, native write
+invalidation and the sender's exact-image admission still need integration.
