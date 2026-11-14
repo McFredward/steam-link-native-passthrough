@@ -59,7 +59,7 @@ void dispatchControls(){
     cached(fakeContext,23,5);check(nativeDraws==3&&lastCount==23&&lastStart==5&&GetLastError()==4321,"cached callback forwards through the current native target after stop");
 }
 template<class T>struct Com {T* p=nullptr;~Com(){if(p)p->Release();}T** out(){return &p;}};
-constexpr unsigned W=37,H=23;
+constexpr unsigned W=37,H=67;
 constexpr char Program[]=R"(
 Texture2D<float4> scene:register(t0);Texture2D<float4> overlay:register(t1);Texture2D<float4> auxiliary:register(t2);
 float4 vs(uint id:SV_VertexID):SV_Position {float2 p=float2((id<<1)&2,id&2);return float4(p*float2(2,-2)+float2(-1,1),0,1);}
@@ -194,6 +194,16 @@ void run(){
     const auto beforeThree=observer->serial;context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
     check(observer->serial==beforeThree+3&&threeBaseline==pixels(context.p,target.p,staging.p),"reproject-x observes all three actual source slots while retaining native RGBA");
     check(observer->status.samples[(observer->serial-1)%SourceAuditSamples].slot==2,"third reprojection source is retained explicitly");
+    context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+    check(threeBaseline==pixels(context.p,target.p,staging.p),"upstream alpha queries retain every native colour and alpha output byte");
+    for(unsigned source=0;source<2;++source){SourceAlphaSample alpha{};
+        check(dispatch.alpha.read((11+source)%8,alpha)&&alpha.source.origin==2&&alpha.source.pid==101+source&&
+            alpha.source.allocationGeneration==11+source&&alpha.source.observation&&!alpha.source.present&&!alpha.source.sourceBit,
+            "actual single-threaded upstream binding publishes its true owner/allocation and an observation, never an invented eye/presentation");
+        for(auto value:alpha.alpha)check((value&255)==0&&((value>>16)&255)==204&&((value>>24)&65535)&&((value>>40)&65535),
+            "upstream alpha statistics retain the actual zero and fractional source population");
+    }
+    check(dispatch.alpha.error()==0,"upstream diagnostic completes on the native graphics caller without GPU errors");
     context.p->VSSetShader(multiVertex.p,nullptr,0);context.p->PSSetShader(unknown.p,nullptr,0);observer->inventory={};
     const auto beforeMultiVertex=observer->serial;const auto beforeMultiRecognized=observer->recognized.load();context.p->Draw(3,0);
     check(observer->serial==beforeMultiVertex+2&&observer->recognized==beforeMultiRecognized,"multiview vertex bindings can diagnose unreviewed pixels without promoting their semantics");
