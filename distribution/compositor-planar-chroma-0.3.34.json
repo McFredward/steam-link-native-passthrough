@@ -1,0 +1,243 @@
+{
+  "archive": {
+    "bytes": 20276559,
+    "sha256": "75209add6ca8a3f07ac8e52a64ed1b3e77d9381b9bcdc013dd952399f4a82dfd"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726216,
+      "sha256": "a696e85542315f85760b369bcf2805a95ee537369a2b3852be5472297d7f40de"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2183680,
+      "sha256": "dd8314fad9c2ac27921c3b81484104dea4641c9500ecf205b04b8501ac031966"
+    }
+  },
+  "change": "Support reviewed direct UV writes into the same native NV12/P010 image as luma, retain the intermediate/packed route; record the first rejected conversion edge; retain512 bounded hashed unknown-program identities with overflow reporting and up to32 source samples per registry epoch within128 total pairs. Source, eye, frame, encoder and camera admission is unchanged.",
+  "ci": {
+    "lifecycle": {
+      "conclusion": "success",
+      "databaseId": 43577946548,
+      "headSha": "cbfe405c7368fe21d226bf64e144c96ce82831ad",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946548"
+    },
+    "observer": {
+      "conclusion": "success",
+      "databaseId": 43579141077,
+      "headSha": "974533fe40da469fcd7f6efea72619a83c07e20f",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43579141077"
+    },
+    "readback": {
+      "conclusion": "success",
+      "databaseId": 43577946563,
+      "headSha": "cbfe405c7368fe21d226bf64e144c96ce82831ad",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946563"
+    },
+    "resource": {
+      "conclusion": "success",
+      "databaseId": 43578473065,
+      "headSha": "f9c7e8968fe21f857c85811b25c0d7224154324b",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43578473065"
+    },
+    "shared_alpha": {
+      "conclusion": "success",
+      "databaseId": 43579141061,
+      "headSha": "974533fe40da469fcd7f6efea72619a83c07e20f",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43579141061"
+    },
+    "source_format": {
+      "conclusion": "success",
+      "databaseId": 43577946562,
+      "headSha": "cbfe405c7368fe21d226bf64e144c96ce82831ad",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946562"
+    },
+    "stages": {
+      "conclusion": "success",
+      "databaseId": 43577946573,
+      "headSha": "cbfe405c7368fe21d226bf64e144c96ce82831ad",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946573"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.12",
+    "pc": "0.3.21"
+  },
+  "device_actions": false,
+  "diagnostics_only": false,
+  "frame_artifacts_and_settings_byte_identical": true,
+  "frame_mask_and_camera_admission_unchanged": true,
+  "hardware_verified": false,
+  "mixed_reality_fixed": false,
+  "native_direct_planar_uv_support_added": true,
+  "observed_failure": "Actual compositor observation sees original game-owned source bindings; sender conversion graph reports zero complete pairs, captured copies, accepted coverage inputs or masks; Frame shows camera-only recovery. Unknown pixel retention saturates at128 before game startup. Exact failing conversion edge not proved.",
+  "schema": "sfnp-compositor-planar-chroma-candidate-v1",
+  "software_logs": {
+    "installer-tests.log": {
+      "bytes": 138,
+      "sha256": "05cb9b1658dc08d9d3ee563844bc4455dec7527cff4135ebdaa0a742aebe9e17"
+    },
+    "native-installer-tests.log": {
+      "bytes": 488,
+      "sha256": "adf4ce712832f92dcabf83d14ffaa96dd9a25ad3b851a2166b31fda684ffd511"
+    },
+    "package-tests.log": {
+      "bytes": 116,
+      "sha256": "a26e2dfd4908ad64d171ec04afa33e7615d05611671ca409dac891264f7ab41e"
+    },
+    "pc-only-tests.log": {
+      "bytes": 3378,
+      "sha256": "d5534e0d035fc36eb2dbff21948b85e09cd1d46a5d1cdccf1bbeb9f1b8a55bdd"
+    },
+    "provider-build.log": {
+      "bytes": 194,
+      "sha256": "a5a8b9a07993c0ca000c91169e865c1dbfc348729bc62d6f47baf00390a8c48c"
+    },
+    "workflow-tests.log": {
+      "bytes": 10544,
+      "sha256": "9a3a566a01898a9bc0baa5455455aadc7c8b7197c763c2579c4c16f4cc0a9878"
+    }
+  },
+  "source_revision": "35219485a208eeee8c6fa5a155427c12c2bd9a36",
+  "version": "0.3.34",
+  "windows_logs": {
+    "gnu/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "189848841162aa81fd049bc3549c3497fd43512ecfb13d6ca23023a004a5d795"
+    },
+    "gnu/loader-case1.log": {
+      "bytes": 209,
+      "sha256": "b4aa6be4c9fe32a9114796cd2079e923ebae9d22d7fa272ca80fdccac4c14281"
+    },
+    "gnu/loader-case10.log": {
+      "bytes": 210,
+      "sha256": "5447445a7623f0478e5e866f1a7c21e86a255c40ed3db6a0f8ec05726802e85d"
+    },
+    "gnu/loader-case11.log": {
+      "bytes": 210,
+      "sha256": "7e09b3fcd4aac06c7b42130246ed43a181d6e98e60a788bb7d2732b4d827ad3f"
+    },
+    "gnu/loader-case2.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "gnu/loader-case3.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "gnu/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "52b59c4639f233de8d256a7f15696657998810c6777946d7808c25c1d1bdcf88"
+    },
+    "gnu/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "c1a972af1a45aa1866d0699bb621d641dc25fc7eea7e666aa29b84e5d65b053d"
+    },
+    "gnu/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "1564768c23980e6265cc3e7268ac8d49db4c5ae5ce3b4b93ac92e288a0b63bde"
+    },
+    "gnu/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "a9147ee645e63e4c62b363010859ea046653745eb4868d92facbc339e103714f"
+    },
+    "gnu/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "bff1dfd9af45c2aa60de84fd908cbd6b877b0e56c70d5a9d075c7399efb7f5a6"
+    },
+    "gnu/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "eda8101e828ad387a3085e4d5bf51028ba0ae8177668e9a0447f1124ea0cff87"
+    },
+    "gnu/loader-independent-single.log": {
+      "bytes": 210,
+      "sha256": "8bca573ea787731d8973cf7d698027c6ccda5d68bcc387bd3776f97da4069902"
+    },
+    "gnu/loader-single.log": {
+      "bytes": 209,
+      "sha256": "5627fb97478f715a43c8b5eb12bd3cd365fc93606a24d046db28867ba1b002af"
+    },
+    "gnu/no-identity.log": {
+      "bytes": 224,
+      "sha256": "88241ca430d7ed681f78908bee07ff84465c5859194a7bd315554db08ad77c5c"
+    },
+    "gnu/no-retry.log": {
+      "bytes": 219,
+      "sha256": "8fa883b0dd0fe2fc1aa6f86d7544e51ff664c7837c73abc561e723c21d45bd13"
+    },
+    "msvc/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "189848841162aa81fd049bc3549c3497fd43512ecfb13d6ca23023a004a5d795"
+    },
+    "msvc/loader-case10.log": {
+      "bytes": 210,
+      "sha256": "97271041b63b3ef95ca6a352b30968237cbbbfce4a66e5a7766bb7f8b8866c42"
+    },
+    "msvc/loader-case11.log": {
+      "bytes": 210,
+      "sha256": "f523d59ec2119243ae36efd0b1a5c1ee3bda0887c45a3abebea035227f89794f"
+    },
+    "msvc/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "2b77c72b43f611c2fe698a5ba84c7feb22a6089d713a899e669a3472951d4368"
+    },
+    "msvc/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "4d80ff8748009f0d13fbfd812a1fad9d3f5e128097a78414b0bfc35af1f05dcc"
+    },
+    "msvc/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "1152ca52e6d470b8ae98aff277875d9d7bc1a03ee7cce517ffc3ce552067630e"
+    },
+    "msvc/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "963696fcc5c782def764391213256f8a7929b0a2b78cf57381d6371a0e16eff4"
+    },
+    "msvc/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "3455f7ef8465dca7a1c43b9bc23a054bfa0339b738edf33b5a74274292f96c2d"
+    },
+    "msvc/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "1457c4f1e9cceac395f37130470722f59045c814e03e556a6b423f1210f23cf5"
+    },
+    "msvc/loader-foreign-installation.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "msvc/loader-independent-single.log": {
+      "bytes": 210,
+      "sha256": "e9ae5d3a9ab3a6c3e8f32175a0820998eef0930674cb402e172a0db8b9abaedb"
+    },
+    "msvc/loader-normal.log": {
+      "bytes": 209,
+      "sha256": "7aeb7f9b45f086c7455456baf9f5c5d98b5dec92f58cb64f8aacbd273c77d85a"
+    },
+    "msvc/loader-publisher-refusal.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "msvc/loader-single.log": {
+      "bytes": 209,
+      "sha256": "319d9e45dadc8cd1ef1784fe83ec36ddd6d03845c1ec4b9a0dc03cfe90fb890d"
+    }
+  }
+}
