@@ -217,3 +217,10 @@ original shader, constants and inputs. A separate reference-render control
 checks subpixel viewport edges, partially covered samples and exact final alpha;
 both direct and ranged resolve constant-buffer bindings are exercised. A
 single-sample-only extraction is insufficient for this observed game path.
+
+Local C++ preflight includes local-shadow warnings to catch the MSVC C4456
+failure in the first MSAA fixture revision. The additional owned-HLSL preflight
+uses the pinned Microsoft DXC parser with HLSL2016 and warnings as errors. This
+catches reserved HLSL identifiers before publication, but produces DXIL only
+for syntax validation. Actual Windows `D3DCompile`/D3D11 WARP execution is still
+required; the parser gate cannot certify a working D3D11 program or MR frame.

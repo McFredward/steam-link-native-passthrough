@@ -95,7 +95,7 @@ cbuffer Policy : register(b2) { float4 flags[2]; };
 Texture2DMS<float4,4> multisample : register(t0);
 float4 resolve(float4 position:SV_Position):SV_Target {
     float4 average=0;
-    [unroll] for(uint sample=0;sample<4;++sample) average+=multisample.Load(int2(position.xy),sample)*0.25;
+    [unroll] for(uint sampleIndex=0;sampleIndex<4;++sampleIndex) average+=multisample.Load(int2(position.xy),sampleIndex)*0.25;
     if(flags[0].x>0) average.a=1;
     return average;
 })";

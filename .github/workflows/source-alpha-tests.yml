@@ -10,6 +10,7 @@ on:
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'tests/test_stream_bridge_source_alpha*'
       - 'tests/test_stream_bridge_projected_alpha_gpu.cpp'
+      - 'tests/check_projected_alpha_hlsl.py'
       - '.github/workflows/source-alpha-tests.yml'
   pull_request:
     paths:
@@ -20,6 +21,7 @@ on:
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'tests/test_stream_bridge_source_alpha*'
       - 'tests/test_stream_bridge_projected_alpha_gpu.cpp'
+      - 'tests/check_projected_alpha_hlsl.py'
       - '.github/workflows/source-alpha-tests.yml'
   workflow_dispatch:
 permissions:
@@ -28,6 +30,19 @@ concurrency:
   group: source-alpha-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  owned-hlsl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare pinned Microsoft compiler for owned HLSL only
+        run: |
+          mkdir -p build/dxc
+          curl --fail --location --retry 3 --max-time 60 https://github.com/microsoft/DirectXShaderCompiler/releases/download/v1.8.2505.1/linux_dxc_2025_07_14.x86_64.tar.gz -o build/dxc.tar.gz
+          echo 'f2213da1fc99dc8778c8823078e16ba97c7f80f86a1d4520ab1adf4b462bc48c  build/dxc.tar.gz' | sha256sum --check --strict
+          tar -xzf build/dxc.tar.gz -C build/dxc
+      - name: Reject owned shader syntax errors before D3D11 execution
+        run: python3 tests/check_projected_alpha_hlsl.py build/dxc/bin/dxc
   publication:
     runs-on: ubuntu-24.04
     steps:
@@ -37,6 +52,7 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -pthread -I. tests/test_stream_bridge_source_alpha_publication.cpp -o /tmp/source-alpha-publication
           /tmp/source-alpha-publication
   gpu:
+    needs: owned-hlsl
     runs-on: windows-2025
     timeout-minutes: 5
     steps:

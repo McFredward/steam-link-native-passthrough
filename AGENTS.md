@@ -67,6 +67,10 @@
   Keep intermediate editing states local and batch a coherent checked change
   before pushing to dev. The syntax check does not replace Windows/WARP CI;
   collect the required successful runs before packaging changed native code.
+  For projected-alpha HLSL or its GPU fixture, also run
+  `python3 tests/check_projected_alpha_hlsl.py REVIEWED_DXC_EXECUTABLE` before
+  pushing. It checks owned shader syntax only; Windows still compiles and
+  executes the actual D3D11 bytecode. The alpha workflow pins the DXC download.
 - The maintainer's 2026-10-29 visual acceptance target is a stable, fluid, sharp
   passthrough image during dense rain, clouds/particles and fine foliage, including
   Venture Spirit Sling. Preserve visible transparency, effects and small holes.
