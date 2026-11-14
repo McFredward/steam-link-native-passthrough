@@ -6,6 +6,8 @@ struct CompositionFixture {
     enum class Mode {Valid,MissingTile,WrongEye,ClearImage,WrongChroma,WrongLuma,UnknownDraw,UnrelatedWrite,RegionWrite,DiscardImage,
         DirectUV,DirectUVLumaFirst,DirectUVWrongSource,DirectUVWrongOutput,DirectUVRepeated,DirectUVMixed};
     ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;Mode mode=Mode::Valid;unsigned created=0,eyeBase=0;
+    DXGI_FORMAT planarFormat=DXGI_FORMAT_NV12;
+    NV_ENC_BUFFER_FORMAT encoderFormat()const{return planarFormat==DXGI_FORMAT_P010?NV_ENC_BUFFER_FORMAT_YUV420_10BIT:NV_ENC_BUFFER_FORMAT_NV12;}
     std::array<std::array<Com<ID3D11Texture2D>,3>,4> sources;
     std::array<Com<ID3D11ShaderResourceView>,4> eyes;
     Com<ID3D11Texture2D> image,chroma,foreignChroma,planar,foreignPlanar,input,unrelated,readback;
@@ -23,9 +25,10 @@ struct CompositionFixture {
     }
     std::vector<std::uint8_t> output(){
         pointerBits<NativeCopy>(nativeTable[47])(context,readback.p,planar.p);D3D11_MAPPED_SUBRESOURCE mapped{};
-        check(SUCCEEDED(context->Map(readback.p,0,D3D11_MAP_READ,0,&mapped)),"owned native NV12 comparison map");
-        std::vector<std::uint8_t> bytes(Width*Height*3/2);
-        for(UINT y=0;y<Height*3/2;++y)std::memcpy(bytes.data()+y*Width,static_cast<const std::uint8_t*>(mapped.pData)+y*mapped.RowPitch,Width);
+        check(SUCCEEDED(context->Map(readback.p,0,D3D11_MAP_READ,0,&mapped)),"owned native planar comparison map");
+        const UINT rowBytes=Width*(planarFormat==DXGI_FORMAT_P010?2u:1u);
+        std::vector<std::uint8_t> bytes(rowBytes*Height*3/2);
+        for(UINT y=0;y<Height*3/2;++y)std::memcpy(bytes.data()+y*rowBytes,static_cast<const std::uint8_t*>(mapped.pData)+y*mapped.RowPitch,rowBytes);
         context->Unmap(readback.p,0);return bytes;
     }
     static CompositionFixture* active;
@@ -56,13 +59,14 @@ struct CompositionFixture {
         if(view)check(SUCCEEDED(device->CreateRenderTargetView(texture.p,nullptr,view->out())),"native production graph view");
     }
     void prepare(){
-        target(image,&imageTarget,Width,Height,DXGI_FORMAT_R16G16B16A16_FLOAT);target(chroma,&chromaTarget,Width/2,Height/2,DXGI_FORMAT_R16G16_FLOAT);
-        target(foreignChroma,nullptr,Width/2,Height/2,DXGI_FORMAT_R16G16_FLOAT);target(planar,nullptr,Width,Height,DXGI_FORMAT_NV12);target(foreignPlanar,nullptr,Width,Height,DXGI_FORMAT_NV12);
-        target(input,nullptr,Width,Height,DXGI_FORMAT_NV12);target(unrelated,&unrelatedTarget,Width,Height,DXGI_FORMAT_R16G16B16A16_FLOAT);
+        const auto chromaFormat=planarFormat==DXGI_FORMAT_P010?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R16G16_FLOAT;
+        target(image,&imageTarget,Width,Height,DXGI_FORMAT_R16G16B16A16_FLOAT);target(chroma,&chromaTarget,Width/2,Height/2,chromaFormat);
+        target(foreignChroma,nullptr,Width/2,Height/2,chromaFormat);target(planar,nullptr,Width,Height,planarFormat);target(foreignPlanar,nullptr,Width,Height,planarFormat);
+        target(input,nullptr,Width,Height,planarFormat);target(unrelated,&unrelatedTarget,Width,Height,DXGI_FORMAT_R16G16B16A16_FLOAT);
         check(SUCCEEDED(device->CreateShaderResourceView(image.p,nullptr,imageView.out()))&&SUCCEEDED(device->CreateShaderResourceView(chroma.p,nullptr,chromaView.out()))&&SUCCEEDED(device->CreateShaderResourceView(foreignChroma.p,nullptr,foreignChromaView.out())),"native graph source views");
-        D3D11_RENDER_TARGET_VIEW_DESC view{};view.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;view.Format=DXGI_FORMAT_R8_UNORM;
+        D3D11_RENDER_TARGET_VIEW_DESC view{};view.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;view.Format=planarFormat==DXGI_FORMAT_P010?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R8_UNORM;
         check(SUCCEEDED(device->CreateRenderTargetView(planar.p,&view,yTarget.out()))&&SUCCEEDED(device->CreateRenderTargetView(foreignPlanar.p,&view,foreignY.out())),"actual native planar luma targets");
-        view.Format=DXGI_FORMAT_R8G8_UNORM;check(SUCCEEDED(device->CreateRenderTargetView(planar.p,&view,uvTarget.out()))&&SUCCEEDED(device->CreateRenderTargetView(foreignPlanar.p,&view,foreignUV.out())),"actual native planar UV targets");
+        view.Format=planarFormat==DXGI_FORMAT_P010?DXGI_FORMAT_R16G16_UNORM:DXGI_FORMAT_R8G8_UNORM;check(SUCCEEDED(device->CreateRenderTargetView(planar.p,&view,uvTarget.out()))&&SUCCEEDED(device->CreateRenderTargetView(foreignPlanar.p,&view,foreignUV.out())),"actual native planar UV targets");
         D3D11_TEXTURE2D_DESC staging{};planar->GetDesc(&staging);staging.Usage=D3D11_USAGE_STAGING;staging.BindFlags=0;staging.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
         check(SUCCEEDED(device->CreateTexture2D(&staging,nullptr,readback.out())),"owned native planar comparison surface");
         D3D11_BUFFER_DESC b{};b.ByteWidth=48;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;check(SUCCEEDED(device->CreateBuffer(&b,nullptr,constants.out())),"native b2 copy parameters");
@@ -75,7 +79,7 @@ struct CompositionFixture {
         renderCore();
         if(mode==Mode::Valid||mode==Mode::UnrelatedWrite||mode==Mode::DirectUV||mode==Mode::DirectUVLumaFirst){
             const unsigned which=mode==Mode::DirectUV?1u:mode==Mode::DirectUVLumaFirst?2u:0u;
-            check(nativeReferences[which]==output(),"production coverage leaves every native NV12 RGB byte unchanged");
+            check(nativeReferences[which]==output(),"production coverage leaves every native planar RGB byte unchanged");
         }
     }
     void prepareReferences(){
@@ -128,7 +132,7 @@ struct CompositionFixture {
 };
 CompositionFixture* CompositionFixture::active=nullptr;
 NVENCSTATUS NVENCAPI compositionRegister(void*,NV_ENC_REGISTER_RESOURCE* resource){resource->registeredResource=reinterpret_cast<NV_ENC_REGISTERED_PTR>(0x2020);return NV_ENC_SUCCESS;}
-NVENCSTATUS NVENCAPI compositionMap(void*,NV_ENC_MAP_INPUT_RESOURCE* input){input->mappedResource=reinterpret_cast<NV_ENC_INPUT_PTR>(0x3030);input->mappedBufferFmt=NV_ENC_BUFFER_FORMAT_NV12;return NV_ENC_SUCCESS;}
+NVENCSTATUS NVENCAPI compositionMap(void*,NV_ENC_MAP_INPUT_RESOURCE* input){input->mappedResource=reinterpret_cast<NV_ENC_INPUT_PTR>(0x3030);input->mappedBufferFmt=CompositionFixture::active->encoderFormat();return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI compositionUnmap(void*,NV_ENC_INPUT_PTR){return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI compositionUnregister(void*,NV_ENC_REGISTERED_PTR){return NV_ENC_SUCCESS;}
 std::uint64_t compositionTimestamp=0;NV_ENC_OUTPUT_PTR compositionOutput=nullptr;
@@ -141,7 +145,7 @@ NVENCSTATUS NVENCAPI compositionLock(void*,NV_ENC_LOCK_BITSTREAM* packet){
     packet->pictureType=NV_ENC_PIC_TYPE_P;packet->pictureStruct=NV_ENC_PIC_STRUCT_FRAME;return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI compositionFactory(NV_ENCODE_API_FUNCTION_LIST* api){factory(api);api->nvEncRegisterResource=compositionRegister;api->nvEncMapInputResource=compositionMap;api->nvEncUnmapInputResource=compositionUnmap;api->nvEncUnregisterResource=compositionUnregister;api->nvEncEncodePicture=compositionEncode;api->nvEncLockBitstream=compositionLock;return NV_ENC_SUCCESS;}
-void runComposition(){
+void runComposition(DXGI_FORMAT planarFormat=DXGI_FORMAT_NV12,bool legacy=false){
     const auto mark=[](const char* stage){std::printf("Owned production composition: %s\n",stage);std::fflush(stdout);};
     mark("compile owned shader contracts");
     static constexpr char shader[]=R"(
@@ -155,7 +159,7 @@ float4 luma(float4 p:SV_Position):SV_Target{return float4(scene.Load(int3(int2(p
 float4 other():SV_Target{return float4(0,0,0,1);}
 )";
     const char* entries[]{"vs","copy","chroma","pack","luma","other"};
-    const NativeShader kinds[]{NativeShader::FullscreenVertex,NativeShader::CopyView,NativeShader::Chroma,NativeShader::ChromaPack,NativeShader::Luma};
+    const NativeShader kinds[]{NativeShader::FullscreenVertex,NativeShader::CopyView,legacy?NativeShader::ChromaLegacy:NativeShader::Chroma,NativeShader::ChromaPack,legacy?NativeShader::LumaLegacy:NativeShader::Luma};
     std::array<Com<ID3DBlob>,6> code;std::array<ShaderFingerprint,5> pins{};
     for(unsigned i=0;i<code.size();++i){check(SUCCEEDED(D3DCompile(shader,sizeof shader-1,"sfnp-owned-production-graph",nullptr,nullptr,entries[i],i?"ps_5_0":"vs_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,code[i].out(),nullptr)),"owned production graph shader");if(i<pins.size()){pins[i].kind=kinds[i];check(dxbcFingerprint(code[i]->GetBufferPointer(),code[i]->GetBufferSize(),pins[i].hash),"owned actual shader signature contract");}}
     mark("construct production observer");
@@ -168,7 +172,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     check(SUCCEEDED(pointerBits<decltype(&D3D11CreateDevice)>(factorySlot)(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),&level,context.out())),"native WARP device through production factory observer");
     Com<ID3D11Multithread> multithread;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11Multithread),reinterpret_cast<void**>(multithread.out()))),"actual native multithread interface");multithread->SetMultithreadProtected(TRUE);
     mark("create actual native shader objects");
-    CompositionFixture fixture;fixture.device=device.p;fixture.context=context.p;fixture.nativeTable=*reinterpret_cast<void***>(context.p);CompositionFixture::active=&fixture;
+    CompositionFixture fixture;fixture.planarFormat=planarFormat;fixture.device=device.p;fixture.context=context.p;fixture.nativeTable=*reinterpret_cast<void***>(context.p);CompositionFixture::active=&fixture;
     check(SUCCEEDED(device->CreateVertexShader(code[0]->GetBufferPointer(),code[0]->GetBufferSize(),nullptr,fixture.vertex.out())),"production recognized native vertex shader");
     ID3D11PixelShader** pixels[]{fixture.copyPixel.out(),fixture.chromaPixel.out(),fixture.packPixel.out(),fixture.lumaPixel.out(),fixture.unknownPixel.out()};
     for(unsigned i=0;i<5;++i)check(SUCCEEDED(device->CreatePixelShader(code[i+1]->GetBufferPointer(),code[i+1]->GetBufferSize(),nullptr,pixels[i])),"production observed actual native pixel creation");
@@ -182,7 +186,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     NV_ENC_INITIALIZE_PARAMS init{};init.version=NV_ENC_INITIALIZE_PARAMS_VER;init.encodeGUID=NV_ENC_CODEC_HEVC_GUID;init.encodeWidth=init.darWidth=CompositionFixture::Width;init.encodeHeight=init.darHeight=CompositionFixture::Height;init.frameRateNum=90;init.frameRateDen=1;
     check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");fixture.prepareReferences();mark("prepare production context and coverage pool");coverage.tick();
     check(coverage.gateStats().contextsReady==1&&coverage.readiness().prepared,"production pool and native context ready");
-    NV_ENC_REGISTER_RESOURCE registered{};registered.version=NV_ENC_REGISTER_RESOURCE_VER;registered.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;registered.resourceToRegister=fixture.input.p;registered.width=CompositionFixture::Width;registered.height=CompositionFixture::Height;registered.bufferFormat=NV_ENC_BUFFER_FORMAT_NV12;
+    NV_ENC_REGISTER_RESOURCE registered{};registered.version=NV_ENC_REGISTER_RESOURCE_VER;registered.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;registered.resourceToRegister=fixture.input.p;registered.width=CompositionFixture::Width;registered.height=CompositionFixture::Height;registered.bufferFormat=fixture.encoderFormat();
     check(api.nvEncRegisterResource(encoder,&registered)==NV_ENC_SUCCESS,"actual encoder input resource registered");
     DirectMode::SubmitLayerPerEye_t eyes[2]{};for(unsigned eye=0;eye<2;++eye){eyes[eye].hTexture=sets[eye].rSharedTextureHandles[0];eyes[eye].bounds={0,0,1,1};eyes[eye].mProjection.m[0][0]=eyes[eye].mProjection.m[1][1]=1;eyes[eye].mHmdPose.m[0][0]=eyes[eye].mHmdPose.m[1][1]=eyes[eye].mHmdPose.m[2][2]=1;}
     calls.submit(&fixture,eyes);calls.present(&fixture,0);
@@ -201,7 +205,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
         std::printf("Owned production composition: present mode %u\n",unsigned(mode));std::fflush(stdout);
         fixture.mode=mode;const bool valid=mode==CompositionFixture::Mode::Valid||mode==CompositionFixture::Mode::UnrelatedWrite||mode==CompositionFixture::Mode::DirectUV||mode==CompositionFixture::Mode::DirectUVLumaFirst;const auto before=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
         NV_ENC_MAP_INPUT_RESOURCE mapped{};mapped.version=NV_ENC_MAP_INPUT_RESOURCE_VER;mapped.registeredResource=registered.registeredResource;check(api.nvEncMapInputResource(encoder,&mapped)==NV_ENC_SUCCESS,"native input mapping");
-        NV_ENC_PIC_PARAMS picture{};picture.version=NV_ENC_PIC_PARAMS_VER;picture.inputBuffer=mapped.mappedResource;picture.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;picture.inputWidth=CompositionFixture::Width;picture.inputHeight=CompositionFixture::Height;picture.inputTimeStamp=++timestamp;picture.outputBitstream=reinterpret_cast<NV_ENC_OUTPUT_PTR>(0x4040+timestamp*16);picture.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;
+        NV_ENC_PIC_PARAMS picture{};picture.version=NV_ENC_PIC_PARAMS_VER;picture.inputBuffer=mapped.mappedResource;picture.bufferFmt=fixture.encoderFormat();picture.inputWidth=CompositionFixture::Width;picture.inputHeight=CompositionFixture::Height;picture.inputTimeStamp=++timestamp;picture.outputBitstream=reinterpret_cast<NV_ENC_OUTPUT_PTR>(0x4040+timestamp*16);picture.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;
         check(api.nvEncEncodePicture(encoder,&picture)==NV_ENC_SUCCESS,"native encode request forwarded unchanged");const auto after=coverage.gateStats();
         if(after.capturedCopies!=before.capturedCopies+unsigned(valid)||after.matchedInputs!=before.matchedInputs+unsigned(valid)){
             std::printf("composition mode=%u captures=%llu/%llu inputs=%llu/%llu last=%s first-step=%s\n",unsigned(mode),static_cast<unsigned long long>(before.capturedCopies),static_cast<unsigned long long>(after.capturedCopies),static_cast<unsigned long long>(before.matchedInputs),static_cast<unsigned long long>(after.matchedInputs),coverageGateName(after.lastRefusal),coverageGateName(static_cast<CoverageGate>(after.compositionRefusal[13])));

@@ -337,5 +337,8 @@ const bool changed=argc==2&&std::strcmp(argv[1],"--protection-change")==0;
 const bool facade=argc==2&&std::strcmp(argv[1],"--facade")==0;
 const bool adaptive=argc==2&&std::strcmp(argv[1],"--adaptive")==0;
 const bool composition=argc==2&&std::strcmp(argv[1],"--composition")==0;
-check(argc==1||changed||facade||adaptive||composition,"fixture arguments are explicit");if(composition)runComposition();else if(facade)runFacade();else run(changed,adaptive);std::printf("production native D3D11 context observer: %u checks PASS\n",checks);return 0;}
+const bool compositionP010=argc==2&&std::strcmp(argv[1],"--composition-p010")==0;
+const bool compositionLegacy=argc==2&&std::strcmp(argv[1],"--composition-legacy")==0;
+const bool compositionP010Legacy=argc==2&&std::strcmp(argv[1],"--composition-p010-legacy")==0;
+check(argc==1||changed||facade||adaptive||composition||compositionP010||compositionLegacy||compositionP010Legacy,"fixture arguments are explicit");if(composition||compositionP010||compositionLegacy||compositionP010Legacy)runComposition(compositionP010||compositionP010Legacy?DXGI_FORMAT_P010:DXGI_FORMAT_NV12,compositionLegacy||compositionP010Legacy);else if(facade)runFacade();else run(changed,adaptive);std::printf("production native D3D11 context observer: %u checks PASS\n",checks);return 0;}
 catch(const std::exception& e){std::fprintf(stderr,"native context observer failed after %u: %s\n",checks,e.what());return 1;}}

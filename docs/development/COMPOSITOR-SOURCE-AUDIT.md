@@ -15,6 +15,42 @@ extent refusals. Both modes still lack PC coverage. These are ordinary-video
 observations, not headset MR acceptance or exact joins between independent
 PC/Frame counters.
 
+## PC0.3.22: current Chroma programs and P010 controls
+
+The supplied November14 PC files identify SteamVR2.19.3, build1794604515.
+The matching sender log rejects `composition-pack`: its608x2432 UV source
+has storage/view format35/35 and its1216x4864 planar output has104/35,
+which is P010 with an R16G16_UNORM UV view. The RGBA tile graph is complete,
+but no complete conversion pair or mask reaches the encoder.
+
+Both current Chroma programs differ from the earlier supplied driver assets;
+the pack and both luma executable/signature contracts are unchanged. The
+changed normal and Legacy filters replace regular-layout clamping with four
+explicit integer rectangles in the expanded b2 buffer. Both still read only
+t0 and write a single native UV intermediate. The conversion graph does not
+interpret these constants or replace the native RGB filtering.
+
+The classifier now retains both generations of both Chroma families. A
+private before/after control uses all17 supplied driver programs from each
+generation: the previous classifier misses exactly the two current Chroma
+programs; the extended classifier recognizes all eight expected graphics
+contracts in both generations and leaves unrelated programs unknown.
+Only digests and this review are published, not third-party shader bodies.
+The metadata observer also labels the additional current multiview programs;
+these labels remain diagnostic and cannot authorize coverage.
+
+Owned Windows production-context controls run in separate processes for
+NV12/P010 and normal/Legacy shader families. Each checks complete packed and
+direct-UV routes, unchanged native colour-plane bytes, exact accepted fake
+encoder inputs, invalid writes and foreign source/output refusals. They do
+not certify hardware encoding, original-game ancestry through the compositor,
+masked Frame padding, or successful headset MR. Those remaining proofs are
+independent of repairing the observed Chroma recognition failure.
+
+Installer0.3.35 ships PC0.3.22 with unchanged Frame0.3.12. This is a correction
+to the observed conversion failure, not a successful beta MR compatibility
+claim. Default/Legacy and valid Auto/manual headset acceptance remain pending.
+
 ## PC0.3.21: direct planar conversion and startup program pressure
 
 The November14 morning capture contains two PC sessions. The later session
