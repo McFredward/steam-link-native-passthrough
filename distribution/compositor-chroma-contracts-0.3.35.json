@@ -1,0 +1,266 @@
+{
+  "archive": {
+    "bytes": 20277055,
+    "sha256": "bb14ada05213618542b478f9ed5d481e5a92f6e77e0c002eec98fba890ebb794"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3726216,
+      "sha256": "a696e85542315f85760b369bcf2805a95ee537369a2b3852be5472297d7f40de"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2185216,
+      "sha256": "6f8e94817a561abdf49ad689dd14f4558098f9af0cb1ba619e8846d9ea9b9afa"
+    }
+  },
+  "change": "Recognize reviewed rectangle-bounded normal and Legacy Chroma programs alongside both previous programs; update diagnostic multiview labels; check NV12/P010 with normal/Legacy production contexts. Source, eye, frame, encoder and camera admission is unchanged. This repairs the demonstrated first conversion failure; original-game ancestry through the compositor and headset MR remain unproved.",
+  "ci": {
+    "Compositor source observation": {
+      "conclusion": "success",
+      "databaseId": 43584221361,
+      "headSha": "d9fca4b50fb3c3ab7d3d829ea875b37b01677918",
+      "name": "Compositor source observation",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43584221361"
+    },
+    "Native Windows sender resource checks": {
+      "conclusion": "success",
+      "databaseId": 43584221367,
+      "headSha": "d9fca4b50fb3c3ab7d3d829ea875b37b01677918",
+      "name": "Native Windows sender resource checks",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43584221367"
+    },
+    "Native passthrough checks": {
+      "conclusion": "success",
+      "databaseId": 43584221535,
+      "headSha": "d9fca4b50fb3c3ab7d3d829ea875b37b01677918",
+      "name": "Native passthrough checks",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43584221535"
+    },
+    "Native source format permission": {
+      "conclusion": "success",
+      "databaseId": 43584221373,
+      "headSha": "d9fca4b50fb3c3ab7d3d829ea875b37b01677918",
+      "name": "Native source format permission",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43584221373"
+    },
+    "PC and Frame setup checks": {
+      "conclusion": "success",
+      "databaseId": 43584221379,
+      "headSha": "d9fca4b50fb3c3ab7d3d829ea875b37b01677918",
+      "name": "PC and Frame setup checks",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43584221379"
+    },
+    "Stream connection lifecycle checks": {
+      "conclusion": "success",
+      "databaseId": 43584221483,
+      "headSha": "d9fca4b50fb3c3ab7d3d829ea875b37b01677918",
+      "name": "Stream connection lifecycle checks",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43584221483"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.12",
+    "pc": "0.3.22"
+  },
+  "device_actions": false,
+  "diagnostics_only": false,
+  "frame_artifacts_and_settings_byte_identical": true,
+  "frame_mask_and_camera_admission_unchanged": true,
+  "hardware_verified": false,
+  "mixed_reality_fixed": false,
+  "observed_failure": "SteamVR2.19.3 build1794604515 rejects the UV pack edge for P010 after four current native tiles. Both current normal and Legacy Chroma programs have changed rectangle clamping and are unrecognized by the previous classifier. Other conversion logic/signatures are unchanged.",
+  "rectangle_bounded_chroma_support_added": true,
+  "schema": "sfnp-compositor-chroma-contracts-candidate-v1",
+  "software_logs": {
+    "classification-validation.json": {
+      "bytes": 5325,
+      "sha256": "c8f64b3c0a833aff323949a7e81609351e24b608657583aa3bf80f7277f113f0"
+    },
+    "context-composition-legacy.log": {
+      "bytes": 6421,
+      "sha256": "9771c5ecf61adb0b4de5cabcdd0471d1bf0ef33d865f4882009834b71a93f4d4"
+    },
+    "context-composition-p010-legacy.log": {
+      "bytes": 6421,
+      "sha256": "9771c5ecf61adb0b4de5cabcdd0471d1bf0ef33d865f4882009834b71a93f4d4"
+    },
+    "context-composition-p010.log": {
+      "bytes": 6421,
+      "sha256": "9771c5ecf61adb0b4de5cabcdd0471d1bf0ef33d865f4882009834b71a93f4d4"
+    },
+    "context-composition.log": {
+      "bytes": 6421,
+      "sha256": "9771c5ecf61adb0b4de5cabcdd0471d1bf0ef33d865f4882009834b71a93f4d4"
+    },
+    "gpu-matrix-validation.json": {
+      "bytes": 385,
+      "sha256": "2960864d60c9ccb756b7576f9a021649c22aef4bf36d77066307e88f5594283e"
+    },
+    "installer-tests.log": {
+      "bytes": 147,
+      "sha256": "45a2b1d7ca283cc5eab280bca60ea911728a882c546a81184e8f3b26bb2cee1e"
+    },
+    "native-installer-tests.log": {
+      "bytes": 488,
+      "sha256": "79d476fc5da6c5c44d90fccdcd4a67aa8ee4cd9bd755bf6ed68e4cf86cc8a266"
+    },
+    "package-tests.log": {
+      "bytes": 116,
+      "sha256": "27c3bc4ec5905d8cb5ca1023e3178efab1e3a29d3ff5f652ad56874c2d7744d1"
+    },
+    "pc-only-tests.log": {
+      "bytes": 3378,
+      "sha256": "d6ca6020ac39426f23a9f06a44ecf62370372a1107b588bb47d12d1d4059fa92"
+    },
+    "provider-build.log": {
+      "bytes": 190,
+      "sha256": "fa443ba15318821934f6108af6617e1b359249728e77dc15752da59367560099"
+    },
+    "workflow-tests.log": {
+      "bytes": 10544,
+      "sha256": "6bd4d662a65c253723ac15a01034c8c0493e697b14655fef32330d970ec8d88b"
+    }
+  },
+  "source_revision": "f8d29d04b93bcfde4877f1b28eb37f9c4224d02a",
+  "version": "0.3.35",
+  "windows_logs": {
+    "gnu/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "189848841162aa81fd049bc3549c3497fd43512ecfb13d6ca23023a004a5d795"
+    },
+    "gnu/loader-case1.log": {
+      "bytes": 209,
+      "sha256": "26d27e1dd4053eb686fe73d5e0aa0f2de08522a88047bcc0db17b11528e49bad"
+    },
+    "gnu/loader-case10.log": {
+      "bytes": 210,
+      "sha256": "bbb9b99368eb9c5a85b73792d84d1ff7b772d479cee07d38fb7eed55afd62570"
+    },
+    "gnu/loader-case11.log": {
+      "bytes": 210,
+      "sha256": "77f833bf808f8421c4b1581d359ef5433f7549ec80b821520bd2ada2b4697d72"
+    },
+    "gnu/loader-case2.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "gnu/loader-case3.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "gnu/loader-case4.log": {
+      "bytes": 209,
+      "sha256": "f2c714e7e8d270158e84d3ed9202483f0065aa8300fd71c67d7d7eb41559a665"
+    },
+    "gnu/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "f8da2a45065f60d455eb4407366b402fee7aae5d8c22d8b600c06eac5336f136"
+    },
+    "gnu/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "57448b66deddba415234015b99d081060877fb3f23171a2cc8f4db82592f987d"
+    },
+    "gnu/loader-case7.log": {
+      "bytes": 209,
+      "sha256": "7cf98bec722664f78061e89ad0e56a28095de617d1c382b6e26e653ef0ff15d4"
+    },
+    "gnu/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "6f59306cf382b5e9cf93ff30228ac2767b6cbe6a365c1f3390ae34e56f671264"
+    },
+    "gnu/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "207545bbf03a3ba7e9fd64e2ac4e58087a117084973c6e7b79b3d130d29ca1bd"
+    },
+    "gnu/loader-independent-single.log": {
+      "bytes": 210,
+      "sha256": "1d8923e8c4313af195c82ca656201148549c2d79dcbf3f9ce0fd5435470440ce"
+    },
+    "gnu/loader-single.log": {
+      "bytes": 209,
+      "sha256": "ced794e442ee5d5052e680275192e8fd678a6f7800e3a44a2f477e0b0d5c4464"
+    },
+    "gnu/no-identity.log": {
+      "bytes": 224,
+      "sha256": "860ea2a338430c2ad072a9e28ac2749f3688fa99614e9c7b26cf6e1df2cef786"
+    },
+    "gnu/no-retry.log": {
+      "bytes": 219,
+      "sha256": "19a9e99357c26788a1d84396865ff74b688a332265b329d5c722c43129ff90a1"
+    },
+    "msvc/audit-gpu.log": {
+      "bytes": 42,
+      "sha256": "189848841162aa81fd049bc3549c3497fd43512ecfb13d6ca23023a004a5d795"
+    },
+    "msvc/loader-case10.log": {
+      "bytes": 210,
+      "sha256": "9f64699bdcd431a6c1133c004b46f0eb01a3b0b2cc50e00f782c339756eec958"
+    },
+    "msvc/loader-case11.log": {
+      "bytes": 210,
+      "sha256": "daf6dd4a8693f6d0e105e44c26d1b8dab5194090293ba0b73c6016e5faa4b4b2"
+    },
+    "msvc/loader-case4.log": {
+      "bytes": 208,
+      "sha256": "bc0ee30add6f78c56d6abb58876fac4fe46b3e583cec12a6c6f8ee4498006654"
+    },
+    "msvc/loader-case5.log": {
+      "bytes": 221,
+      "sha256": "c463c792168f121a243942041d82a894fcf5b28fcf53bbf11e5be96c49817ad8"
+    },
+    "msvc/loader-case6.log": {
+      "bytes": 209,
+      "sha256": "d0be833070dcbf55657271cf8ffbea042a6e84eb8ff9ddce582fadefdb1e8f51"
+    },
+    "msvc/loader-case7.log": {
+      "bytes": 210,
+      "sha256": "67fb1f559da3b6b784c3427e03367a86ab0548ff56c8b09dad3089d02f08b555"
+    },
+    "msvc/loader-case8.log": {
+      "bytes": 224,
+      "sha256": "1b465e25c90eb554e5180a5176ebc9ca527643f2cc6697f66daed8eb33a45ab9"
+    },
+    "msvc/loader-case9.log": {
+      "bytes": 220,
+      "sha256": "c8983cca597cc8662b0e5398b4f2afeeb459382ef53d20ee0c7362f403647992"
+    },
+    "msvc/loader-foreign-installation.log": {
+      "bytes": 205,
+      "sha256": "0f1581a23fdbbfcf099701eae16623634d0bfd6a5bbb905c3e3501d0d5fa89b4"
+    },
+    "msvc/loader-independent-single.log": {
+      "bytes": 210,
+      "sha256": "3fb60cc1931d9de6a0dbcb66abb64e22c14ab9d0506a1e1791988d5d7c1a2584"
+    },
+    "msvc/loader-normal.log": {
+      "bytes": 209,
+      "sha256": "a8dacf42360d1596fc04037b35aabaa6e2a238cd669acd5e7dbf969a1ca2fcef"
+    },
+    "msvc/loader-publisher-refusal.log": {
+      "bytes": 207,
+      "sha256": "14b9a2ba93464bda05862f2752b75f461d18fddaef4bfc9cbfe20c3c4dcded21"
+    },
+    "msvc/loader-single.log": {
+      "bytes": 209,
+      "sha256": "a6db2f2649486ba0609cdde2d24fa5c108dd2e9d339fe0b74f06675b5eda775d"
+    }
+  }
+}

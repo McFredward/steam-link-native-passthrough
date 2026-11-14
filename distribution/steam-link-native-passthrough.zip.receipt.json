@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20276559,
-    "sha256": "75209add6ca8a3f07ac8e52a64ed1b3e77d9381b9bcdc013dd952399f4a82dfd"
+    "bytes": 20277055,
+    "sha256": "bb14ada05213618542b478f9ed5d481e5a92f6e77e0c002eec98fba890ebb794"
   },
   "artifacts": {
     "frame_layer": {
@@ -21,13 +21,13 @@
       "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
     },
     "pc_provider": {
-      "bytes": 2183680,
-      "sha256": "dd8314fad9c2ac27921c3b81484104dea4641c9500ecf205b04b8501ac031966"
+      "bytes": 2185216,
+      "sha256": "6f8e94817a561abdf49ad689dd14f4558098f9af0cb1ba619e8846d9ea9b9afa"
     }
   },
   "component_versions": {
     "frame": "0.3.12",
-    "pc": "0.3.21"
+    "pc": "0.3.22"
   },
   "device_actions": false,
   "hardware_verified": false,
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11549,
-    "sha256": "313a1da9fe44bbaa93af8f3e4737e1d4dd07f5ace9d98f29f0659c0fc0bf4cd6"
+    "sha256": "7a47989e5cdce7f65713df39c5681535601361b02d451f4065681e5fdab365b6"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -47,11 +47,11 @@
     },
     "PATCH_VERSIONS.json": {
       "bytes": 80,
-      "sha256": "9ea649f6ab444ae5152e0ad7a89ee230fd929be92c28296a60487c19896e1505"
+      "sha256": "f3d10a61bd8e2c7be7c06ec2d1ed04cd1980378e20c957b3a86b654297ea771b"
     },
     "VERSION": {
       "bytes": 7,
-      "sha256": "9bfdc0fda10c4841166b035a7c6d794879ec5bb2438c98a5cff8f897e5ccecad"
+      "sha256": "0d2e5c1dfae1be446ac77bbf0a178090d1260f6307f045046cb8fd333132cce1"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -234,7 +234,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "35219485a208eeee8c6fa5a155427c12c2bd9a36",
+  "source_revision": "f8d29d04b93bcfde4877f1b28eb37f9c4224d02a",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -252,9 +252,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8585,
-        "sha256": "1216f971e1ebe31ecd6edd9bf427370a424727b49ce3653441bd0c6648f919ea"
+        "sha256": "d9d7c8d1397626d9e31da7ceb257d39487fa1995df1517c66015a54e90971652"
       }
     }
   ],
-  "version": "0.3.34"
+  "version": "0.3.35"
 }
