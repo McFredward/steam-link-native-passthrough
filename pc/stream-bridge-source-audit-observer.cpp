@@ -18,7 +18,7 @@ template<class To,class From>To bits(From value)noexcept{static_assert(sizeof(To
 template<class T>void release(T*& p)noexcept{if(p)p->Release();p=nullptr;}
 template<class T>struct Held{T* p=nullptr;~Held(){release(p);}T** out()noexcept{return &p;}};
 bool readable(const void* from,void* to,std::size_t bytes)noexcept{SIZE_T count=0;return ReadProcessMemory(GetCurrentProcess(),from,to,bytes,&count)&&count==bytes;}
-const std::array<ShaderFingerprint,11> Contracts{{
+const std::array<ShaderFingerprint,19> Contracts{{
     {NativeShader::StreamVertex,shaderDigest("5f33e43e2f388b7d2b0baa2fe89d9fd64062c9781c622ea6183bc67af70fc0fa")},
     {NativeShader::StreamCombine,shaderDigest("c359fa168f4e80e54395bf0587de803139839cf79f204e783384b5b3a9865e28")},
     {NativeShader::StreamInset,shaderDigest("d9f935dcb136936ad3f61f79629ba20e1dd1db861d62490800bd051a67a01442")},
@@ -29,7 +29,17 @@ const std::array<ShaderFingerprint,11> Contracts{{
     {NativeShader::MultiViewReprojectY,shaderDigest("675da9edd13d0f410d2f60e83446a483a653e1cdea0fcae1607791715c868a72")},
     {NativeShader::MultiViewResolve,shaderDigest("c48e8ffff836b55f565dcc0001bbf5f4d5ff3e77498b249a16d6c7a327bda4be")},
     {NativeShader::MultiViewVertexX,shaderDigest("d6ae45c3e426a9ccfe41e60e0de3c4d8f7f30db3891c42576e78cd0e1d84170c")},
-    {NativeShader::MultiViewVertexY,shaderDigest("a6fb3a02dba65a6a14ad212d731569e5949482b3a3e19f515d81dc54fb880be5")}
+    {NativeShader::MultiViewVertexY,shaderDigest("a6fb3a02dba65a6a14ad212d731569e5949482b3a3e19f515d81dc54fb880be5")},
+    // Additional observed program families remain diagnostic labels. These
+    // records cannot authorize game/eye/frame ancestry or mask composition.
+    {NativeShader::StreamCombine,shaderDigest("c9ca3256f589cb7d1b79cd9682ad26d834b9b9ffaf969dd9c95575aa5cdf0bfd")},
+    {NativeShader::StreamInset,shaderDigest("e6b6b25064e11ec0874d173c894c84d3b46c3815dba7b9ce5c8882e975d0e854")},
+    {NativeShader::MultiViewInner,shaderDigest("eb43d281e767a94ff2865b8f06720372b1f32365f1174298895910b6fe63f26c")},
+    {NativeShader::MultiViewDownscaleY,shaderDigest("63faa7c4c75298a8c4f270d55a925c12af972cc23b557c823c2ba49b47de544e")},
+    {NativeShader::MultiViewReprojectY,shaderDigest("f81e7fc43b88c44c609d4cb478e61984c1ca0a0d28b29ad645a04a01b6ccc838")},
+    {NativeShader::MultiViewResolve,shaderDigest("cd176ca332ec4239c61e27f099a38c90983cc75e25d8b96042c3f4e0f040a72a")},
+    {NativeShader::MultiViewVertexX,shaderDigest("099307078b6adec9586fb239e252ba31e30e2119fa22759a08a7d619481174d2")},
+    {NativeShader::MultiViewVertexY,shaderDigest("187a168a6ad16a7889b51623cb0006959ecae7c519c2bf3c46c06e11cb05dd00")}
 }};
 // Metadata-only same-caller observer. It never draws, copies a GPU image,
 // changes thread protection, blocks a graphics thread or grants source output.

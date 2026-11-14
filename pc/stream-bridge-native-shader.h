@@ -47,8 +47,8 @@ inline std::array<std::uint8_t,32> shaderDigest(const char* hex)noexcept{
     for(unsigned i=0;i<32;++i)result[i]=std::uint8_t(nibble(hex[2*i])*16+nibble(hex[2*i+1]));
     return result;
 }
-inline const std::array<ShaderFingerprint,8>& nativeShaderContracts()noexcept{
-    static const std::array<ShaderFingerprint,8> contracts{{
+inline const std::array<ShaderFingerprint,10>& nativeShaderContracts()noexcept{
+    static const std::array<ShaderFingerprint,10> contracts{{
         {NativeShader::FullscreenVertex,shaderDigest("e35b9b6b0ccb7e169e2fc5e233d7fee89df4b4928c3b25460ff9d76b4bbb3809")},
         {NativeShader::CopyView,shaderDigest("c9f1b48ffb42c5d34fdf0cfa93dc5b79b635c223735154a012c67ee5cd478e99")},
         {NativeShader::CopyViewCas,shaderDigest("c5f4467e016675cdd41269ab135932cf16ca00bc672d6aba775c363a0fdbd803")},
@@ -56,7 +56,12 @@ inline const std::array<ShaderFingerprint,8>& nativeShaderContracts()noexcept{
         {NativeShader::LumaLegacy,shaderDigest("cc53a88f23a6b582501f7f1a742c8bcddc884eda97de7f8b9116351f624f3955")},
         {NativeShader::Chroma,shaderDigest("6063c74433659913836d2d5de149b7e21fcb37a0688d7209be2610a472665abc")},
         {NativeShader::ChromaLegacy,shaderDigest("fefe3273bae76a2ed74c0dec8579f6d00614e06454cf67336f3a936ba9bff89d")},
-        {NativeShader::ChromaPack,shaderDigest("df33300023fcfb9a1c87107b8f3fcb70d10028f9978116caf0ddb403d5b1527a")}
+        {NativeShader::ChromaPack,shaderDigest("df33300023fcfb9a1c87107b8f3fcb70d10028f9978116caf0ddb403d5b1527a")},
+        // Reviewed rectangle-bounded chroma filters. They still read only t0
+        // and write the native UV intermediate. The conversion graph neither
+        // reads their expanded b2 constants nor replaces their colour work.
+        {NativeShader::Chroma,shaderDigest("4d14c71e808ed4932513e6e636508ff1fd5bc026220072d39b345140fdce66dd")},
+        {NativeShader::ChromaLegacy,shaderDigest("0e358fd5182d3498febb8bc7a58b29c42b5868f05c5074ccf7d647a9a90fbe6e")}
     }};return contracts;
 }
 } // namespace stream_bridge::sender
