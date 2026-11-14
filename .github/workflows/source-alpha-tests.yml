@@ -5,6 +5,7 @@ on:
     paths:
       - 'pc/stream-bridge-source-alpha*'
       - 'pc/stream-bridge-projected-alpha-replay.h'
+      - 'pc/stream-bridge-projected-alpha-sync.h'
       - 'pc/stream-bridge-sender-provider-coverage*'
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'tests/test_stream_bridge_source_alpha*'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'pc/stream-bridge-source-alpha*'
       - 'pc/stream-bridge-projected-alpha-replay.h'
+      - 'pc/stream-bridge-projected-alpha-sync.h'
       - 'pc/stream-bridge-sender-provider-coverage*'
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'tests/test_stream_bridge_source_alpha*'
@@ -61,7 +63,7 @@ jobs:
       - name: Verify isolated native-state alpha replay primitive on actual WARP
         shell: cmd
         run: |
-          build\projected-alpha.exe >build\projected-alpha.log 2>&1
+          build\projected-alpha.exe --export-owned-kernels build >build\projected-alpha.log 2>&1
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\projected-alpha.log
           exit /b %SFNP_RESULT%
@@ -72,3 +74,5 @@ jobs:
           path: |
             build/source-alpha.log
             build/projected-alpha.log
+            build/projected-alpha-clone64.dxbc
+            build/projected-alpha-clone80.dxbc

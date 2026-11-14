@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-projected-alpha-replay.h"
+#include "pc/stream-bridge-projected-alpha-sync.h"
 #include <d3dcompiler.h>
 #include <array>
 #include <cstdint>
@@ -10,6 +11,12 @@
 using namespace stream_bridge::sender::projected_alpha;
 namespace {
 unsigned checks=0,draws=0;
+const char* exportDirectory=nullptr;
+unsigned nativeAcquires=0,nativeReleases=0,completedReleases=0;
+bool eventInvalid=false;
+void acquired(const MutexLease& lease,void*)noexcept{++nativeAcquires;eventInvalid|=!bool(lease);}
+void releasing(const MutexLease& lease,std::uint64_t,void*)noexcept{++nativeReleases;eventInvalid|=!bool(lease);}
+void released(const MutexLease& lease,HRESULT result,void*)noexcept{++completedReleases;eventInvalid|=!bool(lease)||result!=S_OK;}
 ID3D11Buffer* replayedConstants=nullptr;
 UINT replayVertices=0,replayStart=0;
 void check(bool pass,const char* label){++checks;if(!pass)throw std::runtime_error(label);}
@@ -27,6 +34,9 @@ cbuffer Native : register(b0) { float4 parameters[5]; };
 Texture2D<float4> source : register(t0);
 float4 vertex(uint id:SV_VertexID):SV_Position {
     return float4(id==2?3:-1,id==1?3:-1,0,1);
+}
+float4 quad(uint id:SV_VertexID):SV_Position {
+    return float4(id>=2?1:-1,(id&1)?1:-1,0,1);
 }
 float4 pixel(float4 pos:SV_Position):SV_Target {
     uint2 xy=uint2(pos.xy)+uint2(parameters[0].xy);
@@ -57,12 +67,12 @@ struct Texture {
     Com<ID3D11Texture2D> image,read;
     Com<ID3D11RenderTargetView> target;
     Com<ID3D11ShaderResourceView> source;
-    bool prepare(ID3D11Device* device,UINT width,UINT height){
+    bool prepare(ID3D11Device* device,UINT width,UINT height,UINT misc=0){
         D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
-        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;desc.MiscFlags=misc;
         if(FAILED(device->CreateTexture2D(&desc,nullptr,image.out()))||FAILED(device->CreateRenderTargetView(image.value,nullptr,target.out()))||
             FAILED(device->CreateShaderResourceView(image.value,nullptr,source.out())))return false;
-        desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;desc.MiscFlags=0;
         return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,read.out()));
     }
     std::vector<std::uint8_t> bytes(ID3D11DeviceContext* context){
@@ -75,29 +85,64 @@ struct Texture {
         context->Unmap(read.value,0);return result;
     }
 };
-void run(UINT creationFlags){
+std::uint64_t sharedHandle(ID3D11Texture2D* texture){
+    Com<IDXGIResource> shared;HANDLE handle=nullptr;
+    check(SUCCEEDED(texture->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(shared.out())))&&
+        SUCCEEDED(shared->GetSharedHandle(&handle))&&handle,"real kernel shared-allocation handle");
+    return static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle));
+}
+void exportKernel(const char* name,ID3DBlob* code){
+    if(!exportDirectory)return;
+    char path[1024]{};const auto written=std::snprintf(path,sizeof path,"%s/%s",exportDirectory,name);
+    check(written>0&&static_cast<std::size_t>(written)<sizeof path,"bounded owned kernel output path");
+#ifdef _MSC_VER
+    FILE* out=nullptr;check(fopen_s(&out,path,"wb")==0&&out,"owned kernel output");
+#else
+    FILE* out=std::fopen(path,"wb");check(out!=nullptr,"owned kernel output");
+#endif
+    const bool okay=std::fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),out)==code->GetBufferSize();
+    check(std::fclose(out)==0&&okay,"complete owned kernel bytes");
+}
+void run(UINT creationFlags,MutexObserver& mutexes){
     Com<ID3D11Device> device;Com<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level{};
     const D3D_FEATURE_LEVEL requested[]={D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,creationFlags,requested,2,
         D3D11_SDK_VERSION,device.out(),&level,context.out())),"actual Windows WARP device");
     Com<ID3D11DeviceContext1> extended;
     check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"actual immediate context1");
+    check(mutexes.prepare(device.value),"cold native keyed-mutex observation on the owning device thread");
     auto clone64=compile(Clone64Hlsl,"main","cs_5_0"),clone80=compile(Clone80Hlsl,"main","cs_5_0");
+    exportKernel("projected-alpha-clone64.dxbc",clone64.value);exportKernel("projected-alpha-clone80.dxbc",clone80.value);
     Replay replay;
     check(replay.prepare(device.value,{clone64->GetBufferPointer(),clone64->GetBufferSize()},
         {clone80->GetBufferPointer(),clone80->GetBufferSize()}),"cold bounded clone/state/blend preparation");
-    auto vsCode=compile(Fixture,"vertex","vs_5_0"),ps64Code=compile(Fixture,"pixel64","ps_5_0"),
+    auto vsCode=compile(Fixture,"vertex","vs_5_0"),quadCode=compile(Fixture,"quad","vs_5_0"),ps64Code=compile(Fixture,"pixel64","ps_5_0"),
         ps80Code=compile(Fixture,"pixel","ps_5_0"),csCode=compile(Fixture,"compute","cs_5_0");
-    Com<ID3D11VertexShader> vs;Com<ID3D11PixelShader> ps64,ps80;Com<ID3D11ComputeShader> cs;
+    Com<ID3D11VertexShader> vs,quad;Com<ID3D11PixelShader> ps64,ps80;Com<ID3D11ComputeShader> cs;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
+        SUCCEEDED(device->CreateVertexShader(quadCode->GetBufferPointer(),quadCode->GetBufferSize(),nullptr,quad.out()))&&
         SUCCEEDED(device->CreatePixelShader(ps64Code->GetBufferPointer(),ps64Code->GetBufferSize(),nullptr,ps64.out()))&&
         SUCCEEDED(device->CreatePixelShader(ps80Code->GetBufferPointer(),ps80Code->GetBufferSize(),nullptr,ps80.out()))&&
         SUCCEEDED(device->CreateComputeShader(csCode->GetBufferPointer(),csCode->GetBufferSize(),nullptr,cs.out())),"owned fixture programs");
     Texture source,native;
     Image mask,wrongSize;
     constexpr UINT Width=37,Height=29;
-    check(source.prepare(device.value,Width,Height)&&native.prepare(device.value,Width,Height)&&
-        mask.prepare(device.value,Width,Height)&&wrongSize.prepare(device.value,Width+1,Height),"owned non-square coverage and RGB images");
+    check(source.prepare(device.value,Width,Height)&&native.prepare(device.value,Width,Height,D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX)&&
+        mask.prepare(device.value,Width,Height,true)&&wrongSize.prepare(device.value,Width+1,Height),"owned non-square shared coverage and native RGB images");
+    const auto nativeHandle=sharedHandle(native.image.value),maskHandle=sharedHandle(mask.resource());
+    Com<IDXGIKeyedMutex> producerMutex,consumerMutex;
+    check(SUCCEEDED(native.image->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(producerMutex.out()))),"actual native producer mutex");
+    Com<ID3D11Device> consumer;Com<ID3D11DeviceContext> consume;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,requested,2,
+        D3D11_SDK_VERSION,consumer.out(),nullptr,consume.out()))&&mutexes.prepare(consumer.value),"independent actual WARP consumer device");
+    Com<ID3D11Texture2D> importedNative,importedMask;
+    check(SUCCEEDED(consumer->OpenSharedResource(reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(nativeHandle)),
+        __uuidof(ID3D11Texture2D),reinterpret_cast<void**>(importedNative.out())))&&
+        SUCCEEDED(consumer->OpenSharedResource(reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(maskHandle)),
+        __uuidof(ID3D11Texture2D),reinterpret_cast<void**>(importedMask.out()))),"independently opened RGB and alpha allocations");
+    check(SUCCEEDED(importedNative->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(consumerMutex.out()))),"actual native consumer mutex");
+    Texture receivedNative,receivedMask;
+    check(receivedNative.prepare(consumer.value,Width,Height)&&receivedMask.prepare(consumer.value,Width,Height),"owned consumer verification storage");
     std::vector<std::array<std::uint8_t,4>> pixels(Width*Height);
     for(unsigned i=0;i<pixels.size();++i)pixels[i]={{std::uint8_t(7+i%213),91,173,std::uint8_t((i%3)==0?0:((i%3)==1?128:255))}};
     context->UpdateSubresource(source.image.value,0,nullptr,pixels.data(),Width*4,0);
@@ -113,7 +158,13 @@ void run(UINT creationFlags){
     D3D11_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_TYPELESS;uav.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;
     uav.Buffer.NumElements=16;uav.Buffer.Flags=D3D11_BUFFER_UAV_FLAG_RAW;
     check(SUCCEEDED(device->CreateUnorderedAccessView(scratch.value,&uav,write.out())),"native UAV");
-    for(unsigned logicalBytes:{64u,80u})for(unsigned offsetBytes:{0u,256u})for(UINT sampleMask:{0x12345679u,0x12345678u}){
+    for(bool strip:{false,true})for(unsigned logicalBytes:{64u,80u})for(unsigned offsetBytes:{0u,256u})for(UINT sampleMask:{0x12345679u,0x12345678u}){
+        check(producerMutex->AcquireSync(0,0)==S_OK,"original native producer acquire");
+        const auto producerLease=mutexes.current(device.value,nativeHandle);
+        check(bool(producerLease)&&producerLease.key==0,"successful actual native acquire creates a versioned allocation lease");
+        const auto beforeTimeout=nativeAcquires;
+        check(consumerMutex->AcquireSync(0,0)==HRESULT(WAIT_TIMEOUT),"original native contended acquire reports timeout");
+        check(!mutexes.current(consumer.value,nativeHandle)&&nativeAcquires==beforeTimeout,"positive WAIT_TIMEOUT HRESULT never creates a consumer lease");
         const unsigned allocation=offsetBytes?512:logicalBytes;
         std::vector<std::uint32_t> words(allocation/4,0x7fc12345u); // outside logical CB must survive
         std::array<float,20> values{};values[4]=.5f;values[5]=.75f;values[6]=.875f;
@@ -128,8 +179,10 @@ void run(UINT creationFlags){
         cbDesc.Usage=D3D11_USAGE_STAGING;cbDesc.BindFlags=0;cbDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
         check(SUCCEEDED(device->CreateBuffer(&cbDesc,nullptr,cbRead.out())),"test-only CB readback");
         auto* ps=logicalBytes==64?ps64.value:ps80.value;
-        context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps,nullptr,0);
-        context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        auto* vertex=strip?quad.value:vs.value;const UINT vertices=strip?4:3;
+        const auto topology=strip?D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP:D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+        context->VSSetShader(vertex,nullptr,0);context->PSSetShader(ps,nullptr,0);
+        context->IASetPrimitiveTopology(topology);
         context->PSSetShaderResources(0,1,&source.source.value);context->PSSetConstantBuffers(0,1,&cb.value);
         UINT offset=offsetBytes/16,count=16;
         if(offsetBytes)extended->PSSetConstantBuffers1(0,1,&cb.value,&offset,&count);
@@ -142,7 +195,7 @@ void run(UINT creationFlags){
         context->CSSetConstantBuffers(0,1,&cb.value);
         const FLOAT clear[4]={0,0,0,0};context->ClearRenderTargetView(native.target.value,clear);
         check(mask.clear(context.value),"owned companion cleared for a new image version");
-        context->Draw(3,0);
+        context->Draw(vertices,0);
         const auto before=native.bytes(context.value);const auto originalSource=source.bytes(context.value);
         check(!replay.replay(context.value,wrongSize,ps,logicalBytes,countedDraw,3,0),"extent mismatch is refused");
         check(!replay.replay(context.value,mask,ps==ps64.value?ps80.value:ps64.value,logicalBytes,countedDraw,3,0),"different native program is refused");
@@ -159,8 +212,8 @@ void run(UINT creationFlags){
         context->OMSetBlendState(blend.value,factors,sampleMask);
         UINT expectedOffset=0,expectedCount=0;Com<ID3D11Buffer> expectedCB;
         extended->PSGetConstantBuffers1(0,1,expectedCB.out(),&expectedOffset,&expectedCount);
-        draws=0;check(replay.replay(context.value,mask,ps,logicalBytes,countedDraw,3,0),"companion alpha replay using actual native state");
-        check(draws==1&&replayVertices==3&&!replayStart,"exact original Draw arguments are invoked once for companion only");
+        draws=0;check(replay.replay(context.value,mask,ps,logicalBytes,countedDraw,vertices,0),"companion alpha replay using actual native state");
+        check(draws==1&&replayVertices==vertices&&!replayStart,"exact original Draw arguments are invoked once for companion only");
         check(replayedConstants!=nullptr,"actual companion uses a distinct cloned GPU CB");
         D3D11_BUFFER_DESC clonedDesc{};replayedConstants->GetDesc(&clonedDesc);
         check(clonedDesc.ByteWidth==logicalBytes,"private GPU clone has exactly the reviewed logical prefix size");
@@ -205,15 +258,32 @@ void run(UINT creationFlags){
         context->CSGetConstantBuffers(0,1,computeCB.out());context->RSGetState(actualRaster.out());
         context->OMGetRenderTargets(1,actualTarget.out(),nullptr);context->OMGetBlendState(actualBlend.out(),actualFactors,&actualSamples);
         extended->PSGetConstantBuffers1(0,1,actualCB.out(),&actualOffset,&actualCount);
-        check(actualPS.value==ps&&actualVS.value==vs.value&&actualCB.value==cb.value&&actualTarget.value==native.target.value,
+        check(actualPS.value==ps&&actualVS.value==vertex&&actualCB.value==cb.value&&actualTarget.value==native.target.value,
             "native graphics bindings restored exactly");
         check(actualOffset==expectedOffset&&actualCount==expectedCount,"native constant buffer range restored exactly");
         check(actualCS.value==cs.value&&actualUAV.value==write.value&&computeCB.value==cb.value,"native CS/UAV/CB state restored by context state swap");
+        D3D11_PRIMITIVE_TOPOLOGY actualTopology{};context->IAGetPrimitiveTopology(&actualTopology);
+        check(actualTopology==topology,"native three-vertex list and four-vertex strip topologies remain unchanged");
         check(actualRaster.value==raster.value&&actualBlend.value==blend.value&&actualSamples==sampleMask&&
             !std::memcmp(actualFactors,factors,sizeof factors),"native rasterizer, blend factors and sample mask restored");
+        context->Flush();
+        check(producerMutex->ReleaseSync(0)==S_OK&&!mutexes.current(device.value,nativeHandle),"original native release ends only its exact producer lease");
+        check(consumerMutex->AcquireSync(0,2000)==S_OK,"original native consumer acquire establishes cross-device order");
+        const auto consumerLease=mutexes.current(consumer.value,nativeHandle);
+        check(bool(consumerLease)&&consumerLease.epoch!=producerLease.epoch&&consumerLease.allocation==producerLease.allocation,
+            "same physical sync allocation has distinct observed producer and consumer ownership scopes");
+        consume->CopyResource(receivedNative.image.value,importedNative.value);consume->CopyResource(receivedMask.image.value,importedMask.value);
+        check(receivedNative.bytes(consume.value)==before,"native RGB/alpha bytes cross the real shared-mutex transfer unchanged");
+        check(receivedMask.bytes(consume.value)==coverage,"exact companion alpha crosses the SAME native ownership transfer");
+        consume->Flush();check(consumerMutex->ReleaseSync(0)==S_OK&&!mutexes.current(consumer.value,nativeHandle),"consumer releases actual ownership after copying the current pair");
     }
+    check(!eventInvalid&&nativeAcquires==nativeReleases&&nativeReleases==completedReleases,"only successful native lock scopes reach bounded callbacks");
     context->ClearState();if(replayedConstants){replayedConstants->Release();replayedConstants=nullptr;}
 }
 }
-int main(){try{run(0);run(D3D11_CREATE_DEVICE_SINGLETHREADED);std::printf("PASS %u projected-alpha primitive checks (unwired, not a native frame permit)\n",checks);return 0;}
+int main(int argc,char** argv){try{
+    if(argc==3&&!std::strcmp(argv[1],"--export-owned-kernels"))exportDirectory=argv[2];else check(argc==1,"only explicit owned-kernel export is accepted");
+    MutexObserver mutexes({acquired,releasing,released,nullptr});
+    run(0,mutexes);run(D3D11_CREATE_DEVICE_SINGLETHREADED,mutexes);
+    std::printf("PASS %u projected-alpha primitive checks, %u native mutex transfers (unwired, not a native frame permit)\n",checks,completedReleases);return 0;}
     catch(const std::exception& e){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,e.what());return 1;}}

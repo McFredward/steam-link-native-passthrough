@@ -438,3 +438,20 @@ Activation additionally requires authenticated game ancestry, actual native
 shared-image synchronization and a current RGB/coverage/eye witness. The masked
 Frame path also needs a proved visible-image mapping when decoder allocations
 are padded. No headset MR acceptance is claimed for this primitive.
+
+The first actual Windows run43645219206 atd99cec7 passes40,990 primitive
+checks, in addition to149,748 existing source-alpha checks. This is an owned
+shader/model validation, separate from live SteamVR or headset acceptance.
+
+The follow-up synchronization primitive observes only original native
+`IDXGIKeyedMutex` operations. An actual `S_OK` acquisition owns a versioned
+physical-allocation scope; positive timeout/abandonment HRESULTs grant nothing.
+Callbacks retain native keys, timeouts, arguments, return values and last-error
+state. Only an independently created8x8 probe is warmed up on the cold path.
+The owned GPU fixture exercises two devices transferring unchanged RGB and a
+separate alpha image through the same real native keyed-mutex ownership change.
+The public DirectMode Present sync-texture argument is retained through its
+matching PostPresent, without treating that argument alone as lock authority.
+These helpers remain unwired until the authenticated source/image handoff is
+implemented. Only our two tiny compute kernels may be exported as CI artifacts;
+no native runtime binary or shader is redistributed.
