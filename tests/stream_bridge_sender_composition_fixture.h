@@ -14,6 +14,7 @@ struct CompositionFixture {
     Com<ID3D11VertexShader> vertex;Com<ID3D11PixelShader> copyPixel,chromaPixel,packPixel,lumaPixel,unknownPixel;
     Com<ID3D11Buffer> constants;Com<ID3D11RasterizerState> raster;
     void** nativeTable=nullptr;bool bypass=false;
+    std::array<std::vector<std::uint8_t>,3> nativeReferences;
     using NativeDraw=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT);
     using NativeCopy=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,ID3D11Resource*);
     void draw(){if(bypass)pointerBits<NativeDraw>(nativeTable[13])(context,3,0);else context->Draw(3,0);}
@@ -71,13 +72,27 @@ struct CompositionFixture {
         // Compare every actual output plane with the same native drawing
         // through the current original dispatch. This is an owned WARP test,
         // not live-process image capture or hardware encoder acceptance.
-        if(mode!=Mode::Valid&&mode!=Mode::UnrelatedWrite&&mode!=Mode::DirectUV&&mode!=Mode::DirectUVLumaFirst){renderCore();return;}
-        bypass=true;renderCore();const auto original=output();bypass=false;
-        renderCore();check(original==output(),"production coverage leaves every native NV12 RGB byte unchanged");
+        renderCore();
+        if(mode==Mode::Valid||mode==Mode::UnrelatedWrite||mode==Mode::DirectUV||mode==Mode::DirectUVLumaFirst){
+            const unsigned which=mode==Mode::DirectUV?1u:mode==Mode::DirectUVLumaFirst?2u:0u;
+            check(nativeReferences[which]==output(),"production coverage leaves every native NV12 RGB byte unchanged");
+        }
+    }
+    void prepareReferences(){
+        // Produce the comparison images before the production facade exists.
+        // A second render in an admitted Present would legitimately revoke
+        // that presentation's already completed resource graph.
+        bypass=true;eyeBase=2;
+        const Mode modes[]{Mode::Valid,Mode::DirectUV,Mode::DirectUVLumaFirst};
+        for(unsigned i=0;i<3;++i){
+            nativeTable=*reinterpret_cast<void***>(context);mode=modes[i];renderCore();
+            nativeTable=*reinterpret_cast<void***>(context);nativeReferences[i]=output();
+        }
+        mode=Mode::Valid;eyeBase=0;bypass=false;
     }
     void renderCore(){
         std::puts("Owned production render: enter");std::fflush(stdout);
-        check(DirectModeBoundary::currentFrame()!=nullptr,"real typed DirectMode presentation scope");
+        check(bypass||DirectModeBoundary::currentFrame()!=nullptr,"real typed DirectMode presentation scope or explicitly unobserved reference");
         context->ClearState();context->RSSetState(raster.p);context->VSSetShader(vertex.p,nullptr,0);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->PSSetShader(copyPixel.p,nullptr,0);context->PSSetConstantBuffers(2,1,&constants.p);context->OMSetRenderTargets(1,&imageTarget.p,nullptr);
         std::puts("Owned production render: bindings ready");std::fflush(stdout);
         for(unsigned tile=0;tile<4;++tile){if(tile==3&&mode==Mode::MissingTile)continue;const unsigned eye=mode==Mode::WrongEye?0:tile/2;
@@ -157,7 +172,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     NV_ENCODE_API_FUNCTION_LIST api{};api.version=NV_ENCODE_API_FUNCTION_LIST_VER;check(boundary.create(compositionFactory,&api)==NV_ENC_SUCCESS,"production NVENC ports installed");
     NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS parameters{};parameters.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;parameters.device=device.p;parameters.deviceType=NV_ENC_DEVICE_TYPE_DIRECTX;void* encoder=nullptr;check(api.nvEncOpenEncodeSessionEx(&parameters,&encoder)==NV_ENC_SUCCESS,"production observes actual encoder device");
     NV_ENC_INITIALIZE_PARAMS init{};init.version=NV_ENC_INITIALIZE_PARAMS_VER;init.encodeGUID=NV_ENC_CODEC_HEVC_GUID;init.encodeWidth=init.darWidth=CompositionFixture::Width;init.encodeHeight=init.darHeight=CompositionFixture::Height;init.frameRateNum=90;init.frameRateDen=1;
-    check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");mark("prepare production context and coverage pool");coverage.tick();
+    check(api.nvEncInitializeEncoder(encoder,&init)==NV_ENC_SUCCESS,"owned HEVC encoder contract");fixture.prepareReferences();mark("prepare production context and coverage pool");coverage.tick();
     check(coverage.gateStats().contextsReady==1&&coverage.readiness().prepared,"production pool and native context ready");
     NV_ENC_REGISTER_RESOURCE registered{};registered.version=NV_ENC_REGISTER_RESOURCE_VER;registered.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;registered.resourceToRegister=fixture.input.p;registered.width=CompositionFixture::Width;registered.height=CompositionFixture::Height;registered.bufferFormat=NV_ENC_BUFFER_FORMAT_NV12;
     check(api.nvEncRegisterResource(encoder,&registered)==NV_ENC_SUCCESS,"actual encoder input resource registered");
@@ -180,7 +195,10 @@ float4 other():SV_Target{return float4(0,0,0,1);}
         NV_ENC_MAP_INPUT_RESOURCE mapped{};mapped.version=NV_ENC_MAP_INPUT_RESOURCE_VER;mapped.registeredResource=registered.registeredResource;check(api.nvEncMapInputResource(encoder,&mapped)==NV_ENC_SUCCESS,"native input mapping");
         NV_ENC_PIC_PARAMS picture{};picture.version=NV_ENC_PIC_PARAMS_VER;picture.inputBuffer=mapped.mappedResource;picture.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;picture.inputWidth=CompositionFixture::Width;picture.inputHeight=CompositionFixture::Height;picture.inputTimeStamp=++timestamp;picture.outputBitstream=reinterpret_cast<NV_ENC_OUTPUT_PTR>(0x4040+timestamp*16);picture.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;
         check(api.nvEncEncodePicture(encoder,&picture)==NV_ENC_SUCCESS,"native encode request forwarded unchanged");const auto after=coverage.gateStats();
-        if(after.capturedCopies!=before.capturedCopies+unsigned(valid)||after.matchedInputs!=before.matchedInputs+unsigned(valid))std::printf("composition mode=%u captures=%llu/%llu inputs=%llu/%llu last=%s\n",unsigned(mode),static_cast<unsigned long long>(before.capturedCopies),static_cast<unsigned long long>(after.capturedCopies),static_cast<unsigned long long>(before.matchedInputs),static_cast<unsigned long long>(after.matchedInputs),coverageGateName(after.lastRefusal));
+        if(after.capturedCopies!=before.capturedCopies+unsigned(valid)||after.matchedInputs!=before.matchedInputs+unsigned(valid)){
+            std::printf("composition mode=%u captures=%llu/%llu inputs=%llu/%llu last=%s first-step=%s\n",unsigned(mode),static_cast<unsigned long long>(before.capturedCopies),static_cast<unsigned long long>(after.capturedCopies),static_cast<unsigned long long>(before.matchedInputs),static_cast<unsigned long long>(after.matchedInputs),coverageGateName(after.lastRefusal),coverageGateName(static_cast<CoverageGate>(after.compositionRefusal[13])));
+            for(unsigned i=1;i<after.refusals.size();++i)if(after.refusals[i]!=before.refusals[i])std::printf("composition refusal %s: +%llu\n",coverageGateName(static_cast<CoverageGate>(i)),static_cast<unsigned long long>(after.refusals[i]-before.refusals[i]));
+        }
         check(after.capturedCopies==before.capturedCopies+unsigned(valid)&&after.matchedInputs==before.matchedInputs+unsigned(valid),"only the complete unchanged current source graph reaches its exact accepted native encoder input");
         check(!after.certifiedMasks,"synthetic NVENC acceptance without a compatible peer cannot fabricate a mask certificate");
         check(api.nvEncUnmapInputResource(encoder,mapped.mappedResource)==NV_ENC_SUCCESS,"exact input retirement");
