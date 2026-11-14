@@ -48,6 +48,8 @@ on:
       - 'tests/*source_audit*'
       # These Windows-only fixtures have their own actual WARP gate.
       - 'tests/test_stream_bridge_sender_context_layout.c'
+      - 'tests/stream_bridge_sender_composition_fixture.h'
+      - 'tests/check_sender_windows_syntax.sh'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
       - 'tests/test_stream_bridge_sender_readback_gpu.cpp'
       - '.github/workflows/sender-readback-tests.yml'
@@ -105,6 +107,8 @@ on:
       - 'tests/*source_audit*'
       # These Windows-only fixtures have their own actual WARP gate.
       - 'tests/test_stream_bridge_sender_context_layout.c'
+      - 'tests/stream_bridge_sender_composition_fixture.h'
+      - 'tests/check_sender_windows_syntax.sh'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
       - 'tests/test_stream_bridge_sender_readback_gpu.cpp'
       - '.github/workflows/sender-readback-tests.yml'

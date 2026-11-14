@@ -53,6 +53,23 @@ evidence for unchanged areas after a bounded repair; report that scope honestly.
 
 ## Windows sender companion
 
+Before pushing Windows sender or fixture changes, run the offline syntax
+preflight with the same reviewed public SDK used below:
+
+```sh
+bash tests/check_sender_windows_syntax.sh /absolute/path/to/reviewed-sdk
+```
+
+It checks the production-context, source-alpha and compositor-observer fixture
+translation units, including their transitive headers. It catches missing
+Windows declarations locally; it does not replace actual MSVC/GNU Windows,
+WARP or headset validation. Keep intermediate edits local and publish one
+coherent checked change before collecting the relevant CI results.
+
+Alpha header changes trigger both their own GPU suite and the dependent sender
+and compositor suites. Superseded observer/alpha runs are cancelled per branch;
+the current run still fails normally on any actual test failure.
+
 The reproducible cross-build uses MinGW x86_64 on Linux and two **explicit,
 reviewed public headers**, `nvEncodeAPI.h` and `openvr_driver.h`. Their exact
 SHA256 values are enforced by

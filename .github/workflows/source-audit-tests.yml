@@ -8,6 +8,8 @@ on:
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-image.h'
       - 'pc/stream-bridge-native-shader.h'
+      - 'pc/stream-bridge-source-alpha*'
+      - 'pc/stream-bridge-sender-provider-coverage-render.h'
       - 'tests/*source_audit*'
       - '.github/workflows/source-audit-tests.yml'
   pull_request:
@@ -17,11 +19,16 @@ on:
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-image.h'
       - 'pc/stream-bridge-native-shader.h'
+      - 'pc/stream-bridge-source-alpha*'
+      - 'pc/stream-bridge-sender-provider-coverage-render.h'
       - 'tests/*source_audit*'
       - '.github/workflows/source-audit-tests.yml'
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: compositor-source-audit-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   gnu-fixtures:
     runs-on: ubuntu-24.04
