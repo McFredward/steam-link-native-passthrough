@@ -493,3 +493,17 @@ image-version witnesses. Merely receiving a row or opening the private channel
 does not authorize a scene image. The owned cross-process fixture deliberately
 leaves its dummy witness incomplete. Live compositor ancestry, native write
 invalidation and the sender's exact-image admission still need integration.
+
+Run43649360708 atea8c8cb passes the source-compiled95,342 and embedded95,325
+GPU controls,64 native transfers in each mode and16 private cross-process
+channel checks. Its Windows sender/native workflows pass too.
+
+The resource observer prepares bounded companion storage from public native
+texture/open/render-target creation callbacks, with nested companion creation
+suppressed. It preserves the native device vptr and private tail and forwards
+cached callbacks after stop. Private registry publication additionally holds
+actual kernel texture references and verifies their handle, physical shape and
+adapter. A nonblocking reader gate prevents publication from dropping old pins
+while a binding is admitted; immediate source-lease revocation rejects stale
+metadata before a cold refresh. These controls establish retained metadata
+ownership only. They do not yet implement live projected-image admission.

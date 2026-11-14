@@ -39,7 +39,8 @@ void parent(){
     ChannelParent channel;check(channel.create(),"cold unnamed private section");
     Registry registry{};registry.revision=5;registry.sourceLease=0x70000004du;
     registry.retained[0]={101,18,100,37,29,28,1,1};registry.retained[1]={102,19,77,37,29,28,1,1};
-    check(channel.page()->registry.publish(registry),"one writer publishes retained allocation metadata");
+    channel.sourceLease(registry.sourceLease);
+    check(channel.page()->registry.publish(registry),"transport-only dummy metadata published without claiming real kernel pins");
     ImageWitness absent{};check(!channel.page()->witnesses[0].read(absent),"empty row supplies no image proof");
     SECURITY_ATTRIBUTES security{sizeof security,nullptr,TRUE};Handle input,output;
     check(CreatePipe(&input.value,&output.value,&security,4096)&&SetHandleInformation(output.value,HANDLE_FLAG_INHERIT,0),"owned anonymous launch pipe");

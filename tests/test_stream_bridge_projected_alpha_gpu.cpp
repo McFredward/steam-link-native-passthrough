@@ -1,6 +1,8 @@
 #include "pc/stream-bridge-projected-alpha-replay.h"
 #include "pc/stream-bridge-projected-alpha-sync.h"
 #include "pc/stream-bridge-projected-alpha-kernels.h"
+#include "pc/stream-bridge-projected-alpha-textures.h"
+#include "pc/stream-bridge-projected-alpha-channel.h"
 #include <d3dcompiler.h>
 #include <array>
 #include <cstdint>
@@ -15,6 +17,21 @@ unsigned checks=0,draws=0;
 const char* exportDirectory=nullptr;
 unsigned nativeAcquires=0,nativeReleases=0,completedReleases=0;
 bool eventInvalid=false;
+unsigned textureCreates=0,textureOpens=0,nestedTextureCreates=0,textureTargets=0;
+bool nestedTextureFailure=false;
+ID3D11Device* lastTextureDevice=nullptr;
+void targetObserved(ID3D11Device*,ID3D11RenderTargetView*,void*)noexcept{++textureTargets;}
+void textureObserved(ID3D11Device* device,ID3D11Texture2D*,TextureOrigin origin,void*)noexcept{
+    lastTextureDevice=device;
+    if(origin==TextureOrigin::Created)++textureCreates;else ++textureOpens;
+    if(!nestedTextureCreates){
+        ++nestedTextureCreates;
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=8;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+        ID3D11Texture2D* own=nullptr;
+        nestedTextureFailure=FAILED(device->CreateTexture2D(&desc,nullptr,&own));if(own)own->Release();
+    }
+}
 void acquired(const MutexLease& lease,void*)noexcept{++nativeAcquires;eventInvalid|=!bool(lease);}
 void releasing(const MutexLease& lease,std::uint64_t,void*)noexcept{++nativeReleases;eventInvalid|=!bool(lease);}
 void released(const MutexLease& lease,HRESULT result,void*)noexcept{++completedReleases;eventInvalid|=!bool(lease)||result!=S_OK;}
@@ -186,7 +203,7 @@ void exportKernel(const char* name,ID3DBlob* code){
     const bool okay=std::fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),out)==code->GetBufferSize();
     check(std::fclose(out)==0&&okay,"complete owned kernel bytes");
 }
-void run(UINT creationFlags,MutexObserver& mutexes){
+void run(UINT creationFlags,MutexObserver& mutexes,TextureObserver& textures){
     Com<ID3D11Device> device;Com<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level{};
     const D3D_FEATURE_LEVEL requested[]={D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,creationFlags,requested,2,
@@ -194,6 +211,9 @@ void run(UINT creationFlags,MutexObserver& mutexes){
     Com<ID3D11DeviceContext1> extended;
     check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"actual immediate context1");
     check(mutexes.prepare(device.value),"cold native keyed-mutex observation on the owning device thread");
+    auto** const originalDeviceTable=*reinterpret_cast<void***>(device.value);
+    check(textures.prepare(device.value)&&*reinterpret_cast<void***>(device.value)==originalDeviceTable,
+        "texture preparation preserves the complete original native device vptr and private tail");
     auto clone64=compile(Clone64Hlsl,"main","cs_5_0"),clone80=compile(Clone80Hlsl,"main","cs_5_0");
     auto clone32=compile(CloneResolve32Hlsl,"main","cs_5_0");
     exportKernel("projected-alpha-clone64.dxbc",clone64.value);exportKernel("projected-alpha-clone80.dxbc",clone80.value);
@@ -221,12 +241,31 @@ void run(UINT creationFlags,MutexObserver& mutexes){
     check(SUCCEEDED(native.image->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(producerMutex.out()))),"actual native producer mutex");
     Com<ID3D11Device> consumer;Com<ID3D11DeviceContext> consume;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,requested,2,
-        D3D11_SDK_VERSION,consumer.out(),nullptr,consume.out()))&&mutexes.prepare(consumer.value),"independent actual WARP consumer device");
+        D3D11_SDK_VERSION,consumer.out(),nullptr,consume.out()))&&mutexes.prepare(consumer.value)&&textures.prepare(consumer.value),"independent actual WARP consumer device");
     Com<ID3D11Texture2D> importedNative,importedMask;
+    const auto opensBefore=textureOpens;
     check(SUCCEEDED(consumer->OpenSharedResource(reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(nativeHandle)),
         __uuidof(ID3D11Texture2D),reinterpret_cast<void**>(importedNative.out())))&&
         SUCCEEDED(consumer->OpenSharedResource(reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(maskHandle)),
         __uuidof(ID3D11Texture2D),reinterpret_cast<void**>(importedMask.out()))),"independently opened RGB and alpha allocations");
+    check(textureOpens==opensBefore+2&&nestedTextureCreates==1&&!nestedTextureFailure,
+        "actual native shared opens are observed once and companion allocation never recurses into native ancestry");
+    {
+        ChannelParent channel;check(channel.create(),"private retained-source publication fixture");
+        Registry registry{};registry.sourceLease=0x70000004du;registry.revision=1;
+        registry.retained[0]={nativeHandle,13,77,Width,Height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
+        std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=native.image.value;
+        channel.sourceLease(registry.sourceLease);
+        check(channel.publishRetained(registry,pins),"published metadata independently matches a real pinned kernel texture");
+        RegistryRead held;check(held.acquire(channel.page())&&held.snapshot().adapterKnown,"reader pins its source snapshot and physical adapter");
+        registry.revision=2;
+        check(!channel.publishRetained(registry,pins),"publisher never releases/recycles old kernel pins while a source admission reads them");
+        held.release();check(channel.publishRetained(registry,pins),"publication resumes without waiting after the reader retains its source binding");
+        registry.retained[0].handle^=1;
+        check(!channel.publishRetained(registry,pins),"same-shaped foreign numeric allocation identity cannot be published");
+        channel.sourceLease(0x80000004du);
+        check(!held.acquire(channel.page()),"source revocation rejects old format metadata immediately, before the next cold refresh");
+    }
     check(SUCCEEDED(importedNative->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(consumerMutex.out()))),"actual native consumer mutex");
     Texture receivedNative,receivedMask;
     check(receivedNative.prepare(consumer.value,Width,Height)&&receivedMask.prepare(consumer.value,Width,Height),"owned consumer verification storage");
@@ -372,6 +411,15 @@ void run(UINT creationFlags,MutexObserver& mutexes){
 int main(int argc,char** argv){try{
     if(argc==3&&!std::strcmp(argv[1],"--export-owned-kernels"))exportDirectory=argv[2];else check(argc==1,"only explicit owned-kernel export is accepted");
     MutexObserver mutexes({acquired,releasing,released,nullptr});
-    run(0,mutexes);run(D3D11_CREATE_DEVICE_SINGLETHREADED,mutexes);
+    TextureObserver textures(textureObserved,nullptr,targetObserved);
+    run(0,mutexes,textures);run(D3D11_CREATE_DEVICE_SINGLETHREADED,mutexes,textures);
+    check(textureCreates&&textureTargets&&textureOpens==4&&lastTextureDevice,"bounded native texture/view callbacks executed on both original devices");
+    using CreateTexture=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const D3D11_TEXTURE2D_DESC*,const D3D11_SUBRESOURCE_DATA*,ID3D11Texture2D**);
+    CreateTexture cached=nullptr;auto* entry=(*reinterpret_cast<void***>(lastTextureDevice))[5];std::memcpy(&cached,&entry,sizeof cached);
+    textures.stop();const auto beforeStop=textureCreates;
+    D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=8;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+    Com<ID3D11Texture2D> afterStop;
+    check(SUCCEEDED(cached(lastTextureDevice,&desc,nullptr,afterStop.out()))&&textureCreates==beforeStop,
+        "cached texture callback forwards safely after stop without declaring new ancestry");
     std::printf("PASS %u projected-alpha primitive checks, %u native mutex transfers (unwired, not a native frame permit)\n",checks,completedReleases);return 0;}
     catch(const std::exception& e){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,e.what());return 1;}}
