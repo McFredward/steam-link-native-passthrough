@@ -203,3 +203,17 @@ matching PostPresent, without treating that argument alone as lock authority.
 These helpers remain unwired until the authenticated source/image handoff is
 implemented. Only our two tiny compute kernels may be exported as CI artifacts;
 no native runtime binary or shader is redistributed.
+
+Actual Windows run43646865350 atc5a4dda passes82,398 projected-alpha checks
+and64 original native mutex transfers, alongside the existing alpha suite.
+The other native, Windows sender and lifecycle workflows pass too.
+
+The active game capture also contains a four-sample intermediate before the
+final shared tile. Its reviewed native resolve program can independently force
+output alpha to1. The companion therefore retains the original four-sample
+coverage and sample mask, then reuses the native resolve with a private b2 clone
+that disables that opaque-output branch. Native RGB follows its unchanged
+original shader, constants and inputs. A separate reference-render control
+checks subpixel viewport edges, partially covered samples and exact final alpha;
+both direct and ranged resolve constant-buffer bindings are exercised. A
+single-sample-only extraction is insufficient for this observed game path.

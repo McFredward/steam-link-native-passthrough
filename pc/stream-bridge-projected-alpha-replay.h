@@ -12,7 +12,10 @@
 namespace stream_bridge::sender::projected_alpha {
 // Our shader copies the CURRENT logical b0 prefix on the GPU. All native
 // words, including integer/NaN bit patterns, are retained except the reviewed
-// output-alpha policy at byte52. Compilation belongs on the cold path.
+// scene output-alpha policy at byte52. The MSAA resolve clone instead disables
+// its optional opaque-output branch at byte0 of logical b2. This affects only
+// the companion draw; ordinary native pixels and constants remain unchanged.
+// Compilation belongs on the cold path.
 inline constexpr char Clone64Hlsl[]=R"(
 cbuffer Original : register(b0) { uint4 words[4]; };
 RWByteAddressBuffer destination : register(u0);
@@ -27,6 +30,14 @@ RWByteAddressBuffer destination : register(u0);
 [numthreads(1,1,1)] void main(uint3 id : SV_DispatchThreadID) {
     uint4 value=words[id.x];
     if(id.x==3) value.y=0x3f800000;
+    destination.Store4(id.x*16,value);
+})";
+inline constexpr char CloneResolve32Hlsl[]=R"(
+cbuffer Original : register(b0) { uint4 words[2]; };
+RWByteAddressBuffer destination : register(u0);
+[numthreads(1,1,1)] void main(uint3 id : SV_DispatchThreadID) {
+    uint4 value=words[id.x];
+    if(id.x==0) value.x=0;
     destination.Store4(id.x*16,value);
 })";
 struct Bytecode {const void* data=nullptr;std::size_t size=0;};
@@ -47,21 +58,25 @@ template<class T>struct Reference {
 // constructor/import for an application's texture or an alias of native RGB.
 // The producer never exposes this image to native pipeline bindings. Its raw
 // resource is used only for the companion's ordered transfer/test readback.
+// A four-sample image stays private and is resolved into a separate shareable
+// single-sample image with the reviewed native resolve geometry.
 class Image {
     friend class Replay;
     Reference<ID3D11Texture2D> texture_;
     Reference<ID3D11RenderTargetView> target_;
+    Reference<ID3D11ShaderResourceView> source_;
 public:
-    bool prepare(ID3D11Device* device,UINT width,UINT height,bool shared=false)noexcept{
+    bool prepare(ID3D11Device* device,UINT width,UINT height,bool shared=false,UINT samples=1,UINT quality=0)noexcept{
         if(!device||texture_.value||!width||!height||width>16384||height>16384||
-            std::size_t(width)*height>16*1024*1024)return false;
+            std::size_t(width)*height>16*1024*1024||(samples!=1&&samples!=4)||(shared&&samples!=1))return false;
         D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;
-        desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+        desc.MipLevels=desc.ArraySize=1;desc.SampleDesc.Count=samples;desc.SampleDesc.Quality=quality;
         desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
-        desc.BindFlags=D3D11_BIND_RENDER_TARGET|(shared?D3D11_BIND_SHADER_RESOURCE:0);
+        desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         desc.MiscFlags=shared?D3D11_RESOURCE_MISC_SHARED:0;
         return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,texture_.out()))&&
-            SUCCEEDED(device->CreateRenderTargetView(texture_.value,nullptr,target_.out()));
+            SUCCEEDED(device->CreateRenderTargetView(texture_.value,nullptr,target_.out()))&&
+            SUCCEEDED(device->CreateShaderResourceView(texture_.value,nullptr,source_.out()));
     }
     ID3D11Texture2D* resource()const noexcept{return texture_.value;}
     bool clear(ID3D11DeviceContext* context)noexcept{
@@ -87,7 +102,7 @@ class Replay {
         Reference<ID3D11Buffer> raw,constant;
         Reference<ID3D11UnorderedAccessView> write;
     };
-    std::array<Clone,2> clones_{};
+    std::array<Clone,3> clones_{};
     Reference<ID3D11Device> device_;
     Reference<ID3D11DeviceContext1> context_;
     Reference<ID3DDeviceContextState> scratch_;
@@ -101,18 +116,19 @@ class Replay {
     static bool viewShape(ID3D11RenderTargetView* view,D3D11_TEXTURE2D_DESC& shape,
         ID3D11Resource*& identity)noexcept{
         D3D11_RENDER_TARGET_VIEW_DESC desc{};view->GetDesc(&desc);
-        if(desc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D||desc.Texture2D.MipSlice)return false;
+        if((desc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D||desc.Texture2D.MipSlice)&&
+            desc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS)return false;
         view->GetResource(&identity);
         Reference<ID3D11Texture2D> texture;
         if(!identity||FAILED(identity->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return false;
         texture->GetDesc(&shape);
-        return shape.MipLevels==1&&shape.ArraySize==1&&shape.SampleDesc.Count==1;
+        return shape.MipLevels==1&&shape.ArraySize==1&&(shape.SampleDesc.Count==1||shape.SampleDesc.Count==4);
     }
 public:
     Replay()=default;
     Replay(const Replay&)=delete;
     Replay& operator=(const Replay&)=delete;
-    bool prepare(ID3D11Device* device,Bytecode clone64,Bytecode clone80)noexcept{
+    bool prepare(ID3D11Device* device,Bytecode clone64,Bytecode clone80,Bytecode clone32={})noexcept{
         if(attempted_)return ready_;
         attempted_=true;
         if(!device||!clone64.data||!clone64.size||!clone80.data||!clone80.size)return false;
@@ -127,9 +143,10 @@ public:
         // learn.microsoft.com/windows/win32/api/d3d11_1/nf-d3d11_1-id3d11devicecontext1-swapdevicecontextstate
         if(FAILED(extended->CreateDeviceContextState(flags,&level,1,D3D11_SDK_VERSION,
             __uuidof(ID3D11Device),nullptr,scratch_.out())))return false;
-        const std::array<Bytecode,2> programs{{clone64,clone80}};
+        const std::array<Bytecode,3> programs{{clone64,clone80,clone32}};
         for(unsigned i=0;i<clones_.size();++i){
-            auto& clone=clones_[i];const auto bytes=64+i*16;
+            if(i==2&&(!clone32.data||!clone32.size))continue;
+            auto& clone=clones_[i];const auto bytes=i==2?32:64+i*16;
             if(FAILED(device->CreateComputeShader(programs[i].data,programs[i].size,nullptr,clone.shader.out())))return false;
             D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=bytes;buffer.Usage=D3D11_USAGE_DEFAULT;
             buffer.BindFlags=D3D11_BIND_UNORDERED_ACCESS;buffer.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
@@ -148,9 +165,20 @@ public:
     bool replay(ID3D11DeviceContext* context,const Image& image,
         ID3D11PixelShader* reviewedBoundProgram,unsigned logicalConstantBytes,
         Draw originalDraw,UINT vertices,UINT firstVertex)noexcept{
+        if(logicalConstantBytes!=64&&logicalConstantBytes!=80)return false;
+        return draw(context,image,reviewedBoundProgram,logicalConstantBytes,originalDraw,vertices,firstVertex,nullptr);
+    }
+    bool resolve(ID3D11DeviceContext* context,const Image& image,const Image& source,
+        ID3D11PixelShader* reviewedBoundProgram,Draw originalDraw,UINT vertices,UINT firstVertex)noexcept{
+        if(!clones_[2].shader.value)return false;
+        return draw(context,image,reviewedBoundProgram,32,originalDraw,vertices,firstVertex,&source);
+    }
+private:
+    bool draw(ID3D11DeviceContext* context,const Image& image,
+        ID3D11PixelShader* reviewedBoundProgram,unsigned logicalConstantBytes,
+        Draw originalDraw,UINT vertices,UINT firstVertex,const Image* msaa)noexcept{
         auto* companion=image.target_.value;
         if(!ready_||!context||!companion||!reviewedBoundProgram||!originalDraw||!vertices||
-            (logicalConstantBytes!=64&&logicalConstantBytes!=80)||
             !sameDevice(context,device_.value)||!sameDevice(companion,device_.value))return false;
         Reference<ID3D11DeviceContext1> actual;
         if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(actual.out())))||
@@ -183,14 +211,32 @@ public:
         Reference<ID3D11Resource> nativeResource,maskResource;
         if(!viewShape(targets[0],nativeShape,nativeResource.value)||!viewShape(companion,maskShape,maskResource.value)||
             nativeResource.value==maskResource.value||nativeShape.Width!=maskShape.Width||nativeShape.Height!=maskShape.Height||
+            nativeShape.SampleDesc.Count!=maskShape.SampleDesc.Count||nativeShape.SampleDesc.Quality!=maskShape.SampleDesc.Quality||
             maskShape.Format!=DXGI_FORMAT_R8G8B8A8_UNORM||
             (maskShape.MiscFlags&&maskShape.MiscFlags!=D3D11_RESOURCE_MISC_SHARED))return false;
+        Reference<ID3D11ShaderResourceView> originalSource;
+        if(msaa){
+            if(!msaa->source_.value||!sameDevice(msaa->source_.value,device_.value)||nativeShape.SampleDesc.Count!=1)return false;
+            D3D11_TEXTURE2D_DESC sourceShape{};msaa->texture_->GetDesc(&sourceShape);
+            if(sourceShape.SampleDesc.Count!=4||sourceShape.Width!=maskShape.Width||sourceShape.Height!=maskShape.Height)return false;
+            context->PSGetShaderResources(0,1,originalSource.out());
+            if(!originalSource.value)return false;
+            D3D11_SHADER_RESOURCE_VIEW_DESC sourceView{};originalSource->GetDesc(&sourceView);
+            Reference<ID3D11Resource> resource;originalSource->GetResource(resource.out());
+            Reference<ID3D11Texture2D> texture;
+            if(sourceView.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2DMS||!resource.value||
+                FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return false;
+            D3D11_TEXTURE2D_DESC actual{};texture->GetDesc(&actual);
+            if(actual.SampleDesc.Count!=4||actual.SampleDesc.Quality!=sourceShape.SampleDesc.Quality||
+                actual.Width!=sourceShape.Width||actual.Height!=sourceShape.Height||actual.MipLevels!=1||actual.ArraySize!=1)return false;
+        }
+        const UINT constantSlot=msaa?2:0;
         Reference<ID3D11Buffer> original;UINT offset=0,count=0;
-        actual->PSGetConstantBuffers1(0,1,original.out(),&offset,&count);
+        actual->PSGetConstantBuffers1(constantSlot,1,original.out(),&offset,&count);
         if(!original.value||count<logicalConstantBytes/16)return false;
         D3D11_BUFFER_DESC buffer{};original->GetDesc(&buffer);
         if(offset>buffer.ByteWidth/16||logicalConstantBytes>buffer.ByteWidth-offset*16)return false;
-        auto& clone=clones_[(logicalConstantBytes-64)/16];
+        auto& clone=clones_[msaa?2:(logicalConstantBytes-64)/16];
         Reference<ID3D11BlendState> blend;FLOAT factors[4]{};UINT samples=0;
         context->OMGetBlendState(blend.out(),factors,&samples);
         if(blend.value){
@@ -215,14 +261,16 @@ public:
         ID3D11UnorderedAccessView* none=nullptr;context->CSSetUnorderedAccessViews(0,1,&none,nullptr);
         context->CopyResource(clone.constant.value,clone.raw.value);
         actual->SwapDeviceContextState(saved.value,nullptr);
-        context->PSSetConstantBuffers(0,1,&clone.constant.value);
+        context->PSSetConstantBuffers(constantSlot,1,&clone.constant.value);
+        if(msaa)context->PSSetShaderResources(0,1,&msaa->source_.value);
         context->OMSetRenderTargets(1,&companion,nullptr);
         context->OMSetBlendState(alphaOnly_.value,nullptr,samples);
         originalDraw(context,vertices,firstVertex);
         context->OMSetRenderTargets(1,targets.data(),nullptr);
         context->OMSetBlendState(blend.value,factors,samples);
-        context->PSSetConstantBuffers(0,1,&original.value);
-        actual->PSSetConstantBuffers1(0,1,&original.value,&offset,&count);
+        context->PSSetConstantBuffers(constantSlot,1,&original.value);
+        actual->PSSetConstantBuffers1(constantSlot,1,&original.value,&offset,&count);
+        if(msaa)context->PSSetShaderResources(0,1,&originalSource.value);
         return true;
     }
 };
