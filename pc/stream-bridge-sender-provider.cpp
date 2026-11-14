@@ -507,12 +507,13 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     static_cast<unsigned long long>(audit.rasterCalls[4]),static_cast<unsigned long long>(audit.rasterCalls[5]),
                     static_cast<unsigned long long>(audit.rasterCalls[6]),static_cast<unsigned long long>(audit.rasterCalls[7]),static_cast<unsigned long long>(audit.unknownPixelOverflow));
                 report(text,stream_bridge::logging::Level::Debug);
-                std::snprintf(text,sizeof text,"compositor multiview audit: inner/downscale-x/downscale-y/reproject-x/reproject-y/resolve/vertex-x/vertex-y=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; factory calls/created/refused=%llu/%llu/%llu; program identities only, no coverage authority",
+                std::snprintf(text,sizeof text,"compositor multiview audit: inner/downscale-x/downscale-y/reproject-x/reproject-y/resolve/vertex-x/vertex-y=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; factory calls/created/refused=%llu/%llu/%llu; alpha-hr=0x%08x/0x%08x/0x%08x/0x%08x; program identities only, no coverage authority",
                     static_cast<unsigned long long>(audit.multiViewShaderKinds[0]),static_cast<unsigned long long>(audit.multiViewShaderKinds[1]),
                     static_cast<unsigned long long>(audit.multiViewShaderKinds[2]),static_cast<unsigned long long>(audit.multiViewShaderKinds[3]),
                     static_cast<unsigned long long>(audit.multiViewShaderKinds[4]),static_cast<unsigned long long>(audit.multiViewShaderKinds[5]),
                     static_cast<unsigned long long>(audit.multiViewShaderKinds[6]),static_cast<unsigned long long>(audit.multiViewShaderKinds[7]),
-                    static_cast<unsigned long long>(audit.factoryCalls),static_cast<unsigned long long>(audit.factoryCreated),static_cast<unsigned long long>(audit.factoryRefused));
+                    static_cast<unsigned long long>(audit.factoryCalls),static_cast<unsigned long long>(audit.factoryCreated),static_cast<unsigned long long>(audit.factoryRefused),
+                    audit.sourceAlphaErrors[0],audit.sourceAlphaErrors[1],audit.sourceAlphaErrors[2],audit.sourceAlphaErrors[3]);
                 report(text,stream_bridge::logging::Level::Debug);++auditReports;}
                 auto samples=audit.samples;
                 std::sort(samples.begin(),samples.end(),[](const auto& a,const auto& b){return a.serial<b.serial;});
@@ -584,7 +585,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             stream_bridge::sender::SourceAlphaSample alpha[2]{};
             const bool haveAlpha[2]{coverage_.sourceAlpha(0,alpha[0]),coverage_.sourceAlpha(1,alpha[1])};
             const auto observedPid=haveAlpha[0]?alpha[0].source.pid:haveAlpha[1]?alpha[1].source.pid:0;
-            const auto alphaError=coverage_.sourceAlphaError();
+            const auto alphaError=coverage_.sourceAlphaError()?coverage_.sourceAlphaError():coverage_.tileAlphaError();
             if(alphaError&&!observedPid&&!alphaUnavailableReported){
                 char alphaText[160]{};std::snprintf(alphaText,sizeof alphaText,
                     "native source alpha: diagnostic unavailable, readback-hr=0x%08x; coverage admission and rendering unchanged",alphaError);
