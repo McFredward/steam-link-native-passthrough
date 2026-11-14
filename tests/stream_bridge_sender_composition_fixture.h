@@ -219,6 +219,13 @@ float4 other():SV_Target{return float4(0,0,0,1);}
         check(!coverage.gateStats().certifiedMasks,"fake completion without a compatible peer cannot grant a real mask certificate");
         check(api.nvEncUnmapInputResource(encoder,mapped.mappedResource)==NV_ENC_SUCCESS,"exact input retirement");
     }
+    for(unsigned eye=0;eye<2;++eye){SourceAlphaSample alpha{};
+        check(coverage.tileAlpha(eye,alpha)&&alpha.source.origin==1&&alpha.source.declaredPid==pid&&
+            (alpha.source.pid==pid||alpha.source.pid==compositorPid)&&alpha.source.sourceBit==(1u<<eye)&&alpha.source.present,
+            "actual staged tile statistics retain their real producer separately from the declared app and grant no source substitution");
+        for(auto value:alpha.alpha)check((value&255)==101&&((value>>8)&255)==101&&((value>>16)&255)==101,
+            "native staged tile alpha statistics preserve the actual fractional source value");
+    }
     permission.reset();coverage.sourceProcess(0);const auto revoked=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
     check(coverage.gateStats().capturedCopies==revoked.capturedCopies&&!coverage.gateStats().certifiedMasks,"source withdrawal refuses a new exact app image without borrowing its previous format lease");
     calls.destroyAll(&fixture,pid);check(!coverage.formatReady(pid),"removing the application's registered swaps prevents new format admission");

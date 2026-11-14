@@ -6,7 +6,11 @@
 namespace stream_bridge::sender {
 struct SourceAlphaMetadata {
     std::uint64_t present=0;
+    // An upstream raster observation is not a DirectMode presentation.
+    std::uint64_t observation=0,allocationGeneration=0;
     std::uint32_t pid=0,width=0,height=0,resourceFormat=0,viewFormat=0;
+    // 0: original legacy source; 1: native staged tile; 2: upstream binding.
+    std::uint32_t origin=0,declaredPid=0,sourceBit=0,shader=0;
     std::array<float,4> uv{};
     float nonFovealAlpha=0,directFoveated=0,sharpness=0;
 };
@@ -34,11 +38,14 @@ public:
         data_[6].store(pair(bits(sample.source.uv[2]),bits(sample.source.uv[3])));
         data_[7].store(pair(bits(sample.source.nonFovealAlpha),bits(sample.source.directFoveated)));
         for(unsigned i=0;i<3;++i)data_[8+i].store(sample.alpha[i]);
+        data_[11].store(pair(sample.source.origin,sample.source.declaredPid));
+        data_[12].store(pair(sample.source.sourceBit,sample.source.shader));
+        data_[13].store(sample.source.observation);data_[14].store(sample.source.allocationGeneration);
         sequence_.fetch_add(1);
     }
     bool read(SourceAlphaSample& sample)const noexcept{
         const auto before=sequence_.load();if(!before||(before&1))return false;
-        std::array<std::uint64_t,11> data{};for(unsigned i=0;i<data.size();++i)data[i]=data_[i].load();
+        std::array<std::uint64_t,15> data{};for(unsigned i=0;i<data.size();++i)data[i]=data_[i].load();
         if(sequence_.load()!=before)return false;
         const auto value=[](std::uint32_t bits){float out=0;std::memcpy(&out,&bits,4);return out;};
         sample.samples=data[0];sample.source.present=data[1];
@@ -48,11 +55,14 @@ public:
         sample.source.uv={{value(std::uint32_t(data[5]>>32)),value(std::uint32_t(data[5])),value(std::uint32_t(data[6]>>32)),value(std::uint32_t(data[6]))}};
         sample.source.nonFovealAlpha=value(std::uint32_t(data[7]>>32));sample.source.directFoveated=value(std::uint32_t(data[7]));
         for(unsigned i=0;i<3;++i)sample.alpha[i]=data[8+i];
+        sample.source.origin=std::uint32_t(data[11]>>32);sample.source.declaredPid=std::uint32_t(data[11]);
+        sample.source.sourceBit=std::uint32_t(data[12]>>32);sample.source.shader=std::uint32_t(data[12]);
+        sample.source.observation=data[13];sample.source.allocationGeneration=data[14];
         return sample.samples!=0;
     }
 private:
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free,"source diagnostics must not lock");
     std::atomic<std::uint64_t> sequence_{};
-    std::array<std::atomic<std::uint64_t>,11> data_{};
+    std::array<std::atomic<std::uint64_t>,15> data_{};
 };
 } // namespace stream_bridge::sender

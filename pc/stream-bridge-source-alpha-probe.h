@@ -3,15 +3,17 @@
 #include "stream-bridge-source-alpha-stats.h"
 #include <algorithm>
 namespace stream_bridge::sender {
-// Caller has proved the exact native shared source / eye / current source grant.
-// Fixed small storage is prepared cold. Capture does not modify native state,
+// Caller identifies an actual bound source. Upstream observations explicitly
+// carry no presentation/eye proof. Fixed small storage is prepared cold.
+// Capture does not modify native state,
 // resource pixels, shaders, UVs, source permission or the coverage pipeline.
 struct SourceAlphaApi {
     NativeGetData get=nullptr;NativeMap map=nullptr;NativeUnmap unmap=nullptr;
 };
-class SourceAlphaProbe {
+template<unsigned SlotCount=2>class BasicSourceAlphaProbe {
 public:
-    ~SourceAlphaProbe(){for(auto& slot:slots_){for(auto*& texture:slot.staging)release(texture);release(slot.query);}}
+    static_assert(SlotCount>0&&SlotCount<=8,"bounded alpha diagnostic slots");
+    ~BasicSourceAlphaProbe(){for(auto& slot:slots_){for(auto*& texture:slot.staging)release(texture);release(slot.query);}}
     bool prepare(ID3D11Device* device)noexcept{
         if(attempted_)return ready_;
         attempted_=true;
@@ -28,7 +30,7 @@ public:
     }
     void sample(ID3D11DeviceContext* context,ID3D11Resource* source,unsigned eye,
         const SourceAlphaMetadata& metadata,std::uint64_t now,const SourceAlphaApi& api)noexcept{
-        if(!ready_||!context||!source||eye>1||!metadata.present||!metadata.pid||!api.get||!api.map||!api.unmap)return;
+        if(!ready_||!context||!source||eye>=SlotCount||(!metadata.present&&!metadata.observation)||!metadata.pid||!api.get||!api.map||!api.unmap)return;
         auto& slot=slots_[eye];
         if(slot.pending){
             BOOL done=FALSE;auto hr=api.get(context,slot.query,&done,sizeof done,D3D11_ASYNC_GETDATA_DONOTFLUSH);
@@ -74,7 +76,7 @@ public:
         // Native submission flushes its ordinary work. This diagnostic never
         // adds a Flush, wait, retry, CPU color export or replacement frame.
     }
-    bool read(unsigned eye,SourceAlphaSample& sample)const noexcept{return eye<2&&publications_[eye].read(sample);}
+    bool read(unsigned eye,SourceAlphaSample& sample)const noexcept{return eye<SlotCount&&publications_[eye].read(sample);}
     std::uint32_t error()const noexcept{return error_.load(std::memory_order_relaxed);}
 private:
     template<class T>static void release(T*& value)noexcept{if(value){value->Release();value=nullptr;}}
@@ -85,8 +87,9 @@ private:
         std::uint64_t next=0,samples=0;
     };
     bool attempted_=false,ready_=false;
-    std::array<Slot,2> slots_{};
-    std::array<SourceAlphaPublication,2> publications_{};
+    std::array<Slot,SlotCount> slots_{};
+    std::array<SourceAlphaPublication,SlotCount> publications_{};
     std::atomic<std::uint32_t> error_{};
 };
+using SourceAlphaProbe=BasicSourceAlphaProbe<2>;
 } // namespace stream_bridge::sender

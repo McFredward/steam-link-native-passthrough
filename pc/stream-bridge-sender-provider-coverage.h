@@ -276,6 +276,8 @@ public:
     bool operational(std::uint32_t processId)const noexcept;
     CoverageGateStats gateStats()const noexcept; // Cold, approximate diagnostics only.
     bool sourceAlpha(unsigned eye,SourceAlphaSample&)const noexcept;
+    bool tileAlpha(unsigned slot,SourceAlphaSample&)const noexcept;
+    std::uint32_t tileAlphaError()const noexcept;
     bool maskContent(MaskContentSample&)const noexcept;
     std::uint32_t sourceAlphaError()const noexcept;
     const char* stateName()const noexcept; // Bounded cold-worker status, no identifiers/secrets.
