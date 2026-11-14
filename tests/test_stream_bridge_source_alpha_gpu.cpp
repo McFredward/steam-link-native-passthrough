@@ -24,7 +24,7 @@ void run(){
     auto hr=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),&level,context.out());
     if(FAILED(hr))hr=D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),&level,context.out());
     check(SUCCEEDED(hr),"real D3D11 device");
-    SourceAlphaProbe probe;check(probe.prepare(device.p),"small diagnostic resources prepared cold");
+    BasicSourceAlphaProbe<8> probe;check(probe.prepare(device.p),"small diagnostic resources prepared cold");
     SourceAlphaSample sample{};check(!probe.read(0,sample),"no result exists before a completed capture");
     SourceAlphaProbe unavailable;check(!unavailable.prepare(nullptr)&&unavailable.error()!=0,"setup failure remains a diagnostic error");
     const SourceAlphaApi api{get,map,unmap};
@@ -41,8 +41,11 @@ void run(){
         SourceAlphaMetadata metadata{};metadata.present=++present;metadata.pid=42;metadata.width=desc.Width;metadata.height=desc.Height;
         metadata.resourceFormat=format;metadata.viewFormat=format;metadata.uv={{0,0,1,1}};
         metadata.nonFovealAlpha=0;metadata.directFoveated=1;metadata.sharpness=-.2f;
+        metadata.origin=unsigned(present%3);metadata.declaredPid=91;metadata.sourceBit=4;metadata.shader=12;
+        metadata.allocationGeneration=present+700;
+        if(metadata.origin==2){metadata.present=0;metadata.observation=present;}
         const std::uint64_t now=present*3000000;
-        for(unsigned eye=0;eye<2;++eye){
+        for(unsigned eye=0;eye<8;++eye){
             const auto beforeQueries=queries,beforeMaps=maps;
             probe.sample(context.p,source.p,eye,metadata,now,api);
             pretendPending=true;probe.sample(context.p,source.p,eye,metadata,now+1,api);pretendPending=false;
@@ -50,12 +53,12 @@ void run(){
         }
         context->Flush(); // Owned test submission; absent from production probe.
         const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(4);
-        for(unsigned eye=0;eye<2;++eye){
+        for(unsigned eye=0;eye<8;++eye){
             for(;;){
                 const auto beforeQueries=queries,beforeMaps=maps;
                 probe.sample(context.p,source.p,eye,metadata,now+1,api);
                 check(queries<=beforeQueries+1&&maps<=beforeMaps+1,"one query and at most one Map per callback");
-                if(probe.read(eye,sample)&&sample.source.present==present)break;
+                if(probe.read(eye,sample)&&sample.source.present==metadata.present&&sample.source.observation==metadata.observation)break;
                 check(std::chrono::steady_clock::now()<deadline,"real source GPU query/readback completes");
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
             }
@@ -63,6 +66,8 @@ void run(){
                 "diagnostic PID/frame/extent/format belong to the completed capture");
             check(sample.source.nonFovealAlpha==0&&sample.source.directFoveated==1&&sample.source.sharpness==-.2f,
                 "native shader alpha/flags are recorded independently of source alpha");
+            check(sample.source.origin==metadata.origin&&sample.source.declaredPid==91&&sample.source.sourceBit==4&&sample.source.shader==12&&sample.source.allocationGeneration==present+700,
+                "producer identity, declaration and diagnostic origin stay distinct; an upstream observation does not invent a presentation");
             for(auto v:sample.alpha){
                 check((v&255)==alpha&&((v>>8)&255)==alpha&&((v>>16)&255)==alpha,"actual source alpha preserves zero, fractional and opaque values");
                 check(((v>>24)&65535)==(alpha==0?1024:0)&&((v>>40)&65535)==(alpha==128?1024:0),"zero and fractional population counts match actual pixels");
@@ -81,6 +86,7 @@ void run(){
         metadata.pid=0;const auto beforeQueries=queries;probe.sample(context.p,source.p,0,metadata,now+3000000,api);
         check(queries==beforeQueries,"missing source PID cannot initiate a diagnostic capture");
     }
+    check(!probe.read(8,sample),"out-of-range diagnostic slot is refused");
     check(probe.error()==0,"actual supported source captures have no GPU errors");
 }
 }

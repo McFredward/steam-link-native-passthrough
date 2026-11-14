@@ -197,6 +197,19 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         [](std::uint32_t pid,bool budget,void* context)noexcept{static_cast<Provider*>(context)->coverage_.sourceProcess(pid,budget);}};
     void** directSlots_=nullptr;std::array<void*,8> directOriginal_{},directWrapped_{};
     void report(const char* status,stream_bridge::logging::Level level=stream_bridge::logging::Level::Important){if(log_&&stream_bridge::logging::enabled(level)){char text[stream_bridge::sender::RgbOutputLogBytes+64]{};std::snprintf(text,sizeof text,"Steam Link Native Passthrough: %s",status);log_->Log(text);}}
+    void reportAlphaObservation(const char* label,unsigned slot,const stream_bridge::sender::SourceAlphaSample& sample,std::uint32_t error){
+        const auto& m=sample.source;char text[896]{};
+        int used=std::snprintf(text,sizeof text,"%s: slot=%u, producer-pid=%u, declared-pid=%u; origin=%u, present=%llu, observation=%llu, allocation=%llu; source-bit=0x%x, shader=%u; samples=%llu, source=%ux%u/storage-view=%u/%u, hr=0x%08x",
+            label,slot,m.pid,m.declaredPid,m.origin,static_cast<unsigned long long>(m.present),static_cast<unsigned long long>(m.observation),
+            static_cast<unsigned long long>(m.allocationGeneration),m.sourceBit,m.shader,static_cast<unsigned long long>(sample.samples),m.width,m.height,m.resourceFormat,m.viewFormat,error);
+        for(unsigned region=0;region<3&&used>0&&std::size_t(used)<sizeof text;++region){
+            const auto value=sample.alpha[region];const auto n=std::snprintf(text+used,sizeof text-std::size_t(used),"; region%u=%u/%u/%u, zero/partial=%u/%u",
+                region,unsigned(value&255),unsigned((value>>8)&255),unsigned((value>>16)&255),unsigned((value>>24)&65535),unsigned((value>>40)&65535));
+            if(n<0)break;
+            used+=n;
+        }
+        report(text,stream_bridge::logging::Level::Debug);
+    }
     std::uint32_t admissionPid_=0;ULONGLONG nextAdmissionReport_=0;
     bool sourceReady(std::uint32_t pid){
         // A capability reply must precede the game's first native RGBA eyes.
@@ -454,6 +467,8 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         // secondary frame-epoch/copy failures without guessing source support.
         std::uint64_t seenSignals=0,seenRefusals=0,nextGateSample=1;
         unsigned auditReports=0,auditSamples=0,auditEpochSamples=0;std::uint64_t auditSerial=0,auditEpoch=0;
+        unsigned upstreamAlphaReports=0,tileAlphaReports=0;
+        std::array<std::uint64_t,32> upstreamAlphaSeen{};std::array<std::uint64_t,8> tileAlphaSeen{};
         unsigned gateTransitions=0,gateSamples=0;
         stream_bridge::sender::CoverageSourceReportBudget sourceReports;
         unsigned alphaReports=0,alphaSources=0;
@@ -469,8 +484,14 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             // on every 8 ms worker tick instead of this cold five-second cadence.
             nextGateReport=now+std::chrono::seconds(5);
             const auto stats=coverage_.gateStats();
-            if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&(auditReports<64||auditSamples<128)){
+            if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&(auditReports<64||auditSamples<128||upstreamAlphaReports<128)){
                 const auto audit=sourceAudit_.status();char text[896]{};
+                for(unsigned slot=0;slot<audit.sourceAlpha.size();++slot){const auto& alpha=audit.sourceAlpha[slot];
+                    if(alpha.samples&&alpha.samples!=upstreamAlphaSeen[slot]&&(final||upstreamAlphaReports<128)){
+                        upstreamAlphaSeen[slot]=alpha.samples;++upstreamAlphaReports;
+                        reportAlphaObservation("upstream source alpha",slot,alpha,audit.sourceAlphaErrors[slot/8]);
+                    }
+                }
                 if(auditReports<64){
                 std::snprintf(text,sizeof text,"compositor source audit: pid=%u, state=%u, error=%u, failed-stage=%u, remote-result=%u; discovery error/entries/matches/misses=%u/%u/%u/%u, load/entry-calls=%u/%u; devices/shaders/draws/recognized/dropped=%llu/%llu/%llu/%llu/%llu; diagnostic only, no frame/mask authority",
                     audit.pid,audit.state,audit.error,audit.failureStage,audit.remoteResult,
@@ -512,6 +533,13 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                         static_cast<unsigned long long>(sample.serial),sample.command,sample.count,sample.instances,sample.start,sample.baseVertex,
                         sample.firstInstance,sample.argumentOffset,sample.vertexKind,sample.shader,sample.programLinked,sample.programHashValid,hash);
                     report(text,stream_bridge::logging::Level::Debug);++auditSamples;++auditEpochSamples;
+                }
+            }
+            if(request_.explicitlyEnabled&&stream_bridge::logging::debug())for(unsigned slot=0;slot<tileAlphaSeen.size();++slot){
+                stream_bridge::sender::SourceAlphaSample alpha{};
+                if(coverage_.tileAlpha(slot,alpha)&&alpha.samples!=tileAlphaSeen[slot]&&(final||tileAlphaReports<128)){
+                    tileAlphaSeen[slot]=alpha.samples;++tileAlphaReports;
+                    reportAlphaObservation("native tile alpha",slot,alpha,coverage_.tileAlphaError());
                 }
             }
             stream_bridge::sender::MaskHevcSyntaxTrace syntax{};

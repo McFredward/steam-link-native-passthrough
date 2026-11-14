@@ -145,6 +145,7 @@ struct SenderCoverage::Impl {
     ID3D11Multithread* multithread=nullptr;CoverageContextFacade facade;
     SourceContract sourceContract;
     SourceAlphaProbe sourceAlpha;
+    BasicSourceAlphaProbe<8> tileAlpha;
     NativeShaders nativeShaders;
     MaskContentPublication maskContent;
     capture::Writer maskCapture;
@@ -434,6 +435,7 @@ struct SenderCoverage::Impl {
         // Optional diagnostics use independent tiny staging/query storage.
         // Failure never withdraws valid native coverage or source permission.
         (void)sourceAlpha.prepare(device);
+        if(logging::debug())(void)tileAlpha.prepare(device);
         width=w;height=h;activeSerial=0;stagedComposition=false;release(nativeOutput);release(intermediate);release(nativeChroma);
         for(auto& slot:all)slot.publish(Stages::Phase::Free);
         poolReady=true;prepared=true;hevcDirty.store(hevcRequested,std::memory_order_release);return true;
@@ -721,6 +723,15 @@ struct SenderCoverage::Impl {
             if(!intermediate)intermediate=identity(targetState.resource);
             if(!same(targetState.resource,intermediate)||!composition.image(reinterpret_cast<std::uintptr_t>(intermediate))||!composition.draw(sourceBit,rect))return failComposition(CoverageGate::CompositionImage);
             if(!drawCopyViewCoverage(ctx,targetView,copyCoverageShader,forwardDraw,count,start))return fail(CoverageGate::BlendDraw);
+            if(logging::debug()&&sourceContract.cameraAuthority()){
+                unsigned slot=0;for(auto bit=sourceBit;bit>1;bit>>=1)++slot;
+                SourceAlphaMetadata alpha{};alpha.present=frame.presentSerial;alpha.origin=1;
+                alpha.pid=pid;alpha.declaredPid=std::uint32_t(sourceContract.cameraAuthority());
+                alpha.sourceBit=sourceBit;alpha.shader=unsigned(kind);
+                alpha.width=sourceDesc.Width;alpha.height=sourceDesc.Height;
+                alpha.resourceFormat=unsigned(sourceDesc.Format);alpha.viewFormat=unsigned(viewDesc.Format);
+                tileAlpha.sample(ctx,source,slot,alpha,clockMicros(),{forwardGetData,forwardMap,forwardUnmap});
+            }
             stagedComposition=true;activePid=pid;activeContract=declared;drawBits|=sourceBit;gates.signal(CoverageSignal::EyeDraws);
             return 1;
         }
@@ -989,6 +1000,8 @@ CoverageGateStats SenderCoverage::gateStats()const noexcept{
 }
 bool SenderCoverage::maskContent(MaskContentSample& sample)const noexcept{return impl_->maskContent.read(sample);}
 bool SenderCoverage::sourceAlpha(unsigned eye,SourceAlphaSample& sample)const noexcept{return impl_->sourceAlpha.read(eye,sample);}
+bool SenderCoverage::tileAlpha(unsigned slot,SourceAlphaSample& sample)const noexcept{return impl_->tileAlpha.read(slot,sample);}
+std::uint32_t SenderCoverage::tileAlphaError()const noexcept{return impl_->tileAlpha.error();}
 std::uint32_t SenderCoverage::sourceAlphaError()const noexcept{return impl_->sourceAlpha.error();}
 const char* SenderCoverage::stateName()const noexcept{
     switch(impl_->state.load()){case 0:return "coverage-waiting-native-device";case 1:return "coverage-unsupported-device";case 2:return "coverage-device-observed";case 3:return "coverage-context-or-hook-refused";case 4:return "coverage-waiting-supported-encoder-or-source";case 5:return "coverage-pool-preparation-refused";case 6:return "coverage-source-pair-prepared-waiting-raw-receipt";case 7:return "coverage-native-receipt-certified-not-selected-proof";case 9:return "coverage-public-context-dispatch-changed";default:return "coverage-stopped";}

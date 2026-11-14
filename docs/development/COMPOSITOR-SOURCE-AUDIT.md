@@ -15,6 +15,47 @@ extent refusals. Both modes still lack PC coverage. These are ordinary-video
 observations, not headset MR acceptance or exact joins between independent
 PC/Frame counters.
 
+## PC0.3.23: alpha before and after the compositor
+
+The post0.3.35 Battlemarked test recognizes all eight sender shader objects.
+It completes4138 native conversion pairs and matches2340 encoder inputs, but
+captures zero game masks. Battlemarked PID27432 receives its ordinary-RGBA
+source grant at11:27:39.903 and again at11:27:53.645 after a scene handoff.
+The native tile producer is compositor PID26556. Matched stages use ordinary
+video rather than a game mask; matching Frame logs show ordinary rendering and
+zero decoded masks. Startup `no-declaration` counters are not evidence that
+the later game never received permission.
+
+The current native path reads four1216-square compositor tiles. Upstream
+observations separately identify the actual4292-square game allocations in
+Inner, DownscaleX and ReprojectX. Allocation ancestry and shader identity do
+not establish the missing current-game/eye/frame transfer. Relabeling the
+compositor PID as the declared game would bypass that requirement.
+
+This diagnostic candidate measures alpha at both actual binding sites without
+changing that admission rule. Existing tiny nonblocking readbacks now cover:
+
+- Registered upstream game bindings on their owning compositor graphics caller.
+  These records use `observation`, allocation generation and actual producer
+  PID. They keep `present=0`; they do not invent a game frame or eye identity.
+- Actual native staged tiles, independently per DirectMode layer/eye bit. These
+  records retain the native producer PID and the separate declared app PID.
+  Their presentation belongs to the native consumer scope, not an upstream app.
+
+Each slot samples three32-square regions at most once per two seconds and
+publishes only alpha min/mean/max and zero/fractional populations. RGB bytes
+are never exported. Upstream storage has eight allocation shards per retained
+context; native tile storage has eight slots. Resources are prepared on the
+device's owning startup caller. Polling uses a single nonblocking query/Map;
+there is no diagnostic Flush, wait, shader compilation or source mutation.
+Both new report families have independent128-record budgets.
+
+The measurements distinguish already opaque native tiles from a downstream
+source-routing failure. They are not exact joins between independent frames,
+mask certificates, or an MR fix. Installer0.3.36 ships PC0.3.23, unchanged
+Frame0.3.12, and the previous Chroma correction. Headset verification and the
+actual game-coverage transfer remain outstanding.
+
 ## PC0.3.22: current Chroma programs and P010 controls
 
 The supplied November14 PC files identify SteamVR2.19.3, build1794604515.

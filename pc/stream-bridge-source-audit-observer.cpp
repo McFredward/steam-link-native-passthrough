@@ -2,6 +2,7 @@
 #include "stream-bridge-source-audit-shared.h"
 #include "stream-bridge-sender-provider-shaders.h"
 #include "stream-bridge-native-image.h"
+#include "stream-bridge-source-alpha-probe.h"
 #include <d3d11_4.h>
 #include <algorithm>
 #include <atomic>
@@ -41,13 +42,14 @@ const std::array<ShaderFingerprint,19> Contracts{{
     {NativeShader::MultiViewVertexX,shaderDigest("099307078b6adec9586fb239e252ba31e30e2119fa22759a08a7d619481174d2")},
     {NativeShader::MultiViewVertexY,shaderDigest("187a168a6ad16a7889b51623cb0006959ecae7c519c2bf3c46c06e11cb05dd00")}
 }};
-// Metadata-only same-caller observer. It never draws, copies a GPU image,
-// changes thread protection, blocks a graphics thread or grants source output.
+// Same-caller observer. Optional tiny readbacks publish alpha statistics only,
+// without colour export, source mutation, graphics waits or coverage grants.
 struct Observer {
     Launch launch;Page* page=nullptr;HANDLE mapping=nullptr,parent=nullptr;
     NativeShaders shaders;
     std::mutex mutex;SourceAuditInventory inventory{};SourceAuditStatus status{};
     struct Context {
+        BasicSourceAlphaProbe<8> alpha;
         ID3D11DeviceContext* object=nullptr;void** original=nullptr;void** facade=nullptr;
         std::array<void*,149> expected{};unsigned count=0;void* allocation=nullptr;
         bool owns()const noexcept {
@@ -73,9 +75,9 @@ struct Observer {
     }
     static void deviceObserved(ID3D11Device* device,void* opaque)noexcept {
         auto& s=*static_cast<Observer*>(opaque);
-        try{s.attachContext(device);}catch(...){std::lock_guard<std::mutex> guard(s.mutex);s.status.state=8;s.status.error=ERROR_UNHANDLED_EXCEPTION;}
+        try{s.attachContext(device,true);}catch(...){std::lock_guard<std::mutex> guard(s.mutex);s.status.state=8;s.status.error=ERROR_UNHANDLED_EXCEPTION;}
     }
-    void attachContext(ID3D11Device* device){
+    void attachContext(ID3D11Device* device,bool prepareAlpha=false){
         std::lock_guard<std::mutex> guard(mutex);if(stopped)return;
         Held<ID3D11DeviceContext> native;device->GetImmediateContext(native.out());
         if(!native.p){status.state=8;status.error=ERROR_INVALID_HANDLE;return;}
@@ -83,6 +85,9 @@ struct Observer {
         for(;index<contexts.size();++index){if(contexts[index].object==native.p)return;if(!contexts[index].object)break;}
         if(index==contexts.size()){status.state=8;status.error=ERROR_TOO_MANY_NAMES;return;}
         auto& ctx=contexts[index];ctx.object=native.p;native.p=nullptr;ctx.count=115;
+        // The actual device-creation callback runs on its owning caller before
+        // native rendering begins. Cold status publication never calls D3D.
+        if(prepareAlpha)(void)ctx.alpha.prepare(device);
         const std::array<GUID,4> versions{{__uuidof(ID3D11DeviceContext4),__uuidof(ID3D11DeviceContext3),__uuidof(ID3D11DeviceContext2),__uuidof(ID3D11DeviceContext1)}};
         const unsigned lengths[4]{149,147,144,134};
         for(unsigned i=0;i<versions.size();++i){void* alias=nullptr;
@@ -198,6 +203,19 @@ struct Observer {
             sample.firstInstance=call.firstInstance;sample.argumentOffset=call.argumentOffset;sample.baseVertex=call.baseVertex;
             sample.programHashValid=hashValid;sample.programHash=program.hash;sample.programLinked=program.linked;
             D3D11_SHADER_RESOURCE_VIEW_DESC vd{};view.p->GetDesc(&vd);sample.view=unsigned(vd.ViewDimension);sample.viewFormat=unsigned(vd.Format);
+            if(multi&&sample.ownerMatches==1&&sample.pid&&sample.pid!=status.pid&&
+               shape.ArraySize==1&&shape.MipLevels==1&&shape.SampleDesc.Count==1&&
+               vd.ViewDimension==D3D11_SRV_DIMENSION_TEXTURE2D&&!vd.Texture2D.MostDetailedMip){
+                SourceAlphaMetadata alpha{};alpha.observation=draws.load(std::memory_order_relaxed);
+                alpha.origin=2;alpha.pid=sample.pid;alpha.allocationGeneration=sample.allocationGeneration;
+                alpha.shader=unsigned(kind);alpha.width=shape.Width;alpha.height=shape.Height;
+                alpha.resourceFormat=unsigned(shape.Format);alpha.viewFormat=unsigned(vd.Format);
+                const auto index=std::find_if(contexts.begin(),contexts.end(),[&](const auto& c){return c.object==ctx;});
+                if(index!=contexts.end())index->alpha.sample(ctx,resource.p,unsigned(sample.allocationGeneration%8),alpha,GetTickCount64()*1000,
+                    {[](ID3D11DeviceContext* c,ID3D11Asynchronous* q,void* p,UINT n,UINT flags){return c->GetData(q,p,n,flags);},
+                     [](ID3D11DeviceContext* c,ID3D11Resource* r,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* p){return c->Map(r,sub,type,flags,p);},
+                     [](ID3D11DeviceContext* c,ID3D11Resource* r,UINT sub){c->Unmap(r,sub);}});
+            }
             Held<ID3D11RenderTargetView> out;ctx->OMGetRenderTargets(1,out.out(),nullptr);
             if(out.p){Held<ID3D11Resource> output;out.p->GetResource(output.out());Held<ID3D11Texture2D> target;
                 if(output.p&&SUCCEEDED(output.p->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(target.out())))){
@@ -252,6 +270,10 @@ struct Observer {
         status.unknownPixelOverflow=stats.unknownPixelOverflow;
         status.multiViewShaderKinds=stats.multiViewKinds;
         status.factoryCalls=stats.factoryCalls;status.factoryCreated=stats.factoryCreated;status.factoryRefused=stats.factoryRefused;
+        for(unsigned context=0;context<contexts.size();++context){
+            status.sourceAlphaErrors[context]=contexts[context].alpha.error();
+            for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
+        }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();
         publish(page->statusSequence,page->status,status);
     }
