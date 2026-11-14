@@ -146,6 +146,9 @@ NVENCSTATUS NVENCAPI compositionLock(void*,NV_ENC_LOCK_BITSTREAM* packet){
 }
 NVENCSTATUS NVENCAPI compositionFactory(NV_ENCODE_API_FUNCTION_LIST* api){factory(api);api->nvEncRegisterResource=compositionRegister;api->nvEncMapInputResource=compositionMap;api->nvEncUnmapInputResource=compositionUnmap;api->nvEncUnregisterResource=compositionUnregister;api->nvEncEncodePicture=compositionEncode;api->nvEncLockBitstream=compositionLock;return NV_ENC_SUCCESS;}
 void runComposition(DXGI_FORMAT planarFormat=DXGI_FORMAT_NV12,bool legacy=false){
+    // Match the dev diagnostic policy explicitly. The production default is
+    // Important, which intentionally does not allocate/sample staged tiles.
+    stream_bridge::logging::current.store(stream_bridge::logging::Level::Debug);
     const auto mark=[](const char* stage){std::printf("Owned production composition: %s\n",stage);std::fflush(stdout);};
     mark("compile owned shader contracts");
     static constexpr char shader[]=R"(
