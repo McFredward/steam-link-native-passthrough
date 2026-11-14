@@ -163,6 +163,7 @@ struct SenderCoverage::Impl {
     IUnknown* nativeOutput=nullptr;std::uint32_t activePid=0;
     ID3D11PixelShader* copyCoverageShader=nullptr;
     NativeComposition composition;IUnknown* intermediate=nullptr;IUnknown* nativeChroma=nullptr;std::atomic<bool> stagedComposition{false};
+    std::uint64_t compositionSampleSerial=0; // Diagnostics only, first rejected edge in each presentation.
     struct Opened {vr::SharedTextureHandle_t handle=0;std::uint64_t generation=0;std::uint32_t pid=0;ID3D11Texture2D* texture=nullptr;};
     std::array<Opened,MaxOpened> opened{};std::uint64_t inventoryEpoch=0;
     struct Constant {ID3D11Resource* resource=nullptr;void* pointer=nullptr;std::array<std::uint8_t,128> bytes{};std::uint64_t present=0;bool valid=false;};
@@ -663,6 +664,16 @@ struct SenderCoverage::Impl {
         const auto kind=nativeShaders.identify(pixel);
         const bool copyView=kind==NativeShader::CopyView||kind==NativeShader::CopyViewCas;
         DrawTarget targetState;const bool targetOkay=targetState.read(ctx);
+        D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc{};D3D11_TEXTURE2D_DESC sourceDesc{};CompositionRect rect{};
+        const auto failComposition=[&](CoverageGate reason){
+            if(compositionSampleSerial!=frame.presentSerial){
+                gates.compositionSample({unsigned(kind),sourceDesc.Width,sourceDesc.Height,unsigned(sourceDesc.Format),unsigned(viewDesc.Format),
+                    targetState.desc.Width,targetState.desc.Height,unsigned(targetState.desc.Format),unsigned(targetState.viewDesc.Format),
+                    rect.width,rect.height,unsigned(composition.complete()),drawBits,unsigned(reason)});
+                compositionSampleSerial=frame.presentSerial;
+            }
+            gates.refuse(reason);gates.refuse(CoverageGate::Composition);return -1;
+        };
         if(!copyView&&(!stagedComposition||activeSerial!=frame.presentSerial)){
             if(targetOkay&&targetState.desc.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&targetState.desc.Width==width&&targetState.desc.Height==height){gates.refuse(CoverageGate::NativeShader);return -1;}
             return 0;
@@ -671,7 +682,8 @@ struct SenderCoverage::Impl {
             if(targetState.resource&&(same(targetState.resource,intermediate)||same(targetState.resource,nativeChroma)||same(targetState.resource,nativeOutput))){gates.refuse(CoverageGate::NativeShader);return -1;}
             return 0;
         }
-        if(!targetOkay||!beginFrame(ctx,frame)){gates.refuse(CoverageGate::Composition);return -1;}
+        if(!targetOkay)return failComposition(CoverageGate::CompositionTarget);
+        if(!beginFrame(ctx,frame))return failComposition(CoverageGate::CompositionFrame);
         Held<ID3D11VertexShader> vertex;ctx->VSGetShader(vertex.out(),nullptr,nullptr);
         D3D11_PRIMITIVE_TOPOLOGY topology{};ctx->IAGetPrimitiveTopology(&topology);
         const bool shape=count==3&&!start&&topology==D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
@@ -679,13 +691,13 @@ struct SenderCoverage::Impl {
         if(!shape||nativeShaders.identify(vertex)!=NativeShader::FullscreenVertex){gates.refuse(CoverageGate::NativeShader);return -1;}
         const unsigned sourceSlot=kind==NativeShader::ChromaPack?1u:0u;
         Held<ID3D11ShaderResourceView> view;ctx->PSGetShaderResources(sourceSlot,1,view.out());
-        Held<ID3D11Resource> source;Held<ID3D11Texture2D> texture;D3D11_SHADER_RESOURCE_VIEW_DESC viewDesc{};D3D11_TEXTURE2D_DESC sourceDesc{};
+        Held<ID3D11Resource> source;Held<ID3D11Texture2D> texture;
         if(view){view->GetDesc(&viewDesc);view->GetResource(source.out());}
         if(!source||FAILED(source->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(texture.out())))){gates.refuse(CoverageGate::SourceView);return -1;}
         texture->GetDesc(&sourceDesc);
         if(viewDesc.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D||viewDesc.Texture2D.MostDetailedMip||sourceDesc.ArraySize!=1||sourceDesc.MipLevels!=1||sourceDesc.SampleDesc.Count!=1){gates.refuse(CoverageGate::SourceShape);return -1;}
-        CompositionRect rect{};const auto& output=targetState.desc;
-        if(!viewport(ctx,output.Width,output.Height,rect)){gates.refuse(CoverageGate::Composition);return -1;}
+        const auto& output=targetState.desc;
+        if(!viewport(ctx,output.Width,output.Height,rect))return failComposition(CoverageGate::CompositionViewport);
         const auto fail=[&](CoverageGate gate){gates.refuse(gate);return -1;};
         if(copyView){
             if(!copyCoverageShader||output.Width!=width||output.Height!=height||output.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||targetState.viewDesc.Format!=output.Format)return fail(CoverageGate::OutputShape);
@@ -707,19 +719,34 @@ struct SenderCoverage::Impl {
             const auto declared=sourceContract.snapshot(pid);
             if(drawBits&&activeContract!=declared)return fail(CoverageGate::SourceContract);
             if(!intermediate)intermediate=identity(targetState.resource);
-            if(!same(targetState.resource,intermediate)||!composition.image(reinterpret_cast<std::uintptr_t>(intermediate))||!composition.draw(sourceBit,rect))return fail(CoverageGate::Composition);
+            if(!same(targetState.resource,intermediate)||!composition.image(reinterpret_cast<std::uintptr_t>(intermediate))||!composition.draw(sourceBit,rect))return failComposition(CoverageGate::CompositionImage);
             if(!drawCopyViewCoverage(ctx,targetView,copyCoverageShader,forwardDraw,count,start))return fail(CoverageGate::BlendDraw);
             stagedComposition=true;activePid=pid;activeContract=declared;drawBits|=sourceBit;gates.signal(CoverageSignal::EyeDraws);
             return 1;
         }
-        if(!stagedComposition||!composition.complete())return fail(CoverageGate::Composition);
+        if(!stagedComposition||!composition.complete())return failComposition(CoverageGate::CompositionIncomplete);
         if(kind==NativeShader::Chroma||kind==NativeShader::ChromaLegacy){
+            // Some native conversions write UV straight into a planar view.
+            // Its resource keeps full luma dimensions while its UV viewport
+            // is half-sized; no separate UV image/pack edge exists there.
+            const bool planar=output.Format==DXGI_FORMAT_NV12||output.Format==DXGI_FORMAT_P010;
+            if(planar){
+                const auto expected=output.Format==DXGI_FORMAT_NV12?DXGI_FORMAT_R8G8_UNORM:DXGI_FORMAT_R16G16_UNORM;
+                if(!same(source,intermediate)||sourceDesc.Width!=width||sourceDesc.Height!=height||
+                   sourceDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||viewDesc.Format!=sourceDesc.Format||
+                   output.Width!=width||output.Height!=height||targetState.viewDesc.Format!=expected||
+                   rect.x||rect.y||rect.width!=width/2||rect.height!=height/2)return failComposition(CoverageGate::CompositionDirectUV);
+                if(!nativeOutput)nativeOutput=identity(targetState.resource);
+                if(!same(targetState.resource,nativeOutput)||!composition.directChroma(reinterpret_cast<std::uintptr_t>(intermediate),reinterpret_cast<std::uintptr_t>(nativeOutput)))return failComposition(CoverageGate::CompositionDirectUV);
+                if(composition.ready(frame.presentSerial,frame.registryEpoch,reinterpret_cast<std::uintptr_t>(nativeOutput))){preparedPid=activePid;if(state!=7)state=6;gates.signal(CoverageSignal::CompletePairs);}
+                return 1;
+            }
             if(!same(source,intermediate)||sourceDesc.Width!=width||sourceDesc.Height!=height||sourceDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||viewDesc.Format!=sourceDesc.Format||
-               output.Width!=width/2||output.Height!=height/2||rect.x||rect.y||rect.width!=output.Width||rect.height!=output.Height)return fail(CoverageGate::Composition);
+               output.Width!=width/2||output.Height!=height/2||rect.x||rect.y||rect.width!=output.Width||rect.height!=output.Height)return failComposition(CoverageGate::CompositionChroma);
             const auto format=targetState.viewDesc.Format;
             if(format!=DXGI_FORMAT_R32G32_FLOAT&&format!=DXGI_FORMAT_R16G16_FLOAT&&format!=DXGI_FORMAT_R16G16_UNORM&&format!=DXGI_FORMAT_R8G8_UNORM)return fail(CoverageGate::OutputShape);
             if(!nativeChroma)nativeChroma=identity(targetState.resource);
-            if(!same(targetState.resource,nativeChroma)||!composition.chroma(reinterpret_cast<std::uintptr_t>(intermediate),reinterpret_cast<std::uintptr_t>(nativeChroma)))return fail(CoverageGate::Composition);
+            if(!same(targetState.resource,nativeChroma)||!composition.chroma(reinterpret_cast<std::uintptr_t>(intermediate),reinterpret_cast<std::uintptr_t>(nativeChroma)))return failComposition(CoverageGate::CompositionChroma);
             return 1;
         }
         const bool luma=kind==NativeShader::Luma||kind==NativeShader::LumaLegacy;
@@ -729,11 +756,11 @@ struct SenderCoverage::Impl {
         const auto expectedView=output.Format==DXGI_FORMAT_NV12?(luma?DXGI_FORMAT_R8_UNORM:DXGI_FORMAT_R8G8_UNORM):(luma?DXGI_FORMAT_R16_UNORM:DXGI_FORMAT_R16G16_UNORM);
         if(targetState.viewDesc.Format!=expectedView||rect.x||rect.y||rect.width!=(luma?width:width/2)||rect.height!=(luma?height:height/2))return fail(CoverageGate::OutputShape);
         if(!nativeOutput)nativeOutput=identity(targetState.resource);
-        if(!same(targetState.resource,nativeOutput))return fail(CoverageGate::Composition);
+        if(!same(targetState.resource,nativeOutput))return failComposition(luma?CoverageGate::CompositionLuma:CoverageGate::CompositionPack);
         const auto outputToken=reinterpret_cast<std::uintptr_t>(nativeOutput);
         if(luma){
-            if(!same(source,intermediate)||sourceDesc.Width!=width||sourceDesc.Height!=height||sourceDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||viewDesc.Format!=sourceDesc.Format||!composition.luma(reinterpret_cast<std::uintptr_t>(intermediate),outputToken))return fail(CoverageGate::Composition);
-        }else if(!same(source,nativeChroma)||sourceDesc.Width!=width/2||sourceDesc.Height!=height/2||!composition.pack(reinterpret_cast<std::uintptr_t>(nativeChroma),outputToken))return fail(CoverageGate::Composition);
+            if(!same(source,intermediate)||sourceDesc.Width!=width||sourceDesc.Height!=height||sourceDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||viewDesc.Format!=sourceDesc.Format||!composition.luma(reinterpret_cast<std::uintptr_t>(intermediate),outputToken))return failComposition(CoverageGate::CompositionLuma);
+        }else if(!same(source,nativeChroma)||sourceDesc.Width!=width/2||sourceDesc.Height!=height/2||!composition.pack(reinterpret_cast<std::uintptr_t>(nativeChroma),outputToken))return failComposition(CoverageGate::CompositionPack);
         gates.output(output.Width,output.Height,unsigned(output.Format));
         if(composition.ready(frame.presentSerial,frame.registryEpoch,outputToken)){preparedPid=activePid;if(state!=7)state=6;gates.signal(CoverageSignal::CompletePairs);}
         return 1;

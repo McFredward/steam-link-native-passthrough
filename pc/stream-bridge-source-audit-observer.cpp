@@ -239,6 +239,7 @@ struct Observer {
         const auto stats=shaders.stats();status.devices=stats.devices;status.shaders=stats.recognized;
         status.draws=draws.load();status.recognizedDraws=recognized.load();status.dropped=dropped.load();
         status.streamShaderKinds=stats.streamKinds;status.unknownPixelPrograms=stats.unknownPixels;
+        status.unknownPixelOverflow=stats.unknownPixelOverflow;
         status.multiViewShaderKinds=stats.multiViewKinds;
         status.factoryCalls=stats.factoryCalls;status.factoryCreated=stats.factoryCreated;status.factoryRefused=stats.factoryRefused;
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();

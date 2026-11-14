@@ -30,6 +30,7 @@ struct SourceAuditStatus {
     std::uint64_t devices=0,shaders=0,draws=0,recognizedDraws=0,dropped=0;
     std::array<std::uint64_t,3> streamShaderKinds{};
     std::uint64_t unknownPixelPrograms=0;
+    std::uint64_t unknownPixelOverflow=0;
     std::array<std::uint64_t,8> multiViewShaderKinds{};
     std::uint64_t factoryCalls=0,factoryCreated=0,factoryRefused=0;
     // Indexed, plain, indexed-instanced, instanced, auto, indexed-indirect,

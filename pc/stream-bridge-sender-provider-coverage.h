@@ -20,7 +20,8 @@ enum class CoverageGate : unsigned {
     None,Device,Context,Caller,DirectFrame,Lock,Prepared,DrawShape,FrameEpoch,
     ConstantBuffer,EyeSelector,SourceView,SourceShape,SharedResource,AmbiguousSource,
     RepeatedSource,MixedProcess,InteriorCopy,OutputDepth,OutputShape,BlendDraw,
-    CopyPair,StageFull,InputReceipt,RawWitness,Readback,Inventory,Encoder,SourceContract,CoverageSession,StageReceipt,RleEncode,FrameCertificate,SourceRevoked,QueryPending,QueryError,NativeShader,Composition,CompositionWrite,Count
+    CopyPair,StageFull,InputReceipt,RawWitness,Readback,Inventory,Encoder,SourceContract,CoverageSession,StageReceipt,RleEncode,FrameCertificate,SourceRevoked,QueryPending,QueryError,NativeShader,Composition,CompositionWrite,
+    CompositionTarget,CompositionFrame,CompositionViewport,CompositionImage,CompositionIncomplete,CompositionChroma,CompositionDirectUV,CompositionLuma,CompositionPack,Count
 };
 inline const char* coverageGateName(CoverageGate gate)noexcept{
     switch(gate){
@@ -42,6 +43,11 @@ inline const char* coverageGateName(CoverageGate gate)noexcept{
     case CoverageGate::NativeShader:return "native-shader-identity";
     case CoverageGate::Composition:return "native-composition-chain";
     case CoverageGate::CompositionWrite:return "native-composition-write";
+    case CoverageGate::CompositionTarget:return "composition-target";case CoverageGate::CompositionFrame:return "composition-frame";
+    case CoverageGate::CompositionViewport:return "composition-viewport";case CoverageGate::CompositionImage:return "composition-image";
+    case CoverageGate::CompositionIncomplete:return "composition-incomplete";case CoverageGate::CompositionChroma:return "composition-chroma";
+    case CoverageGate::CompositionDirectUV:return "composition-direct-uv";case CoverageGate::CompositionLuma:return "composition-luma";
+    case CoverageGate::CompositionPack:return "composition-pack";
     case CoverageGate::CoverageSession:return "coverage-session";case CoverageGate::StageReceipt:return "staging-receipt";
     case CoverageGate::RleEncode:return "coverage-rle";case CoverageGate::FrameCertificate:return "frame-certificate";case CoverageGate::SourceRevoked:return "source-format-revoked";case CoverageGate::QueryPending:return "readback-query-pending";case CoverageGate::QueryError:return "readback-query-error";default:return "unknown";}
 }
@@ -57,6 +63,9 @@ struct CoverageGateStats {
     std::uint64_t drawShapesSupported=0,drawShapesRefused=0;
     bool lastDrawAdaptive=false,lastDrawShapeSupported=false;
     std::array<std::uint32_t,8> nativeSourceShape{}; // array, mips, samples, SRV dimension, storage format, slice, slice-count, mip.
+    // Last rejected composition edge: kind; source w/h/storage/view; output
+    // w/h/storage/view; viewport w/h; complete; eye bits; gate. Metadata only.
+    std::array<std::uint32_t,14> compositionRefusal{};
     std::uint64_t hookDraws=0,nativeDraws=0,sourceFrames=0,constantMaps=0,constantCaptures=0,
         eyeDraws=0,completePairs=0,nativeCopies=0,capturedCopies=0,matchedInputs=0,certifiedMasks=0,
         deviceOpened=0,contextsReady=0,otherDraws=0,nativeMaps=0,inventoryRefreshes=0;
@@ -82,6 +91,9 @@ struct CoverageGateStats {
 class CoverageGateCounters {
     static_assert(std::atomic<std::uint64_t>::is_always_lock_free,"render diagnostics must never use an atomic-library lock");
 public:
+    void compositionSample(const std::array<std::uint32_t,14>& values)noexcept{
+        for(unsigned i=0;i<values.size();++i)compositionRefusal_[i].store(values[i],std::memory_order_relaxed);
+    }
     void nativeSourceShape(std::array<std::uint32_t,8> values)noexcept{
         for(unsigned i=0;i<values.size();++i)nativeSourceShape_[i].store(values[i],std::memory_order_relaxed);
     }
@@ -141,6 +153,7 @@ public:
         out.lastDrawShapeSupported=drawSupported_.load(std::memory_order_relaxed);
         out.drawShapesSupported=drawShapesSupported_.load(std::memory_order_relaxed);out.drawShapesRefused=drawShapesRefused_.load(std::memory_order_relaxed);
         for(unsigned i=0;i<out.nativeSourceShape.size();++i)out.nativeSourceShape[i]=nativeSourceShape_[i].load(std::memory_order_relaxed);
+        for(unsigned i=0;i<out.compositionRefusal.size();++i)out.compositionRefusal[i]=compositionRefusal_[i].load(std::memory_order_relaxed);
         std::uint64_t* const values[]{&out.hookDraws,&out.nativeDraws,&out.sourceFrames,&out.constantMaps,&out.constantCaptures,
             &out.eyeDraws,&out.completePairs,&out.nativeCopies,&out.capturedCopies,&out.matchedInputs,&out.certifiedMasks,
             &out.deviceOpened,&out.contextsReady,&out.otherDraws,&out.nativeMaps,&out.inventoryRefreshes};
@@ -182,6 +195,7 @@ private:
     // Contention can lose diagnostic samples; snapshots are intentionally not
     // coherent frame proofs. No caller may use them to authorize rendering.
     std::array<std::atomic<std::uint64_t>,static_cast<unsigned>(CoverageSignal::Count)> signals_{};
+    std::array<std::atomic<std::uint32_t>,14> compositionRefusal_{};
     std::array<std::atomic<std::uint64_t>,static_cast<unsigned>(CoverageGate::Count)> refusals_{};
     std::array<std::atomic<std::uint64_t>,static_cast<unsigned>(SourceContractStatus::Count)> sourceRefusals_{},sourceProcessPairs_{};
     std::atomic<std::uint32_t> sourceCauses_{0};

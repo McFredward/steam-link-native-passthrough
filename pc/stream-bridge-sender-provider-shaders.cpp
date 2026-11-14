@@ -26,7 +26,12 @@ struct NativeShaders::Impl {
     struct Device {std::atomic<ID3D11Device*> object{nullptr};Table* methods=nullptr;std::atomic<bool> active{false};};
     struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;std::atomic<bool> linked{false};};
     std::array<Table,4> tables{};std::array<Device,4> devices{};std::array<Shader,64> shaders{};
-    std::array<Shader,128> unknownPixels{};
+    std::array<Shader,512> unknownPixels{};
+    std::atomic<std::uint64_t> unknownPixelOverflow{0};
+    static unsigned unknownIndex(IUnknown* identity)noexcept{
+        auto value=reinterpret_cast<std::uintptr_t>(identity)>>4;value^=value>>23;
+        return static_cast<unsigned>(value)&511u;
+    }
     std::array<ShaderFingerprint,32> contracts{};std::size_t contractCount=0;
     std::mutex mutex;std::atomic<bool> stopped{false},published{false};
     DeviceObserved observer=nullptr;void* observerOpaque=nullptr;bool readOnlySingleThreaded=false;
@@ -62,7 +67,18 @@ struct NativeShaders::Impl {
             }
             return false;
         };
-        if(kind==NativeShader::Unknown){if(keep(unknownPixels))return;}
+        if(kind==NativeShader::Unknown){
+            // No deletion: retained COM identities cannot be recycled. Bound
+            // lookups stop at the first empty cell instead of scanning every
+            // startup program on every diagnostic draw.
+            const auto first=unknownIndex(identity);
+            for(unsigned n=0;n<unknownPixels.size();++n){auto& slot=unknownPixels[(first+n)&511u];
+                const auto old=slot.object.load(std::memory_order_acquire);
+                if(old==identity){if(linkage)slot.linked.store(true,std::memory_order_release);identity->Release();return;}
+                if(!old){slot.kind=kind;slot.hash=hash;slot.pixel=true;slot.linked=linkage!=nullptr;slot.object.store(identity,std::memory_order_release);return;}
+            }
+            ++unknownPixelOverflow;
+        }
         else if(keep(shaders))return;
         identity->Release();if(kind!=NativeShader::Unknown)++refused;
     }
@@ -189,11 +205,19 @@ bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& 
         }
         return false;
     };
-    const bool found=find(impl_->shaders)||find(impl_->unknownPixels);identity->Release();return found;
+    bool found=find(impl_->shaders);
+    if(!found){const auto first=Impl::unknownIndex(identity);
+        for(unsigned n=0;n<impl_->unknownPixels.size();++n){const auto& slot=impl_->unknownPixels[(first+n)&511u];
+            const auto object=slot.object.load(std::memory_order_acquire);if(!object)break;
+            if(object==identity){out={NativeShader::Unknown,slot.hash,true,slot.linked.load(std::memory_order_acquire)};found=true;break;}
+        }
+    }
+    identity->Release();return found;
 }
 NativeShaderStats NativeShaders::stats()const noexcept{
     NativeShaderStats out{impl_->deviceCount.load(),impl_->recognized.load(),impl_->refused.load(),impl_->import&&!impl_->stopped};
     out.factoryCalls=impl_->factoryCalls.load();out.factoryCreated=impl_->factoryCreated.load();out.factoryRefused=impl_->factoryRefused.load();
+    out.unknownPixelOverflow=impl_->unknownPixelOverflow.load();
     for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)){
         if(slot.linked.load(std::memory_order_acquire)){if(slot.pixel)++out.unknownPixels;continue;}
         if(slot.kind==NativeShader::StreamVertex)++out.streamKinds[0];

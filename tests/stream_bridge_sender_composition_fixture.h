@@ -3,15 +3,30 @@
 // device; accepted fake submissions do not claim hardware encoding or a peer.
 struct CompositionFixture {
     static constexpr UINT Width=64,Height=64;
-    enum class Mode {Valid,MissingTile,WrongEye,ClearImage,WrongChroma,WrongLuma,UnknownDraw,UnrelatedWrite,RegionWrite,DiscardImage};
+    enum class Mode {Valid,MissingTile,WrongEye,ClearImage,WrongChroma,WrongLuma,UnknownDraw,UnrelatedWrite,RegionWrite,DiscardImage,
+        DirectUV,DirectUVLumaFirst,DirectUVWrongSource,DirectUVWrongOutput,DirectUVRepeated,DirectUVMixed};
     ID3D11Device* device=nullptr;ID3D11DeviceContext* context=nullptr;Mode mode=Mode::Valid;unsigned created=0,eyeBase=0;
     std::array<std::array<Com<ID3D11Texture2D>,3>,4> sources;
     std::array<Com<ID3D11ShaderResourceView>,4> eyes;
-    Com<ID3D11Texture2D> image,chroma,foreignChroma,planar,foreignPlanar,input,unrelated;
-    Com<ID3D11RenderTargetView> imageTarget,chromaTarget,uvTarget,yTarget,foreignY,unrelatedTarget;
+    Com<ID3D11Texture2D> image,chroma,foreignChroma,planar,foreignPlanar,input,unrelated,readback;
+    Com<ID3D11RenderTargetView> imageTarget,chromaTarget,uvTarget,yTarget,foreignY,foreignUV,unrelatedTarget;
     Com<ID3D11ShaderResourceView> imageView,chromaView,foreignChromaView;
     Com<ID3D11VertexShader> vertex;Com<ID3D11PixelShader> copyPixel,chromaPixel,packPixel,lumaPixel,unknownPixel;
     Com<ID3D11Buffer> constants;Com<ID3D11RasterizerState> raster;
+    void** nativeTable=nullptr;bool bypass=false;
+    using NativeDraw=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT);
+    using NativeCopy=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,ID3D11Resource*);
+    void draw(){if(bypass)pointerBits<NativeDraw>(nativeTable[13])(context,3,0);else context->Draw(3,0);}
+    void copy(ID3D11Resource* destination,ID3D11Resource* source){
+        if(bypass)pointerBits<NativeCopy>(nativeTable[47])(context,destination,source);else context->CopyResource(destination,source);
+    }
+    std::vector<std::uint8_t> output(){
+        pointerBits<NativeCopy>(nativeTable[47])(context,readback.p,planar.p);D3D11_MAPPED_SUBRESOURCE mapped{};
+        check(SUCCEEDED(context->Map(readback.p,0,D3D11_MAP_READ,0,&mapped)),"owned native NV12 comparison map");
+        std::vector<std::uint8_t> bytes(Width*Height*3/2);
+        for(UINT y=0;y<Height*3/2;++y)std::memcpy(bytes.data()+y*Width,static_cast<const std::uint8_t*>(mapped.pData)+y*mapped.RowPitch,Width);
+        context->Unmap(readback.p,0);return bytes;
+    }
     static CompositionFixture* active;
     static void create(void*,std::uint32_t,const DirectMode::SwapTextureSetDesc_t* requested,DirectMode::SwapTextureSet_t* output){
         auto& self=*active;check(self.created<self.sources.size(),"bounded actual source sets");const auto eye=self.created++;
@@ -46,11 +61,21 @@ struct CompositionFixture {
         check(SUCCEEDED(device->CreateShaderResourceView(image.p,nullptr,imageView.out()))&&SUCCEEDED(device->CreateShaderResourceView(chroma.p,nullptr,chromaView.out()))&&SUCCEEDED(device->CreateShaderResourceView(foreignChroma.p,nullptr,foreignChromaView.out())),"native graph source views");
         D3D11_RENDER_TARGET_VIEW_DESC view{};view.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;view.Format=DXGI_FORMAT_R8_UNORM;
         check(SUCCEEDED(device->CreateRenderTargetView(planar.p,&view,yTarget.out()))&&SUCCEEDED(device->CreateRenderTargetView(foreignPlanar.p,&view,foreignY.out())),"actual native planar luma targets");
-        view.Format=DXGI_FORMAT_R8G8_UNORM;check(SUCCEEDED(device->CreateRenderTargetView(planar.p,&view,uvTarget.out())),"actual native planar UV target");
+        view.Format=DXGI_FORMAT_R8G8_UNORM;check(SUCCEEDED(device->CreateRenderTargetView(planar.p,&view,uvTarget.out()))&&SUCCEEDED(device->CreateRenderTargetView(foreignPlanar.p,&view,foreignUV.out())),"actual native planar UV targets");
+        D3D11_TEXTURE2D_DESC staging{};planar->GetDesc(&staging);staging.Usage=D3D11_USAGE_STAGING;staging.BindFlags=0;staging.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+        check(SUCCEEDED(device->CreateTexture2D(&staging,nullptr,readback.out())),"owned native planar comparison surface");
         D3D11_BUFFER_DESC b{};b.ByteWidth=48;b.Usage=D3D11_USAGE_DEFAULT;b.BindFlags=D3D11_BIND_CONSTANT_BUFFER;check(SUCCEEDED(device->CreateBuffer(&b,nullptr,constants.out())),"native b2 copy parameters");
         D3D11_RASTERIZER_DESC r{};r.FillMode=D3D11_FILL_SOLID;r.CullMode=D3D11_CULL_NONE;r.DepthClipEnable=TRUE;check(SUCCEEDED(device->CreateRasterizerState(&r,raster.out())),"native copy rasterizer");
     }
     void render(){
+        // Compare every actual output plane with the same native drawing
+        // through the current original dispatch. This is an owned WARP test,
+        // not live-process image capture or hardware encoder acceptance.
+        if(mode!=Mode::Valid&&mode!=Mode::UnrelatedWrite&&mode!=Mode::DirectUV&&mode!=Mode::DirectUVLumaFirst){renderCore();return;}
+        bypass=true;renderCore();const auto original=output();bypass=false;
+        renderCore();check(original==output(),"production coverage leaves every native NV12 RGB byte unchanged");
+    }
+    void renderCore(){
         std::puts("Owned production render: enter");std::fflush(stdout);
         check(DirectModeBoundary::currentFrame()!=nullptr,"real typed DirectMode presentation scope");
         context->ClearState();context->RSSetState(raster.p);context->VSSetShader(vertex.p,nullptr,0);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);context->PSSetShader(copyPixel.p,nullptr,0);context->PSSetConstantBuffers(2,1,&constants.p);context->OMSetRenderTargets(1,&imageTarget.p,nullptr);
@@ -58,20 +83,32 @@ struct CompositionFixture {
         for(unsigned tile=0;tile<4;++tile){if(tile==3&&mode==Mode::MissingTile)continue;const unsigned eye=mode==Mode::WrongEye?0:tile/2;
             const D3D11_VIEWPORT viewport{0,float(tile*Height/4),float(Width),float(Height/4),0,1};context->RSSetViewports(1,&viewport);
             float b[12]{};b[9]=float((tile/2)*Height/2);context->UpdateSubresource(constants.p,0,nullptr,b,0,0);context->PSSetShaderResources(0,1,&eyes[eyeBase+eye].p);
-            std::printf("Owned production render: draw tile %u\n",tile);std::fflush(stdout);context->Draw(3,0);
+            std::printf("Owned production render: draw tile %u\n",tile);std::fflush(stdout);draw();
         }
         const FLOAT zero[4]{};
         if(mode==Mode::ClearImage)context->ClearRenderTargetView(imageTarget.p,zero);
         if(mode==Mode::UnrelatedWrite)context->ClearRenderTargetView(unrelatedTarget.p,zero);
         if(mode==Mode::RegionWrite)context->CopySubresourceRegion(image.p,0,0,0,0,unrelated.p,0,nullptr);
         if(mode==Mode::DiscardImage){Com<ID3D11DeviceContext1> extended;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"native Context1 discard");extended->DiscardView(imageTarget.p);}
-        if(mode==Mode::UnknownDraw){context->PSSetShader(unknownPixel.p,nullptr,0);context->Draw(3,0);}
+        if(mode==Mode::UnknownDraw){context->PSSetShader(unknownPixel.p,nullptr,0);draw();}
         ID3D11ShaderResourceView* empty[2]{};context->PSSetShaderResources(0,2,empty);
+        if(mode>=Mode::DirectUV){
+            const auto luma=[&]{context->OMSetRenderTargets(1,&yTarget.p,nullptr);context->PSSetShaderResources(0,1,&imageView.p);context->PSSetShader(lumaPixel.p,nullptr,0);
+                const D3D11_VIEWPORT view{0,0,float(Width),float(Height),0,1};context->RSSetViewports(1,&view);draw();};
+            if(mode==Mode::DirectUVLumaFirst)luma();
+            auto* uv=mode==Mode::DirectUVWrongOutput?foreignUV.p:uvTarget.p;auto* source=mode==Mode::DirectUVWrongSource?foreignChromaView.p:imageView.p;
+            context->OMSetRenderTargets(1,&uv,nullptr);context->PSSetShaderResources(0,1,&source);context->PSSetShader(chromaPixel.p,nullptr,0);
+            const D3D11_VIEWPORT view{0,0,float(Width/2),float(Height/2),0,1};context->RSSetViewports(1,&view);draw();
+            if(mode==Mode::DirectUVRepeated)draw();
+            if(mode==Mode::DirectUVMixed){context->OMSetRenderTargets(1,&chromaTarget.p,nullptr);context->PSSetShaderResources(0,1,&imageView.p);draw();}
+            if(mode!=Mode::DirectUVLumaFirst)luma();
+            copy(input.p,planar.p);return;
+        }
         context->OMSetRenderTargets(1,&chromaTarget.p,nullptr);context->PSSetShaderResources(0,1,&imageView.p);context->PSSetShader(chromaPixel.p,nullptr,0);
-        D3D11_VIEWPORT viewport{0,0,float(Width/2),float(Height/2),0,1};context->RSSetViewports(1,&viewport);context->Draw(3,0);
-        context->OMSetRenderTargets(1,&uvTarget.p,nullptr);auto* uvSource=mode==Mode::WrongChroma?foreignChromaView.p:chromaView.p;context->PSSetShaderResources(1,1,&uvSource);context->PSSetShader(packPixel.p,nullptr,0);context->Draw(3,0);
-        auto* y=mode==Mode::WrongLuma?foreignY.p:yTarget.p;context->OMSetRenderTargets(1,&y,nullptr);context->PSSetShader(lumaPixel.p,nullptr,0);viewport.Width=float(Width);viewport.Height=float(Height);context->RSSetViewports(1,&viewport);context->Draw(3,0);
-        context->CopyResource(input.p,planar.p);
+        D3D11_VIEWPORT viewport{0,0,float(Width/2),float(Height/2),0,1};context->RSSetViewports(1,&viewport);draw();
+        context->OMSetRenderTargets(1,&uvTarget.p,nullptr);auto* uvSource=mode==Mode::WrongChroma?foreignChromaView.p:chromaView.p;context->PSSetShaderResources(1,1,&uvSource);context->PSSetShader(packPixel.p,nullptr,0);draw();
+        auto* y=mode==Mode::WrongLuma?foreignY.p:yTarget.p;context->OMSetRenderTargets(1,&y,nullptr);context->PSSetShader(lumaPixel.p,nullptr,0);viewport.Width=float(Width);viewport.Height=float(Height);context->RSSetViewports(1,&viewport);draw();
+        copy(input.p,planar.p);
     }
 };
 CompositionFixture* CompositionFixture::active=nullptr;
@@ -108,7 +145,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     check(SUCCEEDED(pointerBits<decltype(&D3D11CreateDevice)>(factorySlot)(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),&level,context.out())),"native WARP device through production factory observer");
     Com<ID3D11Multithread> multithread;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11Multithread),reinterpret_cast<void**>(multithread.out()))),"actual native multithread interface");multithread->SetMultithreadProtected(TRUE);
     mark("create actual native shader objects");
-    CompositionFixture fixture;fixture.device=device.p;fixture.context=context.p;CompositionFixture::active=&fixture;
+    CompositionFixture fixture;fixture.device=device.p;fixture.context=context.p;fixture.nativeTable=*reinterpret_cast<void***>(context.p);CompositionFixture::active=&fixture;
     check(SUCCEEDED(device->CreateVertexShader(code[0]->GetBufferPointer(),code[0]->GetBufferSize(),nullptr,fixture.vertex.out())),"production recognized native vertex shader");
     ID3D11PixelShader** pixels[]{fixture.copyPixel.out(),fixture.chromaPixel.out(),fixture.packPixel.out(),fixture.lumaPixel.out(),fixture.unknownPixel.out()};
     for(unsigned i=0;i<5;++i)check(SUCCEEDED(device->CreatePixelShader(code[i+1]->GetBufferPointer(),code[i+1]->GetBufferSize(),nullptr,pixels[i])),"production observed actual native pixel creation");
@@ -137,9 +174,9 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     check(foreignAfter.completePairs==foreignBefore.completePairs+1&&foreignAfter.capturedCopies==foreignBefore.capturedCopies&&!foreignAfter.certifiedMasks&&!coverage.operational(pid),"a complete compositor image under a live application format lease never becomes an application mask");
     fixture.eyeBase=2;for(unsigned eye=0;eye<2;++eye)eyes[eye].hTexture=sets[2+eye].rSharedTextureHandles[0];
     std::uint64_t timestamp=0;
-    for(auto mode:{CompositionFixture::Mode::Valid,CompositionFixture::Mode::ClearImage,CompositionFixture::Mode::MissingTile,CompositionFixture::Mode::WrongEye,CompositionFixture::Mode::WrongChroma,CompositionFixture::Mode::WrongLuma,CompositionFixture::Mode::UnknownDraw,CompositionFixture::Mode::RegionWrite,CompositionFixture::Mode::DiscardImage,CompositionFixture::Mode::UnrelatedWrite,CompositionFixture::Mode::Valid}){
+    for(auto mode:{CompositionFixture::Mode::Valid,CompositionFixture::Mode::ClearImage,CompositionFixture::Mode::MissingTile,CompositionFixture::Mode::WrongEye,CompositionFixture::Mode::WrongChroma,CompositionFixture::Mode::WrongLuma,CompositionFixture::Mode::UnknownDraw,CompositionFixture::Mode::RegionWrite,CompositionFixture::Mode::DiscardImage,CompositionFixture::Mode::UnrelatedWrite,CompositionFixture::Mode::DirectUV,CompositionFixture::Mode::DirectUVLumaFirst,CompositionFixture::Mode::DirectUVWrongSource,CompositionFixture::Mode::DirectUVWrongOutput,CompositionFixture::Mode::DirectUVRepeated,CompositionFixture::Mode::DirectUVMixed,CompositionFixture::Mode::Valid}){
         std::printf("Owned production composition: present mode %u\n",unsigned(mode));std::fflush(stdout);
-        fixture.mode=mode;const bool valid=mode==CompositionFixture::Mode::Valid||mode==CompositionFixture::Mode::UnrelatedWrite;const auto before=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
+        fixture.mode=mode;const bool valid=mode==CompositionFixture::Mode::Valid||mode==CompositionFixture::Mode::UnrelatedWrite||mode==CompositionFixture::Mode::DirectUV||mode==CompositionFixture::Mode::DirectUVLumaFirst;const auto before=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
         NV_ENC_MAP_INPUT_RESOURCE mapped{};mapped.version=NV_ENC_MAP_INPUT_RESOURCE_VER;mapped.registeredResource=registered.registeredResource;check(api.nvEncMapInputResource(encoder,&mapped)==NV_ENC_SUCCESS,"native input mapping");
         NV_ENC_PIC_PARAMS picture{};picture.version=NV_ENC_PIC_PARAMS_VER;picture.inputBuffer=mapped.mappedResource;picture.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;picture.inputWidth=CompositionFixture::Width;picture.inputHeight=CompositionFixture::Height;picture.inputTimeStamp=++timestamp;picture.outputBitstream=reinterpret_cast<NV_ENC_OUTPUT_PTR>(0x4040+timestamp*16);picture.pictureStruct=NV_ENC_PIC_STRUCT_FRAME;
         check(api.nvEncEncodePicture(encoder,&picture)==NV_ENC_SUCCESS,"native encode request forwarded unchanged");const auto after=coverage.gateStats();

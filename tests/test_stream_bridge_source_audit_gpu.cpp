@@ -5,6 +5,7 @@
 #include <d3dcompiler.h>
 #include <cstdio>
 #include <stdexcept>
+#include <string>
 using namespace stream_bridge::sender;
 using namespace stream_bridge::sender::source_audit;
 namespace {
@@ -200,6 +201,20 @@ void run(){
     check(multiviewStats.multiViewKinds[0]==1&&multiviewStats.multiViewKinds[3]==1&&multiviewStats.multiViewKinds[6]==1,"multiview object counts distinguish pixel and vertex contracts");
     observer->inventory=savedInventory;
     context.p->VSSetShader(vs.p,nullptr,0);
+    Com<ID3D11PixelShader> lateUnknown;std::array<std::uint8_t,32> lateHash{};
+    constexpr char manyPixels[]="Texture2D<float4> scene:register(t0);float4 ps(float4 p:SV_Position):SV_Target{return scene.Load(int3(int2(p.xy),0))*(float(FACTOR)/1024.0);}";
+    for(unsigned i=0;i<140;++i){
+        const auto factor=std::to_string(i+1);const D3D_SHADER_MACRO macros[]{{"FACTOR",factor.c_str()},{nullptr,nullptr}};
+        Com<ID3DBlob> code;Com<ID3D11PixelShader> shader;
+        check(SUCCEEDED(D3DCompile(manyPixels,sizeof manyPixels-1,nullptr,macros,nullptr,"ps","ps_5_0",0,0,code.out(),nullptr))&&
+              SUCCEEDED(device.p->CreatePixelShader(code.p->GetBufferPointer(),code.p->GetBufferSize(),nullptr,shader.out())),"owned startup pixel-program pressure");
+        if(i==139){lateUnknown.p=shader.p;shader.p=nullptr;check(dxbcFingerprint(code.p->GetBufferPointer(),code.p->GetBufferSize(),lateHash),"late unreviewed executable identity");}
+    }
+    check(observer->shaders.stats().unknownPixels>128&&!observer->shaders.stats().unknownPixelOverflow&&
+          observer->shaders.describe(lateUnknown.p,description)&&description.hash==lateHash&&description.kind==NativeShader::Unknown,"a pixel program created after the old startup cap retains diagnostic identity without semantic permission");
+    context.p->PSSetShader(lateUnknown.p,nullptr,0);context.p->ClearRenderTargetView(rtv.p,zero);bits<Draw>(dispatch.function(13))(context.p,3,0);
+    const auto lateBaseline=pixels(context.p,target.p,staging.p);const auto lateSerial=observer->serial;context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+    check(lateBaseline==pixels(context.p,target.p,staging.p)&&observer->serial==lateSerial+2&&observer->status.samples[(observer->serial-1)%SourceAuditSamples].programHash==lateHash,"the actual late bound program remains observable and every native output byte is retained");
     Com<ID3D11ClassLinkage> linkage;Com<ID3D11PixelShader> linked;
     check(SUCCEEDED(device.p->CreateClassLinkage(linkage.out()))&&SUCCEEDED(device.p->CreatePixelShader(psCode.p->GetBufferPointer(),psCode.p->GetBufferSize(),linkage.p,linked.out())),"actual linked pixel creation with reviewed code bytes");
     check(observer->shaders.identify(linked.p)==NativeShader::Unknown&&observer->shaders.describe(linked.p,description)&&description.linked&&description.pixel&&description.kind==NativeShader::Unknown,"linked pixel metadata remains Unknown even when its code hash is reviewed");

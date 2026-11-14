@@ -51,6 +51,18 @@ void graphChecks(){
     check(graph.contains(100)&&graph.contains(200)&&graph.contains(300)&&!graph.contains(400),"mutation tracking covers only this retained image graph");
     graph.invalidate();check(!graph.ready(17,23,300),"unrecognized write permanently revokes the current graph");
     graph=full();check(graph.luma(100,300)&&graph.chroma(100,200)&&graph.pack(200,300)&&graph.ready(17,23,300),"independent luma/chroma edges permit either valid native ordering");
+    graph=full();check(graph.directChroma(100,300)&&!graph.ready(17,23,300)&&graph.luma(100,300)&&graph.ready(17,23,300),"direct planar UV and luma reach the exact same retained output");
+    graph=full();check(graph.luma(100,300)&&graph.directChroma(100,300)&&graph.ready(17,23,300),"direct planar conversion retains either native plane ordering");
+    for(unsigned mode=0;mode<7;++mode){graph=full();bool accepted=true;
+        if(mode==0)accepted=graph.directChroma(101,300);
+        if(mode==1)accepted=graph.directChroma(100,100);
+        if(mode==2){check(graph.luma(100,301),"direct UV foreign-output fixture");accepted=graph.directChroma(100,300);}
+        if(mode==3){check(graph.chroma(100,200),"intermediate UV fixture");accepted=graph.directChroma(100,300);}
+        if(mode==4){check(graph.directChroma(100,300),"direct UV fixture");accepted=graph.chroma(100,200);}
+        if(mode==5){check(graph.directChroma(100,300),"duplicate direct UV fixture");accepted=graph.directChroma(100,300);}
+        if(mode==6){check(graph.directChroma(100,300),"wrong luma fixture");accepted=graph.luma(100,301);}
+        check(!accepted&&!graph.ready(17,23,300),"direct UV cannot mix resources, conversion paths, duplicate writes or luma outputs");
+    }
     for(unsigned mode=0;mode<9;++mode){graph=full();bool accepted=true;
         if(mode==0)accepted=graph.chroma(101,200);
         if(mode==1)accepted=graph.chroma(100,100);
