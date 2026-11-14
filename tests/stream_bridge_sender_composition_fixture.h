@@ -131,8 +131,16 @@ NVENCSTATUS NVENCAPI compositionRegister(void*,NV_ENC_REGISTER_RESOURCE* resourc
 NVENCSTATUS NVENCAPI compositionMap(void*,NV_ENC_MAP_INPUT_RESOURCE* input){input->mappedResource=reinterpret_cast<NV_ENC_INPUT_PTR>(0x3030);input->mappedBufferFmt=NV_ENC_BUFFER_FORMAT_NV12;return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI compositionUnmap(void*,NV_ENC_INPUT_PTR){return NV_ENC_SUCCESS;}
 NVENCSTATUS NVENCAPI compositionUnregister(void*,NV_ENC_REGISTERED_PTR){return NV_ENC_SUCCESS;}
-NVENCSTATUS NVENCAPI compositionEncode(void*,NV_ENC_PIC_PARAMS*){return NV_ENC_SUCCESS;}
-NVENCSTATUS NVENCAPI compositionFactory(NV_ENCODE_API_FUNCTION_LIST* api){factory(api);api->nvEncRegisterResource=compositionRegister;api->nvEncMapInputResource=compositionMap;api->nvEncUnmapInputResource=compositionUnmap;api->nvEncUnregisterResource=compositionUnregister;api->nvEncEncodePicture=compositionEncode;return NV_ENC_SUCCESS;}
+std::uint64_t compositionTimestamp=0;NV_ENC_OUTPUT_PTR compositionOutput=nullptr;
+NVENCSTATUS NVENCAPI compositionEncode(void*,NV_ENC_PIC_PARAMS* picture){compositionTimestamp=picture->inputTimeStamp;compositionOutput=picture->outputBitstream;return NV_ENC_SUCCESS;}
+NVENCSTATUS NVENCAPI compositionLock(void*,NV_ENC_LOCK_BITSTREAM* packet){
+    // Explicitly synthetic completion ports; no hardware encoding or peer.
+    static std::uint8_t ownedBytes[]{0,0,0,1,2,1,0x80};
+    if(packet->outputBitstream!=compositionOutput)return NV_ENC_ERR_INVALID_PARAM;
+    packet->bitstreamBufferPtr=ownedBytes;packet->bitstreamSizeInBytes=sizeof ownedBytes;packet->outputTimeStamp=compositionTimestamp;
+    packet->pictureType=NV_ENC_PIC_TYPE_P;packet->pictureStruct=NV_ENC_PIC_STRUCT_FRAME;return NV_ENC_SUCCESS;
+}
+NVENCSTATUS NVENCAPI compositionFactory(NV_ENCODE_API_FUNCTION_LIST* api){factory(api);api->nvEncRegisterResource=compositionRegister;api->nvEncMapInputResource=compositionMap;api->nvEncUnmapInputResource=compositionUnmap;api->nvEncUnregisterResource=compositionUnregister;api->nvEncEncodePicture=compositionEncode;api->nvEncLockBitstream=compositionLock;return NV_ENC_SUCCESS;}
 void runComposition(){
     const auto mark=[](const char* stage){std::printf("Owned production composition: %s\n",stage);std::fflush(stdout);};
     mark("compile owned shader contracts");
@@ -201,6 +209,10 @@ float4 other():SV_Target{return float4(0,0,0,1);}
         }
         check(after.capturedCopies==before.capturedCopies+unsigned(valid)&&after.matchedInputs==before.matchedInputs+unsigned(valid),"only the complete unchanged current source graph reaches its exact accepted native encoder input");
         check(!after.certifiedMasks,"synthetic NVENC acceptance without a compatible peer cannot fabricate a mask certificate");
+        NV_ENC_LOCK_BITSTREAM completed{};completed.version=NV_ENC_LOCK_BITSTREAM_VER;completed.outputBitstream=picture.outputBitstream;
+        check(api.nvEncLockBitstream(encoder,&completed)==NV_ENC_SUCCESS&&completed.outputTimeStamp==picture.inputTimeStamp,"owned fake completion addresses the exact submitted input");
+        check(api.nvEncUnlockBitstream(encoder,picture.outputBitstream)==NV_ENC_SUCCESS,"owned fake output release retires its exact coverage stage");
+        check(!coverage.gateStats().certifiedMasks,"fake completion without a compatible peer cannot grant a real mask certificate");
         check(api.nvEncUnmapInputResource(encoder,mapped.mappedResource)==NV_ENC_SUCCESS,"exact input retirement");
     }
     permission.reset();coverage.sourceProcess(0);const auto revoked=coverage.gateStats();calls.submit(&fixture,eyes);calls.present(&fixture,0);
