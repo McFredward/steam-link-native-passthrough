@@ -52,12 +52,14 @@ class Image {
     Reference<ID3D11Texture2D> texture_;
     Reference<ID3D11RenderTargetView> target_;
 public:
-    bool prepare(ID3D11Device* device,UINT width,UINT height)noexcept{
+    bool prepare(ID3D11Device* device,UINT width,UINT height,bool shared=false)noexcept{
         if(!device||texture_.value||!width||!height||width>16384||height>16384||
             std::size_t(width)*height>16*1024*1024)return false;
         D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;
         desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
-        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET;
+        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.BindFlags=D3D11_BIND_RENDER_TARGET|(shared?D3D11_BIND_SHADER_RESOURCE:0);
+        desc.MiscFlags=shared?D3D11_RESOURCE_MISC_SHARED:0;
         return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,texture_.out()))&&
             SUCCEEDED(device->CreateRenderTargetView(texture_.value,nullptr,target_.out()));
     }
@@ -181,7 +183,8 @@ public:
         Reference<ID3D11Resource> nativeResource,maskResource;
         if(!viewShape(targets[0],nativeShape,nativeResource.value)||!viewShape(companion,maskShape,maskResource.value)||
             nativeResource.value==maskResource.value||nativeShape.Width!=maskShape.Width||nativeShape.Height!=maskShape.Height||
-            maskShape.Format!=DXGI_FORMAT_R8G8B8A8_UNORM||maskShape.MiscFlags)return false;
+            maskShape.Format!=DXGI_FORMAT_R8G8B8A8_UNORM||
+            (maskShape.MiscFlags&&maskShape.MiscFlags!=D3D11_RESOURCE_MISC_SHARED))return false;
         Reference<ID3D11Buffer> original;UINT offset=0,count=0;
         actual->PSGetConstantBuffers1(0,1,original.out(),&offset,&count);
         if(!original.value||count<logicalConstantBytes/16)return false;

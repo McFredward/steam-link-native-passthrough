@@ -140,7 +140,7 @@ void DirectModeBoundary::submit(void* object,const DirectMode::SubmitLayerPerEye
 void DirectModeBoundary::present(void* object,vr::SharedTextureHandle_t sync){
     auto& self=*instance_.load();DirectFrame frame{};
     {std::unique_lock<std::mutex> lock(self.mutex_,std::try_to_lock);if(lock&&self.enabled_){if(auto c=self.component(object)){
-        frame=c->queued;c->queued={};frame.registryEpoch=self.registryEpoch_;
+        frame=c->queued;c->queued={};frame.registryEpoch=self.registryEpoch_;frame.syncTexture=sync;
         if(self.nextPresent_!=std::numeric_limits<std::uint64_t>::max())frame.presentSerial=++self.nextPresent_;
         const bool tainted=self.tainted_.exchange(false);
         if(tainted)self.diagnose(DirectDiagnostic::PresentTainted);

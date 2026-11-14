@@ -16,8 +16,8 @@ void destroy(void*,vr::SharedTextureHandle_t){++destroys;}
 void destroyAll(void*,std::uint32_t){++destroyAlls;if(destroyInPresent)check(!DirectModeBoundary::currentFrame(),"real source revocation is already visible inside original native destruction");}
 void next(void*,vr::SharedTextureHandle_t[2],std::uint32_t(*)[2]){}
 void submit(void*,const DirectMode::SubmitLayerPerEye_t(&eyes)[2]){++submits;forwardedEyesPointer=eyes;std::memcpy(forwardedEyes,eyes,sizeof forwardedEyes);}
-void present(void* o,vr::SharedTextureHandle_t){++presents;if(const auto* p=DirectModeBoundary::currentFrame()){frame=*p;++seen;}if(emptyDestroyInPresent){table.destroyAll(o,9001);table.destroy(o,999999);check(DirectModeBoundary::currentFrame()!=nullptr,"empty client cleanup must preserve the current exact game frame");}if(destroyInPresent){table.destroyAll(o,42);check(!DirectModeBoundary::currentFrame(),"actual destruction invalidates in-flight snapshot epoch immediately");}}
-void post(void*,const DirectMode::Throttling_t*){++posts;if(const auto* p=DirectModeBoundary::currentFrame()){check(p->presentSerial==frame.presentSerial,"PostPresent retains exact prior Present scope");++seen;}}
+void present(void* o,vr::SharedTextureHandle_t sync){++presents;if(const auto* p=DirectModeBoundary::currentFrame()){frame=*p;check(frame.syncTexture==sync,"current frame retains the unchanged original native sync texture");++seen;}if(emptyDestroyInPresent){table.destroyAll(o,9001);table.destroy(o,999999);check(DirectModeBoundary::currentFrame()!=nullptr,"empty client cleanup must preserve the current exact game frame");}if(destroyInPresent){table.destroyAll(o,42);check(!DirectModeBoundary::currentFrame(),"actual destruction invalidates in-flight snapshot epoch immediately");}}
+void post(void*,const DirectMode::Throttling_t*){++posts;if(const auto* p=DirectModeBoundary::currentFrame()){check(p->presentSerial==frame.presentSerial&&p->syncTexture==frame.syncTexture,"PostPresent retains exact prior Present and native sync texture scope");++seen;}}
 void timing(void*,vr::DriverDirectMode_FrameTiming*){}
 void descriptors(){
     SharedTextureShape shape{};

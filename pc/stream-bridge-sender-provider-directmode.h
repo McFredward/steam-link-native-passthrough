@@ -19,6 +19,9 @@ struct DirectFrame {
     void* component=nullptr;std::uint64_t presentSerial=0,registryEpoch=0;
     std::array<std::array<DirectEye,2>,4> layers{};std::uint32_t layerCount=0;
     bool sourceKnown=false;
+    // Actual public Present argument, retained through its matching PostPresent.
+    // Merely recording it does not prove that native AcquireSync succeeded.
+    vr::SharedTextureHandle_t syncTexture=0;
 };
 struct DirectSwap {void* component=nullptr;std::uint32_t processId=0;std::uint64_t generation=0;DirectMode::SwapTextureSetDesc_t description{};std::array<vr::SharedTextureHandle_t,3> handles{};};
 struct DirectInventory {std::array<DirectSwap,64> swaps{};std::uint64_t epoch=0;bool valid=false;};
