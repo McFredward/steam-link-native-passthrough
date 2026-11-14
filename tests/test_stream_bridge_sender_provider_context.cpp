@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-sender-provider-coverage.h"
+#include "bridge/stream_bridge_log.h"
 #include "pc/stream-bridge-native-shader.h"
 #include "pc/stream-bridge-sender-provider-sourceipc.h"
 #include <d3d11_4.h>
