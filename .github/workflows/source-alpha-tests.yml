@@ -14,6 +14,7 @@ on:
       - 'tests/test_stream_bridge_source_alpha*'
       - 'tests/test_stream_bridge_projected_alpha_gpu.cpp'
       - 'tests/check_projected_alpha_hlsl.py'
+      - 'tests/build_projected_windows_fixtures.py'
       - 'tests/test_stream_bridge_projected_channel_windows.cpp'
       - 'tools/generate_projected_alpha_kernels.py'
       - '.github/workflows/source-alpha-tests.yml'
@@ -30,6 +31,7 @@ on:
       - 'tests/test_stream_bridge_source_alpha*'
       - 'tests/test_stream_bridge_projected_alpha_gpu.cpp'
       - 'tests/check_projected_alpha_hlsl.py'
+      - 'tests/build_projected_windows_fixtures.py'
       - 'tests/test_stream_bridge_projected_channel_windows.cpp'
       - 'tools/generate_projected_alpha_kernels.py'
       - '.github/workflows/source-alpha-tests.yml'
@@ -77,9 +79,7 @@ jobs:
           mkdir build
           cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_source_alpha_gpu.cpp /Fe:build\source-alpha.exe /Fo:build\ /link d3d11.lib dxgi.lib dxguid.lib uuid.lib
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_projected_alpha_gpu.cpp /Fe:build\projected-alpha.exe /Fo:build\ /link d3d11.lib dxgi.lib d3dcompiler.lib dxguid.lib uuid.lib
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_projected_channel_windows.cpp /Fe:build\projected-channel.exe /Fo:build\ /link bcrypt.lib dxguid.lib uuid.lib
+          python tests/build_projected_windows_fixtures.py --compiler msvc --output build
           if errorlevel 1 exit /b 1
       - name: Verify actual RGBA and BGRA readbacks without source mutation
         shell: cmd

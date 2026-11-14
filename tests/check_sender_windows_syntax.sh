@@ -30,4 +30,8 @@ for sender_syntax_fixture in \
     -I"$sender_syntax_repo" -isystem "$sender_syntax_sdk" -fsyntax-only \
     "$sender_syntax_repo/$sender_syntax_fixture"
 done
-printf '%s\n' 'Windows sender fixture syntax preflight PASS (not GPU/runtime validation)'
+sender_syntax_link_dir=$(mktemp -d "${TMPDIR:-/tmp}/sfnp-windows-link.XXXXXX")
+trap 'rm -rf -- "$sender_syntax_link_dir"' EXIT
+python3 "$sender_syntax_repo/tests/build_projected_windows_fixtures.py" \
+  --compiler mingw --cxx "$sender_syntax_cxx" --output "$sender_syntax_link_dir"
+printf '%s\n' 'Windows sender fixture syntax/link preflight PASS (not GPU/runtime validation)'
