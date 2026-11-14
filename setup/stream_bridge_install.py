@@ -80,6 +80,17 @@ CAMERA_HOOK = '85-steam-link-native-passthrough-camera.conf'
 CAMERA_TOOL = 'tools/stream_bridge_camera.py'
 PC_FILES = {'pc-provider/driver.vrdrivermanifest',
             'pc-provider/bin/win64/driver_steam_link_native_passthrough.dll'}
+# The OpenXR API layer offering passthrough to unmodified OpenXR applications.
+# Packages built since it exists always carry the pair; earlier bundles and
+# receipts without it stay readable. It is registered as an implicit layer of
+# this user while the provider is active (DISABLE_XR_APILAYER_SFNP_PASSTHROUGH
+# turns it off per process) and does nothing unless the sender answers and
+# SteamVR lacks passthrough itself.
+OPENXR_LAYER_MANIFEST = 'pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.json'
+OPENXR_LAYER_FILES = frozenset({OPENXR_LAYER_MANIFEST,'pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.dll'})
+OPENXR_LAYER_NAME = 'XR_APILAYER_SFNP_passthrough'
+OPENXR_LAYER_DISABLE = 'DISABLE_XR_APILAYER_SFNP_PASSTHROUGH'
+OWNED_PC_FILES = frozenset(PC_FILES|OPENXR_LAYER_FILES|{'pc-provider/logging-default.conf'})
 TOOLS = frozenset('frame/tools/'+name+'.py' for name in (
     'app_payload_probe','compositor_startup_health','native_fragment_count1_interface',
     'native_fragment_ssa_probe','native_fragment_stream_coverage','native_shader_contract','pixel_payload_recovery','stream_bridge_camera'))
@@ -246,7 +257,9 @@ class Bundle:
                            self.logging['channel'] in ('dev','main') and
                            self.logging['level']==('Debug' if self.logging['channel']=='dev' else 'Important'),
                            'Unknown package logging default.')
-        pc_files=PC_FILES|({'pc-provider/'+LOG_DEFAULT} if self.logging else set())
+        layer_files=set(v['files'])&OPENXR_LAYER_FILES
+        engine.require(not layer_files or layer_files==OPENXR_LAYER_FILES,'Incomplete OpenXR layer pair.')
+        pc_files=PC_FILES|layer_files|({'pc-provider/'+LOG_DEFAULT} if self.logging else set())
         frame_defaults=FRAME_DEFAULTS if self.logging else frozenset()
         # Optional complete pair for the negotiated HEVC mask codec. Existing
         # lossless-only bundles/receipts remain readable without these files.
@@ -286,6 +299,15 @@ class Bundle:
             expected=(self.logging['level']+'\n').encode('ascii')
             engine.require(self.files['pc-provider/'+LOG_DEFAULT]==expected and
                            self.files['frame/'+LOG_DEFAULT]==expected,'Package logging defaults differ from their declared channel.')
+        if layer_files:
+            layer=engine.parse(self.files[OPENXR_LAYER_MANIFEST]);api=layer.get('api_layer') if type(layer)is dict else None
+            engine.require(type(api)is dict and api.get('name')==OPENXR_LAYER_NAME and
+                           api.get('library_path')=='.\\XrApiLayer_sfnp_passthrough.dll' and
+                           api.get('disable_environment')==OPENXR_LAYER_DISABLE,'Unsupported OpenXR layer manifest.')
+            image=self.files['pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.dll']
+            offset=int.from_bytes(image[60:64],'little') if len(image)>=64 else len(image)
+            engine.require(image[:2]==b'MZ' and offset<=len(image)-6 and image[offset:offset+6]==b'PE\x00\x00d\x86',
+                           'The OpenXR layer must be an x64 DLL.')
         provider=engine.parse(self.files['pc-provider/driver.vrdrivermanifest'])
         engine.require(provider.get('name')==NAME and provider.get('alwaysActivate') is True,
                        'Unsupported owned OpenVR provider manifest.')
@@ -413,7 +435,8 @@ class LocalInstall:
         e=self.e
         e.require(set(v)-{'version','activation_mode'}=={'schema','bundle','files','settings','registered_before','pair','vrpathreg'} and
                   v['schema']==RECEIPT and re.fullmatch('[0-9a-f]{64}',v['bundle']) and
-                  set(v['files']) in (PC_FILES,PC_FILES|{'pc-provider/'+LOG_DEFAULT}),'Unknown PC connection receipt preserved.')
+                  set(v['files'])-OPENXR_LAYER_FILES in (PC_FILES,PC_FILES|{'pc-provider/'+LOG_DEFAULT}) and
+                  set(v['files'])&OPENXR_LAYER_FILES in (set(),OPENXR_LAYER_FILES),'Unknown PC connection receipt preserved.')
         version_fields(v)
         e.require(v.get('activation_mode','active') in ('active','inactive'),'Unknown PC activation state preserved.')
         e.records(v['files'])
@@ -453,6 +476,11 @@ class LocalInstall:
         self.local.register(tool,'adddriver' if registered else 'removedriver')
         self.e.require(bool(self.local.inventory().get('registered'))==registered,'The owned driver registration could not be confirmed.')
 
+    def openxr_layer(self,active):
+        """The implicit OpenXR layer is registered exactly while the provider is active and its files are installed."""
+        manifest=self.local.root/OPENXR_LAYER_MANIFEST
+        self.local.openxr_layer(manifest,active and manifest.is_file())
+
     def registration_tool(self,pc,pin):
         e=self.e
         e.require(Path(pc.get('steamvr') or '').is_absolute() and pin['path']=='bin/win64/vrpathreg.exe',
@@ -468,7 +496,7 @@ class LocalInstall:
 
     def checkpoint(self,pair_id=None):
         helper=load_helper(self.e,'steam_link_setup_checkpoint')
-        paths={self.local.root/name for name in PC_FILES|{'pc-provider/'+LOG_DEFAULT}}|{self.receipt,self.settings_path(),self.local.root/'pairings/active.json'}
+        paths={self.local.root/name for name in OWNED_PC_FILES}|{self.receipt,self.settings_path(),self.local.root/'pairings/active.json'}
         def allowed(path):
             return path in paths or path.parent==self.local.root/'pairings' and re.fullmatch('[0-9a-f]{32}[.]json',path.name) is not None
         return helper.Checkpoint(self.e,self.local.root/'setup-restore.json',allowed,
@@ -507,6 +535,7 @@ class LocalInstall:
                 self.local.register(self.local.verify_tool(pc,tool_pin),'adddriver')
                 e.require(self.local.inventory()['registered'],'The repaired provider registration could not be confirmed.')
             changed=bool(missing) or runtime_active and not pc.get('registered')
+            self.openxr_layer(runtime_active)
             return {'reason':'repaired' if changed else 'current','changed':changed,'automatic_restart':False}
         edits=SettingsChange(e,self.settings_path(),{SETTINGS_SECTION:{'enableStreamBridge':runtime_active,
               'controlListenAddress':private_ipv4(address),'controlPort':port}})
@@ -540,8 +569,10 @@ class LocalInstall:
                    'settings':settings,'registered_before':bool(pc.get('registered')),'pair':pair['pair_id'],'vrpathreg':tool_pin,
                    **({'activation_mode':'inactive'} if not runtime_active else {})}
             if not runtime_active and pc.get('registered'):self.registration(pc,False,tool_pin)
+            self.openxr_layer(runtime_active)
             e.put(self.receipt,e.encoded(value))
         except BaseException:
+            self.openxr_layer(False)
             if runtime_active and not pc.get('registered'):
                 self.local.register(self.local.verify_tool(pc,tool_pin),'removedriver')
             if settings:SettingsChange.restore(e,settings)
@@ -599,6 +630,7 @@ class LocalInstall:
         elif runtime_active and not pc.get('registered'):
             self.local.register(self.local.verify_tool(pc,tool_pin),'adddriver')
             e.require(self.local.inventory()['registered'],'The updated provider registration could not be confirmed.')
+        self.openxr_layer(runtime_active)
         return {'reason':'updated','changed':True,'automatic_restart':False}
 
     def uninstall(self,pc,*,backup=False,target=None):
@@ -611,8 +643,9 @@ class LocalInstall:
                         state=self.validate_state(e.parse(base64.b64decode(item['bytes'],validate=True)));break
                 if state:break
         if state is None:
-            e.require(not pc.get('registered') and not any(os.path.lexists(self.local.root/name) for name in PC_FILES|{'pc-provider/'+LOG_DEFAULT}),
+            e.require(not pc.get('registered') and not any(os.path.lexists(self.local.root/name) for name in OWNED_PC_FILES),
                       'The PC removal receipt is missing; existing provider files or registration were preserved.')
+            self.openxr_layer(False)
             return {'reason':'not_installed','automatic_restart':False}
         e.require(not self.local.runner.runtime_running(),'Close SteamVR on this PC before removing the connection.')
         if pc.get('registered'):self.registration_tool(pc,state['vrpathreg'])
@@ -659,6 +692,7 @@ class LocalInstall:
             checkpoint.begin('uninstall',operations,settings,bool(pc.get('registered')),target=target)
         if pc.get('registered'):self.registration(pc,False,state['vrpathreg'])
         e.require(not self.local.inventory().get('registered'),'The owned PC driver registration could not be removed.')
+        self.openxr_layer(False)
         path=Path(state['settings']['path']);mode=stat.S_IMODE(path.stat().st_mode)
         if e.encoded(current)!=raw:e.put(path,e.encoded(current),raw)
         if os.name!='nt':os.chmod(path,mode)
