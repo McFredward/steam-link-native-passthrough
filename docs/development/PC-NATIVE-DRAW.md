@@ -150,3 +150,39 @@ Frame0.3.10, its shader programs,
 selector and decoder remain byte-identical. The existing PC-only update path
 must leave Frame files, settings and services running and untouched. Actual
 headset mask generation remains pending.
+
+## Projected source alpha investigation (2026-11-14)
+
+The supplied PC2.19.3/build1794604515 capture has genuine zero and fractional
+alpha in the registered game allocations. All72 sampled regions in the24
+native tile observations during the active game window are opaque. These are
+separate diagnostic populations, not an exact image/eye association. Both
+reviewed old and current MultiView Y/Inner program families have an output
+policy which can replace filtered source alpha with1. Their X stages retain
+RGBA. Changing driver shader labels alone cannot recover this alpha.
+
+`stream-bridge-projected-alpha-replay.h` is an **unwired GPU primitive** for
+retaining that alpha in a distinct, privately allocated companion image. It
+clones the current logical constant-buffer prefix on the GPU and changes only
+the reviewed policy word. The companion draw keeps the original native shader,
+geometry, source bindings, UVs, viewport and scissor. Native source pixels,
+output RGB/alpha and original constant buffers remain untouched. Own compute
+state is isolated with public D3D11.1 context-state objects; the native CB range,
+blend factors and sample mask are restored. Unknown layouts, output UAVs,
+stream output, depth attachments and native blending are refused.
+
+The owned Windows fixture checks64/80-byte prefixes, full and offset buffer
+views, single-threaded and ordinary devices, changing alpha including zero and
+fractional values, native opaque policy, exact GPU clone words (including NaN
+and signed-zero bits), unchanged native RGBA and retained graphics/compute
+bindings. The existing alpha workflow runs it on actual Windows/WARP. Wine's
+built-in HLSL compiler cannot compile this fixture's raw-buffer compute shader;
+that refusal is not GPU evidence or a reason to skip the Windows gate.
+
+The primitive is not called by the compositor observer, sender or package. It
+does not grant a game source, invent a presentation, make the diagnostic audit
+page trusted, or relabel a compositor allocation as an application's texture.
+Activation additionally requires authenticated game ancestry, actual native
+shared-image synchronization and a current RGB/coverage/eye witness. The masked
+Frame path also needs a proved visible-image mapping when decoder allocations
+are padded. No headset MR acceptance is claimed for this primitive.
