@@ -8,6 +8,7 @@ on:
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-composition.h'
       - 'pc/stream-bridge-native-shader.h'
+      - 'pc/stream-bridge-source-alpha*'
       - 'pc/stream-bridge-native-image.h'
       - 'pc/stream-bridge-mask-hevc-syntax-trace.h'
       - 'bridge/stream_bridge_log.h'
@@ -18,6 +19,7 @@ on:
       - 'tests/test_stream_bridge_sender_shared_resource.cpp'
       - 'tests/test_stream_bridge_sender_provider_context.cpp'
       - 'tests/stream_bridge_sender_composition_fixture.h'
+      - 'tests/check_sender_windows_syntax.sh'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
       - 'tests/test_stream_bridge_sender_context_layout.c'
       - '.github/workflows/sender-resource-tests.yml'
@@ -27,6 +29,7 @@ on:
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-composition.h'
       - 'pc/stream-bridge-native-shader.h'
+      - 'pc/stream-bridge-source-alpha*'
       - 'pc/stream-bridge-native-image.h'
       - 'pc/stream-bridge-mask-hevc-syntax-trace.h'
       - 'bridge/stream_bridge_log.h'
@@ -37,6 +40,7 @@ on:
       - 'tests/test_stream_bridge_sender_shared_resource.cpp'
       - 'tests/test_stream_bridge_sender_provider_context.cpp'
       - 'tests/stream_bridge_sender_composition_fixture.h'
+      - 'tests/check_sender_windows_syntax.sh'
       - 'tests/test_stream_bridge_sender_writable_context_shadow.cpp'
       - 'tests/test_stream_bridge_sender_context_layout.c'
       - '.github/workflows/sender-resource-tests.yml'
@@ -56,6 +60,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  windows-syntax:
+    if: github.event_name != 'workflow_dispatch' || inputs.focus == 'context' || inputs.focus == 'all'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare the distribution compiler and pinned public SDK
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-win32
+          mkdir -p build/syntax-sdk
+          curl --fail --location --retry 3 --max-time 60 https://raw.githubusercontent.com/FFmpeg/nv-codec-headers/43d91706e097565f57b311e567f0219838bcc2f6/include/ffnvcodec/nvEncodeAPI.h -o build/syntax-sdk/nvEncodeAPI.h
+          curl --fail --location --retry 3 --max-time 60 https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_driver.h -o build/syntax-sdk/openvr_driver.h
+      - name: Reject missing Windows fixture declarations before WARP execution
+        run: bash tests/check_sender_windows_syntax.sh build/syntax-sdk
   cleanup-continuity:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
@@ -196,6 +215,7 @@ jobs:
             build/shared-resource-*.log
             build/directmode*.log
   context-observer:
+    needs: windows-syntax
     # Normal pushes/PRs exercise the complete production observer. Only a
     # focused manual dispatch may select another affected test group.
     if: github.event_name != 'workflow_dispatch' || inputs.focus == 'context' || inputs.focus == 'all'
