@@ -498,7 +498,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 for(const auto& sample:samples)if(sample.serial>auditSerial&&auditSamples<128){
                     auditSerial=sample.serial;
                     if(auditEpoch!=sample.inventoryEpoch){auditEpoch=sample.inventoryEpoch;auditEpochSamples=0;}
-                    if(auditEpochSamples>=8)continue;
+                    if(auditEpochSamples>=stream_bridge::sender::SourceAuditSamples)continue;
                     constexpr char digits[]="0123456789abcdef";char hash[65]{};
                     if(sample.programHashValid){for(unsigned j=0;j<32;++j){hash[2*j]=digits[sample.programHash[j]>>4];hash[2*j+1]=digits[sample.programHash[j]&15];}}
                     else std::strcpy(hash,"unavailable");

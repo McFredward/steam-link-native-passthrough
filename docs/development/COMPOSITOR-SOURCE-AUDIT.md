@@ -60,6 +60,11 @@ creates140 distinct extra startup programs and requires the later bound pixel
 program's exact digest, Unknown label and unchanged native output. Ordinary
 coverage observers still disable unknown-program retention.
 
+Cold reporting can retain all32 bounded source samples of one registry epoch,
+within the unchanged128-pair overall budget. The earlier eight-sample epoch
+budget could omit later reprojection/filter stages after recording their early
+game-source bindings; increasing retention alone would not fix that blind spot.
+
 Composition diagnostics now retain the first rejected edge in a presentation,
 including native source/output storage and view formats, dimensions, viewport,
 complete state and eye bits. Subsequent failed-frame fallout cannot overwrite
