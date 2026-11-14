@@ -507,3 +507,9 @@ adapter. A nonblocking reader gate prevents publication from dropping old pins
 while a binding is admitted; immediate source-lease revocation rejects stale
 metadata before a cold refresh. These controls establish retained metadata
 ownership only. They do not yet implement live projected-image admission.
+
+The retained-channel GPU fixture also needs BCrypt. Run43653764132 exposed a
+missing Windows link library in the manually duplicated build command. Local
+preflight now links both projected executables, and MSVC CI uses the same
+library lists in `tests/build_projected_windows_fixtures.py`. Compile-only
+success cannot substitute for this link check or actual Windows execution.
