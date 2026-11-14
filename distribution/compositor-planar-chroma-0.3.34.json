@@ -25,7 +25,7 @@
       "sha256": "103730ab71cf6db979d44b3ec773d19ad76c457f9526050af7f650aad8946f1d"
     }
   },
-  "change": "Start independent cold discovery before sender/encoder preparation; diagnose actual factory outcomes and Windows multiview program bindings; retain original capture and all native RGB/source/frame/mask admission rules",
+  "change": "Support reviewed direct UV writes into the same native NV12/P010 image as luma, retain the intermediate/packed route; record the first rejected conversion edge; retain512 bounded hashed unknown-program identities with overflow reporting. Source, eye, frame, encoder and camera admission is unchanged.",
   "ci": {
     "lifecycle": {
       "conclusion": "success",
