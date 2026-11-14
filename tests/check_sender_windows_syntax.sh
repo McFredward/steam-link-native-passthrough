@@ -25,7 +25,7 @@ for sender_syntax_fixture in \
   tests/test_stream_bridge_source_alpha_gpu.cpp \
   tests/test_stream_bridge_projected_alpha_gpu.cpp \
   tests/test_stream_bridge_source_audit_gpu.cpp; do
-  "$sender_syntax_cxx" -std=c++17 -Wall -Wextra -Wpedantic -Werror \
+  "$sender_syntax_cxx" -std=c++17 -Wall -Wextra -Wpedantic -Wshadow=local -Werror \
     -I"$sender_syntax_repo" -isystem "$sender_syntax_sdk" -fsyntax-only \
     "$sender_syntax_repo/$sender_syntax_fixture"
 done

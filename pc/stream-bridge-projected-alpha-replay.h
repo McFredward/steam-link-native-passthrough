@@ -226,9 +226,9 @@ private:
             Reference<ID3D11Texture2D> texture;
             if(sourceView.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2DMS||!resource.value||
                 FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return false;
-            D3D11_TEXTURE2D_DESC actual{};texture->GetDesc(&actual);
-            if(actual.SampleDesc.Count!=4||actual.SampleDesc.Quality!=sourceShape.SampleDesc.Quality||
-                actual.Width!=sourceShape.Width||actual.Height!=sourceShape.Height||actual.MipLevels!=1||actual.ArraySize!=1)return false;
+            D3D11_TEXTURE2D_DESC actualShape{};texture->GetDesc(&actualShape);
+            if(actualShape.SampleDesc.Count!=4||actualShape.SampleDesc.Quality!=sourceShape.SampleDesc.Quality||
+                actualShape.Width!=sourceShape.Width||actualShape.Height!=sourceShape.Height||actualShape.MipLevels!=1||actualShape.ArraySize!=1)return false;
         }
         const UINT constantSlot=msaa?2:0;
         Reference<ID3D11Buffer> original;UINT offset=0,count=0;
