@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20276552,
-    "sha256": "a160c821ffc3145003783f22284a55093b7d022709941301dfeef377ffda42cd"
+    "bytes": 20276559,
+    "sha256": "75209add6ca8a3f07ac8e52a64ed1b3e77d9381b9bcdc013dd952399f4a82dfd"
   },
   "artifacts": {
     "frame_layer": {
@@ -22,7 +22,7 @@
     },
     "pc_provider": {
       "bytes": 2183680,
-      "sha256": "103730ab71cf6db979d44b3ec773d19ad76c457f9526050af7f650aad8946f1d"
+      "sha256": "dd8314fad9c2ac27921c3b81484104dea4641c9500ecf205b04b8501ac031966"
     }
   },
   "component_versions": {
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11549,
-    "sha256": "91cb42ab6ca4eae76abb3780a2e84b33030645c937bfd8b6521e780e622e451c"
+    "sha256": "313a1da9fe44bbaa93af8f3e4737e1d4dd07f5ace9d98f29f0659c0fc0bf4cd6"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -234,7 +234,7 @@
       "sha256": "8eec889523a0b0e203ae5ec3ccbaca560860ca6601f29774a3cbda8ec942b8e4"
     }
   },
-  "source_revision": "a18b55684879b16a522f09207f4c279491e5d604",
+  "source_revision": "35219485a208eeee8c6fa5a155427c12c2bd9a36",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -252,7 +252,7 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8585,
-        "sha256": "7aa035223c5a5c6a81bb9afc05011a34fc3a3517b73f4affaff9e228e1c4c70f"
+        "sha256": "1216f971e1ebe31ecd6edd9bf427370a424727b49ce3653441bd0c6648f919ea"
       }
     }
   ],

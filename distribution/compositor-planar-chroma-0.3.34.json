@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20276552,
-    "sha256": "a160c821ffc3145003783f22284a55093b7d022709941301dfeef377ffda42cd"
+    "bytes": 20276559,
+    "sha256": "75209add6ca8a3f07ac8e52a64ed1b3e77d9381b9bcdc013dd952399f4a82dfd"
   },
   "artifacts": {
     "frame_layer": {
@@ -22,10 +22,10 @@
     },
     "pc_provider": {
       "bytes": 2183680,
-      "sha256": "103730ab71cf6db979d44b3ec773d19ad76c457f9526050af7f650aad8946f1d"
+      "sha256": "dd8314fad9c2ac27921c3b81484104dea4641c9500ecf205b04b8501ac031966"
     }
   },
-  "change": "Support reviewed direct UV writes into the same native NV12/P010 image as luma, retain the intermediate/packed route; record the first rejected conversion edge; retain512 bounded hashed unknown-program identities with overflow reporting. Source, eye, frame, encoder and camera admission is unchanged.",
+  "change": "Support reviewed direct UV writes into the same native NV12/P010 image as luma, retain the intermediate/packed route; record the first rejected conversion edge; retain512 bounded hashed unknown-program identities with overflow reporting and up to32 source samples per registry epoch within128 total pairs. Source, eye, frame, encoder and camera admission is unchanged.",
   "ci": {
     "lifecycle": {
       "conclusion": "success",
@@ -36,10 +36,10 @@
     },
     "observer": {
       "conclusion": "success",
-      "databaseId": 43577946622,
-      "headSha": "cbfe405c7368fe21d226bf64e144c96ce82831ad",
+      "databaseId": 43579141077,
+      "headSha": "974533fe40da469fcd7f6efea72619a83c07e20f",
       "status": "completed",
-      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946622"
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43579141077"
     },
     "readback": {
       "conclusion": "success",
@@ -57,10 +57,10 @@
     },
     "shared_alpha": {
       "conclusion": "success",
-      "databaseId": 43577946661,
-      "headSha": "cbfe405c7368fe21d226bf64e144c96ce82831ad",
+      "databaseId": 43579141061,
+      "headSha": "974533fe40da469fcd7f6efea72619a83c07e20f",
       "status": "completed",
-      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946661"
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43579141061"
     },
     "source_format": {
       "conclusion": "success",
@@ -108,15 +108,15 @@
       "sha256": "d5534e0d035fc36eb2dbff21948b85e09cd1d46a5d1cdccf1bbeb9f1b8a55bdd"
     },
     "provider-build.log": {
-      "bytes": 192,
-      "sha256": "c688c39a351fef2c197429fd8739f89ea87e7c752dfb079542c1ea8f09fa8d62"
+      "bytes": 194,
+      "sha256": "a5a8b9a07993c0ca000c91169e865c1dbfc348729bc62d6f47baf00390a8c48c"
     },
     "workflow-tests.log": {
       "bytes": 10544,
       "sha256": "9a3a566a01898a9bc0baa5455455aadc7c8b7197c763c2579c4c16f4cc0a9878"
     }
   },
-  "source_revision": "a18b55684879b16a522f09207f4c279491e5d604",
+  "source_revision": "35219485a208eeee8c6fa5a155427c12c2bd9a36",
   "version": "0.3.34",
   "windows_logs": {
     "gnu/audit-gpu.log": {
