@@ -76,3 +76,4 @@ jobs:
             build/projected-alpha.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
+            build/projected-alpha-clone32.dxbc

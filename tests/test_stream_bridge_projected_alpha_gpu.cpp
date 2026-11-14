@@ -64,19 +64,24 @@ Com<ID3DBlob> compile(const char* source,const char* entry,const char* profile){
     return code;
 }
 struct Texture {
-    Com<ID3D11Texture2D> image,read;
+    Com<ID3D11Texture2D> image,read,resolved;
     Com<ID3D11RenderTargetView> target;
     Com<ID3D11ShaderResourceView> source;
-    bool prepare(ID3D11Device* device,UINT width,UINT height,UINT misc=0){
+    bool prepare(ID3D11Device* device,UINT width,UINT height,UINT misc=0,UINT samples=1){
         D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
         desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;desc.MiscFlags=misc;
+        desc.SampleDesc.Count=samples;
         if(FAILED(device->CreateTexture2D(&desc,nullptr,image.out()))||FAILED(device->CreateRenderTargetView(image.value,nullptr,target.out()))||
             FAILED(device->CreateShaderResourceView(image.value,nullptr,source.out())))return false;
-        desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;desc.MiscFlags=0;
+        desc.SampleDesc.Count=1;desc.MiscFlags=0;
+        if(samples!=1&&FAILED(device->CreateTexture2D(&desc,nullptr,resolved.out())))return false;
+        desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
         return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,read.out()));
     }
     std::vector<std::uint8_t> bytes(ID3D11DeviceContext* context){
-        D3D11_TEXTURE2D_DESC desc{};image->GetDesc(&desc);context->CopyResource(read.value,image.value);
+        D3D11_TEXTURE2D_DESC desc{};image->GetDesc(&desc);
+        if(desc.SampleDesc.Count!=1)context->ResolveSubresource(resolved.value,0,image.value,0,desc.Format);
+        context->CopyResource(read.value,resolved.value?resolved.value:image.value);
         D3D11_MAPPED_SUBRESOURCE map{};
         check(SUCCEEDED(context->Map(read.value,0,D3D11_MAP_READ,0,&map)),"test-only owned image readback");
         std::vector<std::uint8_t> result(desc.Width*desc.Height*4);
@@ -85,6 +90,83 @@ struct Texture {
         context->Unmap(read.value,0);return result;
     }
 };
+constexpr char ResolveFixture[]=R"(
+cbuffer Policy : register(b2) { float4 flags[2]; };
+Texture2DMS<float4,4> multisample : register(t0);
+float4 resolve(float4 position:SV_Position):SV_Target {
+    float4 average=0;
+    [unroll] for(uint sample=0;sample<4;++sample) average+=multisample.Load(int2(position.xy),sample)*0.25;
+    if(flags[0].x>0) average.a=1;
+    return average;
+})";
+void multisample(ID3D11Device* device,ID3D11DeviceContext* context,Replay& replay,
+    ID3D11VertexShader* quad,ID3D11PixelShader* scene,const Texture& source){
+    D3D11_TEXTURE2D_DESC sourceDesc{};source.image->GetDesc(&sourceDesc);
+    const auto width=sourceDesc.Width,height=sourceDesc.Height;
+    Texture nativeMsaa,referenceMsaa,nativeFinal,referenceFinal;
+    Image alphaMsaa,alphaFinal;
+    check(nativeMsaa.prepare(device,width,height,0,4)&&referenceMsaa.prepare(device,width,height,0,4)&&
+        nativeFinal.prepare(device,width,height)&&referenceFinal.prepare(device,width,height)&&
+        alphaMsaa.prepare(device,width,height,false,4)&&alphaFinal.prepare(device,width,height,true),"distinct native and private four-sample images");
+    auto resolveCode=compile(ResolveFixture,"resolve","ps_5_0");Com<ID3D11PixelShader> resolve;
+    check(SUCCEEDED(device->CreatePixelShader(resolveCode->GetBufferPointer(),resolveCode->GetBufferSize(),nullptr,resolve.out())),"owned native resolve-policy model");
+    D3D11_BUFFER_DESC cbDesc{};cbDesc.ByteWidth=64;cbDesc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+    std::array<float,16> values{};values[4]=values[5]=values[6]=1;
+    D3D11_SUBRESOURCE_DATA initial{values.data(),0,0};Com<ID3D11Buffer> ordinary,preserved;
+    check(SUCCEEDED(device->CreateBuffer(&cbDesc,&initial,ordinary.out())),"native scene opaque-alpha constants");
+    values[13]=1;
+    check(SUCCEEDED(device->CreateBuffer(&cbDesc,&initial,preserved.out())),"independent reference scene constants");
+    Com<ID3D11DeviceContext1> extended;
+    check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"MSAA context1");
+    D3D11_RASTERIZER_DESC rasterDesc{};rasterDesc.FillMode=D3D11_FILL_SOLID;rasterDesc.CullMode=D3D11_CULL_NONE;
+    rasterDesc.MultisampleEnable=TRUE;rasterDesc.DepthClipEnable=TRUE;
+    Com<ID3D11RasterizerState> raster;check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,raster.out())),"actual native MSAA rasterizer");
+    context->RSSetState(raster.value);context->VSSetShader(quad,nullptr,0);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);context->OMSetBlendState(nullptr,nullptr,0xbu);
+    const D3D11_VIEWPORT sceneViewport{.25f,.5f,float(width)-1,float(height)-1,0,1};context->RSSetViewports(1,&sceneViewport);
+    const FLOAT opaque[4]={0,0,0,1},zero[4]{};
+    context->ClearRenderTargetView(nativeMsaa.target.value,opaque);context->ClearRenderTargetView(referenceMsaa.target.value,zero);
+    check(alphaMsaa.clear(context),"all private coverage samples start at zero");
+    context->PSSetShader(scene,nullptr,0);context->PSSetShaderResources(0,1,&source.source.value);
+    context->PSSetConstantBuffers(0,1,&preserved.value);context->OMSetRenderTargets(1,&referenceMsaa.target.value,nullptr);context->Draw(4,0);
+    context->PSSetConstantBuffers(0,1,&ordinary.value);context->OMSetRenderTargets(1,&nativeMsaa.target.value,nullptr);context->Draw(4,0);
+    const auto nativeBefore=nativeMsaa.bytes(context);
+    check(replay.replay(context,alphaMsaa,scene,64,countedDraw,4,0),"alpha-only replay retains all four native sample positions and coverage");
+    check(nativeMsaa.bytes(context)==nativeBefore,"every resolved native RGBA byte is unchanged after MSAA companion extraction");
+    const D3D11_VIEWPORT resolveViewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&resolveViewport);
+    context->PSSetShader(resolve.value,nullptr,0);context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+    for(UINT byteOffset:{0u,256u}){
+        const UINT size=byteOffset?512:32;std::vector<std::uint32_t> words(size/4,0x7fc12345u);
+        for(unsigned i=0;i<8;++i)words[byteOffset/4+i]=0;
+        cbDesc.ByteWidth=size;D3D11_SUBRESOURCE_DATA policyData{words.data(),0,0};Com<ID3D11Buffer> policy;
+        check(SUCCEEDED(device->CreateBuffer(&cbDesc,&policyData,policy.out())),"exact native resolve b2, including a ranged view");
+        context->PSSetConstantBuffers(2,1,&policy.value);UINT offset=byteOffset/16,count=16;
+        if(byteOffset)extended->PSSetConstantBuffers1(2,1,&policy.value,&offset,&count);
+        context->PSSetShaderResources(0,1,&referenceMsaa.source.value);
+        context->OMSetRenderTargets(1,&referenceFinal.target.value,nullptr);context->Draw(4,0);
+        const auto expected=referenceFinal.bytes(context);
+        words[byteOffset/4]=0x3f800000u;context->UpdateSubresource(policy.value,0,nullptr,words.data(),0,0);
+        context->PSSetShaderResources(0,1,&nativeMsaa.source.value);
+        context->OMSetRenderTargets(1,&nativeFinal.target.value,nullptr);context->Draw(4,0);
+        const auto before=nativeFinal.bytes(context);
+        check(alphaFinal.clear(context)&&replay.resolve(context,alphaFinal,alphaMsaa,resolve.value,countedDraw,4,0),"native four-sample resolve produces companion alpha without its opaque-output policy");
+        check(before==nativeFinal.bytes(context),"normal native resolve result stays byte-identical");
+        context->CopyResource(referenceFinal.image.value,alphaFinal.resource());const auto actual=referenceFinal.bytes(context);
+        unsigned transparent=0,fractional=0;
+        for(unsigned i=0;i<width*height;++i){
+            check(!actual[i*4]&&!actual[i*4+1]&&!actual[i*4+2],"resolved coverage contains no scene RGB");
+            check(actual[i*4+3]==expected[i*4+3],"four-sample scene and resolve preserve the exact reference coverage at fractional viewport edges");
+            check(before[i*4+3]==255,"actual normal resolve policy hides all source alpha");
+            transparent+=actual[i*4+3]==0;fractional+=actual[i*4+3]>0&&actual[i*4+3]<255;
+        }
+        check(transparent&&fractional,"MSAA control really exercises holes, fractional alpha and subpixel geometry");
+        Com<ID3D11ShaderResourceView> originalSource;context->PSGetShaderResources(0,1,originalSource.out());
+        Com<ID3D11Buffer> originalPolicy;UINT originalOffset=0,originalCount=0;
+        extended->PSGetConstantBuffers1(2,1,originalPolicy.out(),&originalOffset,&originalCount);
+        check(originalSource.value==nativeMsaa.source.value&&originalPolicy.value==policy.value&&originalOffset==offset,
+            "original native multisample input and b2 range restored");
+    }
+}
 std::uint64_t sharedHandle(ID3D11Texture2D* texture){
     Com<IDXGIResource> shared;HANDLE handle=nullptr;
     check(SUCCEEDED(texture->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(shared.out())))&&
@@ -112,10 +194,12 @@ void run(UINT creationFlags,MutexObserver& mutexes){
     check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"actual immediate context1");
     check(mutexes.prepare(device.value),"cold native keyed-mutex observation on the owning device thread");
     auto clone64=compile(Clone64Hlsl,"main","cs_5_0"),clone80=compile(Clone80Hlsl,"main","cs_5_0");
+    auto clone32=compile(CloneResolve32Hlsl,"main","cs_5_0");
     exportKernel("projected-alpha-clone64.dxbc",clone64.value);exportKernel("projected-alpha-clone80.dxbc",clone80.value);
+    exportKernel("projected-alpha-clone32.dxbc",clone32.value);
     Replay replay;
     check(replay.prepare(device.value,{clone64->GetBufferPointer(),clone64->GetBufferSize()},
-        {clone80->GetBufferPointer(),clone80->GetBufferSize()}),"cold bounded clone/state/blend preparation");
+        {clone80->GetBufferPointer(),clone80->GetBufferSize()},{clone32->GetBufferPointer(),clone32->GetBufferSize()}),"cold bounded clone/state/blend preparation");
     auto vsCode=compile(Fixture,"vertex","vs_5_0"),quadCode=compile(Fixture,"quad","vs_5_0"),ps64Code=compile(Fixture,"pixel64","ps_5_0"),
         ps80Code=compile(Fixture,"pixel","ps_5_0"),csCode=compile(Fixture,"compute","cs_5_0");
     Com<ID3D11VertexShader> vs,quad;Com<ID3D11PixelShader> ps64,ps80;Com<ID3D11ComputeShader> cs;
@@ -278,6 +362,7 @@ void run(UINT creationFlags,MutexObserver& mutexes){
         consume->Flush();check(consumerMutex->ReleaseSync(0)==S_OK&&!mutexes.current(consumer.value,nativeHandle),"consumer releases actual ownership after copying the current pair");
     }
     check(!eventInvalid&&nativeAcquires==nativeReleases&&nativeReleases==completedReleases,"only successful native lock scopes reach bounded callbacks");
+    multisample(device.value,context.value,replay,quad.value,ps64.value,source);
     context->ClearState();if(replayedConstants){replayedConstants->Release();replayedConstants=nullptr;}
 }
 }
