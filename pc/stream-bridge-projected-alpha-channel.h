@@ -19,6 +19,8 @@ struct Registry {
     // Published ONLY from current, retained native opens plus the live
     // kernel-validated application lease. Never copy a diagnostic inventory.
     std::uint64_t sourceLease=0,revision=0;
+    std::uint64_t adapterLuid=0;
+    std::uint32_t adapterKnown=0;
     std::array<Allocation,ChannelAllocations> retained{};
 };
 struct MaskRegistration {
@@ -54,6 +56,11 @@ struct ChannelPage {
     std::array<std::uint8_t,16> cookie{};
     std::uint32_t bytes=sizeof(ChannelPage),parentPid=0,peerPid=0,reserved=0;
     volatile LONG bound=0,stopped=0,peerReady=0;
+    // Nonblocking publication gate. A reader keeps published allocations pinned
+    // until it has retained the actual native source binding. No stale numeric
+    // KMT value can be reclassified after its previous allocation is destroyed.
+    volatile LONG registryGate=0;
+    alignas(8) volatile LONG64 sourceLease=0;
     Row<Registry> registry{};
     std::array<Row<MaskRegistration>,ChannelImages> registrations{};
     std::array<Row<ImageWitness>,ChannelImages> witnesses{};
@@ -71,11 +78,34 @@ inline std::uint64_t processBirth(HANDLE process)noexcept{
     return GetProcessTimes(process,&created,&exit,&kernel,&user)?
         (std::uint64_t(created.dwHighDateTime)<<32)|created.dwLowDateTime:0;
 }
+inline bool deviceLuid(ID3D11Device* device,std::uint64_t& value)noexcept{
+    Reference<IDXGIDevice> dxgi;Reference<IDXGIAdapter> adapter;DXGI_ADAPTER_DESC desc{};
+    if(!device||FAILED(device->QueryInterface(__uuidof(IDXGIDevice),reinterpret_cast<void**>(dxgi.out())))||
+        FAILED(dxgi->GetAdapter(adapter.out()))||FAILED(adapter->GetDesc(&desc)))return false;
+    value=(std::uint64_t(static_cast<std::uint32_t>(desc.AdapterLuid.HighPart))<<32)|desc.AdapterLuid.LowPart;return true;
+}
+class RegistryRead {
+    ChannelPage* page_=nullptr;Registry snapshot_{};
+public:
+    RegistryRead()=default;RegistryRead(const RegistryRead&)=delete;RegistryRead& operator=(const RegistryRead&)=delete;
+    ~RegistryRead(){release();}
+    bool acquire(ChannelPage* page)noexcept{
+        if(page_||!page||InterlockedCompareExchange(&page->stopped,0,0))return false;
+        const auto readers=InterlockedCompareExchange(&page->registryGate,0,0);
+        if(readers<0||readers>=64||InterlockedCompareExchange(&page->registryGate,readers+1,readers)!=readers)return false;
+        page_=page;
+        if(!page->registry.read(snapshot_)||snapshot_.sourceLease!=static_cast<std::uint64_t>(InterlockedCompareExchange64(&page->sourceLease,0,0))){release();return false;}
+        return true;
+    }
+    const Registry& snapshot()const noexcept{return snapshot_;}
+    void release()noexcept{if(page_){InterlockedDecrement(&page_->registryGate);page_=nullptr;}}
+};
 class ChannelParent {
     HANDLE mapping_=nullptr;ChannelPage* page_=nullptr;
+    std::array<ID3D11Texture2D*,ChannelAllocations> pins_{};
 public:
     ChannelParent()=default;ChannelParent(const ChannelParent&)=delete;ChannelParent& operator=(const ChannelParent&)=delete;
-    ~ChannelParent(){stop();if(page_)UnmapViewOfFile(page_);if(mapping_)CloseHandle(mapping_);}
+    ~ChannelParent(){stop();for(auto* pin:pins_)if(pin)pin->Release();if(page_)UnmapViewOfFile(page_);if(mapping_)CloseHandle(mapping_);}
     bool create()noexcept{
         if(mapping_||page_)return false;
         mapping_=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,sizeof(ChannelPage),nullptr);
@@ -102,6 +132,35 @@ public:
         InterlockedExchange(&page_->bound,1);return true;
     }
     ChannelPage* page()const noexcept{return page_;}
+    void sourceLease(std::uint64_t value)noexcept{if(page_)InterlockedExchange64(&page_->sourceLease,static_cast<LONG64>(value));}
+    // Cold, single publisher. Caller obtains PID/generation only from its real
+    // DirectMode registry, with live native opens. Shape/handle/LUID are checked
+    // independently against those retained kernel allocations here. The reader
+    // gate prevents dropping/recycling the old pins during source admission.
+    bool publishRetained(const Registry& requested,const std::array<ID3D11Texture2D*,ChannelAllocations>& resources)noexcept{
+        if(!page_||InterlockedCompareExchange(&page_->stopped,0,0)||
+            InterlockedCompareExchange(&page_->registryGate,-1,0)!=0)return false;
+        struct Unlock {ChannelPage* page;~Unlock(){InterlockedExchange(&page->registryGate,0);}} unlock{page_};
+        Registry actual=requested;actual.adapterKnown=0;actual.adapterLuid=0;
+        std::array<Reference<ID3D11Texture2D>,ChannelAllocations> next{};
+        for(unsigned i=0;i<requested.retained.size();++i){
+            const auto& item=requested.retained[i];if(!item.handle)continue;
+            if(!item.generation||!item.pid||!resources[i])return false;
+            for(unsigned prior=0;prior<i;++prior)if(requested.retained[prior].handle==item.handle)return false;
+            D3D11_TEXTURE2D_DESC desc{};resources[i]->GetDesc(&desc);
+            if(desc.Width!=item.width||desc.Height!=item.height||unsigned(desc.Format)!=item.format||desc.SampleDesc.Count!=item.samples||
+                desc.ArraySize!=item.arraySize||desc.MipLevels!=1||desc.Usage!=D3D11_USAGE_DEFAULT||desc.CPUAccessFlags)return false;
+            Reference<IDXGIResource> shared;HANDLE handle=nullptr;
+            if(FAILED(resources[i]->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(shared.out())))||
+                FAILED(shared->GetSharedHandle(&handle))||static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle))!=item.handle)return false;
+            Reference<ID3D11Device> device;resources[i]->GetDevice(device.out());std::uint64_t luid=0;
+            if(!deviceLuid(device.value,luid)||(actual.adapterKnown&&luid!=actual.adapterLuid))return false;
+            actual.adapterKnown=1;actual.adapterLuid=luid;resources[i]->AddRef();next[i].value=resources[i];
+        }
+        if(actual.sourceLease!=static_cast<std::uint64_t>(InterlockedCompareExchange64(&page_->sourceLease,0,0))||!page_->registry.publish(actual))return false;
+        for(unsigned i=0;i<pins_.size();++i){if(pins_[i])pins_[i]->Release();pins_[i]=next[i].value;next[i].value=nullptr;}
+        return true;
+    }
     void stop()noexcept{if(page_)InterlockedExchange(&page_->stopped,1);}
 };
 class ChannelPeer {
