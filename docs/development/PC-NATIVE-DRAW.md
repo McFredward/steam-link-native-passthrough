@@ -1,5 +1,50 @@
 # Adaptive PC native draw and composition
 
+## November14 morning: camera-only recovery and missing native conversion
+
+The saved Frame capture aligns with two PC sessions ending around08:31:37 UTC.
+The later PC session now observes the actual compositor device, exactly one
+successful factory creation and multiview draws of4292-square sources. Retained
+bindings include the declared game's PID24040 with allocation generations7/8.
+Some programs remain unavailable because the128-entry unknown-pixel table is
+already full before game startup. These identities are diagnostics, not current
+source/eye/frame permission.
+
+PC coverage reports25248 eye events but zero complete compositions, captured
+copies, accepted coverage inputs or masks. Broad native-composition-chain
+refusals precede failed-epoch and staging consequences. Across the saved two-run
+interval, Frame0.3.12 receives8669 additional metadata records, zero new prepared
+pictures, zero ordinary draws and4924 camera-only draws, with no new masks or
+extent refusals. This matches missing game elements rather than a transparent
+mask: no mask was decoded at all. The counter intervals do not identify exact
+individual PC frames.
+
+The existing native conversion graph refused direct Chroma/ChromaLegacy writes
+into an NV12/P010 UV view; it required a separate UV image and pack step. PC0.3.21
+supports direct UV with either luma/UV ordering and preserves the intermediate
+route. Both planes still require the exact same complete current composition
+and retained native planar output. This code gap is established; the recorded
+hardware run did not retain the first conversion-edge failure, so it is not
+asserted as that run's confirmed root edge.
+
+Owned Windows WARP controls exercise both paths, wrong/mixed/repeated edges,
+native NV12 byte equality and exact synthetic encoder-input/completion lifetimes.
+The successful
+[production-context gate](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43578473065)
+uses explicitly fake NVENC ports without a peer; it never claims a hardware mask
+certificate. The
+[MSVC/GNU observer gate](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43577946622)
+passes391 checks each, including a late bound program after140 distinct startup
+programs. New diagnostics retain the first rejected conversion edge and use a
+bounded512-cell hashed program-identity table with overflow reporting.
+
+Installer0.3.34 / PC0.3.21 leaves all Frame0.3.12 files/settings unchanged.
+Current application-eye coverage through the real multiview pipeline, exact
+upstream image/mask lineage and successful beta MR remain unverified. A source
+PID, shader fingerprint, complete ordinary video or passed software test cannot
+substitute for those boundaries. Default/Legacy and arbitrary valid resolutions
+remain the compatibility target rather than completed hardware acceptance.
+
 ## November14: missing startup observation, Windows shader folder inspected
 
 The new PC0.3.19 test starts a fresh compositor at00:24:15.142 CET. Its native
