@@ -62,6 +62,11 @@
   a headset test. The maintainer confirmed real GloomhavenVR native passthrough
   with Build686 on 2026-10-17. That temporary-process hardware result does not
   establish persistent-installation, update safety or arbitrary-game support.
+- Before publishing Windows sender/fixture edits, run
+  `bash tests/check_sender_windows_syntax.sh REVIEWED_PUBLIC_SDK_DIRECTORY`.
+  Keep intermediate editing states local and batch a coherent checked change
+  before pushing to dev. The syntax check does not replace Windows/WARP CI;
+  collect the required successful runs before packaging changed native code.
 - The maintainer's 2026-10-29 visual acceptance target is a stable, fluid, sharp
   passthrough image during dense rain, clouds/particles and fine foliage, including
   Venture Spirit Sling. Preserve visible transparency, effects and small holes.

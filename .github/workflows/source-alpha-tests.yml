@@ -18,6 +18,9 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: source-alpha-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   publication:
     runs-on: ubuntu-24.04
