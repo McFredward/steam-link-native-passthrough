@@ -34,8 +34,12 @@ copy-view and accepted-NVENC-input chain. The actual compositor producer PID is
 retained separately from the authenticated game's mask source PID. An active
 game without this proof uses camera-only recovery.
 
-Resources are bounded to 32 published images and 256 MiB of companion texture
-storage across the private producer channel. Preparation runs on native resource
+Resources are bounded to 32 published images and separate 256 MiB budgets for
+ordinary RGBA/MSAA companions and FP16 intermediates (512 MiB total). Native
+ordinary targets must not consume the storage needed to construct the FP16
+ancestry path. Failed cold preparations return their reservation automatically.
+The private page size check rejects mixed old/new budget layouts. These limits
+cover texture storage across the private producer channel. Preparation runs on native resource
 creation. Rendering callbacks perform no allocation, shader compilation or
 blocking synchronization. Calls follow the actual native caller. A nonblocking
 per-context guard permits sequential thread migration; unsupported concurrent

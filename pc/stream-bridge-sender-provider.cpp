@@ -510,8 +510,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     std::snprintf(text,sizeof text,"projected alpha ancestry: context=%u, root-passes/paired-draws=%llu/%llu; last-root-refusal=%u (1=view,2=allocation,3=registry-read,4=no-lease,5=adapter,6=unretained,7=owner,8=shape,9=ownership,10=revoked); last-input-refusal=%u (1=untracked,2=invalid,3=revoked,4=ownership); approximate counters only, not frame proof",
                         context,static_cast<unsigned long long>(production.rootPasses),static_cast<unsigned long long>(production.pairedDraws),production.rootFailure,production.inputFailure);
                     report(text,stream_bridge::logging::Level::Debug);
-                    std::snprintf(text,sizeof text,"projected alpha storage: context=%u, FP16 callbacks/prepared=%u/%u; last-refusal=%u (2=shape,3=missing-srv,4=uav-capability,5=samples-or-extent,6=float-view,7=view-dimension,8=budget,9=allocation,10=clear,11=capacity); cold target admission diagnostics only",
-                        context,production.fp16Calls,production.fp16Prepared,production.fp16Refusal);
+                    std::snprintf(text,sizeof text,"projected alpha storage: context=%u, FP16 callbacks/prepared=%u/%u; last-refusal=%u (2=shape,3=missing-srv,4=uav-capability,5=samples-or-extent,6=float-view,7=view-dimension,8=budget,9=allocation,10=clear,11=capacity); rgba/fp16-reserved-bytes=%llu/%llu, per-class-limit=268435456; cold target admission diagnostics only",
+                        context,production.fp16Calls,production.fp16Prepared,production.fp16Refusal,
+                        static_cast<unsigned long long>(production.rgbaBytes),static_cast<unsigned long long>(production.fp16Bytes));
                     report(text,stream_bridge::logging::Level::Debug);
                 }
                 std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown-retention-overflow=%llu; unknown programs remain diagnostic only",

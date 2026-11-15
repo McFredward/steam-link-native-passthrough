@@ -35,7 +35,28 @@ int peer(HANDLE input){
     while(channel.active()&&GetTickCount64()<deadline)Sleep(1); // Own IPC fixture only, never a render callback.
     check(!channel.active(),"explicit parent stop invalidates the child channel");return 0;
 }
+void budgetControls(){
+    ChannelPage page{};
+    {
+        CompanionReservation rgba,fp16,extra;
+        check(rgba.claim(&page,false,CompanionClassBudget),"ordinary storage retains its complete bounded budget");
+        check(fp16.claim(&page,true,CompanionClassBudget),"full ordinary storage cannot starve FP16 storage");
+        check(!extra.claim(&page,false,1)&&!extra.claim(&page,true,1),"neither class borrows beyond its own hard limit");
+        check(std::uint64_t(page.companionBytes)==CompanionClassBudget&&std::uint64_t(page.fp16CompanionBytes)==CompanionClassBudget,
+            "simultaneous admitted storage is bounded by two complete class budgets");
+    }
+    check(!page.companionBytes&&!page.fp16CompanionBytes,"failed preparation releases both reservations automatically");
+    {
+        CompanionReservation accepted;
+        check(accepted.claim(&page,true,4096)&&!accepted.claim(&page,false,4096),"an active reservation cannot be claimed twice");
+        accepted.commit();
+    }
+    CompanionReservation oversized;
+    check(page.fp16CompanionBytes==4096&&!oversized.claim(&page,true,UINT64_MAX)&&page.fp16CompanionBytes==4096,
+        "committed storage stays accounted and an overflowing request changes nothing");
+}
 void parent(){
+    budgetControls();
     ChannelParent channel;check(channel.create(),"cold unnamed private section");
     Registry registry{};registry.revision=5;registry.sourceLease=0x70000004du;
     registry.retained[0]={101,18,100,37,29,28,1,1};registry.retained[1]={102,19,77,37,29,28,1,1};

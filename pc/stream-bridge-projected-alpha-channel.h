@@ -61,7 +61,10 @@ struct ChannelPage {
     std::uint32_t bytes=sizeof(ChannelPage),parentPid=0,peerPid=0,reserved=0;
     volatile LONG bound=0,stopped=0,peerReady=0;
     volatile LONG nextImageSlot=0;
-    alignas(8) volatile LONG64 companionBytes=0;
+    // Separate bounded pools: ordinary RGBA/MSAA targets cannot consume the
+    // storage needed by the native FP16 X/Y path. Each remains <=256 MiB;
+    // the total admitted companion storage is therefore <=512 MiB.
+    alignas(8) volatile LONG64 companionBytes=0,fp16CompanionBytes=0;
     // Nonblocking publication gate. A reader keeps published allocations pinned
     // until it has retained the actual native source binding. No stale numeric
     // KMT value can be reclassified after its previous allocation is destroyed.
@@ -74,6 +77,29 @@ struct ChannelPage {
 static_assert(std::is_trivially_copyable<Registry>::value&&std::is_trivially_copyable<ImageWitness>::value,
     "fixed private production payloads");
 static_assert(sizeof(ChannelPage)<=32768,"bounded private section");
+constexpr std::uint64_t CompanionClassBudget=256ull*1024*1024;
+// Cold resource creation only. Failed preparation returns its reservation,
+// including early exits after the image exists but its clear failed.
+class CompanionReservation {
+    volatile LONG64* counter_=nullptr;LONG64 bytes_=0;
+public:
+    CompanionReservation()=default;
+    CompanionReservation(const CompanionReservation&)=delete;
+    CompanionReservation& operator=(const CompanionReservation&)=delete;
+    ~CompanionReservation(){if(counter_)InterlockedExchangeAdd64(counter_,-bytes_);}
+    bool claim(ChannelPage* page,bool fp16,std::uint64_t bytes)noexcept{
+        if(counter_||!page||!bytes||bytes>CompanionClassBudget)return false;
+        auto* counter=fp16?&page->fp16CompanionBytes:&page->companionBytes;
+        for(unsigned attempt=0;attempt<8;++attempt){
+            const auto before=InterlockedCompareExchange64(counter,0,0);
+            if(before<0||std::uint64_t(before)>CompanionClassBudget-bytes)return false;
+            if(InterlockedCompareExchange64(counter,before+LONG64(bytes),before)!=before)continue;
+            counter_=counter;bytes_=LONG64(bytes);return true;
+        }
+        return false;
+    }
+    void commit()noexcept{counter_=nullptr;bytes_=0;}
+};
 struct ChannelLaunch {
     std::uint64_t magic=ChannelMagic,parentBirth=0,peerBirth=0,mapping=0;
     std::array<std::uint8_t,16> cookie{};

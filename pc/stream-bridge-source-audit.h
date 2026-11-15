@@ -51,6 +51,7 @@ struct SourceAuditStatus {
         std::uint32_t rootFailure=0,inputFailure=0;
         std::uint64_t rootPasses=0,pairedDraws=0;
         std::uint32_t fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
+        std::uint64_t rgbaBytes=0,fp16Bytes=0;
     };
     std::array<Production,4> production{};
     std::uint32_t productionStopped=0;
