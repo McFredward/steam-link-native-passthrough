@@ -5,24 +5,26 @@
 namespace {
 struct CoverageGpu:OutputGpu {
     VkDescriptorSetLayout maskLayout{},controlLayout{};VkDescriptorPool maskPool{};VkDescriptorSet maskSet{},controlSet{};
-    std::size_t control=0;
+    std::size_t control=0,geometry=0;
     std::size_t maskImage=0,maskUpload=0;
     ~CoverageGpu(){if(maskPool)vkDestroyDescriptorPool(device,maskPool,nullptr);if(maskLayout)vkDestroyDescriptorSetLayout(device,maskLayout,nullptr);if(controlLayout)vkDestroyDescriptorSetLayout(device,controlLayout,nullptr);}
     void prepareMask(){
         maskImage=image(VK_FORMAT_R8_UNORM,16,16,VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT);
         maskUpload=buffer(256,VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
         VkDescriptorSetLayoutBinding binding{0,VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr};
-        VkDescriptorSetLayoutCreateInfo l{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};l.bindingCount=1;l.pBindings=&binding;
+        const std::array<VkDescriptorSetLayoutBinding,2> maskBindings{{binding,{1,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr}}};
+        VkDescriptorSetLayoutCreateInfo l{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};l.bindingCount=2;l.pBindings=maskBindings.data();
         check(vkCreateDescriptorSetLayout(device,&l,nullptr,&maskLayout));
-        binding.descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        l.bindingCount=1;l.pBindings=&binding;binding.descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         check(vkCreateDescriptorSetLayout(device,&l,nullptr,&controlLayout));
-        control=buffer(16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        control=buffer(16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);geometry=buffer(16,VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+        const std::array<float,4> mapping{{1,1,0,0}};std::memcpy(buffers[geometry].mapped,mapping.data(),16);flush(geometry);
         vkDestroyPipelineLayout(device,pipelineLayout,nullptr);pipelineLayout={};
         VkDescriptorSetLayout layouts[3]{descriptorLayout,maskLayout,controlLayout};
         VkPipelineLayoutCreateInfo p{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};p.setLayoutCount=3;p.pSetLayouts=layouts;
         VkPushConstantRange range{VK_SHADER_STAGE_VERTEX_BIT,0,16};p.pushConstantRangeCount=1;p.pPushConstantRanges=&range;
         check(vkCreatePipelineLayout(device,&p,nullptr,&pipelineLayout));
-        VkDescriptorPoolSize size[2]{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1},{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1}};
+        VkDescriptorPoolSize size[2]{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1},{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,2}};
         VkDescriptorPoolCreateInfo pool{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};pool.maxSets=2;pool.poolSizeCount=2;pool.pPoolSizes=size;
         check(vkCreateDescriptorPool(device,&pool,nullptr,&maskPool));
         VkDescriptorSetAllocateInfo a{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};a.descriptorPool=maskPool;a.descriptorSetCount=1;a.pSetLayouts=&maskLayout;
@@ -34,6 +36,8 @@ struct CoverageGpu:OutputGpu {
         VkDescriptorBufferInfo controlInfo{buffers[control].value,0,16};
         w.dstSet=controlSet;w.descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;w.pImageInfo=nullptr;w.pBufferInfo=&controlInfo;
         vkUpdateDescriptorSets(device,1,&w,0,nullptr);
+        VkDescriptorBufferInfo geometryInfo{buffers[geometry].value,0,16};
+        w.dstSet=maskSet;w.dstBinding=1;w.pBufferInfo=&geometryInfo;vkUpdateDescriptorSets(device,1,&w,0,nullptr);
         auto* pixels=static_cast<unsigned char*>(buffers[maskUpload].mapped);
         for(unsigned y=0;y<16;++y)for(unsigned x=0;x<16;++x)pixels[y*16+x]=std::array<unsigned char,4>{{0,64,127,255}}[x/4];
         flush(maskUpload);begin();
@@ -45,6 +49,7 @@ struct CoverageGpu:OutputGpu {
         b.oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;b.newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;b.srcAccessMask=VK_ACCESS_TRANSFER_WRITE_BIT;b.dstAccessMask=VK_ACCESS_SHADER_READ_BIT;
         vkCmdPipelineBarrier(command,VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,nullptr,0,nullptr,1,&b);finish();
     }
+    void visibleMapping(const std::array<float,4>& value){std::memcpy(buffers[geometry].mapped,value.data(),16);flush(geometry);}
     std::array<std::uint32_t,4> drawMasked(const Case& c,float enabled=1,float recovery=0,bool bindMask=true){const std::array<float,4> values{{enabled,recovery,0,0}};std::memcpy(buffers[control].mapped,values.data(),sizeof values);flush(control);metadata(c);startPass();if(bindMask)vkCmdBindDescriptorSets(command,VK_PIPELINE_BIND_POINT_GRAPHICS,pipelineLayout,1,1,&maskSet,0,nullptr);vkCmdBindDescriptorSets(command,VK_PIPELINE_BIND_POINT_GRAPHICS,pipelineLayout,2,1,&controlSet,0,nullptr);raster(probe,c.u);return readPass();}
 };
 }
@@ -82,6 +87,26 @@ int main(int argc,char** argv){try{
             require(camera.drawMasked(c,0,0,false)==original,"standalone recovery withdrawal restores original RGBA without any mask descriptor");
         }
     }
+    unsigned padded=0,refused=0;
+    const std::array<float,4> mapping{{1.5f,1.25f,-.125f,-.125f}};gpu.visibleMapping(mapping);
+    for(auto c:cases())for(float x:{.15625f,.40625f,.65625f,.90625f}){
+        c.u[0]=x;c.u[1]=.5f;c.r1={0,0,1,1};
+        const auto native=oracle?oracle->drawSingle(c,oracle->original):gpu.drawSingle(c,gpu.original);
+        const auto covered=gpu.drawMasked(c);
+        const float ix=(x-c.r0[0])/(c.r0[2]-c.r0[0]),iy=(.5f-c.r0[1])/(c.r0[3]-c.r0[1]);
+        const float weight=(c.flags>>16)&2?0.f:1.f-std::max(0.f,std::min(1.f,(std::max(std::abs(ix*2-1),std::abs(iy*2-1))-.800000012f)*5.26315784f));
+        const float outerX=x*mapping[0]+mapping[2],outerY=.5f*mapping[1]+mapping[3];
+        const float innerX=(c.patch[0]+ix)*mapping[0]+mapping[2],innerY=(c.patch[1]+iy)*mapping[1]+mapping[3];
+        const auto inside=[](float u,float v){return u>=0&&u<=1&&v>=0&&v<=1;};
+        const bool valid=(weight==1||inside(outerX,outerY))&&(weight==0||inside(innerX,innerY));
+        if(valid){
+            require(std::equal(native.begin(),native.begin()+3,covered.begin()),"padded stable valid samples preserve native RGB exactly");
+            const auto sample=[](float u){const int column=std::max(0,std::min(15,int(std::floor(u*16.f))));return std::array<unsigned,4>{{0,64,127,255}}[unsigned(column)/4]/255.f;};
+            near(floating(covered[3]),sample(outerX)*(1-weight)+sample(innerX)*weight,"stable mask uses actual allocation-to-visible mapping");++padded;
+        }else {require(covered==std::array<std::uint32_t,4>{},"padded stable invalid native samples emit zero RGBA");++refused;}
+        require(gpu.drawMasked(c,0,0)==native,"ordinary stable picture remains unchanged even with nonidentity coverage geometry");
+    }
+    require(padded&&refused,"stable padding controls exercise both admission and refusal");
     require(zeroEmission>0,"actual E>0/A0 is preserved");require(validationErrors.load()==0,"zero Vulkan validation errors");
     std::cout<<"{\"schema\":\"sfnp-native-stream-coverage-gpu-v1\",\"cases\":"<<count<<",\"checks\":"<<checks<<",\"rgb_bit_identical\":true,\"validation_errors\":"<<validationErrors.load()<<",\"native_source_selected_binding_proven\":false}\n";return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}

@@ -16,6 +16,7 @@ import tempfile
 import native_shader_contract as shader_contract
 import native_fragment_ssa_probe as ssa
 import native_fragment_count1_interface as count1
+import stream_coverage_visible_geometry as visible_geometry
 
 
 def transform(original, descriptor_count=1, *, camera_only=False):
@@ -104,6 +105,7 @@ def transform(original, descriptor_count=1, *, camera_only=False):
     header[3] = condition + 1  # first unallocated ID
     words = [*header, *(word for instruction in result for word in instruction.words())]
     binary = struct.pack('<%dI' % len(words), *words)
+    if not camera_only:binary=visible_geometry.transform(binary,False)
     return binary, {
         'schema': 'sfnp-native-stream-coverage-v1',
         'original_sha256': hashlib.sha256(original).hexdigest(),
@@ -114,7 +116,7 @@ def transform(original, descriptor_count=1, *, camera_only=False):
         'recording_control_set': 2, 'recording_control_binding': 0,
         'recording_control': 'owned coherent floats: exact 0/1; camera-only recovery 0/1. Recovery hides every game pixel when exact is absent',
         'camera_only_shader': camera_only,
-        'mask_uv': 'unchanged current native coded-video UVs 538/798 and reconstruction weight 1008',
+        'mask_uv': 'actual native UVs and blend weight; immutable per-frame decoder COMPOSE mapping',
         'native_rgb_instructions_retained': True,
         'source_and_selected_image_authority_provided_by_runtime': False,
     }
@@ -210,11 +212,12 @@ def transform_current(original, descriptor_count=1, *, camera_only=False):
     header[3]=next(fresh)
     binary=struct.pack('<%dI' % (5+sum(len(i.operands)+1 for i in result)),
                        *header,*(word for i in result for word in i.words()))
+    if not camera_only:binary=visible_geometry.transform(binary,True)
     return binary, {'schema':'sfnp-native-stream-coverage-v1','original_sha256':profile['sha256'],
                     'output_sha256':hashlib.sha256(binary).hexdigest(),'output_bytes':len(binary),
                     'owned_binding9_descriptor_count':descriptor_count,'camera_only_shader':camera_only,
                     'native_rgb_instructions_retained':True,'native_sample_branches_retained':True,
-                    'mask_uv':'current native sample UVs and consumed blend weight',
+                    'mask_uv':'actual native sample UVs/weight plus immutable decoder COMPOSE mapping',
                     'source_and_selected_image_authority_provided_by_runtime':False}
 
 

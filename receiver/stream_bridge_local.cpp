@@ -23,12 +23,17 @@ namespace stream_bridge_local {
 namespace {
 namespace nd=stream_bridge_native;
 constexpr std::size_t SharedBytes=4096,SlotCount=nd::MaxDevices*nd::MaxBuffers,HeaderBytes=192;
-constexpr std::uint64_t Magic=0x31534c504e4653ULL;
-struct Slot {std::atomic<std::uint64_t> sequence{0};std::array<std::atomic<std::uint64_t>,10> fields{};};
+constexpr std::uint64_t Magic=0x32534c504e4653ULL;
+struct Slot {std::atomic<std::uint64_t> sequence{0};std::array<std::atomic<std::uint64_t>,12> fields{};};
 struct Shared {std::atomic<std::uint64_t> magic{Magic},active{1};std::array<Slot,SlotCount> slots{};};
 static_assert(sizeof(Shared)<=SharedBytes&&std::atomic<std::uint64_t>::is_always_lock_free,"fixed lock-free cross-process lease ABI");
-using Words=std::array<std::uint64_t,10>;
-Words words(const nd::CaptureObservation& c,KernelIdentity kernel){return {{static_cast<std::uint64_t>(c.fd),c.index,c.nativeTimestampToken,c.sourcePoolGeneration,c.capturePoolGeneration,c.contentGeneration,kernel[0],kernel[1],static_cast<std::uint64_t>(c.dmabufFd),1}};}
+using Words=std::array<std::uint64_t,12>;
+Words words(const nd::CaptureObservation& c,KernelIdentity kernel){
+    const auto& g=c.visible;
+    const auto a=(std::uint64_t(g.allocationWidth)<<48)|(std::uint64_t(g.allocationHeight)<<32)|(std::uint64_t(g.left)<<16)|g.top;
+    const auto b=(std::uint64_t(g.width)<<32)|(std::uint64_t(g.height)<<16)|(g.known?1u:0u);
+    return {{static_cast<std::uint64_t>(c.fd),c.index,c.nativeTimestampToken,c.sourcePoolGeneration,c.capturePoolGeneration,c.contentGeneration,kernel[0],kernel[1],static_cast<std::uint64_t>(c.dmabufFd),1,a,b}};
+}
 bool identity(int fd,KernelIdentity& out){struct stat st{};if(fd<0||fstat(fd,&st)||!st.st_ino)return false;out={{static_cast<std::uint64_t>(st.st_dev),static_cast<std::uint64_t>(st.st_ino)}};return true;}
 bool snapshot(const Shared* shared,std::uint32_t index,std::uint64_t epoch,std::uint64_t& sequence,Words& out){
     if(!shared||!epoch||index>=SlotCount||shared->magic.load(std::memory_order_acquire)!=Magic||shared->active.load(std::memory_order_acquire)!=epoch)return false;
@@ -58,7 +63,7 @@ LeaseWriter::LeaseWriter():impl_(new Impl){}
 LeaseWriter::~LeaseWriter(){revoke();if(impl_->shared)munmap(impl_->shared,SharedBytes);closeFd(impl_->readonly);closeFd(impl_->fd);}
 bool LeaseWriter::prepareCold() noexcept {
     std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->shared)return false;
-    impl_->fd=memfd_create("sfnp-capture-leases-v1",MFD_CLOEXEC|MFD_ALLOW_SEALING);
+    impl_->fd=memfd_create("sfnp-capture-leases-v2",MFD_CLOEXEC|MFD_ALLOW_SEALING);
     if(impl_->fd<0||ftruncate(impl_->fd,SharedBytes)){closeFd(impl_->fd);return false;}
     auto* map=mmap(nullptr,SharedBytes,PROT_READ|PROT_WRITE,MAP_SHARED,impl_->fd,0);if(map==MAP_FAILED){closeFd(impl_->fd);return false;}
     impl_->shared=new(map)Shared();
@@ -95,7 +100,7 @@ void LeaseWriter::captureEvent(const nd::CaptureObservation& event) noexcept {
         if(resource.fd.load(std::memory_order_acquire)==event.dmabufFd){const KernelIdentity candidate{{resource.device.load(std::memory_order_acquire),resource.inode.load(std::memory_order_acquire)}};
             if(resource.sequence.load(std::memory_order_acquire)==sequence){kernel=candidate;break;}}
     }
-    if(!kernel[1]||!event.sourcePoolGeneration||!event.capturePoolGeneration||!event.contentGeneration||event.nativeTimestampToken>0xffff){store(impl_->shared->slots[index],{});return;}
+    if((event.visible.known?!event.visible.valid():!(event.visible==nd::VisibleGeometry{}))||!kernel[1]||!event.sourcePoolGeneration||!event.capturePoolGeneration||!event.contentGeneration||event.nativeTimestampToken>0xffff){store(impl_->shared->slots[index],{});return;}
     store(impl_->shared->slots[index],words(event,kernel));
 }
 void LeaseWriter::sink(const nd::CaptureObservation& event,void* context) noexcept {if(context)static_cast<LeaseWriter*>(context)->captureEvent(event);}
@@ -220,12 +225,14 @@ bool validMessage(const Message& m){
     if(m.kind==Kind::Certified)return !m.certifiedMetadata.empty()&&m.certifiedMetadata.size()<=Channel::MaximumPayload&&m.dmabuf<0&&m.readOnlyLeases<0;
     if((m.kind!=Kind::Decoded&&m.kind!=Kind::Ready)||!m.certifiedMetadata.empty()
         ||(m.kind==Kind::Decoded?(m.dmabuf<0||m.readOnlyLeases<0):(m.dmabuf>=0||m.readOnlyLeases>=0))||m.lease.slot>=SlotCount||!m.lease.epoch||!m.lease.sequence||(m.lease.sequence&1))return false;
-    const auto& c=m.lease.capture;return c.kind==nd::CaptureKind::Decoded&&c.sourcePoolGeneration==m.source.outputPoolGeneration
+    const auto& c=m.lease.capture;
+    if(c.visible.known?!c.visible.valid():!(c.visible==nd::VisibleGeometry{}))return false;
+    return c.kind==nd::CaptureKind::Decoded&&c.sourcePoolGeneration==m.source.outputPoolGeneration
         &&c.nativeTimestampToken==m.nativeTimestampToken&&c.fd>=0&&c.dmabufFd>=0&&c.index<nd::MaxBuffers
         &&c.capturePoolGeneration&&c.contentGeneration&&m.lease.kernel[1];
 }
 std::array<std::uint8_t,HeaderBytes> encode(const Message& m){
-    std::array<std::uint8_t,HeaderBytes> h{};std::memcpy(h.data(),"SFL2",4);h[4]=2;h[5]=static_cast<std::uint8_t>(m.kind);h[6]=m.peerConfirmed?1:0;
+    std::array<std::uint8_t,HeaderBytes> h{};std::memcpy(h.data(),"SFL3",4);h[4]=3;h[5]=static_cast<std::uint8_t>(m.kind);h[6]=m.peerConfirmed?1:0;
     put(h.data()+8,m.certifiedMetadata.size(),4);std::copy(m.source.stream.connection.begin(),m.source.stream.connection.end(),h.begin()+16);
     put(h.data()+32,m.source.outputPoolGeneration,8);put(h.data()+40,m.descriptor.sourceFrame,8);put(h.data()+48,m.descriptor.encoderGeneration,8);
     put(h.data()+56,m.descriptor.codedWidth,2);put(h.data()+58,m.descriptor.codedHeight,2);put(h.data()+60,m.nativeTimestampToken,4);put(h.data()+64,m.submittedContent,8);
@@ -234,19 +241,26 @@ std::array<std::uint8_t,HeaderBytes> encode(const Message& m){
     if(m.kind!=Kind::Certified){put(h.data()+152,m.lease.epoch,8);put(h.data()+88,m.lease.slot,4);put(h.data()+92,m.lease.capture.index,4);put(h.data()+96,m.lease.sequence,8);
         put(h.data()+104,m.lease.capture.capturePoolGeneration,8);put(h.data()+112,m.lease.capture.contentGeneration,8);
         put(h.data()+120,m.lease.kernel[0],8);put(h.data()+128,m.lease.kernel[1],8);
-        put(h.data()+136,static_cast<std::uint64_t>(m.lease.capture.fd),4);put(h.data()+140,static_cast<std::uint64_t>(m.lease.capture.dmabufFd),4);}
+        put(h.data()+136,static_cast<std::uint64_t>(m.lease.capture.fd),4);put(h.data()+140,static_cast<std::uint64_t>(m.lease.capture.dmabufFd),4);
+        const auto& g=m.lease.capture.visible;
+        const std::uint32_t fields[]{g.allocationWidth,g.allocationHeight,g.left,g.top,g.width,g.height,g.known?1u:0u};
+        for(unsigned i=0;i<7;++i)put(h.data()+160+4*i,fields[i],4);}
     return h;
 }
 bool decode(const std::array<std::uint8_t,HeaderBytes>& h,Message& m){
-    if(std::memcmp(h.data(),"SFL2",4)||h[4]!=2||(h[5]!=1&&h[5]!=2&&h[5]!=3)||h[6]>1||h[7])return false;
+    if(std::memcmp(h.data(),"SFL3",4)||h[4]!=3||(h[5]!=1&&h[5]!=2&&h[5]!=3)||h[6]>1||h[7])return false;
     for(unsigned i=12;i<16;++i)if(h[i])return false;
-    for(unsigned i=160;i<HeaderBytes;++i)if(h[i])return false;
+    for(unsigned i=188;i<HeaderBytes;++i)if(h[i])return false;
+    if(h[5]==static_cast<unsigned>(Kind::Certified))for(unsigned i=160;i<188;++i)if(h[i])return false;
     const auto payload=get(h.data()+8,4);if(payload>Channel::MaximumPayload)return false;
     m.kind=static_cast<Kind>(h[5]);m.peerConfirmed=h[6]!=0;std::copy_n(h.begin()+16,16,m.source.stream.connection.begin());
     m.source.outputPoolGeneration=get(h.data()+32,8);m.source.stream.generation=get(h.data()+144,8);m.descriptor={get(h.data()+40,8),get(h.data()+48,8),static_cast<std::uint16_t>(get(h.data()+56,2)),static_cast<std::uint16_t>(get(h.data()+58,2))};
     m.nativeTimestampToken=static_cast<std::uint32_t>(get(h.data()+60,4));m.submittedContent=get(h.data()+64,8);std::copy_n(h.begin()+72,16,m.binding.begin());
     if(m.kind!=Kind::Certified){m.lease.epoch=get(h.data()+152,8);m.lease.slot=static_cast<std::uint32_t>(get(h.data()+88,4));m.lease.sequence=get(h.data()+96,8);m.lease.kernel={{get(h.data()+120,8),get(h.data()+128,8)}};
         m.lease.capture={nd::CaptureKind::Decoded,static_cast<int>(get(h.data()+136,4)),static_cast<int>(get(h.data()+140,4)),static_cast<std::uint32_t>(get(h.data()+92,4)),m.nativeTimestampToken,m.source.outputPoolGeneration,get(h.data()+104,8),get(h.data()+112,8)};
+        if(get(h.data()+184,4)>1)return false;
+        m.lease.capture.visible={unsigned(get(h.data()+160,4)),unsigned(get(h.data()+164,4)),unsigned(get(h.data()+168,4)),unsigned(get(h.data()+172,4)),unsigned(get(h.data()+176,4)),unsigned(get(h.data()+180,4)),get(h.data()+184,4)==1};
+        if(m.lease.capture.visible.known&&!m.lease.capture.visible.valid())return false;
         if(payload)return false;
     }else {for(unsigned i=88;i<144;++i)if(h[i])return false;for(unsigned i=152;i<160;++i)if(h[i])return false;if(!payload)return false;}
     m.certifiedMetadata.resize(payload);return true;
@@ -349,9 +363,9 @@ void Channel::tick() noexcept {
             }
             if(bad){impl_->close(State::Refused);return;}
             if(header){impl_->headerAt+=static_cast<std::size_t>(n);
-                constexpr char magic[]="SFL2";
+                constexpr char magic[]="SFL3";
                 for(std::size_t at=0;at<std::min<std::size_t>(4,impl_->headerAt);++at)if(impl_->header[at]!=static_cast<std::uint8_t>(magic[at])){impl_->close(State::Refused);return;}
-                if(impl_->headerAt>=5&&impl_->header[4]!=2){impl_->close(State::Refused);return;}
+                if(impl_->headerAt>=5&&impl_->header[4]!=3){impl_->close(State::Refused);return;}
                 if(impl_->headerAt>=6&&((impl_->endpoint==Endpoint::VrlinkProducer&&impl_->header[5]!=static_cast<std::uint8_t>(Kind::Ready))
                     ||(impl_->endpoint==Endpoint::CompositorConsumer&&impl_->header[5]!=static_cast<std::uint8_t>(Kind::Certified)&&impl_->header[5]!=static_cast<std::uint8_t>(Kind::Decoded)))){impl_->close(State::Refused);return;}
                 if(impl_->headerAt==HeaderBytes){if(!decode(impl_->header,impl_->assembling)){impl_->close(State::Refused);return;}impl_->decoded=true;
