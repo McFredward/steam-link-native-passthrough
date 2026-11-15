@@ -59,8 +59,9 @@ template<class T>struct Reference {
 
 // Only a new private allocation can become a replay destination. There is no
 // constructor/import for an application's texture or an alias of native RGB.
-// The producer never exposes this image to native pipeline bindings. Its raw
-// resource is used only for the companion's ordered transfer/test readback.
+// The shipping replay never exposes this image to native pipeline bindings.
+// The unshipped same-draw control also uses it as a second private RTV; neither
+// operation makes the allocation an authenticated image/frame permit.
 // A four-sample image stays private and is resolved into a separate shareable
 // single-sample image with the reviewed native resolve geometry.
 class Image {
@@ -237,7 +238,7 @@ public:
         return (desc.DepthEnable&&desc.DepthFunc!=D3D11_COMPARISON_ALWAYS)||
             (desc.StencilEnable&&(desc.FrontFace.StencilFunc!=D3D11_COMPARISON_ALWAYS||desc.BackFace.StencilFunc!=D3D11_COMPARISON_ALWAYS));
     }
-    // A separate native-alpha route: run the ORIGINAL draw exactly once with
+    // Unshipped scene-policy experiment: run the ORIGINAL draw exactly once with
     // its existing alpha-policy constant enabled. No scene texture is sampled
     // a second time and no RGB arithmetic, shader, RTV, depth/stencil state or
     // geometry is replaced. The caller must authenticate source ancestry and
@@ -246,7 +247,7 @@ public:
         unsigned logicalBytes,bool resolving,Draw original,UINT vertices,UINT start)noexcept{
         if(!ready_||!context||!program||!original||!vertices||
             !sameDevice(context,device_.value)||context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE||
-            (resolving?logicalBytes!=32:(logicalBytes!=0&&logicalBytes!=64&&logicalBytes!=80)))return false;
+            resolving||(logicalBytes!=0&&logicalBytes!=64&&logicalBytes!=80))return false;
         Reference<ID3D11DeviceContext1> actual;
         if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(actual.out())))||
             actual.value!=context_.value)return false;
@@ -288,6 +289,72 @@ public:
         context->PSSetConstantBuffers(slot,1,&clone.constant.value);
         original(context,vertices,start);
         context->PSSetConstantBuffers(slot,1,&native.value);actual->PSSetConstantBuffers1(slot,1,&native.value,&offset,&count);
+        return true;
+    }
+    // Unshipped MRT primitive. A cold-prepared, separately reviewed augmented
+    // program must leave its native SV_Target0 unchanged and emit real coverage
+    // to SV_Target1. It is NOT obtained by flipping the native resolve policy:
+    // that policy can change RGB as well as A. No root/image permit is granted
+    // here; the production ancestry/Present controller is not wired to this.
+    bool nativeCapture(ID3D11DeviceContext* context,const Image& capture,
+        ID3D11PixelShader* nativeProgram,ID3D11PixelShader* augmentedProgram,
+        Draw original,UINT vertices,UINT start,const Image* alphaInput=nullptr)noexcept{
+        if(!ready_||!context||!nativeProgram||!augmentedProgram||!original||!vertices||
+            !capture.target_.value||!sameDevice(context,device_.value)||
+            !sameDevice(augmentedProgram,device_.value)||!sameDevice(capture.target_.value,device_.value)||
+            context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE)return false;
+        Reference<ID3D11DeviceContext1> actual;
+        if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(actual.out())))||
+            actual.value!=context_.value)return false;
+        Reference<ID3D11PixelShader> bound;UINT classes=0;context->PSGetShader(bound.out(),nullptr,&classes);
+        if(bound.value!=nativeProgram||classes)return false;
+        std::array<ID3D11RenderTargetView*,D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT> targets{};
+        Reference<ID3D11DepthStencilView> depth;context->OMGetRenderTargets(UINT(targets.size()),targets.data(),depth.out());
+        struct TargetRefs {decltype(targets)& values;~TargetRefs(){for(auto* v:values)if(v)v->Release();}} refs{targets};
+        if(!targets[0])return false;
+        for(unsigned i=1;i<targets.size();++i)if(targets[i])return false;
+        Reference<ID3D11Resource> output;Reference<ID3D11Texture2D> texture;targets[0]->GetResource(output.out());
+        if(FAILED(output->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out())))||
+            texture.value==capture.texture_.value)return false;
+        D3D11_TEXTURE2D_DESC nativeShape{},privateShape{};texture->GetDesc(&nativeShape);capture.texture_->GetDesc(&privateShape);
+        D3D11_RENDER_TARGET_VIEW_DESC nativeView{};targets[0]->GetDesc(&nativeView);
+        if(nativeShape.Width!=privateShape.Width||nativeShape.Height!=privateShape.Height||
+            nativeShape.SampleDesc.Count!=privateShape.SampleDesc.Count||nativeShape.SampleDesc.Quality!=privateShape.SampleDesc.Quality||
+            nativeShape.MipLevels!=1||nativeShape.ArraySize!=1||
+            (nativeView.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D&&nativeView.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS))return false;
+        std::array<ID3D11UnorderedAccessView*,D3D11_1_UAV_SLOT_COUNT> uavs{};
+        const UINT slots=device_->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1?D3D11_1_UAV_SLOT_COUNT:D3D11_PS_CS_UAV_REGISTER_COUNT;
+        context->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,1,slots-1,uavs.data());
+        bool writable=false;for(auto* v:uavs)if(v){writable=true;v->Release();}if(writable)return false;
+        Reference<ID3D11BlendState> blend;std::array<FLOAT,4> factor{};UINT sampleMask=0;
+        context->OMGetBlendState(blend.out(),factor.data(),&sampleMask);
+        if(blend.value){D3D11_BLEND_DESC desc{};blend->GetDesc(&desc);
+            if(desc.AlphaToCoverageEnable||desc.RenderTarget[0].BlendEnable||
+                desc.RenderTarget[0].RenderTargetWriteMask!=D3D11_COLOR_WRITE_ENABLE_ALL)return false;
+            Reference<ID3D11BlendState1> extended;
+            if(SUCCEEDED(blend->QueryInterface(__uuidof(ID3D11BlendState1),reinterpret_cast<void**>(extended.out())))){
+                D3D11_BLEND_DESC1 current{};extended->GetDesc1(&current);if(current.RenderTarget[0].LogicOpEnable)return false;
+            }
+        }
+        Reference<ID3D11ShaderResourceView> priorInput;
+        if(alphaInput){
+            if(!alphaInput->source_.value||!sameDevice(alphaInput->source_.value,device_.value)||
+                alphaInput->texture_.value==texture.value||alphaInput->texture_.value==capture.texture_.value)return false;
+            // The augmented resolve reads its private MSAA alpha at t1. It
+            // leaves native t0, b2 and every original instruction unchanged.
+            context->PSGetShaderResources(1,1,priorInput.out());
+            context->PSSetShaderResources(1,1,&alphaInput->source_.value);
+        }
+        ID3D11RenderTargetView* pair[]{targets[0],capture.target_.value};
+        context->OMSetRenderTargets(2,pair,depth.value);
+        // RT0 was already unblended/full-write; default gives the same native
+        // colour behaviour and enables the new RT1. Preserve sample coverage.
+        context->OMSetBlendState(nullptr,nullptr,sampleMask);
+        context->PSSetShader(augmentedProgram,nullptr,0);original(context,vertices,start);
+        context->PSSetShader(nativeProgram,nullptr,0);
+        context->OMSetRenderTargets(1,targets.data(),depth.value);
+        context->OMSetBlendState(blend.value,factor.data(),sampleMask);
+        if(alphaInput)context->PSSetShaderResources(1,1,&priorInput.value);
         return true;
     }
     bool replay(ID3D11DeviceContext* context,const Image& image,
