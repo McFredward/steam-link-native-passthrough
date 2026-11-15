@@ -514,7 +514,9 @@ struct SenderCoverage::Impl {
         return !invalid&&activeEpoch==frame.registryEpoch;
     }
     void invalidateWrite(ID3D11DeviceContext* ctx,ID3D11Resource* resource,bool all=false){
-        if(ctx!=context||!adaptive||!enabled||companionCommands||!stagedComposition.load(std::memory_order_acquire))return;
+        if(ctx!=context||!adaptive||!enabled||companionCommands)return;
+        projected.invalidate(all?nullptr:resource);
+        if(!stagedComposition.load(std::memory_order_acquire))return;
         Held<IUnknown> token;if(resource)token.value=identity(resource);
         std::unique_lock<std::mutex> lock(mutex,std::try_to_lock);
         if(!lock){if(const auto* frame=DirectModeBoundary::currentFrame())failedSerial=frame->presentSerial;else prepared=false;return;}
@@ -523,11 +525,11 @@ struct SenderCoverage::Impl {
         }
     }
     void invalidateView(ID3D11DeviceContext* ctx,ID3D11View* view){
-        if(!view||companionCommands||!stagedComposition.load(std::memory_order_acquire))return;
+        if(!view||companionCommands)return;
         Held<ID3D11Resource> resource;view->GetResource(resource.out());invalidateWrite(ctx,resource);
     }
     void invalidateTargets(ID3D11DeviceContext* ctx){
-        if(companionCommands||!stagedComposition.load(std::memory_order_acquire))return;
+        if(companionCommands)return;
         std::array<ID3D11RenderTargetView*,8> views{};ctx->OMGetRenderTargets(static_cast<UINT>(views.size()),views.data(),nullptr);
         for(auto* view:views)if(view){invalidateView(ctx,view);view->Release();}
     }
@@ -817,7 +819,12 @@ struct SenderCoverage::Impl {
             forwardDraw(ctx,count,start);return;
         }
         s.gates.signal(CoverageSignal::SourceFrames);
-        MultithreadScope protect(s.multithread);forwardDraw(ctx,count,start);
+        MultithreadScope protect(s.multithread);
+        if(s.adaptive){
+            Held<ID3D11RenderTargetView> out;Held<ID3D11Resource> written;ctx->OMGetRenderTargets(1,out.out(),nullptr);
+            if(out){out->GetResource(written.out());s.projected.invalidate(written);}
+        }
+        forwardDraw(ctx,count,start);
         CompanionCommands ownCommands;
         // Luma/chroma selection comes from the actual public planar view. The
         // native shader and every geometry/UV/constant binding remain native.
@@ -833,7 +840,10 @@ struct SenderCoverage::Impl {
     static HRESULT STDMETHODCALLTYPE map(ID3D11DeviceContext* ctx,ID3D11Resource* resource,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* output){
         auto& s=*instance.load();const auto result=forwardMap(ctx,resource,sub,type,flags,output);
         const bool caller=s.site(__builtin_return_address(0),0x9f36f2);if(caller)s.gates.signal(CoverageSignal::NativeMaps);
-        if(s.adaptive)return result; // No private constant-buffer observation is needed in this route.
+        if(s.adaptive){
+            if(ctx==s.context&&s.enabled&&!companionCommands&&SUCCEEDED(result)&&type!=D3D11_MAP_READ)s.projected.invalidate(resource);
+            return result; // No private constant-buffer observation is needed in this route.
+        }
         if(ctx!=s.context||!s.enabled||!caller||FAILED(result)||!output||!output->pData||sub||type!=D3D11_MAP_WRITE_DISCARD||flags){
             if(caller)s.gates.refuse(ctx!=s.context?CoverageGate::Context:CoverageGate::ConstantBuffer);
             return result;

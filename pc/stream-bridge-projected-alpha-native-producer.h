@@ -15,7 +15,7 @@ class NativeProducer {
         std::atomic<ULONG> references{1};std::shared_ptr<Budget> budget;
         D3D11_TEXTURE2D_DESC shape{};Image alpha;Allocation native{},scene{};
         std::array<Allocation,8> contributors{};unsigned contributorCount=0;
-        std::uint64_t serial=0,bytes=0,epoch=0,version=0,lease=0;
+        std::uint64_t serial=0,bytes=0,epoch=0,version=0,lease=0,mutation=0;
         UINT width=0,height=0;bool valid=false,empty=false;unsigned row=ChannelImages;
         std::array<MutexLease,8> scopes{};ImageWitness witness{};
         std::array<Reference<IDXGIResource>,8> sealed{};
@@ -83,8 +83,8 @@ class NativeProducer {
     bool valid(const Record& record)const noexcept{return record.valid&&record.epoch==epoch_&&live(record.lease);}
     bool base(const Record& record)const noexcept{return (record.empty&&record.epoch==epoch_)||valid(record);}
     void revoke(Record& record)noexcept{
+        invalidateSharedImages(page_,record.native);
         record.valid=record.empty=false;record.width=record.height=0;record.epoch=0;record.lease=0;record.scene={};record.contributors={};record.contributorCount=0;record.scopes={};record.witness={};
-        if(record.row<exports_.size()&&exports_[record.row].record.value==&record)(void)page_->witnesses[record.row].publish({});
         for(auto& sealed:record.sealed)if(sealed.value){sealed->Release();sealed.value=nullptr;}
         if(record.version==UINT64_MAX){InterlockedExchange(&page_->stopped,1);return;}++record.version;
     }
@@ -115,11 +115,14 @@ class NativeProducer {
              program.hash==shaderDigest("675da9edd13d0f410d2f60e83446a483a653e1cdea0fcae1607791715c868a72")));
     }
     bool boundedInput(ID3D11DeviceContext* context,const NativeShaderDescription& program,const Record& input,UINT outputWidth)noexcept{
-        if(outputWidth>input.width||!bounded(program))return false;
+        const auto refuse=[this](unsigned reason){inputFailure_=100+reason;return false;};
+        if(outputWidth>input.width)return refuse(1);
+        if(!bounded(program))return refuse(2);
         std::array<float,4> dimensions{};
         if(program.kind==NativeShader::MultiViewDownscaleY){
-            if(!geometry_.constantPrefix(context,dimensions.data(),sizeof dimensions))return false;
-            return std::isfinite(dimensions[1])&&dimensions[1]>=1&&dimensions[1]<=float(input.height)&&dimensions[1]==std::floor(dimensions[1]);
+            if(!geometry_.constantPrefix(context,dimensions.data(),sizeof dimensions))return refuse(3);
+            if(!std::isfinite(dimensions[1])||dimensions[1]<1||dimensions[1]>float(input.height)||dimensions[1]!=std::floor(dimensions[1]))return refuse(4);
+            inputFailure_=0;return true;
         }
         // Reviewed ReprojectY reads x=int(SV_Position.x), and skips every row
         // outside roundEven(v4.yw). Its flat v4 comes from normalized native
@@ -127,14 +130,17 @@ class NativeProducer {
         // the actual selected eye/view proves a containing integer read domain
         // without replacing native reprojection or approximating its matrices.
         std::array<std::uint32_t,76> viewState{};std::array<std::uint32_t,700> views{};
-        if(!geometry_.constantPrefix(context,dimensions.data(),sizeof dimensions,true,0)||
-            !geometry_.constantPrefix(context,viewState.data(),sizeof viewState,true,1)||
-            !geometry_.constantPrefix(context,views.data(),sizeof views,true,2))return false;
-        if(!std::isfinite(dimensions[1])||dimensions[1]<1||dimensions[1]>float(input.height)||dimensions[1]!=std::floor(dimensions[1])||
-            viewState[72]>1||views[0]>2)return false;
+        if(!geometry_.constantPrefix(context,dimensions.data(),sizeof dimensions,true,0))return refuse(11);
+        if(!geometry_.constantPrefix(context,viewState.data(),sizeof viewState,true,1))return refuse(12);
+        if(!geometry_.constantPrefix(context,views.data(),sizeof views,true,2))return refuse(13);
+        if(!std::isfinite(dimensions[1])||dimensions[1]<1||dimensions[1]>float(input.height)||dimensions[1]!=std::floor(dimensions[1]))return refuse(14);
+        if(viewState[72]>1)return refuse(15);
+        if(views[0]>2)return refuse(16);
         const auto offset=views[0]*58+(viewState[72]?28u:0u);float first=0,last=0;
         std::memcpy(&first,&views[(offset+28)*4+1],4);std::memcpy(&last,&views[(offset+30)*4+1],4);
-        return std::isfinite(first)&&std::isfinite(last)&&first>=0&&first<=1&&last>=0&&last<=1;
+        if(!std::isfinite(first)||first<0||first>1)return refuse(17);
+        if(!std::isfinite(last)||last<0||last>1)return refuse(18);
+        inputFailure_=0;return true;
     }
     static bool contribute(std::array<Allocation,8>& values,unsigned& count,const Allocation& value)noexcept{
         for(unsigned i=0;i<count;++i)if(exact(values[i],value))return true;
@@ -153,17 +159,35 @@ class NativeProducer {
         for(unsigned i=0;i<exports_.size();++i){auto& entry=exports_[i];if(!entry.record.value)continue;
             const auto* keep=retained(registry,entry.allocation,GetCurrentProcessId());
             if(keep&&exact(*keep,entry.allocation))continue;
-            (void)page_->witnesses[i].publish({});(void)page_->registrations[i].publish({});
+            MaskRegistration owned{};
+            if(page_->registrations[i].read(owned)&&owned.maskGeneration==entry.record->serial){
+                (void)page_->witnesses[i].publish({});(void)page_->registrations[i].publish({});
+            }
             entry.record->row=ChannelImages;entry.native->Release();entry.native.value=nullptr;
             entry.record->Release();entry.record.value=nullptr;entry.allocation={};
         }
         unsigned row=record.row;
+        if(row<exports_.size()&&exports_[row].record.value==&record){
+            MaskRegistration owned{};
+            if(!page_->registrations[row].read(owned)||owned.maskGeneration!=record.serial){
+                auto& retired=exports_[row];retired.native->Release();retired.native.value=nullptr;
+                retired.record->Release();retired.record.value=nullptr;retired.allocation={};record.row=ChannelImages;row=ChannelImages;
+            }
+        }
         if(row>=exports_.size()||exports_[row].record.value!=&record){
-            for(row=0;row<exports_.size()&&exports_[row].record.value;++row){}
+            for(row=0;row<exports_.size();++row){
+                if(exports_[row].record.value)continue;
+                MaskRegistration other{};const bool published=page_->registrations[row].read(other);
+                if(!published||!other.maskHandle)break;
+                const auto* keep=retained(registry,other.native,GetCurrentProcessId());
+                if(keep&&exact(*keep,other.native))continue;
+                (void)page_->witnesses[row].publish({});(void)page_->registrations[row].publish({});break;
+            }
             if(row==exports_.size()){stage_=4513;return false;}
             Allocation mask{};if(!allocation(record.alpha.resource(),mask)){stage_=4514;return false;}
             auto& entry=exports_[row];record.AddRef();entry.record.value=&record;native->AddRef();entry.native.value=native;entry.allocation=*current;
-            record.row=row;MaskRegistration registration{*current,mask.handle,record.serial};
+            record.row=row;if(InterlockedIncrement64(&page_->imageMutations[row])<=0){InterlockedExchange(&page_->stopped,1);return false;}
+            MaskRegistration registration{*current,mask.handle,record.serial};
             (void)page_->witnesses[row].publish({});(void)page_->registrations[row].publish(registration);
         }
         return true;
@@ -196,7 +220,8 @@ public:
         if(!(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE)){refuse(3);return;}
         if(desc.BindFlags&D3D11_BIND_UNORDERED_ACCESS){refuse(4);return;}
         if((desc.SampleDesc.Count!=1&&desc.SampleDesc.Count!=4)||desc.Width<32||desc.Height<32){refuse(5);return;}
-        const bool rgba=desc.Format==DXGI_FORMAT_R8G8B8A8_TYPELESS||desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM||desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        const bool rgba=desc.Format==DXGI_FORMAT_R8G8B8A8_TYPELESS||desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM||desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB||
+            desc.Format==DXGI_FORMAT_B8G8R8A8_TYPELESS||desc.Format==DXGI_FORMAT_B8G8R8A8_UNORM||desc.Format==DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
         if((!floating&&!rgba)||(floating&&(desc.SampleDesc.Count!=1||desc.MiscFlags||vd.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))){refuse(6);return;}
         if(vd.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D&&vd.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS){refuse(7);return;}
         if(budget_->records.fetch_add(1,std::memory_order_acq_rel)>=1024){--budget_->records;refuse(11);return;}
@@ -216,7 +241,7 @@ public:
         if(floating){++fp16Prepared_;fp16Refusal_=0;}stage_=4002;
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
-        geometry_.invalidate(resource);
+        geometry_.invalidate(resource);invalidateSharedImages(page_,resource);
         if(resource){auto record=get(resource);if(record.value)revoke(*record.value);return;}
         if(epoch_==UINT64_MAX){InterlockedExchange(&page_->stopped,1);return;}++epoch_;
         for(auto& entry:exports_)if(entry.record.value)revoke(*entry.record.value);
@@ -240,7 +265,8 @@ public:
         for(auto* view:writable)if(view){Reference<ID3D11Resource> resource;view->GetResource(resource.out());invalidate(resource.value);view->Release();}
     }
     void clear(ID3D11DeviceContext* context,ID3D11RenderTargetView* view,const FLOAT* color)noexcept{
-        Reference<ID3D11Resource> resource;if(view)view->GetResource(resource.out());auto record=get(resource.value);if(!record.value)return;
+        Reference<ID3D11Resource> resource;if(view)view->GetResource(resource.out());invalidateSharedImages(page_,resource.value);
+        auto record=get(resource.value);if(!record.value)return;
         revoke(*record.value);const bool zero=color&&!color[0]&&!color[1]&&!color[2]&&!color[3];
         if(fp16(record->shape.Format)){if(zero)++fp16Zero_;else ++fp16Other_;}
         // A native compositor RGBA blank clear has no game contribution even
@@ -270,7 +296,8 @@ public:
                 owned=true;const auto current=locks_->current(device_,scope.allocation);
                 if(!current||current.epoch!=scope.epoch){owned=false;break;}
             }
-            previous=owned;
+            previous=owned&&destination->row<ChannelImages&&
+                destination->mutation==std::uint64_t(InterlockedCompareExchange64(&page_->imageMutations[destination->row],0,0));
         }
         const auto priorScene=destination->scene;const auto priorLease=destination->lease;
         const auto priorContributors=destination->contributors;const auto priorContributorCount=destination->contributorCount;
@@ -342,8 +369,19 @@ public:
         if(partialReproject&&(width==0||height==0)){stage_=4422;return false;}
         std::array<MutexLease,8> scopes{};
         if(destination->native.handle&&!locks_->capture(device_,scopes)){stage_=4440;return false;}
+        // Established exports need only the shared registry read already held
+        // above. Do not acquire the exclusive cold import/retirement gate on
+        // every frame or turn an ordinary concurrent reader into a lost mask.
+        bool registered=!destination->native.handle;
+        if(!registered&&destination->row<exports_.size()){
+            const auto& entry=exports_[destination->row];
+            const auto* current=retained(read.snapshot(),destination->native,GetCurrentProcessId());
+            MaskRegistration registration{};
+            registered=entry.record.value==destination.value&&current&&exact(entry.allocation,*current)&&
+                page_->registrations[destination->row].read(registration)&&registration.maskGeneration==destination->serial;
+        }
         read.release();
-        if(destination->native.handle&&!exportImage(*destination.value,outputTexture.value,scene,lease))return false;
+        if(!registered&&!exportImage(*destination.value,outputTexture.value,scene,lease))return false;
         bool executed=false;
         if(x&&fp16(destination->shape.Format)){
             // Native X itself writes genuine RGBA; observe its single original
@@ -354,18 +392,23 @@ public:
         if(live(lease)){
             destination->valid=true;destination->empty=false;destination->epoch=epoch_;destination->scene=scene;destination->lease=lease;
             destination->width=width;destination->height=height;destination->scopes=scopes;
-            destination->contributors=contributors;destination->contributorCount=contributorCount;++pairs_;stage_=4016;
+            destination->contributors=contributors;destination->contributorCount=contributorCount;
+            if(destination->native.handle)destination->mutation=std::uint64_t(InterlockedCompareExchange64(&page_->imageMutations[destination->row],0,0));
+            ++pairs_;stage_=4016;
         }
         return true;
     }
     void releasing(const MutexLease& scope,std::uint64_t key)noexcept{
         if(!page_||scope.device!=device_||!scope.retained)return;
         for(auto& entry:exports_)if(entry.record.value){auto& record=*entry.record.value;
-            if(!valid(record)||record.width!=record.shape.Width||record.height!=record.shape.Height)continue;
+            if(!valid(record)||record.width!=record.shape.Width||record.height!=record.shape.Height||
+                !record.mutation||record.mutation!=std::uint64_t(InterlockedCompareExchange64(&page_->imageMutations[record.row],0,0)))continue;
             unsigned choice=0;for(;choice<record.scopes.size();++choice)
                 if(record.scopes[choice].allocation==scope.allocation&&record.scopes[choice].epoch==scope.epoch)break;
             if(choice==record.scopes.size())continue;
             RegistryRead read;if(!read.acquire(page_)||read.snapshot().sourceLease!=record.lease)continue;
+            MaskRegistration registration{};
+            if(!page_->registrations[record.row].read(registration)||registration.maskGeneration!=record.serial)continue;
             const auto* native=retained(read.snapshot(),entry.allocation,GetCurrentProcessId());
             const auto* scene=retained(read.snapshot(),record.scene,std::uint32_t(record.lease));
             if(!native||!scene||!exact(*native,entry.allocation)||!exact(*scene,record.scene))continue;
@@ -376,7 +419,7 @@ public:
             if(!current)continue;
             Allocation mask{};if(!allocation(record.alpha.resource(),mask))continue;
             auto& witness=record.witness;witness.native=*native;witness.scene=*scene;witness.sourceLease=record.lease;
-            witness.maskHandle=mask.handle;witness.maskGeneration=record.serial;witness.imageVersion=record.version;witness.complete=1;witness.route=2;witness.contributors=record.contributors;witness.contributorCount=record.contributorCount;
+            witness.maskHandle=mask.handle;witness.maskGeneration=record.serial;witness.imageVersion=record.version;witness.complete=1;witness.route=2;witness.contributors=record.contributors;witness.contributorCount=record.contributorCount;witness.nativeMutation=record.mutation;
             witness.releases[choice]={scope.allocation,scope.epoch,key};
             if(!record.sealed[choice].value){scope.retained->AddRef();record.sealed[choice].value=scope.retained;}
             if(page_->witnesses[record.row].publish(witness)){++seals_;stage_=4020;}

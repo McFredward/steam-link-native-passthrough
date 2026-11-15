@@ -80,7 +80,8 @@ public:
                 witness.native.samples!=native.samples||witness.native.arraySize!=native.arraySize||
                 witness.maskHandle!=image.registration.maskHandle||witness.maskGeneration!=image.registration.maskGeneration)continue;
             if(witness.route==2){
-                if(!witness.contributorCount||witness.contributorCount>witness.contributors.size())continue;
+                if(!witness.nativeMutation||witness.nativeMutation!=std::uint64_t(InterlockedCompareExchange64(&page->imageMutations[i],0,0))||
+                    !witness.contributorCount||witness.contributorCount>witness.contributors.size())continue;
                 bool complete=true;
                 for(unsigned contributor=0;contributor<witness.contributorCount;++contributor)
                     if(witness.contributors[contributor].pid!=std::uint32_t(liveLease)||!current(witness.contributors[contributor]))complete=false;
@@ -94,6 +95,7 @@ public:
         }
         return selected;
     }
+    void invalidate(ID3D11Resource* resource=nullptr)noexcept{invalidateSharedImages(channel_.page(),resource);}
     void stop()noexcept{channel_.stop();locks_.stop();}
 };
 } // namespace stream_bridge::sender::projected_alpha
