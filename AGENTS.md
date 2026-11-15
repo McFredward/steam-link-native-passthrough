@@ -1,5 +1,11 @@
 # Working on Steam Link Native Passthrough
 
+- Maintain `docs/development/STEAMVR-BETA-INVESTIGATION.md` for this investigation
+  (maintainer request, 2026-11-15). Before another headset candidate, state its
+  hypothesis and expected observable change. After each run, append the matched
+  evidence, actual result, proved/rejected assumptions and next decision. Keep
+  software validation separate from headset acceptance; do not repeat rejected
+  approaches without new evidence. Read this ledger before continuing beta work.
 - For a new game, start with `docs/DEVELOPING.md`, then
   `docs/development/GAME-INTEGRATION.md` and `INTEGRATION-LESSONS.md` in that
   directory. They describe the current ordinary-RGBA route and an agent handoff.

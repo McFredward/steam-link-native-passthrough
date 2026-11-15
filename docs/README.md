@@ -40,6 +40,7 @@ versions and pending checks; they do not override current source or release scop
 | [Native Frame camera failure after setup restart](development/NATIVE-CAMERA-STARTUP.md) | `development/NATIVE-CAMERA-STARTUP.md` |
 | [General native mask compression and camera-only recovery](development/NATIVE-MASK-CODEC.md) | `development/NATIVE-MASK-CODEC.md` |
 | [Native update recognition, October21](development/NATIVE-UPDATE-RECOGNITION.md) | `development/NATIVE-UPDATE-RECOGNITION.md` |
+| [SteamVR beta passthrough: evidence and decision log](development/STEAMVR-BETA-INVESTIGATION.md) | `development/STEAMVR-BETA-INVESTIGATION.md` |
 | [Release 0.3.18: native texture-edge rounding](development/RELEASE-0.3.18.md) | `development/RELEASE-0.3.18.md` |
 | [Prior release 0.3.15 developer baseline](development/RELEASE-0.3.15.md) | `development/RELEASE-0.3.15.md` |
 | [Vanilla uninstall and exact operation Undo](development/VANILLA-UNINSTALL-20261019.md) | `development/VANILLA-UNINSTALL-20261019.md` |
