@@ -5,6 +5,7 @@ on:
     paths:
       - 'pc/stream-bridge-source-alpha*'
       - 'pc/stream-bridge-projected-alpha-replay.h'
+      - 'pc/stream-bridge-projected-alpha-scene-capture.h'
       - 'pc/stream-bridge-projected-alpha-sync.h'
       - 'pc/stream-bridge-projected-alpha-channel.h'
       - 'pc/stream-bridge-projected-alpha-kernels.h'
@@ -29,6 +30,7 @@ on:
     paths:
       - 'pc/stream-bridge-source-alpha*'
       - 'pc/stream-bridge-projected-alpha-replay.h'
+      - 'pc/stream-bridge-projected-alpha-scene-capture.h'
       - 'pc/stream-bridge-projected-alpha-sync.h'
       - 'pc/stream-bridge-projected-alpha-channel.h'
       - 'pc/stream-bridge-projected-alpha-kernels.h'
