@@ -159,6 +159,26 @@ Change the hypothesis only when new evidence supports the change. If a test
 does not answer its stated question, improve the observation or fixture and
 record that limitation rather than presenting an inferred cause as established.
 
+### E048: unshipped single-native-draw control
+
+Hypothesis: for a reviewed native output-alpha policy, the original draw can
+retain genuine alpha in its own RGBA output while keeping every RGB byte
+unchanged. This would avoid independently sampling a plain-shared game source
+twice and would not require inventing a keyed interface on that source.
+
+The first owned WARP control uses genuinely plain-shared input **and** output,
+the unchanged original pixel/vertex programs and both 64/80-byte policy ranges.
+It must observe exactly one original draw, unchanged RGB including positive
+emission at alpha zero, genuine zero/fractional/opaque alpha, restored native
+bindings, and refusal when alpha-to-coverage would affect RGB sample coverage.
+This tests a primitive only. Its source, complete native scene/filter/resolve
+graph, unknown-write handling and Present/encoder handoff remain to be integrated
+and validated before another headset candidate. It grants no image/frame permit.
+
+Status: local syntax/HLSL checks and actual Windows GPU execution are being run.
+No installer or native patch version has been delivered for E048. Retain this
+distinction when recording its eventual software result.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are

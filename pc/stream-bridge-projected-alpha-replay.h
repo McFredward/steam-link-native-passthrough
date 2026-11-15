@@ -237,6 +237,59 @@ public:
         return (desc.DepthEnable&&desc.DepthFunc!=D3D11_COMPARISON_ALWAYS)||
             (desc.StencilEnable&&(desc.FrontFace.StencilFunc!=D3D11_COMPARISON_ALWAYS||desc.BackFace.StencilFunc!=D3D11_COMPARISON_ALWAYS));
     }
+    // A separate native-alpha route: run the ORIGINAL draw exactly once with
+    // its existing alpha-policy constant enabled. No scene texture is sampled
+    // a second time and no RGB arithmetic, shader, RTV, depth/stencil state or
+    // geometry is replaced. The caller must authenticate source ancestry and
+    // retain exact native output/Present synchronization before exporting A.
+    bool nativeAlpha(ID3D11DeviceContext* context,ID3D11PixelShader* program,
+        unsigned logicalBytes,bool resolving,Draw original,UINT vertices,UINT start)noexcept{
+        if(!ready_||!context||!program||!original||!vertices||
+            !sameDevice(context,device_.value)||context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE||
+            (resolving?logicalBytes!=32:(logicalBytes!=0&&logicalBytes!=64&&logicalBytes!=80)))return false;
+        Reference<ID3D11DeviceContext1> actual;
+        if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(actual.out())))||
+            actual.value!=context_.value)return false;
+        Reference<ID3D11PixelShader> bound;UINT classes=0;context->PSGetShader(bound.out(),nullptr,&classes);
+        if(bound.value!=program||classes)return false;
+        std::array<ID3D11RenderTargetView*,D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT> targets{};
+        context->OMGetRenderTargets(UINT(targets.size()),targets.data(),nullptr);
+        struct TargetRefs {decltype(targets)& values;~TargetRefs(){for(auto* v:values)if(v)v->Release();}} refs{targets};
+        if(!targets[0])return false;
+        for(unsigned i=1;i<targets.size();++i)if(targets[i])return false;
+        std::array<ID3D11UnorderedAccessView*,D3D11_1_UAV_SLOT_COUNT> uavs{};
+        const UINT slots=device_->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1?D3D11_1_UAV_SLOT_COUNT:D3D11_PS_CS_UAV_REGISTER_COUNT;
+        context->OMGetRenderTargetsAndUnorderedAccessViews(0,nullptr,nullptr,1,slots-1,uavs.data());
+        bool writable=false;for(auto* v:uavs)if(v){writable=true;v->Release();}if(writable)return false;
+        Reference<ID3D11BlendState> blend;context->OMGetBlendState(blend.out(),nullptr,nullptr);
+        if(blend.value){D3D11_BLEND_DESC desc{};blend->GetDesc(&desc);
+            if(desc.AlphaToCoverageEnable||desc.RenderTarget[0].BlendEnable||
+                desc.RenderTarget[0].RenderTargetWriteMask!=D3D11_COLOR_WRITE_ENABLE_ALL)return false;
+            Reference<ID3D11BlendState1> extended;
+            if(SUCCEEDED(blend->QueryInterface(__uuidof(ID3D11BlendState1),reinterpret_cast<void**>(extended.out())))){
+                D3D11_BLEND_DESC1 current{};extended->GetDesc1(&current);if(current.RenderTarget[0].LogicOpEnable)return false;
+            }
+        }
+        if(!logicalBytes){original(context,vertices,start);return true;}
+        const UINT slot=resolving?2:0;
+        Reference<ID3D11Buffer> native;UINT offset=0,count=0;
+        actual->PSGetConstantBuffers1(slot,1,native.out(),&offset,&count);
+        if(!native.value||count<logicalBytes/16)return false;
+        D3D11_BUFFER_DESC desc{};native->GetDesc(&desc);
+        if(offset>desc.ByteWidth/16||logicalBytes>desc.ByteWidth-offset*16)return false;
+        auto& clone=clones_[resolving?2:(logicalBytes-64)/16];if(!clone.shader.value)return false;
+        Reference<ID3DDeviceContextState> saved;
+        actual->SwapDeviceContextState(scratch_.value,saved.out());if(!saved.value)return false;
+        context->CSSetConstantBuffers(0,1,&native.value);actual->CSSetConstantBuffers1(0,1,&native.value,&offset,&count);
+        context->CSSetShader(clone.shader.value,nullptr,0);context->CSSetUnorderedAccessViews(0,1,&clone.write.value,nullptr);
+        context->Dispatch(logicalBytes/16,1,1);
+        ID3D11UnorderedAccessView* none=nullptr;context->CSSetUnorderedAccessViews(0,1,&none,nullptr);
+        context->CopyResource(clone.constant.value,clone.raw.value);actual->SwapDeviceContextState(saved.value,nullptr);
+        context->PSSetConstantBuffers(slot,1,&clone.constant.value);
+        original(context,vertices,start);
+        context->PSSetConstantBuffers(slot,1,&native.value);actual->PSSetConstantBuffers1(slot,1,&native.value,&offset,&count);
+        return true;
+    }
     bool replay(ID3D11DeviceContext* context,const Image& image,
         ID3D11PixelShader* reviewedBoundProgram,unsigned logicalConstantBytes,
         Draw originalDraw,UINT vertices,UINT firstVertex)noexcept{
