@@ -80,7 +80,7 @@ PC_FILES = {'pc-provider/driver.vrdrivermanifest',
             'pc-provider/bin/win64/driver_steam_link_native_passthrough.dll'}
 TOOLS = frozenset('frame/tools/'+name+'.py' for name in (
     'app_payload_probe','compositor_startup_health','native_fragment_count1_interface',
-    'native_fragment_ssa_probe','native_fragment_stream_coverage','native_shader_contract','pixel_payload_recovery','stream_bridge_camera'))
+    'native_fragment_ssa_probe','native_fragment_stream_coverage','stream_coverage_visible_geometry','native_shader_contract','pixel_payload_recovery','stream_bridge_camera'))
 PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
