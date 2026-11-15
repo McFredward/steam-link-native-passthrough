@@ -23,6 +23,7 @@ RWByteAddressBuffer positions : register(u1);
     positions.Store4(32,asuint(float4(5,4,8,7)));positions.Store4(48,asuint(float4(5,5,8,8)));
 }
 float4 vs(float2 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position-1,0,1);}
+float4 layoutVS(float3 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position.xy-1,position.z,1);}
 float4 ps(float4 xy:SV_Position):SV_Target{
     float4 value=scene.Load(int3(int2(xy.xy),0));
     value.rgb*=words[1].xyz;
@@ -90,13 +91,30 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
         SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual observed native-model program objects");
     check(shaders.identify(vs.value)==NativeShader::StreamVertex&&shaders.identify(ps.value)==NativeShader::MultiViewInner,"actual shader observations survive cold companion preparation");
+    // Keep more than sixteen distinct live native objects before the actual
+    // game quad. Metadata must follow each object, not the first sixteen ever.
+    std::array<Reference<ID3D11InputLayout>,48> otherLayouts;
+    std::array<Reference<ID3D11Buffer>,48> otherBuffers;
+    std::array<std::uint8_t,256> otherBytes{};
+    for(UINT i=0;i<otherLayouts.size();++i){
+        const D3D11_INPUT_ELEMENT_DESC otherElements[]{
+            {"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,64+4*i,D3D11_INPUT_PER_VERTEX_DATA,0},
+            {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
+        check(SUCCEEDED(device->CreateInputLayout(otherElements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),otherLayouts[i].out())),"real unrelated layout pressure");
+        producer.geometry().layout(otherElements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),otherLayouts[i].value);
+        D3D11_BUFFER_DESC otherDesc{};otherDesc.ByteWidth=32+4*i;otherDesc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+        D3D11_SUBRESOURCE_DATA otherData{otherBytes.data(),0,0};
+        check(SUCCEEDED(device->CreateBuffer(&otherDesc,&otherData,otherBuffers[i].out())),"real unrelated vertex allocation pressure");
+        producer.geometry().buffer(&otherDesc,&otherData,otherBuffers[i].value);
+    }
+    auto layoutCode=compile("layoutVS","vs_5_0");
     const D3D11_INPUT_ELEMENT_DESC elements[]{
-        {"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
-        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
-    check(SUCCEEDED(device->CreateInputLayout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual native-style position plus UV layout");
-    producer.geometry().layout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.value);
+        {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0}};
+    check(SUCCEEDED(device->CreateInputLayout(elements,2,layoutCode->GetBufferPointer(),layoutCode->GetBufferSize(),layout.out())),"native-style float3 position plus UV layout from a wider creation signature");
+    producer.geometry().layout(elements,2,layoutCode->GetBufferPointer(),layoutCode->GetBufferSize(),layout.value);
     // Deliberately different UVs must not become position evidence.
-    const std::array<float,16> points{{0,0,7,7,0,1,7,8,1,0,8,7,1,1,8,8}};D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    const std::array<float,20> points{{0,0,99,7,7,0,1,99,7,8,1,0,99,8,7,1,1,99,8,8}};D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
     D3D11_SUBRESOURCE_DATA vertexData{points.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&vertexData,vertices.out())),"actual vertex buffer");
     producer.geometry().buffer(&buffer,&vertexData,vertices.value);
     std::array<float,16> words{};words[4]=words[5]=words[6]=1;buffer.ByteWidth=sizeof words;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
@@ -106,7 +124,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
         SUCCEEDED(native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(streamMutex.out()))),"original application and stream mutexes");
     check(sourceMutex->AcquireSync(0,0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"actual producer ownership");
     context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);context->PSSetConstantBuffers(0,1,&constants.value);
-    context->IASetInputLayout(layout.value);UINT stride=16,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    context->IASetInputLayout(layout.value);UINT stride=20,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     context->OMSetRenderTargets(1,&target.value,nullptr);context->PSSetShaderResources(0,1,&sourceView.value);
     const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
     Reference<ID3D11VertexShader> boundVertex;Reference<ID3D11RenderTargetView> boundTarget;
