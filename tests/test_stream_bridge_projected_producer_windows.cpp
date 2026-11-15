@@ -231,10 +231,14 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
             check(producer.diagnostics().pairedDraws==before,"integer RTV cannot borrow the FLOAT interpretation of the same native storage");
         }
         context->OMSetRenderTargets(1,&intermediateTarget.value,nullptr);
+        const FLOAT zero[4]{};producer.clear(context.value,intermediateTarget.value,zero);
+        context->ClearRenderTargetView(intermediateTarget.value,zero);
         const D3D11_VIEWPORT floatingViewport{0,0,float(intermediateWidth),float(intermediateHeight),0,1};context->RSSetViewports(1,&floatingViewport);
         producer.draw(context.value,draw,4,0);draw(context.value,4,0);
         check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==1,
             "production X pass captures actual source ancestry into an FP16 companion for this exact native target");
+        check(producer.diagnostics().fp16ZeroClears==1&&producer.diagnostics().fp16OtherClears==0&&producer.diagnostics().geometryEmpty==1,
+            "the diagnostic distinguishes an observed native zero clear from private companion initialization");
         ID3D11RenderTargetView* none=nullptr;context->OMSetRenderTargets(1,&none,nullptr);
         context->PSSetShaderResources(0,1,&intermediateView.value);context->OMSetRenderTargets(1,&target.value,nullptr);
         context->RSSetViewports(1,&viewport);

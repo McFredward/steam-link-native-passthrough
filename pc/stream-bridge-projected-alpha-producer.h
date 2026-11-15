@@ -24,6 +24,8 @@ class Producer {
     std::atomic<unsigned> stage_{0},rootFailure_{0},inputFailure_{0};
     std::atomic<std::uint64_t> rootPasses_{0},pairedDraws_{0};
     std::atomic<unsigned> fp16Calls_{0},fp16Prepared_{0},fp16Refusal_{0};
+    std::atomic<unsigned> geometryReason_{0},geometryPixel_{0},geometryVertex_{0},geometryEmpty_{0};
+    std::atomic<std::uint64_t> fp16ZeroClears_{0},fp16OtherClears_{0};
     ChannelPage* page_=nullptr;ID3D11Device* device_=nullptr;
     Replay replay_;Geometry geometry_;NativeShaders* shaders_=nullptr;MutexObserver* locks_=nullptr;
     std::uint64_t nextGeneration_=1;UINT uavSlots_=D3D11_PS_CS_UAV_REGISTER_COUNT;
@@ -123,13 +125,18 @@ public:
         unsigned rootFailure=0,inputFailure=0;std::uint64_t rootPasses=0,pairedDraws=0;
         unsigned fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
         std::uint64_t rgbaBytes=0,fp16Bytes=0;
+        unsigned geometryReason=0,geometryPixel=0,geometryVertex=0,geometryEmpty=0;
+        std::uint64_t fp16ZeroClears=0,fp16OtherClears=0;
     };
     Diagnostics diagnostics()const noexcept{
         return {rootFailure_.load(std::memory_order_relaxed),inputFailure_.load(std::memory_order_relaxed),
             rootPasses_.load(std::memory_order_relaxed),pairedDraws_.load(std::memory_order_relaxed),
             fp16Calls_.load(std::memory_order_relaxed),fp16Prepared_.load(std::memory_order_relaxed),fp16Refusal_.load(std::memory_order_relaxed),
             page_?std::uint64_t(InterlockedCompareExchange64(&page_->companionBytes,0,0)):0,
-            page_?std::uint64_t(InterlockedCompareExchange64(&page_->fp16CompanionBytes,0,0)):0};
+            page_?std::uint64_t(InterlockedCompareExchange64(&page_->fp16CompanionBytes,0,0)):0,
+            geometryReason_.load(std::memory_order_relaxed),geometryPixel_.load(std::memory_order_relaxed),
+            geometryVertex_.load(std::memory_order_relaxed),geometryEmpty_.load(std::memory_order_relaxed),
+            fp16ZeroClears_.load(std::memory_order_relaxed),fp16OtherClears_.load(std::memory_order_relaxed)};
     }
     Geometry& geometry()noexcept{return geometry_;}
     // Called only on native resource creation, never from raster callbacks.
@@ -203,9 +210,14 @@ public:
         Reference<ID3D11Resource> resource;if(view)view->GetResource(resource.out());auto* image=find(resource.value);
         if(!image)return;
         revoke(*image);
+        const bool zero=color&&!color[0]&&!color[1]&&!color[2]&&!color[3];
+        if(fp16(image->shape.Format)){
+            if(zero)fp16ZeroClears_.fetch_add(1,std::memory_order_relaxed);
+            else fp16OtherClears_.fetch_add(1,std::memory_order_relaxed);
+        }
         // Exact zero RGBA clear is public evidence that untouched regions have
         // no game contribution, including additive RGB at alpha zero.
-        if(color&&!color[0]&&!color[1]&&!color[2]&&!color[3]){
+        if(zero){
             image->empty=image->companion.clear(context);image->valid=false;
         }
     }
@@ -232,6 +244,7 @@ public:
         const bool fullVertex=vertexKind==NativeShader::StreamVertex||vertexKind==NativeShader::MultiViewVertexY;
         unsigned geometryReason=0;
         const bool full=fullVertex&&geometry_.fullUnitQuad(context,count,start,destination->shape.Width,destination->shape.Height,destination->shape.SampleDesc.Count,&geometryReason);
+        geometryReason_=geometryReason;geometryPixel_=unsigned(kind);geometryVertex_=unsigned(vertexKind);geometryEmpty_=unsigned(empty);
         stage_=!full&&fullVertex?2000+geometryReason:1000+2*unsigned(vertexKind)+(full?1:0);
         Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
         context->GSGetShader(geometry.out(),nullptr,nullptr);context->HSGetShader(hull.out(),nullptr,nullptr);context->DSGetShader(domain.out(),nullptr,nullptr);

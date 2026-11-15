@@ -342,7 +342,11 @@ struct Observer {
                      [](ID3D11DeviceContext* c,ID3D11Resource* r,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* p){return c->Map(r,sub,type,flags,p);},
                      [](ID3D11DeviceContext* c,ID3D11Resource* r,UINT sub){c->Unmap(r,sub);}});
             }
-            Held<ID3D11RenderTargetView> out;ctx->OMGetRenderTargets(1,out.out(),nullptr);
+            UINT viewportCount=1;D3D11_VIEWPORT viewport{};ctx->RSGetViewports(&viewportCount,&viewport);
+            sample.viewportCount=viewportCount;
+            sample.viewport={viewport.TopLeftX,viewport.TopLeftY,viewport.Width,viewport.Height,viewport.MinDepth,viewport.MaxDepth};
+            Held<ID3D11RenderTargetView> out;Held<ID3D11DepthStencilView> depth;ctx->OMGetRenderTargets(1,out.out(),depth.out());
+            sample.depthAttached=depth.p?1u:0u;
             if(out.p){Held<ID3D11Resource> output;out.p->GetResource(output.out());Held<ID3D11Texture2D> target;
                 if(output.p&&SUCCEEDED(output.p->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(target.out())))){
                     D3D11_TEXTURE2D_DESC d{};target.p->GetDesc(&d);sample.outputWidth=d.Width;sample.outputHeight=d.Height;sample.outputFormat=unsigned(d.Format);
@@ -352,7 +356,7 @@ struct Observer {
             }
             const auto key=[](const SourceAuditSample& p){return std::make_tuple(p.inventoryEpoch,p.allocationGeneration,
                 p.shader,p.slot,p.pid,p.width,p.height,p.format,p.arraySize,p.samples,p.view,p.viewFormat,p.ownerMatches,
-                p.outputWidth,p.outputHeight,p.outputFormat,p.outputDescription,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash,p.programLinked);};
+                p.outputWidth,p.outputHeight,p.outputFormat,p.outputDescription,p.viewportCount,p.viewport,p.depthAttached,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash,p.programLinked);};
             bool duplicate=false;
             for(const auto& previous:status.samples)if(previous.serial&&key(previous)==key(sample)){duplicate=true;break;}
             if(duplicate)continue;
@@ -406,7 +410,9 @@ struct Observer {
             status.projectedAlphaStages[context]=contexts[context].producer.stage();
             const auto production=contexts[context].producer.diagnostics();
             status.production[context]={production.rootFailure,production.inputFailure,production.rootPasses,production.pairedDraws,
-                production.fp16Calls,production.fp16Prepared,production.fp16Refusal,production.rgbaBytes,production.fp16Bytes};
+                production.fp16Calls,production.fp16Prepared,production.fp16Refusal,production.rgbaBytes,production.fp16Bytes,
+                production.geometryReason,production.geometryPixel,production.geometryVertex,production.geometryEmpty,
+                production.fp16ZeroClears,production.fp16OtherClears};
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();
