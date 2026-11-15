@@ -96,6 +96,13 @@ float4 sceneNative(float4 xy:SV_Position):SV_Target{
     float4 v=sceneValue(xy);if(words[3].y==0)v.a=1;return v;
 }
 float4 sceneReference(float4 xy:SV_Position):SV_Target{return sceneValue(xy);}
+float4 sceneReprojectNative(float4 xy:SV_Position):SV_Target{
+    if(xy.x>20){float4 blank;blank.rgb=0;blank.a=words[3].y==0?1:0;return blank;}
+    float4 v=sceneValue(xy);if(words[3].y==0)v.a=1;return v;
+}
+float4 sceneReprojectReference(float4 xy:SV_Position):SV_Target{
+    if(xy.x>20)return 0;return sceneValue(xy);
+}
 Pair sceneCapture(float4 xy:SV_Position){
     float4 v=sceneValue(xy);Pair p;p.coverage=float4(0,0,0,v.a);
     if(words[3].y==0)v.a=1;p.native=v;return p;
@@ -533,7 +540,7 @@ void nativeSingleDrawControl(){
     context->OMSetBlendState(nullptr,nullptr,UINT_MAX);context->ClearState();
     std::printf("owned single native draw: plain-shared non-keyed input/output;64/80-byte policies; exact original RGB and true alpha; no image/frame permit yet\n");
 }
-void nativeMrtControl(){
+void nativeMrtControl(bool reproject=false){
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,
         D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"actual MRT single-threaded WARP device");
@@ -552,20 +559,29 @@ void nativeMrtControl(){
     UINT stride=16,offset=0;context->IASetInputLayout(layout.value);context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);
     context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);context->VSSetShader(vs.value,nullptr,0);
     std::array<Reference<ID3D11PixelShader>,6> programs;
-    const std::array<const char*,6> names{{"sceneNative","sceneReference","sceneCapture","resolveNative","resolveReference","resolveCapture"}};
+    auto sceneContractCode=compileCapture(reproject?"sceneReprojectNative":"sceneNative"),resolveContractCode=compileCapture("resolveNative");
+    std::array<ShaderFingerprint,2> captures{};captures[0].kind=reproject?NativeShader::MultiViewReprojectY:NativeShader::MultiViewInner;
+    captures[1].kind=NativeShader::MultiViewResolve;
+    check(dxbcFingerprint(sceneContractCode->GetBufferPointer(),sceneContractCode->GetBufferSize(),captures[0].hash)&&
+        dxbcFingerprint(resolveContractCode->GetBufferPointer(),resolveContractCode->GetBufferSize(),captures[1].hash),"owned exact-object cold capture contracts");
+    NativeShaders nativePrograms(captures.data(),captures.size(),nullptr,nullptr,true,false,true);
+    check(nativePrograms.observeDevice(device.value),"cold capture observer attached before original native shader creation");
+    const std::array<const char*,6> names{{reproject?"sceneReprojectNative":"sceneNative",reproject?"sceneReprojectReference":"sceneReference",
+        "sceneCapture","resolveNative","resolveReference","resolveCapture"}};
     for(unsigned i=0;i<names.size();++i){auto code=compileCapture(names[i]);
         check(SUCCEEDED(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,programs[i].out())),"owned native/reference/augmented pixel programs");}
     // Exercise the bounded cold bytecode derivation, not just a hand-authored
     // paired shader. Original executable instructions and constants stay intact.
-    auto originalScene=compileCapture("sceneNative");std::vector<std::uint8_t> augmented;
-    const auto derived=scene_capture::derive(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),augmented);
+    auto originalScene=compileCapture(names[0]);std::vector<std::uint8_t> augmented;
+    const auto sceneContract=reproject?scene_capture::Contract::ReprojectScene:scene_capture::Contract::Scene;
+    const auto derived=scene_capture::derive(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),augmented,sceneContract);
     if(!derived){Reference<ID3DBlob> diagnostic;
         if(SUCCEEDED(D3DDisassemble(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),0,nullptr,diagnostic.out())))
             std::fwrite(diagnostic->GetBufferPointer(),1,diagnostic->GetBufferSize(),stderr);
     }
     check(derived,"cold original-scene bytecode derivation");
-    programs[2]->Release();programs[2].value=nullptr;
-    check(SUCCEEDED(device->CreatePixelShader(augmented.data(),augmented.size(),nullptr,programs[2].out())),"actual Windows validation accepts the derived MRT scene program");
+    programs[2]->Release();programs[2].value=nativePrograms.captureProgram(programs[0].value);
+    check(programs[2].value!=nullptr,"actual cold native creation produced the exact original program's capture derivative");programs[2]->AddRef();
     Reference<ID3D11ShaderReflection> derivedReflection;D3D11_SHADER_DESC derivedDescription{};
     check(SUCCEEDED(D3DReflect(augmented.data(),augmented.size(),IID_ID3D11ShaderReflection,reinterpret_cast<void**>(derivedReflection.out())))&&
         SUCCEEDED(derivedReflection->GetDesc(&derivedDescription))&&derivedDescription.OutputParameters==2,"derived original program has native and private output signatures");
@@ -574,6 +590,11 @@ void nativeMrtControl(){
         check(!scene_capture::derive(originalScene->GetBufferPointer(),n,refused)&&refused.empty(),"every truncated original container refuses derivation");
     auto resolveOriginal=compileCapture("resolveNative");
     check(!scene_capture::derive(resolveOriginal->GetBufferPointer(),resolveOriginal->GetBufferSize(),refused)&&refused.empty(),"distinct alpha-dependent resolve cannot be mistaken for a scene-tail contract");
+    std::vector<std::uint8_t> resolveDerived;
+    check(scene_capture::derive(resolveOriginal->GetBufferPointer(),resolveOriginal->GetBufferSize(),resolveDerived,scene_capture::Contract::Resolve),"cold resolve derivative retains all original colour work and adds private MSAA alpha");
+    programs[5]->Release();programs[5].value=nativePrograms.captureProgram(programs[3].value);
+    check(programs[5].value!=nullptr,"actual cold native creation produced the original resolve's separate-input capture derivative");programs[5]->AddRef();
+    if(reproject)check(!scene_capture::derive(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),refused),"early return requires its explicit reviewed zero-game contract");
     auto corrupt=augmented;corrupt[4]^=1;
     check(!scene_capture::derive(corrupt.data(),corrupt.size(),refused)&&refused.empty(),"corrupt container checksum refuses transformation");
     auto xCode=compile("copyFp16","ps_5_0");Reference<ID3D11PixelShader> xProgram;
@@ -775,6 +796,7 @@ int main(int argc,char** argv){try{
         ChannelPeer peer;check(peer.open(message.launch),"child binds the actual private kernel channel");run(&message,peer.page());
     }else if(argc==2&&!std::strcmp(argv[1],"--native-single"))nativeSingleDrawControl();
     else if(argc==2&&!std::strcmp(argv[1],"--native-mrt"))nativeMrtControl();
+    else if(argc==2&&!std::strcmp(argv[1],"--native-mrt-reproject"))nativeMrtControl(true);
     else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
     else if(argc==2&&!std::strcmp(argv[1],"--float"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT);
     else if(argc==2&&!std::strcmp(argv[1],"--typeless"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS);

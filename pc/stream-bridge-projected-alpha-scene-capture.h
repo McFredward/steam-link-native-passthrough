@@ -1,5 +1,5 @@
 #pragma once
-// Unshipped cold DXBC transformation. No original executable instruction is
+// Cold DXBC transformation. No original executable instruction is
 // changed. Only a private SV_Target1 declaration and alpha output are added.
 // Caller still needs an exact reviewed shader contract and image/frame proof.
 #include "stream-bridge-native-shader.h"
@@ -42,24 +42,27 @@ inline std::array<std::uint8_t,16> checksum(const std::uint8_t* bytes,std::size_
     store(last.data()+60,1u|(std::uint32_t(size)<<1));block(last.data());
     std::array<std::uint8_t,16> output{};for(unsigned i=0;i<4;++i)store(output.data()+i*4,state[i]);return output;
 }
-// Only the reviewed scene tail is supported here: one native float4 SV_Target0,
+enum class Contract {Scene,ReprojectScene,Resolve};
+// Reviewed scene tail: one native float4 SV_Target0,
 // exactly one scalar MOVC o0.w, condition, literal1, temporary-alpha and
 // one final RET. Independent RGB writes may follow the alpha selection.
 // No branch/constant/source/geometry rewrite and no runtime HLSL compilation.
-// Refuse all other forms, including the distinct alpha-dependent resolve.
-inline bool derive(const void* input,std::size_t size,std::vector<std::uint8_t>& output){
+// Resolve uses a separate contract: original RGB/t0/b2 remain untouched;
+// new private t1 supplies the four exact alpha samples at native SV_Position.
+inline bool derive(const void* input,std::size_t size,std::vector<std::uint8_t>& output,Contract contract=Contract::Scene){
     output.clear();std::array<std::uint8_t,32> fingerprint{};
     if(!dxbcFingerprint(input,size,fingerprint))return false;
     const auto* original=static_cast<const std::uint8_t*>(input);
     const auto originalChecksum=checksum(original+20,size-20);
     if(std::memcmp(original+4,originalChecksum.data(),16))return false;
-    const auto count=load(original+28);unsigned executable=16,signature=16;
+    const auto count=load(original+28);unsigned executable=16,signature=16,inputSignature=16;
     struct Chunk {std::array<std::uint8_t,4> name{};std::vector<std::uint8_t> data;};
     std::vector<Chunk> chunks;chunks.reserve(count);
     for(unsigned i=0;i<count;++i){const auto offset=load(original+32+4*i),length=load(original+offset+4);Chunk chunk;
         std::copy_n(original+offset,4,chunk.name.data());chunk.data.assign(original+offset+8,original+offset+8+length);
         if(!std::memcmp(chunk.name.data(),"SHEX",4)||!std::memcmp(chunk.name.data(),"SHDR",4))executable=i;
         if(!std::memcmp(chunk.name.data(),"OSGN",4))signature=i;
+        if(!std::memcmp(chunk.name.data(),"ISGN",4))inputSignature=i;
         chunks.push_back(std::move(chunk));
     }
     if(executable>=count||signature>=count)return false;
@@ -73,38 +76,83 @@ inline bool derive(const void* input,std::size_t size,std::vector<std::uint8_t>&
     auto& code=chunks[executable].data;const auto length=code.size()/4;
     if(length<14||(load(code.data())!=0x50u&&load(code.data())!=0x40u)||load(code.data()+4)!=length)return false;
     std::vector<std::uint32_t> words(length);for(std::size_t i=0;i<length;++i)words[i]=load(code.data()+4*i);
-    std::size_t at=2,declaration=0,tail=0;unsigned outputs=0,returns=0;
+    const bool resolving=contract==Contract::Resolve,reprojecting=contract==Contract::ReprojectScene;
+    std::size_t at=2,declaration=0,tail=0,previous=0,resource=0,temps=0;
+    unsigned outputs=0,returns=0,resources=0,temporaryCount=0;std::vector<std::size_t> early,otherAlpha;
+    const auto policy=[&](std::size_t offset){
+        return offset+9<=length&&words[offset]==0x09000037u&&words[offset+1]==0x00102082u&&!words[offset+2]&&
+            (words[offset+3]&~0x30u)==0x0010000au&&words[offset+5]==0x00004001u&&words[offset+6]==0x3f800000u&&
+            (words[offset+7]&~0x30u)==0x0010000au;
+    };
+    const auto zeroRgb=[&](std::size_t offset){
+        return offset+8<=length&&words[offset]==0x08000036u&&words[offset+1]==0x00102072u&&!words[offset+2]&&
+            words[offset+3]==0x00004002u&&!words[offset+4]&&!words[offset+5]&&!words[offset+6]&&!words[offset+7];
+    };
     while(at<length){const auto token=words[at],opcode=token&2047u,n=(token>>24)&127u;
         if(!n||n>length-at)return false;
         if(opcode==101){
             if(n!=3||words[at+1]!=0x001020f2u||words[at+2])return false;
             ++outputs;declaration=at+n;
         }
-        if(opcode==62){++returns;if(n!=1||at!=length-1)return false;}
-        if(opcode!=101&&n>=3){const auto destination=words[at+1];
-            const bool outputAlpha=(destination&~0xf0u)==0x00102002u&&
-                (destination&0x80u)&&words[at+2]==0;
-            if(outputAlpha){
-                if(tail||opcode!=55||n!=9||destination!=0x00102082u)return false;
-                tail=at;
+        if(opcode==88){++resources;resource=at;}
+        if(opcode==104){if(temps||n!=2||words[at+1]>4093)return false;temps=at;temporaryCount=words[at+1];}
+        if(opcode==62){++returns;if(n!=1)return false;
+            if(at!=length-1){
+                // Only a separately reviewed zero-game early exit is allowed.
+                // The original RGB is explicitly zero immediately before RET;
+                // its policy-dependent native A stays entirely unchanged.
+                if(!reprojecting||early.size()>=8||!zeroRgb(previous))return false;
+                early.push_back(at);
             }
         }
-        at+=n;
+        if(!resolving&&opcode!=101&&n>=3){const auto destination=words[at+1];
+            const bool outputAlpha=(destination&~0xf0u)==0x00102002u&&(destination&0x80u)&&words[at+2]==0;
+            if(outputAlpha){
+                if(policy(at)){if(tail)return false;tail=at;}
+                else otherAlpha.push_back(at);
+            }
+        }
+        previous=at;at+=n;
     }
-    if(at!=length||outputs!=1||returns!=1||!declaration||tail<=declaration||tail+9>=length)return false;
-    // Scalar unmodified temporary operands: no relative addressing, modifiers,
-    // extensions or extra source words. SV_Target1 is private alpha only.
-    if(words[tail]!=0x09000037u||words[tail+1]!=0x00102082u||words[tail+2]||
-        (words[tail+3]&~0x30u)!=0x0010000au||words[tail+5]!=0x00004001u||words[tail+6]!=0x3f800000u||
-        (words[tail+7]&~0x30u)!=0x0010000au)return false;
-    std::vector<std::uint32_t> rewritten;rewritten.reserve(length+16);
+    if(at!=length||outputs!=1||!returns||!declaration||previous!=length-1||words[previous]!=0x0100003eu)return false;
+    if(resolving){
+        if(returns!=1||resources!=1||!resource||!temps||inputSignature>=count||
+            words[resource]!=0x04042058u||words[resource+1]!=0x00107000u||words[resource+2]||words[resource+3]!=0x5555u)return false;
+        const auto& in=chunks[inputSignature].data;
+        if(in.size()<32||load(in.data())!=1||load(in.data()+4)!=8||load(in.data()+12)||
+            load(in.data()+16)!=1||load(in.data()+20)!=3||load(in.data()+24)||(load(in.data()+28)&3u)!=3u)return false;
+    }else{
+        if(!tail||tail<=declaration||tail+9>=length||returns!=early.size()+1)return false;
+        if(reprojecting){
+            if(early.empty())return false;
+            for(const auto write:otherAlpha)if(write>=early.back())return false;
+        }else if(!early.empty()||!otherAlpha.empty())return false;
+    }
+    std::vector<std::uint32_t> rewritten;rewritten.reserve(length+128);
+    const auto clear=[&](){rewritten.insert(rewritten.end(),{0x08000036u,0x001020f2u,1u,0x00004002u,0u,0u,0u,0u});};
+    const auto source=[](unsigned component){return 0x0010000au|(component<<4);};
+    const auto resolveAlpha=[&](){
+        const auto coordinate=temporaryCount,alphas=coordinate+1,sums=coordinate+2;
+        rewritten.insert(rewritten.end(),{0x0500001bu,0x00100032u,coordinate,0x00101046u,0u}); // ftoi xy,v0.xy
+        rewritten.insert(rewritten.end(),{0x08000036u,0x001000c2u,coordinate,0x00004002u,0u,0u,0u,0u});
+        for(unsigned sample=0;sample<4;++sample)
+            rewritten.insert(rewritten.end(),{0x0900002eu,0x00100002u|(1u<<(sample+4)),alphas,
+                0x00100e46u,coordinate,0x00107ff6u,1u,0x00004001u,sample}); // ld_ms alpha from private t1
+        rewritten.insert(rewritten.end(),{0x07000000u,0x00100012u,sums,source(0),alphas,source(1),alphas});
+        rewritten.insert(rewritten.end(),{0x07000000u,0x00100022u,sums,source(2),alphas,source(3),alphas});
+        rewritten.insert(rewritten.end(),{0x07000000u,0x00100012u,sums,source(0),sums,source(1),sums});
+        clear();rewritten.insert(rewritten.end(),{0x07000038u,0x00102082u,1u,source(0),sums,0x00004001u,0x3e800000u});
+    };
     for(std::size_t i=0;i<length;++i){
         if(i==declaration)rewritten.insert(rewritten.end(),{0x03000065u,0x001020f2u,1u});
-        if(i==tail){
-            rewritten.insert(rewritten.end(),{0x08000036u,0x001020f2u,1u,0x00004002u,0u,0u,0u,0u});
-            rewritten.insert(rewritten.end(),{0x05000036u,0x00102082u,1u,words[tail+7],words[tail+8]});
+        if(resolving&&i==resource+4){
+            rewritten.insert(rewritten.end(),words.begin()+resource,words.begin()+resource+4);
+            rewritten[rewritten.size()-2]=1; // Private MSAA t1, original t0 is unchanged.
         }
-        rewritten.push_back(words[i]);
+        if(!resolving&&i==tail){clear();rewritten.insert(rewritten.end(),{0x05000036u,0x00102082u,1u,words[tail+7],words[tail+8]});}
+        if(!resolving&&std::find(early.begin(),early.end(),i)!=early.end())clear();
+        if(resolving&&i==length-1)resolveAlpha();
+        rewritten.push_back(resolving&&i==temps+1?temporaryCount+3:words[i]);
     }
     rewritten[1]=std::uint32_t(rewritten.size());code.resize(rewritten.size()*4);
     for(std::size_t i=0;i<rewritten.size();++i)store(code.data()+i*4,rewritten[i]);

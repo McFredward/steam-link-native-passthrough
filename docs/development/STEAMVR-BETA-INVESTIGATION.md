@@ -258,6 +258,38 @@ Present/encoder handoff. Current controls do not test those missing integrations
 No new installer/native package was delivered; installed/shipping version is
 still 0.3.47 / PC 0.3.33 / Frame 0.3.13. No device changes or restarts were made.
 
+### E050: integrate same-draw capture for the next headset candidate
+
+Maintainer instruction: continue until a usable installer candidate is available
+for the next test. No additional test is requested for the intermediate source
+steps below.
+
+Hypothesis: the actual cold-created scene and resolve objects can retain private
+MRT derivatives, and the native producer can authenticate plain-shared game
+inputs at the single original draw. Private alpha then follows native geometry,
+depth/stencil and the actual output ownership transfer without a second game
+sample. Original native RGBA and native constants remain unchanged.
+
+The resolve derivative has a separate reviewed contract. It adds private t1
+MSAA reads at native SV_Position, four-sample alpha averaging and SV_Target1;
+original t0/b2 and every original colour instruction stay intact. Reproject Y
+uses a separate reviewed zero-game early-exit contract with explicitly zero RGB
+before each early RET. Other early exits remain refused. Owned controls now
+exercise the real cold creation observer and exact original COM-object lookup,
+not only standalone bytecode construction.
+
+Required next software evidence: original native RGBA equality through both
+resolve policies, genuine coverage including early exits, exactly-once native
+depth/stencil, actual plain-shared game/output resources and a separate native
+Present sync allocation. Production source/image state, alias/unknown-write
+invalidation and bounded allocation lifetimes must be wired before delivery.
+Expected hardware marker: admitted roots and paired draws become nonzero, then
+sealed output versions, mask submissions and matching Frame receipt. Preserve
+the previous ordinary-RGBA and native program families, Auto/fixed resolution,
+and normal/Legacy conversion paths. This is a hypothesis, not headset acceptance.
+
+Status: implementation and required Windows/GPU controls in progress.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
