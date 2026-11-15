@@ -82,14 +82,17 @@ void run(){
     producer.geometry().buffer(&buffer,&vertexData,vertices.value);
     std::array<float,16> words{};words[4]=words[5]=words[6]=1;buffer.ByteWidth=sizeof words;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
     D3D11_SUBRESOURCE_DATA constantData{words.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&constantData,constants.out())),"native alpha policy constant buffer");
-    context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);context->PSSetConstantBuffers(0,1,&constants.value);
-    context->IASetInputLayout(layout.value);UINT stride=8,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-    context->OMSetRenderTargets(1,&target.value,nullptr);context->PSSetShaderResources(0,1,&sourceView.value);
-    const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
     Reference<IDXGIKeyedMutex> sourceMutex,streamMutex;
     check(SUCCEEDED(source->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sourceMutex.out())))&&
         SUCCEEDED(native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(streamMutex.out()))),"original application and stream mutexes");
     check(sourceMutex->AcquireSync(0,0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"actual producer ownership");
+    context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);context->PSSetConstantBuffers(0,1,&constants.value);
+    context->IASetInputLayout(layout.value);UINT stride=8,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    context->OMSetRenderTargets(1,&target.value,nullptr);context->PSSetShaderResources(0,1,&sourceView.value);
+    const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
+    Reference<ID3D11VertexShader> boundVertex;Reference<ID3D11RenderTargetView> boundTarget;
+    context->VSGetShader(boundVertex.out(),nullptr,nullptr);context->OMGetRenderTargets(1,boundTarget.out(),nullptr);
+    check(boundTarget.value==target.value&&shaders.identify(boundVertex.value)==NativeShader::StreamVertex,"actual native target and vertex program are bound under ownership");
     check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"production bound vertex range proves full image coverage");
     check(bool(locks.current(device.value,sourceHandle)),"actual source-allocation ownership is retained");
     producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();

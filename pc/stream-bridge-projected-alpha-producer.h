@@ -27,6 +27,7 @@ class Producer {
     std::uint64_t nextGeneration_=1;
     static constexpr std::uint64_t Budget=256ull*1024*1024;
     ImageState* find(ID3D11Resource* resource)noexcept{
+        if(!resource)return nullptr;
         for(auto& image:images_)if(image.native.value==resource)return &image;
         return nullptr;
     }
@@ -183,6 +184,7 @@ public:
         stage_=11;
         const bool fullVertex=vertexKind==NativeShader::StreamVertex||vertexKind==NativeShader::MultiViewVertexY;
         const bool full=fullVertex&&geometry_.fullUnitQuad(context,count,start,destination->shape.Width,destination->shape.Height,destination->shape.SampleDesc.Count);
+        stage_=1000+2*unsigned(vertexKind)+(full?1:0);
         Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
         context->GSGetShader(geometry.out(),nullptr,nullptr);context->HSGetShader(hull.out(),nullptr,nullptr);context->DSGetShader(domain.out(),nullptr,nullptr);
         if(geometry.value||hull.value||domain.value)return;
