@@ -111,7 +111,11 @@ struct Observer {
         }
         return {};
     }
-    static void textureObserved(ID3D11Device*,ID3D11Texture2D*,projected_alpha::TextureOrigin,void*)noexcept{}
+    static void textureObserved(ID3D11Device* device,ID3D11Texture2D* texture,projected_alpha::TextureOrigin,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device)){
+            OwnCommands own;self.nativeLocks.observeTexture(device,texture);
+        }
+    }
     static void targetObserved(ID3D11Device* device,ID3D11RenderTargetView* view,void* opaque)noexcept{
         auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context){OwnCommands own;context->producer.target(view);}
     }
@@ -413,11 +417,13 @@ struct Observer {
         for(unsigned context=0;context<contexts.size();++context){
             status.sourceAlphaErrors[context]=contexts[context].alpha.error();
             status.projectedAlphaStages[context]=contexts[context].producer.stage();
-            const auto production=contexts[context].producer.diagnostics();
+            const auto production=contexts[context].producer.diagnostics();const auto sync=nativeLocks.diagnostics();
             status.production[context]={production.rootFailure,production.inputFailure,production.rootPasses,production.pairedDraws,
                 production.fp16Calls,production.fp16Prepared,production.fp16Refusal,production.rgbaBytes,production.fp16Bytes,
                 production.geometryReason,production.geometryPixel,production.geometryVertex,production.geometryEmpty,
-                production.fp16ZeroClears,production.fp16OtherClears};
+                production.fp16ZeroClears,production.fp16OtherClears,production.rootMisc,production.rootKeyed,
+                {sync.textures,sync.shared,sync.keyed,sync.nonKeyed,sync.tables,sync.admissionRefused,sync.acquireCalls,sync.acquireOkay,
+                 sync.releaseCalls,sync.identityRefused,sync.slotRefused,sync.active,sync.identityReason}};
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();

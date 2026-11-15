@@ -19,6 +19,11 @@ struct MutexLease {
 // owning thread. An epoch versions an observed lock; it is NOT a video frame.
 class MutexObserver {
 public:
+    struct Diagnostics {
+        std::uint64_t textures=0,shared=0,keyed=0,nonKeyed=0,tables=0,admissionRefused=0;
+        std::uint64_t acquireCalls=0,acquireOkay=0,releaseCalls=0,identityRefused=0,slotRefused=0,active=0;
+        unsigned identityReason=0;
+    };
     struct Events {
         void (*acquired)(const MutexLease&,void*)noexcept=nullptr;
         void (*releasing)(const MutexLease&,std::uint64_t,void*)noexcept=nullptr;
@@ -43,9 +48,14 @@ private:
         std::array<std::atomic<Table*>,4> deviceTables{};
         std::array<Slot,64> slots{};
         std::atomic<std::uint64_t> next{2},refused{0};
+        std::atomic<std::uint64_t> textures{0},sharedTextures{0},keyedTextures{0},nonKeyedTextures{0},tableCount{0},admissionRefused{0};
+        std::atomic<std::uint64_t> acquireCalls{0},acquireOkay{0},releaseCalls{0},identityRefused{0};
+        std::atomic<unsigned> identityReason{0};
         std::atomic<bool> stopped{false};
         Events events{};bool published=false;
         inline static std::atomic<Core*> instance{nullptr};
+        inline static thread_local unsigned nativeDepth=0,probeDepth=0;
+        struct NativeCall {bool outer;NativeCall()noexcept:outer(nativeDepth++==0&&!probeDepth){}~NativeCall(){--nativeDepth;}};
         static bool writable(void** table,DWORD& previous)noexcept{
             MEMORY_BASIC_INFORMATION info{};const auto first=reinterpret_cast<std::uintptr_t>(table+8);
             if(!VirtualQuery(table+8,&info,sizeof info)||info.State!=MEM_COMMIT||
@@ -66,12 +76,23 @@ private:
             return false;
         }
         bool identity(IDXGIKeyedMutex* mutex,MutexLease& lease,Reference<IDXGIResource>& hold)noexcept{
+            const auto refuse=[this](unsigned reason)noexcept{identityReason=reason;identityRefused.fetch_add(1,std::memory_order_relaxed);return false;};
             Reference<ID3D11Device> device;Reference<ID3D11Texture2D> texture;
-            if(!mutex||FAILED(mutex->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return false;
-            texture->GetDevice(device.out());
-            if(!tracked(device.value)||FAILED(texture->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(hold.out()))))return false;
+            if(!mutex)return refuse(1);
+            // The DXGI interface need not expose an ID3D11Texture2D wrapper.
+            // Its public resource and device identify the same retained kernel
+            // allocation; preserve the previous texture route as a fallback.
+            if(SUCCEEDED(mutex->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(hold.out()))))
+                (void)hold->GetDevice(__uuidof(ID3D11Device),reinterpret_cast<void**>(device.out()));
+            if(!hold.value||!device.value){
+                if(FAILED(mutex->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return refuse(1);
+                if(!device.value)texture->GetDevice(device.out());
+                if(!hold.value&&FAILED(texture->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(hold.out()))))return refuse(3);
+            }
+            if(!tracked(device.value))return refuse(2);
             HANDLE handle=nullptr;
-            if(FAILED(hold->GetSharedHandle(&handle))||!handle||handle==INVALID_HANDLE_VALUE)return false;
+            if(FAILED(hold->GetSharedHandle(&handle))||!handle||handle==INVALID_HANDLE_VALUE)return refuse(4);
+            identityReason=0;
             lease.device=device.value;lease.retained=hold.value;
             lease.allocation=static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle));return true;
         }
@@ -132,17 +153,19 @@ private:
             return nullptr;
         }
         template<unsigned Index>static HRESULT STDMETHODCALLTYPE acquire(IDXGIKeyedMutex* object,UINT64 key,DWORD timeout){
-            auto& s=*instance.load(std::memory_order_acquire);
+            auto& s=*instance.load(std::memory_order_acquire);NativeCall call;
             const auto result=s.tables[Index].acquire(object,key,timeout);const DWORD error=GetLastError();
+            if(call.outer){s.acquireCalls.fetch_add(1,std::memory_order_relaxed);if(result==S_OK)s.acquireOkay.fetch_add(1,std::memory_order_relaxed);}
             // WAIT_TIMEOUT/WAIT_ABANDONED are positive HRESULT values. Neither
             // grants a lease; SUCCEEDED(result) is deliberately insufficient.
-            if(result==S_OK&&owned(s.tables[Index]))s.acquired(object,key);
+            if(call.outer&&result==S_OK&&owned(s.tables[Index]))s.acquired(object,key);
             SetLastError(error);return result;
         }
         template<unsigned Index>static HRESULT STDMETHODCALLTYPE release(IDXGIKeyedMutex* object,UINT64 key){
-            auto& s=*instance.load(std::memory_order_acquire);MutexLease lease{};
+            auto& s=*instance.load(std::memory_order_acquire);MutexLease lease{};NativeCall call;
+            if(call.outer)s.releaseCalls.fetch_add(1,std::memory_order_relaxed);
             const DWORD incoming=GetLastError();
-            auto* slot=owned(s.tables[Index])?s.releasing(object,key,lease):nullptr;
+            auto* slot=call.outer&&owned(s.tables[Index])?s.releasing(object,key,lease):nullptr;
             SetLastError(incoming);
             const auto result=s.tables[Index].release(object,key);const DWORD error=GetLastError();
             if(slot){
@@ -152,23 +175,10 @@ private:
             }
             SetLastError(error);return result;
         }
-        bool prepare(ID3D11Device* device)noexcept{
-            if(!device||stopped)return false;
-            Core* expected=nullptr;if(!instance.compare_exchange_strong(expected,this)&&expected!=this)return false;
-            if(tracked(device))return true;
-            unsigned deviceSlot=0;while(deviceSlot<devices.size()&&devices[deviceSlot].load())++deviceSlot;
-            if(deviceSlot==devices.size())return false;
-            D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=8;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
-            desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
-            desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
-            Reference<ID3D11Texture2D> probe;Reference<IDXGIKeyedMutex> mutex;Reference<IDXGIResource> shared;
-            if(FAILED(device->CreateTexture2D(&desc,nullptr,probe.out()))||
-                FAILED(probe->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(mutex.out())))||
-                FAILED(mutex->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(shared.out()))))return false;
-            HANDLE handle=nullptr;if(FAILED(shared->GetSharedHandle(&handle))||!handle)return false;
-            if(mutex->AcquireSync(0,0)!=S_OK||mutex->ReleaseSync(0)!=S_OK)return false;
+        // Cold only. Never warm, acquire or release an actual native texture.
+        bool admit(IDXGIKeyedMutex* mutex,Table*& chosen)noexcept{
             void** address=nullptr;SIZE_T read=0;std::array<void*,10> entries{};
-            if(!ReadProcessMemory(GetCurrentProcess(),mutex.value,&address,sizeof address,&read)||read!=sizeof address||!address||
+            if(!ReadProcessMemory(GetCurrentProcess(),mutex,&address,sizeof address,&read)||read!=sizeof address||!address||
                 !ReadProcessMemory(GetCurrentProcess(),address,entries.data(),sizeof entries,&read)||read!=sizeof entries||!entries[8]||!entries[9])return false;
             unsigned index=0;for(;index<tables.size();++index)if(tables[index].address==address||!tables[index].address)break;
             if(index==tables.size())return false;
@@ -192,11 +202,50 @@ private:
                     }
                     return false;
                 }
+                tableCount.fetch_add(1,std::memory_order_relaxed);
             }
+            chosen=&table;return true;
+        }
+        bool observeMutex(ID3D11Device* device,IDXGIKeyedMutex* mutex)noexcept{
+            if(!device||!mutex||stopped||!tracked(device))return false;
+            Reference<ID3D11Device> actual;
+            if(FAILED(mutex->GetDevice(__uuidof(ID3D11Device),reinterpret_cast<void**>(actual.out())))||actual.value!=device)return false;
+            Table* chosen=nullptr;return admit(mutex,chosen);
+        }
+        void observeTexture(ID3D11Device* device,ID3D11Texture2D* texture)noexcept{
+            if(!device||!texture||stopped||!tracked(device))return;
+            textures.fetch_add(1,std::memory_order_relaxed);
+            Reference<ID3D11Device> actual;texture->GetDevice(actual.out());if(actual.value!=device)return;
+            D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);
+            if(!(desc.MiscFlags&(D3D11_RESOURCE_MISC_SHARED|D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX|D3D11_RESOURCE_MISC_SHARED_NTHANDLE)))return;
+            sharedTextures.fetch_add(1,std::memory_order_relaxed);Reference<IDXGIKeyedMutex> mutex;
+            if(FAILED(texture->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(mutex.out())))){
+                nonKeyedTextures.fetch_add(1,std::memory_order_relaxed);return;
+            }
+            keyedTextures.fetch_add(1,std::memory_order_relaxed);
+            if(!observeMutex(device,mutex.value))admissionRefused.fetch_add(1,std::memory_order_relaxed);
+        }
+        bool prepare(ID3D11Device* device)noexcept{
+            if(!device||stopped)return false;
+            Core* expected=nullptr;if(!instance.compare_exchange_strong(expected,this)&&expected!=this)return false;
+            if(tracked(device))return true;
+            unsigned deviceSlot=0;while(deviceSlot<devices.size()&&devices[deviceSlot].load())++deviceSlot;
+            if(deviceSlot==devices.size())return false;
+            D3D11_TEXTURE2D_DESC desc{};desc.Width=desc.Height=8;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+            desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+            desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+            Reference<ID3D11Texture2D> probe;Reference<IDXGIKeyedMutex> mutex;Reference<IDXGIResource> shared;
+            if(FAILED(device->CreateTexture2D(&desc,nullptr,probe.out()))||
+                FAILED(probe->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(mutex.out())))||
+                FAILED(mutex->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(shared.out()))))return false;
+            HANDLE handle=nullptr;if(FAILED(shared->GetSharedHandle(&handle))||!handle)return false;
+            {struct Probe {Probe(){++probeDepth;}~Probe(){--probeDepth;}} probeCall;
+                if(mutex->AcquireSync(0,0)!=S_OK||mutex->ReleaseSync(0)!=S_OK)return false;}
+            Table* chosen=nullptr;if(!admit(mutex.value,chosen))return false;
             // Retain observed device identities for process-lifetime cached
             // callbacks. Stop may run cold; it never Releases a SINGLETHREADED
             // native device from another thread.
-            device->AddRef();deviceTables[deviceSlot].store(&table,std::memory_order_release);
+            device->AddRef();deviceTables[deviceSlot].store(chosen,std::memory_order_release);
             devices[deviceSlot].store(device,std::memory_order_release);return true;
         }
         void stop()noexcept{
@@ -217,6 +266,15 @@ public:
     bool prepare(ID3D11Device* device)noexcept{return core_&&core_->prepare(device);}
     MutexLease current(ID3D11Device* device,std::uint64_t allocation)const noexcept{return core_?core_->current(device,allocation):MutexLease{};}
     unsigned capture(ID3D11Device* device,std::array<MutexLease,8>& output)const noexcept{return core_?core_->capture(device,output):0;}
+    void observeTexture(ID3D11Device* device,ID3D11Texture2D* texture)noexcept{if(core_)core_->observeTexture(device,texture);}
+    bool observeMutex(ID3D11Device* device,IDXGIKeyedMutex* mutex)noexcept{return core_&&core_->observeMutex(device,mutex);}
+    Diagnostics diagnostics()const noexcept{
+        if(!core_)return {};
+        const auto& c=*core_;Diagnostics out{c.textures.load(),c.sharedTextures.load(),c.keyedTextures.load(),c.nonKeyedTextures.load(),c.tableCount.load(),c.admissionRefused.load(),
+            c.acquireCalls.load(),c.acquireOkay.load(),c.releaseCalls.load(),c.identityRefused.load(),c.refused.load(),0,c.identityReason.load()};
+        for(const auto& slot:c.slots)if(slot.state.load(std::memory_order_acquire)>=2)++out.active;
+        return out;
+    }
     std::uint64_t refusals()const noexcept{return core_?core_->refused.load(std::memory_order_relaxed):0;}
     void stop()noexcept{if(core_)core_->stop();}
 };

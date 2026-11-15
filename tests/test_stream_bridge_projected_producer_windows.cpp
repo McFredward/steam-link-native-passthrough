@@ -7,13 +7,13 @@
 using namespace stream_bridge::sender;
 using namespace stream_bridge::sender::projected_alpha;
 namespace {
-unsigned checks=0;Producer* active=nullptr;
+unsigned checks=0;Producer* active=nullptr;MutexObserver* activeLocks=nullptr;
 struct CrossProcess {ChannelLaunch launch{};std::uint64_t source=0,native=0;std::uint32_t compositorPid=0;};
 void check(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
 void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);}
 void released(const MutexLease& lease,HRESULT result,void*)noexcept{if(active)active->released(lease,result);}
 void depthObserved(ID3D11Device*,ID3D11DepthStencilState* state,void*)noexcept{if(active)active->depthState(state);}
-void textureObserved(ID3D11Device*,ID3D11Texture2D*,TextureOrigin,void*)noexcept{}
+void textureObserved(ID3D11Device* device,ID3D11Texture2D* texture,TextureOrigin,void*)noexcept{if(activeLocks)activeLocks->observeTexture(device,texture);}
 void targetObserved(ID3D11Device*,ID3D11RenderTargetView* view,void*)noexcept{if(active)active->target(view);}
 void bufferObserved(ID3D11Device*,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void*)noexcept{
     if(active)active->geometry().buffer(desc,data,buffer);
@@ -22,6 +22,33 @@ void layoutObserved(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC* desc,UINT coun
     if(active)active->geometry().layout(desc,count,code,bytes,layout);
 }
 void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){context->Draw(count,start);}
+// Owned DXGI-only forwarding control: a distinct public method table, no
+// reverse D3D texture QI, and nested forwarding into the real WARP mutex.
+// All keys/results/GPU synchronization still come from the original resource.
+class DxgiOnlyMutex final:public IDXGIKeyedMutex {
+    std::atomic<ULONG> count_{1};Reference<IDXGIKeyedMutex> native_;
+public:
+    explicit DxgiOnlyMutex(IDXGIKeyedMutex* native){native->AddRef();native_.value=native;}
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out)override{
+        if(!out)return E_POINTER;
+        *out=nullptr;
+        if(iid==IID_IUnknown||iid==__uuidof(IDXGIObject)||iid==__uuidof(IDXGIDeviceSubObject)||iid==__uuidof(IDXGIKeyedMutex)){
+            *out=static_cast<IDXGIKeyedMutex*>(this);AddRef();return S_OK;}
+        if(iid==__uuidof(ID3D11Texture2D))return E_NOINTERFACE;
+        return native_->QueryInterface(iid,out);
+    }
+    ULONG STDMETHODCALLTYPE AddRef()override{return count_.fetch_add(1)+1;}
+    ULONG STDMETHODCALLTYPE Release()override{const auto n=count_.fetch_sub(1)-1;if(!n)delete this;return n;}
+    HRESULT STDMETHODCALLTYPE SetPrivateData(REFGUID id,UINT bytes,const void* data)override{return native_->SetPrivateData(id,bytes,data);}
+    HRESULT STDMETHODCALLTYPE SetPrivateDataInterface(REFGUID id,const IUnknown* value)override{return native_->SetPrivateDataInterface(id,value);}
+    HRESULT STDMETHODCALLTYPE GetPrivateData(REFGUID id,UINT* bytes,void* data)override{return native_->GetPrivateData(id,bytes,data);}
+    HRESULT STDMETHODCALLTYPE GetParent(REFIID iid,void** out)override{return native_->GetParent(iid,out);}
+    HRESULT STDMETHODCALLTYPE GetDevice(REFIID iid,void** out)override{return native_->GetDevice(iid,out);}
+    HRESULT STDMETHODCALLTYPE AcquireSync(UINT64 key,DWORD timeout)override{return native_->AcquireSync(key,timeout);}
+    HRESULT STDMETHODCALLTYPE ReleaseSync(UINT64 key)override{return native_->ReleaseSync(key);}
+};
+__declspec(noinline) HRESULT nativeAcquire(IDXGIKeyedMutex* mutex,UINT64 key,DWORD timeout){return mutex->AcquireSync(key,timeout);}
+__declspec(noinline) HRESULT nativeRelease(IDXGIKeyedMutex* mutex,UINT64 key){return mutex->ReleaseSync(key);}
 constexpr char ProducerFixture[]=R"(
 cbuffer Scene : register(b0) {float4 words[4];};
 Texture2D<float4> scene : register(t0);
@@ -72,7 +99,7 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
     check(SUCCEEDED(image->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(resource.out())))&&SUCCEEDED(resource->GetSharedHandle(&result))&&result,"owned shared allocation identity");
     return std::uint64_t(reinterpret_cast<std::uintptr_t>(result));
 }
-void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false,bool padded=false,bool depthTests=false,bool reproject=false){
+void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false,bool padded=false,bool depthTests=false,bool reproject=false,bool dxgiOnly=false){
     const bool filtering=intermediateFormat!=DXGI_FORMAT_UNKNOWN;
     auto vsCode=compile("vs","vs_5_0"),psCode=compile(padded?"boundedY":"ps","ps_5_0"),copyCode=compile(reproject?"reprojectCopy":"copyFp16","ps_5_0");
     Reference<ID3D11ShaderReflection> reflection;D3D11_SHADER_DESC signature{};
@@ -92,7 +119,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,
         D3D11_SDK_VERSION,device.out(),nullptr,context.out()))&&shaders.observeDevice(device.value),"owned actual native-style device");
-    MutexObserver locks({nullptr,releasing,released,nullptr});check(locks.prepare(device.value),"original native synchronization observed");
+    MutexObserver locks({nullptr,releasing,released,nullptr});activeLocks=&locks;check(locks.prepare(device.value),"original native synchronization observed");
     ChannelParent channel;check(channel.create(),"private producer channel");
     auto* page=external?external:channel.page();
     const unsigned policyBytes=64;Producer producer(&contracts[1],&policyBytes,1,padded?&contracts[1].hash:nullptr);active=&producer;
@@ -192,7 +219,27 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     Reference<IDXGIKeyedMutex> sourceMutex,streamMutex;
     check(SUCCEEDED(source->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sourceMutex.out())))&&
         SUCCEEDED(native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(streamMutex.out()))),"original application and stream mutexes");
-    check(sourceMutex->AcquireSync(0,0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"actual producer ownership");
+    if(dxgiOnly){
+        auto* facade=new DxgiOnlyMutex(sourceMutex.value);Reference<ID3D11Texture2D> unsupported;
+        check(facade->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(unsupported.out()))==E_NOINTERFACE,
+            "owned actual mutex facade does not expose a D3D texture wrapper");
+        const auto before=locks.diagnostics().acquireCalls;
+        check(locks.observeMutex(device.value,facade)&&locks.diagnostics().tables>=2&&locks.diagnostics().acquireCalls==before,
+            "a distinct actual DXGI interface table is admitted cold without acquiring the native resource");
+        sourceMutex->Release();sourceMutex.value=facade;
+    }
+    const auto coldSync=locks.diagnostics();
+    check(coldSync.textures&&coldSync.shared>=2&&coldSync.keyed>=2&&coldSync.tables&&!coldSync.admissionRefused,
+        "actual created and imported native textures receive cold synchronization admission");
+    const auto callsBefore=coldSync.acquireCalls;
+    locks.observeTexture(device.value,source.value);
+    check(locks.diagnostics().acquireCalls==callsBefore&&!locks.current(device.value,sourceHandle),"cold native mutex admission performs no acquisition and grants no lease");
+    auto plainDesc=desc;plainDesc.MiscFlags=D3D11_RESOURCE_MISC_SHARED;Reference<ID3D11Texture2D> plain;
+    check(SUCCEEDED(device->CreateTexture2D(&plainDesc,nullptr,plain.out()))&&locks.diagnostics().nonKeyed,
+        "real shared textures without a keyed interface stay diagnostic and gain no ownership");
+    check(nativeAcquire(sourceMutex.value,0,0)==S_OK&&nativeAcquire(streamMutex.value,0,0)==S_OK,"actual producer ownership");
+    const auto actualSync=locks.diagnostics();check(actualSync.acquireCalls==callsBefore+2&&actualSync.acquireOkay>=2&&actualSync.active==2&&!actualSync.identityRefused,
+        "counters observe the two actual native acquisitions and currently held leases");
     context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);context->PSSetConstantBuffers(0,1,&constants.value);
     context->IASetInputLayout(layout.value);UINT stride=20,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     context->OMSetRenderTargets(1,&target.value,nullptr);context->PSSetShaderResources(0,1,&sourceView.value);
@@ -343,10 +390,10 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     std::printf("production stage after draw=%u\n",producer.stage());
     check(streamMutex->ReleaseSync(3)==S_OK,"native stream ownership transferred with its unchanged release key");
     if(incoming){
-        check(sourceMutex->ReleaseSync(0)==S_OK,"child source ownership released after paired image");
+        check(nativeRelease(sourceMutex.value,0)==S_OK,"child source ownership released after paired image");
         BYTE finished=0;DWORD bytes=0;
         check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&finished,1,&bytes,nullptr)&&bytes==1&&finished==1,"parent acknowledges its actual paired copy");
-        active=nullptr;context->ClearState();return;
+        active=nullptr;activeLocks=nullptr;context->ClearState();return;
     }
     std::printf("production stage after release=%u\n",producer.stage());
     if(pressure){const auto storage=producer.diagnostics();
@@ -375,8 +422,8 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     check(streamMutex->ReleaseSync(0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"next exact native ownership interval");
     channel.sourceLease(lease+0x100000000ull);producer.draw(context.value,draw,4,0);draw(context.value,4,0);
     check(streamMutex->ReleaseSync(0)==S_OK&&page->witnesses[0].read(witness)&&!witness.complete,"revoked app session cannot republish old coverage");
-    check(sourceMutex->ReleaseSync(0)==S_OK,"native application ownership ends");
-    active=nullptr;context->ClearState();
+    check(nativeRelease(sourceMutex.value,0)==S_OK,"native application ownership ends");
+    active=nullptr;activeLocks=nullptr;context->ClearState();
 }
 void consumerControl(){
     Consumer consumer;auto& channel=consumer.channel();check(channel.page()!=nullptr,"private parent consumer channel");
@@ -448,6 +495,7 @@ int main(int argc,char** argv){try{
     else if(argc==2&&!std::strcmp(argv[1],"--padded"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,true);
     else if(argc==2&&!std::strcmp(argv[1],"--padded-depth"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,true,true);
     else if(argc==2&&!std::strcmp(argv[1],"--reproject-depth"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,false,true,true);
+    else if(argc==2&&!std::strcmp(argv[1],"--dxgi-sync"))run(nullptr,nullptr,DXGI_FORMAT_UNKNOWN,false,false,false,false,true);
     else {check(argc==1,"known fixture mode");run();}
     std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
 catch(const std::exception& error){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,error.what());return 1;}}

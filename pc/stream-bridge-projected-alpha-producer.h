@@ -22,7 +22,7 @@ class Producer {
         ImageWitness witness{};
     };
     std::array<ImageState,ChannelImages> images_{};
-    std::atomic<unsigned> stage_{0},rootFailure_{0},inputFailure_{0};
+    std::atomic<unsigned> stage_{0},rootFailure_{0},inputFailure_{0},rootMisc_{0},rootKeyed_{0};
     std::atomic<std::uint64_t> rootPasses_{0},pairedDraws_{0};
     std::atomic<unsigned> fp16Calls_{0},fp16Prepared_{0},fp16Refusal_{0};
     std::atomic<unsigned> geometryReason_{0},geometryPixel_{0},geometryVertex_{0},geometryEmpty_{0};
@@ -72,6 +72,8 @@ class Producer {
     }
     bool root(ID3D11Texture2D* texture,const D3D11_SHADER_RESOURCE_VIEW_DESC& view,Allocation& scene,std::uint64_t& lease)noexcept{
         const auto refuse=[this](unsigned reason)noexcept{rootFailure_=reason;return false;};
+        if(texture){D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);rootMisc_=desc.MiscFlags;
+            Reference<IDXGIKeyedMutex> keyed;rootKeyed_=SUCCEEDED(texture->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(keyed.out())))?1u:0u;}
         if(view.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D||view.Texture2D.MostDetailedMip||
             (view.Format!=DXGI_FORMAT_R8G8B8A8_UNORM&&view.Format!=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB&&
              view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM&&view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))return refuse(1);
@@ -138,6 +140,7 @@ public:
         std::uint64_t rgbaBytes=0,fp16Bytes=0;
         unsigned geometryReason=0,geometryPixel=0,geometryVertex=0,geometryEmpty=0;
         std::uint64_t fp16ZeroClears=0,fp16OtherClears=0;
+        unsigned rootMisc=0,rootKeyed=0;
     };
     Diagnostics diagnostics()const noexcept{
         return {rootFailure_.load(std::memory_order_relaxed),inputFailure_.load(std::memory_order_relaxed),
@@ -147,7 +150,8 @@ public:
             page_?std::uint64_t(InterlockedCompareExchange64(&page_->fp16CompanionBytes,0,0)):0,
             geometryReason_.load(std::memory_order_relaxed),geometryPixel_.load(std::memory_order_relaxed),
             geometryVertex_.load(std::memory_order_relaxed),geometryEmpty_.load(std::memory_order_relaxed),
-            fp16ZeroClears_.load(std::memory_order_relaxed),fp16OtherClears_.load(std::memory_order_relaxed)};
+            fp16ZeroClears_.load(std::memory_order_relaxed),fp16OtherClears_.load(std::memory_order_relaxed),
+            rootMisc_.load(std::memory_order_relaxed),rootKeyed_.load(std::memory_order_relaxed)};
     }
     Geometry& geometry()noexcept{return geometry_;}
     void depthState(ID3D11DepthStencilState* state)noexcept{replay_.observeDepth(state);}
