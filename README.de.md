@@ -32,11 +32,6 @@ Spiele unterstützte PC-VR-Spiele über Steam Link in deinem echten Zimmer.
 
 Die Installationszeile unten installiert dieses Release von `main` mit normalen Logs.
 
-PC0.3.13 behebt einen Rundungsfehler an nativen Texturgrenzen, durch den
-Passthrough in Venture schwarz bleiben konnte. Die Korrektur wurde auf Steam
-Frame bestätigt. Bei intakter Frame0.3.5-Installation wird nur der PC-Patch
-aktualisiert; die Frame wird dabei nicht neu gestartet.
-
 ## Native Transparenz, kein Farbersatz
 
 Das Spiel sendet Transparenz getrennt von seinen Farben; keine Farbe wird aus
@@ -65,10 +60,6 @@ Steam Link kann mit **Auto oder fester Bitrate** verwendet werden.
 | PC SteamVR | **2.18.4**, 2.17.10 |
 | Steam Frame SteamVR | **2.18.2** |
 | SteamOS auf der Steam Frame | **0.4.5** · Build `20261022.6150929` |
-
-Nach dem Frame-Update am 8. November 2026 meldet der Maintainer weiterhin
-funktionierendes Passthrough mit diesem System-Build und SteamVR 2.18.2.
-Details stehen unter [Versionsprüfung und Testumfang](docs/COMPATIBILITY.md#frame-update-follow-up-november-8-2026).
 
 ## Installation
 
