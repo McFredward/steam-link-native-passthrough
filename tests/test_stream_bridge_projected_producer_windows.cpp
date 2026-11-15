@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-projected-alpha-producer.h"
+#include "pc/stream-bridge-projected-alpha-consumer.h"
 #include <cstdio>
 #include <stdexcept>
 #include <vector>
@@ -6,6 +7,7 @@ using namespace stream_bridge::sender;
 using namespace stream_bridge::sender::projected_alpha;
 namespace {
 unsigned checks=0;Producer* active=nullptr;
+struct CrossProcess {ChannelLaunch launch{};std::uint64_t source=0,native=0;std::uint32_t compositorPid=0;};
 void check(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
 void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);}
 void released(const MutexLease& lease,HRESULT result,void*)noexcept{if(active)active->released(lease,result);}
@@ -40,7 +42,7 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
     check(SUCCEEDED(image->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(resource.out())))&&SUCCEEDED(resource->GetSharedHandle(&result))&&result,"owned shared allocation identity");
     return std::uint64_t(reinterpret_cast<std::uintptr_t>(result));
 }
-void run(){
+void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0");
     std::array<ShaderFingerprint,2> contracts{};contracts[0].kind=NativeShader::StreamVertex;contracts[1].kind=NativeShader::MultiViewInner;
     check(dxbcFingerprint(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),contracts[0].hash)&&
@@ -51,9 +53,10 @@ void run(){
         D3D11_SDK_VERSION,device.out(),nullptr,context.out()))&&shaders.observeDevice(device.value),"owned actual native-style device");
     MutexObserver locks({nullptr,releasing,released,nullptr});check(locks.prepare(device.value),"original native synchronization observed");
     ChannelParent channel;check(channel.create(),"private producer channel");
+    auto* page=external?external:channel.page();
     const unsigned policyBytes=64;Producer producer(&contracts[1],&policyBytes,1);active=&producer;
-    check(producer.prepare(device.value,channel.page(),shaders,locks),"production controller prepares embedded own kernels");
-    constexpr UINT width=40,height=36;constexpr std::uint32_t scenePid=77,compositorPid=88;
+    check(producer.prepare(device.value,page,shaders,locks),"production controller prepares embedded own kernels");
+    constexpr UINT width=40,height=36;const std::uint32_t scenePid=77,compositorPid=incoming?incoming->compositorPid:88;
     const std::uint64_t lease=(std::uint64_t(7)<<32)|scenePid;channel.sourceLease(lease);
     std::vector<std::uint8_t> input(width*height*4);
     for(UINT i=0;i<width*height;++i){input[i*4]=UINT(i*17)%256;input[i*4+1]=UINT(i*39)%256;input[i*4+2]=UINT(i*71)%256;input[i*4+3]=i%3==0?0:i%3==1?127:255;}
@@ -61,15 +64,17 @@ void run(){
     desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
     desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;D3D11_SUBRESOURCE_DATA initial{input.data(),width*4,0};
     Reference<ID3D11Texture2D> source,native;Reference<ID3D11ShaderResourceView> sourceView;Reference<ID3D11RenderTargetView> target;
-    check(SUCCEEDED(device->CreateTexture2D(&desc,&initial,source.out()))&&SUCCEEDED(device->CreateTexture2D(&desc,nullptr,native.out()))&&
+    const auto open=[&](std::uint64_t value,ID3D11Texture2D** output){return device->OpenSharedResource(reinterpret_cast<HANDLE>(std::uintptr_t(value)),__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(output));};
+    check((incoming?(SUCCEEDED(open(incoming->source,source.out()))&&SUCCEEDED(open(incoming->native,native.out()))):
+        (SUCCEEDED(device->CreateTexture2D(&desc,&initial,source.out()))&&SUCCEEDED(device->CreateTexture2D(&desc,nullptr,native.out()))))&&
         SUCCEEDED(device->CreateShaderResourceView(source.value,nullptr,sourceView.out()))&&SUCCEEDED(device->CreateRenderTargetView(native.value,nullptr,target.out())),"actual owned source and native target");
     producer.target(target.value);const auto sourceHandle=handle(source.value),nativeHandle=handle(native.value);
-    MaskRegistration prepared{};check(channel.page()->registrations[0].read(prepared)&&prepared.maskHandle&&producer.stage()==2,"cold preparation published the actual companion allocation");
+    MaskRegistration prepared{};check(page->registrations[0].read(prepared)&&prepared.maskHandle&&producer.stage()==2,"cold preparation published the actual companion allocation");
     Registry registry{};registry.sourceLease=lease;registry.revision=1;
     registry.retained[0]={sourceHandle,21,scenePid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
     registry.retained[1]={nativeHandle,22,compositorPid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
     std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=source.value;pins[1]=native.value;
-    check(channel.publishRetained(registry,pins),"real held source registry publication");
+    check(external||channel.publishRetained(registry,pins),"real held source registry publication");
     Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> ps;Reference<ID3D11InputLayout> layout;Reference<ID3D11Buffer> vertices,constants;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
         SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual observed native-model program objects");
@@ -98,8 +103,14 @@ void run(){
     producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();
     std::printf("production stage after draw=%u\n",producer.stage());
     check(streamMutex->ReleaseSync(3)==S_OK,"native stream ownership transferred with its unchanged release key");
+    if(incoming){
+        check(sourceMutex->ReleaseSync(0)==S_OK,"child source ownership released after paired image");
+        BYTE finished=0;DWORD bytes=0;
+        check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&finished,1,&bytes,nullptr)&&bytes==1&&finished==1,"parent acknowledges its actual paired copy");
+        active=nullptr;context->ClearState();return;
+    }
     std::printf("production stage after release=%u\n",producer.stage());
-    ImageWitness witness{};check(channel.page()->witnesses[0].read(witness)&&witness.complete&&witness.sourceLease==lease&&
+    ImageWitness witness{};check(page->witnesses[0].read(witness)&&witness.complete&&witness.sourceLease==lease&&
         witness.scene.pid==scenePid&&witness.native.pid==compositorPid&&witness.native.generation==22,"production witness separates authenticated game ancestry from actual compositor ownership");
     bool sealed=false;for(const auto& release:witness.releases)sealed|=release.allocation==nativeHandle&&release.key==3&&release.scope>1;
     check(sealed,"witness sealed by the original native output release");
@@ -110,13 +121,77 @@ void run(){
     for(UINT i=0;i<width*height;++i){check(nativePixels[i*4+3]==255,"ordinary native alpha policy remains opaque");
         check(maskPixels[i*4+3]==input[i*4+3],"production mask preserves every zero/fractional/opaque source alpha");
         for(unsigned c=0;c<3;++c)check(nativePixels[i*4+c]==input[i*4+c]&&!maskPixels[i*4+c],"native RGB including additive zero-alpha colour unchanged; no RGB exported");}
-    producer.invalidate(native.value);check(channel.page()->witnesses[0].read(witness)&&!witness.complete,"unsupported native write revokes the previously sealed image before reuse");
+    producer.invalidate(native.value);check(page->witnesses[0].read(witness)&&!witness.complete,"unsupported native write revokes the previously sealed image before reuse");
     check(streamMutex->ReleaseSync(0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"next exact native ownership interval");
     channel.sourceLease(lease+0x100000000ull);producer.draw(context.value,draw,4,0);draw(context.value,4,0);
-    check(streamMutex->ReleaseSync(0)==S_OK&&channel.page()->witnesses[0].read(witness)&&!witness.complete,"revoked app session cannot republish old coverage");
+    check(streamMutex->ReleaseSync(0)==S_OK&&page->witnesses[0].read(witness)&&!witness.complete,"revoked app session cannot republish old coverage");
     check(sourceMutex->ReleaseSync(0)==S_OK,"native application ownership ends");
     active=nullptr;context->ClearState();
 }
+void consumerControl(){
+    Consumer consumer;auto& channel=consumer.channel();check(channel.page()!=nullptr,"private parent consumer channel");
+    Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"independent actual parent WARP device");
+    constexpr UINT width=40,height=36;std::vector<std::uint8_t> input(width*height*4);
+    for(UINT i=0;i<width*height;++i){input[i*4]=UINT(i*17)%256;input[i*4+1]=UINT(i*39)%256;input[i*4+2]=UINT(i*71)%256;input[i*4+3]=i%3==0?0:i%3==1?127:255;}
+    D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+    desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+    D3D11_SUBRESOURCE_DATA initial{input.data(),width*4,0};Reference<ID3D11Texture2D> source,native;
+    check(SUCCEEDED(device->CreateTexture2D(&desc,&initial,source.out()))&&SUCCEEDED(device->CreateTexture2D(&desc,nullptr,native.out())),"parent retains exact application and native output allocations");
+    Reference<IDXGIKeyedMutex> sync;
+    check(SUCCEEDED(native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sync.out()))),"actual parent native synchronization resource");
+    struct Handles {HANDLE read=nullptr,write=nullptr,process=nullptr,thread=nullptr;
+        ~Handles(){if(write)CloseHandle(write);if(read)CloseHandle(read);if(process){if(WaitForSingleObject(process,0)!=WAIT_OBJECT_0)TerminateProcess(process,1);CloseHandle(process);}if(thread)CloseHandle(thread);}} handles;
+    SECURITY_ATTRIBUTES security{sizeof security,nullptr,TRUE};
+    check(CreatePipe(&handles.read,&handles.write,&security,4096)&&SetHandleInformation(handles.write,HANDLE_FLAG_INHERIT,0),"owned anonymous launch pipe");
+    std::array<wchar_t,32768> path{};const auto length=GetModuleFileNameW(nullptr,path.data(),UINT(path.size()));
+    check(length&&length<path.size(),"exact owned executable path");
+    std::wstring command=L"\""+std::wstring(path.data())+L"\" --child";
+    std::vector<wchar_t> mutableCommand(command.begin(),command.end());mutableCommand.push_back(0);
+    STARTUPINFOW startup{};startup.cb=sizeof startup;startup.dwFlags=STARTF_USESTDHANDLES;startup.hStdInput=handles.read;
+    startup.hStdOutput=GetStdHandle(STD_OUTPUT_HANDLE);startup.hStdError=GetStdHandle(STD_ERROR_HANDLE);PROCESS_INFORMATION process{};
+    check(CreateProcessW(path.data(),mutableCommand.data(),nullptr,nullptr,TRUE,0,nullptr,nullptr,&startup,&process),"launch exactly the owned producer process");
+    handles.process=process.hProcess;handles.thread=process.hThread;CloseHandle(handles.read);handles.read=nullptr;
+    CrossProcess message{};message.source=handle(source.value);message.native=handle(native.value);message.compositorPid=process.dwProcessId;
+    check(channel.duplicateToVerifiedPeer(handles.process,message.launch),"private section duplicated to the known owned child instance");
+    const std::uint64_t lease=(std::uint64_t(7)<<32)|77;channel.sourceLease(lease);
+    Registry registry{};registry.sourceLease=lease;registry.revision=1;
+    registry.retained[0]={message.source,21,77,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
+    registry.retained[1]={message.native,22,message.compositorPid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
+    std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=source.value;pins[1]=native.value;
+    check(channel.publishRetained(registry,pins),"parent kernel allocations publish the only source registry");
+    DWORD sent=0;check(WriteFile(handles.write,&message,sizeof message,&sent,nullptr)&&sent==sizeof message,"private fixture facts sent without public mapping names");
+    const auto deadline=GetTickCount64()+5000;
+    while(InterlockedCompareExchange(&channel.page()->peerReady,0,0)!=1&&GetTickCount64()<deadline&&WaitForSingleObject(handles.process,0)==WAIT_TIMEOUT)Sleep(1);
+    check(consumer.prepare(device.value),"consumer prepares only for its bound private peer");
+    const auto& allocation=registry.retained[1];
+    check(!consumer.select(device.value,allocation,message.native,lease).view,"unowned native image never selects a latest mask");
+    check(sync->AcquireSync(3,5000)==S_OK,"original native consumer acquires the producer release key");
+    consumer.poll(device.value);const auto selected=consumer.select(device.value,allocation,message.native,lease);
+    check(selected.view&&selected.lease==lease&&selected.scenePid==77&&consumer.nativeProducer(message.compositorPid),"real cross-process pair admitted under original native ownership");
+    Reference<ID3D11Resource> resource;Reference<ID3D11Texture2D> mask;selected.view->GetResource(resource.out());
+    check(SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(mask.out()))),"selected view is the exact imported mask allocation");
+    const auto rgb=pixels(device.value,context.value,native.value),alpha=pixels(device.value,context.value,mask.value);
+    for(UINT i=0;i<width*height;++i){check(alpha[i*4+3]==input[i*4+3]&&rgb[i*4+3]==255,"exact zero/fractional/opaque alpha and unchanged native alpha cross the actual process boundary");
+        for(unsigned c=0;c<3;++c)check(rgb[i*4+c]==input[i*4+c]&&!alpha[i*4+c],"every native RGB byte and private alpha-only payload retained across processes");}
+    auto wrong=allocation;++wrong.generation;check(!consumer.select(device.value,wrong,message.native,lease).view,"wrong native allocation generation is refused");
+    wrong=allocation;++wrong.pid;check(!consumer.select(device.value,wrong,message.native,lease).view,"different actual native owner is refused");
+    check(!consumer.select(device.value,allocation,message.source,lease).view,"another sync allocation cannot seal this consumer image");
+    channel.sourceLease(0);check(!consumer.select(device.value,allocation,message.native,lease).view,"revoked source lease cannot select a retained pair");
+    context->Flush();check(sync->ReleaseSync(0)==S_OK,"consumer releases original ownership after its exact paired copy");
+    BYTE finished=1;check(WriteFile(handles.write,&finished,1,&sent,nullptr)&&sent==1,"child may retire only after parent copy acknowledgement");
+    check(WaitForSingleObject(handles.process,5000)==WAIT_OBJECT_0,"owned producer exits after acknowledgement");DWORD result=1;
+    check(GetExitCodeProcess(handles.process,&result)&&result==0,"actual child producer completed its native path");
+    consumer.stop();
 }
-int main(){try{run();std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
+
+}
+int main(int argc,char** argv){try{
+    if(argc==2&&!std::strcmp(argv[1],"--child")){
+        CrossProcess message{};DWORD received=0;
+        check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&message,sizeof message,&received,nullptr)&&received==sizeof message,"owned launch pipe payload");
+        ChannelPeer peer;check(peer.open(message.launch),"child binds the actual private kernel channel");run(&message,peer.page());
+    }else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
+    else {check(argc==1,"known fixture mode");run();}
+    std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
 catch(const std::exception& error){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,error.what());return 1;}}

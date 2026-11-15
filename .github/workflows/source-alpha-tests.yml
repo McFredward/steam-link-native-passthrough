@@ -130,6 +130,13 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\projected-producer.log
           exit /b %SFNP_RESULT%
+      - name: Verify the actual producer and consumer in separate Windows processes
+        shell: cmd
+        run: |
+          build\projected-producer.exe --consumer >build\projected-producer-consumer.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-consumer.log
+          exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -140,6 +147,7 @@ jobs:
             build/projected-alpha-embedded.log
             build/projected-channel.log
             build/projected-producer.log
+            build/projected-producer-consumer.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc

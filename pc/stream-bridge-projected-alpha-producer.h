@@ -75,7 +75,7 @@ class Producer {
             // The actual application allocation must remain natively owned
             // through both the ordinary and companion samples. An unrelated
             // keyed mutex or a latest observed app texture is insufficient.
-            if(!locks_->current(device_,known.handle))return false;
+            if(!locks_->current(device_,known.handle)){stage_=1305;return false;}
             scene=known;lease=registry.sourceLease;return live(lease);
         }
         return false;

@@ -499,6 +499,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     static_cast<unsigned long long>(audit.shaders),static_cast<unsigned long long>(audit.draws),
                     static_cast<unsigned long long>(audit.recognizedDraws),static_cast<unsigned long long>(audit.dropped));
                 report(text,stream_bridge::logging::Level::Debug);
+                std::snprintf(text,sizeof text,"projected alpha producer stages: %u/%u/%u/%u; 1=prepared, 2=storage, 10=draw, 12=geometry, 13=source, 1305=source-ownership-missing, 14=ancestry, 15=replay, 16=paired, 20=native-release-sealed; diagnostics only",
+                    audit.projectedAlphaStages[0],audit.projectedAlphaStages[1],audit.projectedAlphaStages[2],audit.projectedAlphaStages[3]);
+                report(text,stream_bridge::logging::Level::Debug);
                 std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown-retention-overflow=%llu; unknown programs remain diagnostic only",
                     static_cast<unsigned long long>(audit.streamShaderKinds[0]),static_cast<unsigned long long>(audit.streamShaderKinds[1]),
                     static_cast<unsigned long long>(audit.streamShaderKinds[2]),static_cast<unsigned long long>(audit.unknownPixelPrograms),

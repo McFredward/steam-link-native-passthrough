@@ -41,7 +41,7 @@ struct SourceAuditStatus {
     // Four retained contexts, eight allocation shards each. No eye/frame
     // authority; observation counters must never be printed as presentations.
     std::array<SourceAlphaSample,32> sourceAlpha{};
-    std::array<std::uint32_t,4> sourceAlphaErrors{};
+    std::array<std::uint32_t,4> sourceAlphaErrors{},projectedAlphaStages{};
 };
 // A numerical shared handle is considered only alongside retained registry
 // generation and exact physical shape. Multiple owners remain ambiguous.
