@@ -43,7 +43,8 @@ inline std::array<std::uint8_t,16> checksum(const std::uint8_t* bytes,std::size_
     std::array<std::uint8_t,16> output{};for(unsigned i=0;i<4;++i)store(output.data()+i*4,state[i]);return output;
 }
 // Only the reviewed scene tail is supported here: one native float4 SV_Target0,
-// a final scalar MOVC o0.w, condition, literal1, temporary-alpha followed by RET.
+// exactly one scalar MOVC o0.w, condition, literal1, temporary-alpha and
+// one final RET. Independent RGB writes may follow the alpha selection.
 // No branch/constant/source/geometry rewrite and no runtime HLSL compilation.
 // Refuse all other forms, including the distinct alpha-dependent resolve.
 inline bool derive(const void* input,std::size_t size,std::vector<std::uint8_t>& output){
@@ -72,17 +73,25 @@ inline bool derive(const void* input,std::size_t size,std::vector<std::uint8_t>&
     auto& code=chunks[executable].data;const auto length=code.size()/4;
     if(length<14||(load(code.data())!=0x50u&&load(code.data())!=0x40u)||load(code.data()+4)!=length)return false;
     std::vector<std::uint32_t> words(length);for(std::size_t i=0;i<length;++i)words[i]=load(code.data()+4*i);
-    std::size_t at=2,declaration=0,tail=0,previous=0;unsigned outputs=0,returns=0;
+    std::size_t at=2,declaration=0,tail=0;unsigned outputs=0,returns=0;
     while(at<length){const auto token=words[at],opcode=token&2047u,n=(token>>24)&127u;
         if(!n||n>length-at)return false;
         if(opcode==101){
             if(n!=3||words[at+1]!=0x001020f2u||words[at+2])return false;
             ++outputs;declaration=at+n;
         }
-        if(opcode==62){++returns;if(n!=1||at!=length-1)return false;tail=previous;}
-        previous=at;at+=n;
+        if(opcode==62){++returns;if(n!=1||at!=length-1)return false;}
+        if(opcode!=101&&n>=3){const auto destination=words[at+1];
+            const bool outputAlpha=(destination&~0xf0u)==0x00102002u&&
+                (destination&0x80u)&&words[at+2]==0;
+            if(outputAlpha){
+                if(tail||opcode!=55||n!=9||destination!=0x00102082u)return false;
+                tail=at;
+            }
+        }
+        at+=n;
     }
-    if(at!=length||outputs!=1||returns!=1||!declaration||tail<=declaration||length-tail!=10)return false;
+    if(at!=length||outputs!=1||returns!=1||!declaration||tail<=declaration||tail+9>=length)return false;
     // Scalar unmodified temporary operands: no relative addressing, modifiers,
     // extensions or extra source words. SV_Target1 is private alpha only.
     if(words[tail]!=0x09000037u||words[tail+1]!=0x00102082u||words[tail+2]||
