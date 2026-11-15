@@ -175,7 +175,7 @@ struct Observer {
         SFNP_AUDIT_ATTACH(40,drawIndirect) SFNP_AUDIT_ATTACH(58,execute)
         SFNP_AUDIT_ATTACH(14,map) SFNP_AUDIT_ATTACH(15,unmap)
         SFNP_AUDIT_ATTACH(41,dispatch) SFNP_AUDIT_ATTACH(42,dispatchIndirect)
-        SFNP_AUDIT_ATTACH(46,copyRegion) SFNP_AUDIT_ATTACH(47,copyResource) SFNP_AUDIT_ATTACH(48,update)
+        SFNP_AUDIT_ATTACH(46,copyRegion) SFNP_AUDIT_ATTACH(47,copyResource) SFNP_AUDIT_ATTACH(48,update) SFNP_AUDIT_ATTACH(49,copyCounter)
         SFNP_AUDIT_ATTACH(50,clearTarget) SFNP_AUDIT_ATTACH(51,clearUint) SFNP_AUDIT_ATTACH(52,clearFloat)
         SFNP_AUDIT_ATTACH(54,mips) SFNP_AUDIT_ATTACH(57,resolve)
         if(ctx.count>115){SFNP_AUDIT_ATTACH(115,copyRegion1) SFNP_AUDIT_ATTACH(116,update1)
@@ -275,11 +275,12 @@ struct Observer {
         if(auto* c=admission.context){OwnCommands own;Operation;} \
         SetLastError(incoming);bits<decltype(&Name<Index>)>(self.contexts[Index].function(Slot)) Arguments; \
     }
-    SFNP_PRODUCTION_WRITE(dispatch,41,(ID3D11DeviceContext* ctx,UINT x,UINT y,UINT z),(ctx,x,y,z),c->producer.invalidate())
-    SFNP_PRODUCTION_WRITE(dispatchIndirect,42,(ID3D11DeviceContext* ctx,ID3D11Buffer* args,UINT offset),(ctx,args,offset),c->producer.invalidate())
+    SFNP_PRODUCTION_WRITE(dispatch,41,(ID3D11DeviceContext* ctx,UINT x,UINT y,UINT z),(ctx,x,y,z),c->producer.dispatch(ctx))
+    SFNP_PRODUCTION_WRITE(dispatchIndirect,42,(ID3D11DeviceContext* ctx,ID3D11Buffer* args,UINT offset),(ctx,args,offset),c->producer.dispatch(ctx))
     SFNP_PRODUCTION_WRITE(copyRegion,46,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,UINT x,UINT y,UINT z,ID3D11Resource* src,UINT sourceSub,const D3D11_BOX* box),(ctx,dst,sub,x,y,z,src,sourceSub,box),c->producer.invalidate(dst))
     SFNP_PRODUCTION_WRITE(copyResource,47,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,ID3D11Resource* src),(ctx,dst,src),c->producer.invalidate(dst))
     SFNP_PRODUCTION_WRITE(update,48,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,const D3D11_BOX* box,const void* data,UINT row,UINT depth),(ctx,dst,sub,box,data,row,depth),c->producer.invalidate(dst);if(!sub&&!box)c->producer.geometry().update(dst,data))
+    SFNP_PRODUCTION_WRITE(copyCounter,49,(ID3D11DeviceContext* ctx,ID3D11Buffer* dst,UINT offset,ID3D11UnorderedAccessView* src),(ctx,dst,offset,src),c->producer.invalidate(dst))
     SFNP_PRODUCTION_WRITE(clearUint,51,(ID3D11DeviceContext* ctx,ID3D11UnorderedAccessView* view,const UINT* data),(ctx,view,data),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
     SFNP_PRODUCTION_WRITE(clearFloat,52,(ID3D11DeviceContext* ctx,ID3D11UnorderedAccessView* view,const FLOAT* data),(ctx,view,data),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
     SFNP_PRODUCTION_WRITE(mips,54,(ID3D11DeviceContext* ctx,ID3D11ShaderResourceView* view),(ctx,view),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))

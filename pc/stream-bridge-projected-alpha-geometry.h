@@ -14,7 +14,7 @@ namespace stream_bridge::sender::projected_alpha {
 class Geometry {
     struct Buffer {
         std::atomic<ID3D11Buffer*> object{nullptr};
-        std::array<std::uint8_t,4096> bytes{};UINT size=0;bool valid=false;void* mapped=nullptr;
+        std::array<std::uint8_t,4096> bytes{};UINT size=0;bool valid=false,immutable=false;void* mapped=nullptr;
     };
     struct Layout {
         std::atomic<ID3D11InputLayout*> object{nullptr};UINT slot=0,offset=0;
@@ -35,6 +35,7 @@ public:
         if(find(object))return;
         for(auto& slot:buffers_)if(!slot.object.load(std::memory_order_acquire)){
             slot.size=desc->ByteWidth;slot.valid=initial&&initial->pSysMem;
+            slot.immutable=desc->Usage==D3D11_USAGE_IMMUTABLE;
             if(slot.valid)std::memcpy(slot.bytes.data(),initial->pSysMem,slot.size);
             object->AddRef();slot.object.store(object,std::memory_order_release);return;
         }
@@ -89,72 +90,81 @@ public:
         if(auto* slot=find(resource)){slot->valid=bytes!=nullptr;if(bytes)std::memcpy(slot->bytes.data(),bytes,slot->size);slot->mapped=nullptr;}
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
-        for(auto& slot:buffers_)if(!resource||slot.object.load(std::memory_order_acquire)==resource){slot.valid=false;slot.mapped=nullptr;}
+        // Unknown command-list writes cannot change an immutable allocation.
+        // Retain its creation evidence; mutable buffers still need fresh data.
+        for(auto& slot:buffers_)if((resource&&slot.object.load(std::memory_order_acquire)==resource)||(!resource&&!slot.immutable)){
+            slot.valid=false;slot.mapped=nullptr;
+        }
     }
     // Caller separately recognizes a VS whose clip position is (2*input.xy-1,
     // 0,1), and a PS without discard. Reproject-X is NOT such a full-height VS.
     // Count4 alone is deliberately insufficient: prove the actual bound layout,
     // vertex bytes/range, rectangle, winding, viewport, scissor and sample mask.
-    bool fullUnitQuad(ID3D11DeviceContext* context,UINT count,UINT start,UINT width,UINT height,UINT samples)noexcept{
-        if(!context||count!=4||!width||!height||(samples!=1&&samples!=4))return false;
+    bool fullUnitQuad(ID3D11DeviceContext* context,UINT count,UINT start,UINT width,UINT height,UINT samples,unsigned* reason=nullptr)noexcept{
+        if(reason)*reason=0;
+        const auto refuse=[reason](unsigned value)noexcept{if(reason)*reason=value;return false;};
+        if(!context||count!=4||!width||!height||(samples!=1&&samples!=4))return refuse(1);
         Reference<ID3D11Predicate> predicate;BOOL predicated=FALSE;context->GetPredication(predicate.out(),&predicated);
-        if(predicate.value)return false;
+        if(predicate.value)return refuse(2);
         Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
         context->GSGetShader(geometry.out(),nullptr,nullptr);context->HSGetShader(hull.out(),nullptr,nullptr);context->DSGetShader(domain.out(),nullptr,nullptr);
-        if(geometry.value||hull.value||domain.value)return false;
+        if(geometry.value||hull.value||domain.value)return refuse(3);
         D3D11_PRIMITIVE_TOPOLOGY topology{};context->IAGetPrimitiveTopology(&topology);
-        if(topology!=D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP)return false;
+        if(topology!=D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP)return refuse(4);
         Reference<ID3D11InputLayout> actualLayout;context->IAGetInputLayout(actualLayout.out());
         const Layout* layoutInfo=nullptr;
         for(const auto& known:layouts_)if(known.object.load(std::memory_order_acquire)==actualLayout.value&&actualLayout.value)layoutInfo=&known;
-        if(!layoutInfo)return false;
+        if(!layoutInfo)return refuse(5);
         Reference<ID3D11Buffer> actualBuffer;UINT stride=0,offset=0;
         context->IAGetVertexBuffers(layoutInfo->slot,1,actualBuffer.out(),&stride,&offset);
-        auto* bufferInfo=find(actualBuffer.value);if(!bufferInfo||!bufferInfo->valid||stride<8)return false;
+        auto* bufferInfo=find(actualBuffer.value);if(!bufferInfo)return refuse(6);
+        if(!bufferInfo->valid)return refuse(7);
+        if(stride<8)return refuse(8);
         std::array<std::array<float,2>,4> points{};
         for(unsigned i=0;i<4;++i){
             const auto at=std::uint64_t(offset)+(std::uint64_t(start)+i)*stride+layoutInfo->offset;
-            if(at>bufferInfo->size||8>bufferInfo->size-at)return false;
+            if(at>bufferInfo->size||8>bufferInfo->size-at)return refuse(9);
             std::memcpy(points[i].data(),bufferInfo->bytes.data()+at,8);
-            if(!std::isfinite(points[i][0])||!std::isfinite(points[i][1]))return false;
+            if(!std::isfinite(points[i][0])||!std::isfinite(points[i][1]))return refuse(10);
         }
         float left=points[0][0],right=left,top=points[0][1],bottom=top;
         for(const auto& point:points){left=point[0]<left?point[0]:left;right=point[0]>right?point[0]:right;
             top=point[1]<top?point[1]:top;bottom=point[1]>bottom?point[1]:bottom;}
-        if(left>0||right<1||top>0||bottom<1||left==right||top==bottom)return false;
+        if(left>0||right<1||top>0||bottom<1||left==right||top==bottom)return refuse(11);
         unsigned corners=0;
         for(const auto& point:points){
-            if((point[0]!=left&&point[0]!=right)||(point[1]!=top&&point[1]!=bottom))return false;
+            if((point[0]!=left&&point[0]!=right)||(point[1]!=top&&point[1]!=bottom))return refuse(11);
             const auto bit=1u<<((point[0]==right?1u:0u)|(point[1]==bottom?2u:0u));
-            if(corners&bit)return false;
+            if(corners&bit)return refuse(11);
             corners|=bit;
         }
-        if(corners!=15||points[1][0]==points[2][0]||points[1][1]==points[2][1])return false;
+        if(corners!=15||points[1][0]==points[2][0]||points[1][1]==points[2][1])return refuse(11);
         UINT viewports=1;D3D11_VIEWPORT viewport{};context->RSGetViewports(&viewports,&viewport);
         if(viewports!=1||viewport.TopLeftX||viewport.TopLeftY||viewport.Width!=float(width)||viewport.Height!=float(height)||
-            viewport.MinDepth!=0||viewport.MaxDepth!=1)return false;
+            viewport.MinDepth!=0||viewport.MaxDepth!=1)return refuse(12);
         Reference<ID3D11RasterizerState> raster;context->RSGetState(raster.out());
         D3D11_RASTERIZER_DESC desc{};desc.FillMode=D3D11_FILL_SOLID;desc.CullMode=D3D11_CULL_BACK;
         if(raster.value)raster->GetDesc(&desc);
-        if(desc.FillMode!=D3D11_FILL_SOLID)return false;
+        if(desc.FillMode!=D3D11_FILL_SOLID)return refuse(13);
         if(raster.value){Reference<ID3D11RasterizerState2> latest;
             if(SUCCEEDED(raster->QueryInterface(__uuidof(ID3D11RasterizerState2),reinterpret_cast<void**>(latest.out())))){
                 D3D11_RASTERIZER_DESC2 desc2{};latest->GetDesc2(&desc2);
-                if(desc2.ForcedSampleCount||desc2.ConservativeRaster!=D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF)return false;
+                if(desc2.ForcedSampleCount||desc2.ConservativeRaster!=D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF)return refuse(13);
             }
             Reference<ID3D11RasterizerState1> extended;
             if(SUCCEEDED(raster->QueryInterface(__uuidof(ID3D11RasterizerState1),reinterpret_cast<void**>(extended.out())))){
-                D3D11_RASTERIZER_DESC1 desc1{};extended->GetDesc1(&desc1);if(desc1.ForcedSampleCount)return false;
+                D3D11_RASTERIZER_DESC1 desc1{};extended->GetDesc1(&desc1);if(desc1.ForcedSampleCount)return refuse(13);
             }
         }
         const float area=(points[1][0]-points[0][0])*(points[2][1]-points[0][1])-
             (points[1][1]-points[0][1])*(points[2][0]-points[0][0]);
         const bool front=desc.FrontCounterClockwise?area>0:area<0;
-        if((desc.CullMode==D3D11_CULL_BACK&&!front)||(desc.CullMode==D3D11_CULL_FRONT&&front))return false;
+        if((desc.CullMode==D3D11_CULL_BACK&&!front)||(desc.CullMode==D3D11_CULL_FRONT&&front))return refuse(14);
         if(desc.ScissorEnable){UINT rectangles=1;D3D11_RECT rect{};context->RSGetScissorRects(&rectangles,&rect);
-            if(rectangles!=1||rect.left>0||rect.top>0||rect.right<LONG(width)||rect.bottom<LONG(height))return false;}
+            if(rectangles!=1||rect.left>0||rect.top>0||rect.right<LONG(width)||rect.bottom<LONG(height))return refuse(15);}
         Reference<ID3D11BlendState> blend;FLOAT factors[4]{};UINT mask=0;context->OMGetBlendState(blend.out(),factors,&mask);
-        return (mask&((1u<<samples)-1))==((1u<<samples)-1);
+        if((mask&((1u<<samples)-1))!=((1u<<samples)-1))return refuse(16);
+        return true;
     }
 };
 } // namespace stream_bridge::sender::projected_alpha

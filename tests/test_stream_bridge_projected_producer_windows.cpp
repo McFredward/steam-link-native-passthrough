@@ -15,6 +15,13 @@ void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){
 constexpr char ProducerFixture[]=R"(
 cbuffer Scene : register(b0) {float4 words[4];};
 Texture2D<float4> scene : register(t0);
+RWTexture2D<uint> scratch : register(u0);
+RWStructuredBuffer<float4> positions : register(u1);
+[numthreads(1,1,1)] void compute(uint3 id:SV_DispatchThreadID){scratch[id.xy]=123;}
+[numthreads(1,1,1)] void outside(){
+    positions[0]=float4(4,4,7,7);positions[1]=float4(4,5,7,8);
+    positions[2]=float4(5,4,8,7);positions[3]=float4(5,5,8,8);
+}
 float4 vs(float2 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position-1,0,1);}
 float4 ps(float4 xy:SV_Position):SV_Target{
     float4 value=scene.Load(int3(int2(xy.xy),0));
@@ -107,7 +114,43 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     check(boundTarget.value==target.value&&shaders.identify(boundVertex.value)==NativeShader::StreamVertex,"actual native target and vertex program are bound under ownership");
     check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"production bound vertex range proves full image coverage");
     check(bool(locks.current(device.value,sourceHandle)),"actual source-allocation ownership is retained");
+    auto computeCode=compile("compute","cs_5_0"),outsideCode=compile("outside","cs_5_0");
+    Reference<ID3D11ComputeShader> compute,outside;
+    check(SUCCEEDED(device->CreateComputeShader(computeCode->GetBufferPointer(),computeCode->GetBufferSize(),nullptr,compute.out()))&&
+        SUCCEEDED(device->CreateComputeShader(outsideCode->GetBufferPointer(),outsideCode->GetBufferSize(),nullptr,outside.out())),"actual native-style independent compute passes");
+    D3D11_TEXTURE2D_DESC scratchDesc{};scratchDesc.Width=scratchDesc.Height=scratchDesc.MipLevels=scratchDesc.ArraySize=scratchDesc.SampleDesc.Count=1;
+    scratchDesc.Format=DXGI_FORMAT_R32_UINT;scratchDesc.BindFlags=D3D11_BIND_UNORDERED_ACCESS;
+    Reference<ID3D11Texture2D> scratchImage;Reference<ID3D11UnorderedAccessView> scratchView;
+    check(SUCCEEDED(device->CreateTexture2D(&scratchDesc,nullptr,scratchImage.out()))&&
+        SUCCEEDED(device->CreateUnorderedAccessView(scratchImage.value,nullptr,scratchView.out())),"separate writable compute output");
+    context->CSSetShader(compute.value,nullptr,0);context->CSSetUnorderedAccessViews(0,1,&scratchView.value,nullptr);
+    producer.dispatch(context.value);context->Dispatch(1,1,1);
+    check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"unrelated compute cannot erase actual native vertex creation evidence");
+    D3D11_BUFFER_DESC mutableDesc{};mutableDesc.ByteWidth=sizeof points;mutableDesc.BindFlags=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_UNORDERED_ACCESS;
+    mutableDesc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;mutableDesc.StructureByteStride=16;
+    Reference<ID3D11Buffer> mutableVertices;Reference<ID3D11UnorderedAccessView> mutableView;
+    check(SUCCEEDED(device->CreateBuffer(&mutableDesc,&vertexData,mutableVertices.out()))&&
+        SUCCEEDED(device->CreateUnorderedAccessView(mutableVertices.value,nullptr,mutableView.out())),"vertex data that really is compute writable");
+    producer.geometry().buffer(&mutableDesc,&vertexData,mutableVertices.value);
+    context->IASetVertexBuffers(0,1,&mutableVertices.value,&stride,&offset);
+    check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"known mutable vertex data initially covers the actual target");
+    ID3D11Buffer* noBuffer=nullptr;context->IASetVertexBuffers(0,1,&noBuffer,&stride,&offset);
+    context->CSSetShader(outside.value,nullptr,0);context->CSSetUnorderedAccessViews(1,1,&mutableView.value,nullptr);
+    producer.dispatch(context.value);context->Dispatch(1,1,1);
+    ID3D11UnorderedAccessView* noView=nullptr;context->CSSetUnorderedAccessViews(1,1,&noView,nullptr);
+    context->IASetVertexBuffers(0,1,&mutableVertices.value,&stride,&offset);
+    unsigned reason=0;
+    check(!producer.geometry().fullUnitQuad(context.value,4,0,width,height,1,&reason)&&reason==7,"actual bound compute writes revoke that vertex allocation before reuse");
+    D3D11_BUFFER_DESC readDesc=mutableDesc;readDesc.Usage=D3D11_USAGE_STAGING;readDesc.BindFlags=readDesc.MiscFlags=readDesc.StructureByteStride=0;readDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+    Reference<ID3D11Buffer> readVertices;check(SUCCEEDED(device->CreateBuffer(&readDesc,nullptr,readVertices.out())),"owned compute-write reference readback");
+    context->CopyResource(readVertices.value,mutableVertices.value);D3D11_MAPPED_SUBRESOURCE mapped{};
+    check(SUCCEEDED(context->Map(readVertices.value,0,D3D11_MAP_READ,0,&mapped)),"observe actual changed vertex bytes on the owned GPU target");
+    check(static_cast<const float*>(mapped.pData)[0]==4&&static_cast<const float*>(mapped.pData)[1]==4,"compute really moved the vertices outside the image");context->Unmap(readVertices.value,0);
+    context->UpdateSubresource(mutableVertices.value,0,nullptr,points.data(),0,0);producer.geometry().update(mutableVertices.value,points.data());
+    check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"fresh public vertex data repairs only its actual allocation");
+    context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->CSSetShader(compute.value,nullptr,0);
     producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();
+    producer.dispatch(context.value);context->Dispatch(1,1,1);
     std::printf("production stage after draw=%u\n",producer.stage());
     check(streamMutex->ReleaseSync(3)==S_OK,"native stream ownership transferred with its unchanged release key");
     if(incoming){

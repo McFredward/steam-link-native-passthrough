@@ -240,6 +240,8 @@ void geometryControl(ID3D11Device* device,ID3D11DeviceContext* context,Geometry&
     check(geometry.fullUnitQuad(context,4,4,width,height,1),"full overwrite is proved from the actual nonzero vertex range and bound layout");
     const FLOAT zero[4]{};context->ClearRenderTargetView(output.target.value,zero);context->Draw(4,4);const auto full=output.bytes(context);
     for(unsigned i=0;i<width*height;++i)check(full[i*4+3]==255,"real GPU confirms every pixel of the metadata-proved quad");
+    geometry.invalidate();
+    check(geometry.fullUnitQuad(context,4,4,width,height,1),"unknown mutable-resource writes retain immutable vertex creation evidence");
     check(!geometry.fullUnitQuad(context,4,0,width,height,1),"same count/topology cannot certify the offscreen vertex prefix");
     context->ClearRenderTargetView(output.target.value,zero);context->Draw(4,0);const auto offscreen=output.bytes(context);
     for(unsigned i=0;i<width*height;++i)check(!offscreen[i*4+3],"wrong start is a causal all-offscreen geometry control");
