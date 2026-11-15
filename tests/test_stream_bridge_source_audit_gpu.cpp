@@ -32,13 +32,25 @@ void callerAdmissionControls(){
     projected_alpha::ChannelParent channel;check(channel.create(),"owned native-caller channel");
     projected_alpha::ChannelLaunch launch{};check(channel.duplicateToVerifiedPeer(GetCurrentProcess(),launch),"owned same-process admission control handle");
     auto* observer=new Observer(Launch{});check(observer->productionPeer.open(launch),"owned native-caller private peer");
-    auto* token=reinterpret_cast<ID3D11Device*>(std::uintptr_t(0x1000));observer->contexts[0].producerDevice=token;
+    auto* token=reinterpret_cast<ID3D11Device*>(std::uintptr_t(0x1000));auto& context=observer->contexts[0];context.producerDevice=token;
+    // Admission now also requires ownership of the installed public facade.
+    // This serialization-only control previously supplied just a device token.
+    std::array<void*,115> facade{};facade.fill(bits<void*>(&fakeRef));
+    struct PublicObject {void** table;} object{facade.data()};
+    context.object=reinterpret_cast<ID3D11DeviceContext*>(&object);context.facade=facade.data();context.count=115;
+    std::copy(facade.begin(),facade.end(),context.expected.begin());
     {auto admitted=observer->production(token);check(bool(admitted),"first serialized native caller admitted");}
     bool migrated=false;std::thread second([&]{auto admitted=observer->production(token);migrated=bool(admitted);});second.join();
     check(migrated&&!InterlockedCompareExchange(&channel.page()->stopped,0,0),"serialized caller migration does not retire a valid device");
     {auto held=observer->production(token);check(bool(held),"original caller can resume after serialized migration");
         bool concurrent=true;std::thread other([&]{auto refused=observer->production(token);concurrent=bool(refused);});other.join();
         check(!concurrent&&InterlockedCompareExchange(&channel.page()->stopped,0,0)&&observer->productionOverlaps.load()==1,"unsupported concurrent state mutation closes private admission without waiting and records its cause");}
+    projected_alpha::ChannelParent lost;check(lost.create(),"owned changed-dispatch control channel");
+    projected_alpha::ChannelLaunch changed{};check(lost.duplicateToVerifiedPeer(GetCurrentProcess(),changed),"owned changed-dispatch peer");
+    auto* replaced=new Observer(Launch{});check(replaced->productionPeer.open(changed),"changed-dispatch private mapping");
+    replaced->contexts[0].producerDevice=token;
+    check(!replaced->production(token)&&InterlockedCompareExchange(&lost.page()->stopped,0,0),
+        "missing native facade cannot continue publishing image ancestry");
 }
 void dispatchControls(){
     static std::array<void*,116> storage{};auto* table=storage.data()+1;
