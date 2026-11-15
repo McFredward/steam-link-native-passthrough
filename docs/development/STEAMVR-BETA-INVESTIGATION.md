@@ -238,13 +238,25 @@ compositor is still absent. The distinct resolve is refused by this derivation.
 The owned compiler schedules an independent RGB write after its alpha output;
 the transform accepts that order while requiring exactly one native alpha write
 and leaving all original instruction positions relative to each other unchanged.
-Reprojection with an early exit is also refused: its zero-game-alpha case needs a separate
-reviewed control rather than silently assuming that every path reaches the
+Reprojection with an early exit is also refused: its zero-game-alpha case
+needs a separate reviewed control rather than silently assuming that every path reaches the
 final selection. Private retained inner/Y containers match the structural
 transform; that is not native GPU execution or production activation.
 
-Status: the cold-derived-scene control is undergoing Windows/HLSL preflight and
-actual Windows/WARP execution. No new installer/native package was delivered.
+Software result of the cold-derived control: **61,572 checks passed** in
+[Windows/WARP run 43759352834](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43759352834),
+source `3906fa28d6aa8d68bd21525b1b530af86ec61318`. Actual Windows shader creation
+and reflection accepted the derived original program; the full owned MRT test
+retained native RGBA, real alpha and exactly-once native stencil updates.
+Truncated containers, a corrupt checksum and the distinct resolve program were
+refused. Local sender syntax/link and all 27 owned HLSL entries also passed.
+
+**Remaining before a headset candidate:** implement the separate reviewed
+resolve derivative and reprojection early-exit control, then connect the
+same-draw result to a lifetime-bounded source/image graph and exact native
+Present/encoder handoff. Current controls do not test those missing integrations.
+No new installer/native package was delivered; installed/shipping version is
+still 0.3.47 / PC 0.3.33 / Frame 0.3.13. No device changes or restarts were made.
 
 ## Evidence locations and maintenance
 
