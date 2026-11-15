@@ -342,9 +342,25 @@ all retained old/current inner, Y, reproject-Y and resolve containers. Their
 shader bodies were not redistributed; actual original native GPU execution is
 still a headset test, not established by these owned controls.
 
-Status: final local Windows syntax/link and29 owned HLSL entries pass; the
-expanded final GPU controls are running before packaging. Installer delivery
-and headset acceptance remain pending. No device changes have been made.
+The expanded production GPU controls passed in
+[Windows/WARP run43767216883](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43767216883),
+source `57e567402208944fd8430be0ea1125a2fed83196`: each of the normal, reprojection,
+BGRA and direct-root modes passed2,933 sender-side checks and59–61 actual
+compositor-side production checks. The previous61,578/61,719 MRT derivative
+controls and legacy regressions also passed. Accepted native shader creation,
+actual non-keyed resources, separate original sync, original RGBA equality and
+refusal of a wrong contributor generation are exercised on the GPU.
+
+The same source's observer admission control initially failed because its
+serialization-only mock supplied a device token with no installed facade. The
+new ownership rule correctly refused it. The fixture now supplies its owned
+public-method facade and separately verifies that an absent facade closes
+production admission. The production guard is retained; this is not evidence
+of a headset dispatch failure.
+
+Status: final source CI and packaging checks are being completed for
+installer0.3.48 / PC0.3.34 / unchanged Frame0.3.13. Headset acceptance remains
+pending. No device changes have been made.
 
 ## Evidence locations and maintenance
 
