@@ -12,18 +12,24 @@ class Consumer {
     };
     std::array<Imported,ChannelImages> images_{};
     ChannelParent channel_;MutexObserver locks_{{}};
-    std::uint64_t nextPoll_=0;
+    std::uint64_t nextPoll_=0;bool prepared_=false;
 public:
     struct Selection {ID3D11ShaderResourceView* view=nullptr;std::uint64_t lease=0;std::uint32_t scenePid=0;};
     Consumer()noexcept{channel_.create();}
     ChannelParent& channel()noexcept{return channel_;}
-    bool prepare(ID3D11Device* device)noexcept{return locks_.prepare(device);}
+    bool prepare(ID3D11Device* device)noexcept{
+        if(prepared_)return true;
+        auto* page=channel_.page();
+        if(!page||InterlockedCompareExchange(&page->bound,0,0)!=1||InterlockedCompareExchange(&page->peerReady,0,0)!=1||
+            InterlockedCompareExchange(&page->stopped,0,0))return false;
+        prepared_=locks_.prepare(device);return prepared_;
+    }
     bool nativeProducer(std::uint32_t pid)const noexcept{
         const auto* page=channel_.page();return page&&pid&&page->peerPid==pid;
     }
     void poll(ID3D11Device* device)noexcept{
         auto* page=channel_.page();const auto now=GetTickCount64();
-        if(!device||!page||now<nextPoll_||InterlockedCompareExchange(&page->stopped,0,0))return;
+        if(!device||!page||!prepare(device)||now<nextPoll_||InterlockedCompareExchange(&page->stopped,0,0))return;
         nextPoll_=now+100;
         for(unsigned i=0;i<images_.size();++i){auto& slot=images_[i];if(slot.published.load(std::memory_order_acquire))continue;
             MaskRegistration registration{};
