@@ -57,6 +57,8 @@ struct SourceAuditStatus {
         std::uint64_t rgbaBytes=0,fp16Bytes=0;
         std::uint32_t geometryReason=0,geometryPixel=0,geometryVertex=0,geometryEmpty=0;
         std::uint64_t fp16ZeroClears=0,fp16OtherClears=0;
+        std::uint32_t rootMisc=0,rootKeyed=0;
+        std::array<std::uint64_t,13> nativeSync{};
     };
     std::array<Production,4> production{};
     std::uint32_t productionStopped=0;

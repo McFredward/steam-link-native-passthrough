@@ -164,8 +164,11 @@ jobs:
           if errorlevel 1 (type build\projected-producer-padded-depth.log & exit /b 1)
           type build\projected-producer-padded-depth.log
           build\projected-producer.exe --reproject-depth >build\projected-producer-reproject-depth.log 2>&1
-          set "SFNP_RESULT=%ERRORLEVEL%"
+          if errorlevel 1 (type build\projected-producer-reproject-depth.log & exit /b 1)
           type build\projected-producer-reproject-depth.log
+          build\projected-producer.exe --dxgi-sync >build\projected-producer-dxgi-sync.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-dxgi-sync.log
           exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
@@ -184,6 +187,7 @@ jobs:
             build/projected-producer-padded.log
             build/projected-producer-padded-depth.log
             build/projected-producer-reproject-depth.log
+            build/projected-producer-dxgi-sync.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc
