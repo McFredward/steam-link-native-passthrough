@@ -137,6 +137,16 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\projected-producer-consumer.log
           exit /b %SFNP_RESULT%
+      - name: Verify production FP16 filtering with typed and typeless native storage
+        shell: cmd
+        run: |
+          build\projected-producer.exe --float >build\projected-producer-float.log 2>&1
+          if errorlevel 1 (type build\projected-producer-float.log & exit /b 1)
+          type build\projected-producer-float.log
+          build\projected-producer.exe --typeless >build\projected-producer-typeless.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-typeless.log
+          exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -148,6 +158,8 @@ jobs:
             build/projected-channel.log
             build/projected-producer.log
             build/projected-producer-consumer.log
+            build/projected-producer-float.log
+            build/projected-producer-typeless.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc

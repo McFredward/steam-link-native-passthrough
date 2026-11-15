@@ -42,6 +42,13 @@ struct SourceAuditStatus {
     // authority; observation counters must never be printed as presentations.
     std::array<SourceAlphaSample,32> sourceAlpha{};
     std::array<std::uint32_t,4> sourceAlphaErrors{},projectedAlphaStages{};
+    // Approximate producer diagnostics, never consumed as source/frame proof.
+    // Page::bytes rejects a mixed old/new diagnostic layout.
+    struct Production {
+        std::uint32_t rootFailure=0,inputFailure=0;
+        std::uint64_t rootPasses=0,pairedDraws=0;
+    };
+    std::array<Production,4> production{};
 };
 // A numerical shared handle is considered only alongside retained registry
 // generation and exact physical shape. Multiple owners remain ambiguous.
