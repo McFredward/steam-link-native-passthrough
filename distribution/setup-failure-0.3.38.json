@@ -1,0 +1,114 @@
+{
+  "actual_packaged_shader_preparation": {
+    "current": "PASS",
+    "device_access": false,
+    "log": {
+      "bytes": 97,
+      "sha256": "376c507c9b589c8c0184e6d15cf7c44849f9aab9200d5113e2e0fe3a4ba2231f"
+    },
+    "stable": "PASS"
+  },
+  "archive": {
+    "bytes": 20318662,
+    "sha256": "c61514d900ea737cda665458a3e6512bfae8eed50cd2c623024154faa8b5c055"
+  },
+  "base_archive": {
+    "bytes": 20317555,
+    "sha256": "8ffa633980fca61fae6ce2171ddcc625fcdfc60d4ab64a7826f9a3927a8a46a1"
+  },
+  "change": "Admit actual stable/current visible-geometry shader outputs; show the authored error before recovery, retain it during recovery, label rollback as a failed action, and default to Exit after failure.",
+  "component_versions": {
+    "frame": "0.3.13",
+    "pc": "0.3.24"
+  },
+  "device_actions": false,
+  "headset_verified": false,
+  "inherited_native_validation": [
+    {
+      "checks": [
+        "exact_frame_association",
+        "frame_layer_build",
+        "frame_selector_build",
+        "installer_transaction",
+        "opaque_fallback",
+        "ordinary_rgba_source",
+        "owned_coverage_gpu",
+        "pc_provider_build",
+        "startup_health_logic"
+      ],
+      "hardware_verified": false,
+      "pin": {
+        "bytes": 8747,
+        "sha256": "0c0a2d83824d034805a65b6ff215424bfb1215a4472350fa7729b5e1b44507ea"
+      }
+    }
+  ],
+  "native_artifacts": {
+    "frame_layer": {
+      "bytes": 3724368,
+      "sha256": "673f715eab0bad3d774f3cf803445e82ccd21940cb8f7b1280aba99e2d669a42"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2305536,
+      "sha256": "3f0e47fc0b75dc2620fc7b315e6eaaa8134588955cf98fe9da16b3e730985306"
+    }
+  },
+  "native_artifacts_unchanged": true,
+  "schema": "sfnp-setup-failure-candidate-v1",
+  "software_logs": {
+    "artifact-pins.log": {
+      "bytes": 100,
+      "sha256": "f3874f1bc83a634fd04abbf35e717328a24a73dc1cffe20a6972ccd456a246ac"
+    },
+    "installer.log": {
+      "bytes": 488,
+      "sha256": "ed8c516f27b2326b0e94faae21ba17665794d1ed2b41ec4a781979ed7039fd0f"
+    },
+    "native-setup.log": {
+      "bytes": 116,
+      "sha256": "f5726ef9e88ddbe4c29d8831b758a82e8b911aa30d42c518ff8c2265caca4003"
+    },
+    "package.log": {
+      "bytes": 116,
+      "sha256": "b581d9fddc7062ea7cb382a882385c3e53a5717079190767e132617a740cd265"
+    },
+    "pc-only.log": {
+      "bytes": 3927,
+      "sha256": "a4e54a8ab89553b65042fabaf88fccd243c4bca717c8b08a61baec790c26c51f"
+    },
+    "plain-ui.log": {
+      "bytes": 156,
+      "sha256": "ad97b930f072d6b28b030542f3f03dc1ce27abb29d38835968cea8a2acdf6cd8"
+    },
+    "session-log.log": {
+      "bytes": 119,
+      "sha256": "bb1cc42aa1046c1e8d19e96b12f7edd30ff3ddef107c8494ef7630cacf52dd34"
+    },
+    "textual-final.log": {
+      "bytes": 1294,
+      "sha256": "db667d64e3c180e979565e42b7042eaf2d675c6cacf5997d54b4c6cd48cdf4bb"
+    },
+    "textual-focused.log": {
+      "bytes": 101,
+      "sha256": "e0f84c94a88da034578f0887c0a2dcb40221e5d569911dd65876388f186982c9"
+    },
+    "workflow.log": {
+      "bytes": 10724,
+      "sha256": "9a0aa056656b57559cd975f739f4f3548f765a5c000ad85e9a8d02b176ee044c"
+    }
+  },
+  "source_revision": "28d8e17219442de1fd10d2820567ac933af64aef",
+  "version": "0.3.38"
+}
