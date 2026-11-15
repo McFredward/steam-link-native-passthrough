@@ -13,12 +13,14 @@ class TextureObserver {
 public:
     using Observed=void(*)(ID3D11Device*,ID3D11Texture2D*,TextureOrigin,void*)noexcept;
     using TargetObserved=void(*)(ID3D11Device*,ID3D11RenderTargetView*,void*)noexcept;
+    using DepthObserved=void(*)(ID3D11Device*,ID3D11DepthStencilState*,void*)noexcept;
     using BufferObserved=void(*)(ID3D11Device*,const D3D11_BUFFER_DESC*,const D3D11_SUBRESOURCE_DATA*,ID3D11Buffer*,void*)noexcept;
     using LayoutObserved=void(*)(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC*,UINT,const void*,SIZE_T,ID3D11InputLayout*,void*)noexcept;
 private:
     using Create=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const D3D11_TEXTURE2D_DESC*,const D3D11_SUBRESOURCE_DATA*,ID3D11Texture2D**);
     using Open=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,HANDLE,REFIID,void**);
     using Target=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,ID3D11Resource*,const D3D11_RENDER_TARGET_VIEW_DESC*,ID3D11RenderTargetView**);
+    using Depth=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const D3D11_DEPTH_STENCIL_DESC*,ID3D11DepthStencilState**);
     using Buffer=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const D3D11_BUFFER_DESC*,const D3D11_SUBRESOURCE_DATA*,ID3D11Buffer**);
     using Layout=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC*,UINT,const void*,SIZE_T,ID3D11InputLayout**);
     template<class To,class From>static To bits(From value)noexcept{
@@ -26,15 +28,15 @@ private:
     }
     struct Core {
         struct Table {void** address=nullptr;Create create=nullptr;Open open=nullptr;Target target=nullptr;
-            Buffer buffer=nullptr;Layout layout=nullptr;
+            Buffer buffer=nullptr;Layout layout=nullptr;Depth depth=nullptr;
             void* wrappedCreate=nullptr;void* wrappedOpen=nullptr;void* wrappedTarget=nullptr;
-            void* wrappedBuffer=nullptr;void* wrappedLayout=nullptr;};
+            void* wrappedBuffer=nullptr;void* wrappedLayout=nullptr;void* wrappedDepth=nullptr;};
         std::array<Table,4> tables{};
         std::array<std::atomic<ID3D11Device*>,4> devices{};
         std::array<std::atomic<Table*>,4> owners{};
         std::atomic<bool> stopped{false};bool published=false;
         Observed callback=nullptr;TargetObserved targetCallback=nullptr;void* opaque=nullptr;
-        BufferObserved bufferCallback=nullptr;LayoutObserved layoutCallback=nullptr;
+        BufferObserved bufferCallback=nullptr;LayoutObserved layoutCallback=nullptr;DepthObserved depthCallback=nullptr;
         inline static std::atomic<Core*> instance{nullptr};
         inline static thread_local unsigned companionDepth=0;
         static bool owned(const Table& table)noexcept{
@@ -42,7 +44,8 @@ private:
                 reinterpret_cast<void* volatile*>(table.address)[28]==table.wrappedOpen&&
                 (!table.wrappedTarget||reinterpret_cast<void* volatile*>(table.address)[9]==table.wrappedTarget)&&
                 (!table.wrappedBuffer||reinterpret_cast<void* volatile*>(table.address)[3]==table.wrappedBuffer)&&
-                (!table.wrappedLayout||reinterpret_cast<void* volatile*>(table.address)[11]==table.wrappedLayout);
+                (!table.wrappedLayout||reinterpret_cast<void* volatile*>(table.address)[11]==table.wrappedLayout)&&
+                (!table.wrappedDepth||reinterpret_cast<void* volatile*>(table.address)[21]==table.wrappedDepth);
         }
         bool tracked(ID3D11Device* device)const noexcept{
             for(unsigned i=0;i<devices.size();++i)if(devices[i].load(std::memory_order_acquire)==device){
@@ -107,6 +110,15 @@ private:
             }
             SetLastError(error);return result;
         }
+        template<unsigned Index>static HRESULT STDMETHODCALLTYPE depth(ID3D11Device* device,
+            const D3D11_DEPTH_STENCIL_DESC* desc,ID3D11DepthStencilState** output){
+            auto& s=*instance.load(std::memory_order_acquire);
+            const auto result=s.tables[Index].depth(device,desc,output);const DWORD error=GetLastError();
+            if(SUCCEEDED(result)&&output&&*output&&!s.stopped&&!companionDepth&&s.depthCallback&&s.tracked(device)){
+                ++companionDepth;s.depthCallback(device,*output,s.opaque);--companionDepth;
+            }
+            SetLastError(error);return result;
+        }
         // Like NativeShaders, cold device admission is externally serialized by
         // the owning controller. No mutex, allocation or I/O enters emit().
         bool prepare(ID3D11Device* device)noexcept{
@@ -128,11 +140,17 @@ private:
                 FAILED(shared->GetSharedHandle(&handle))||!handle||
                 FAILED(device->OpenSharedResource(handle,__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(opened.out())))||
                 (targetCallback&&FAILED(device->CreateRenderTargetView(opened.value,nullptr,view.out()))))return false;
+            Reference<ID3D11DepthStencilState> depthProbe;
+            if(depthCallback){D3D11_DEPTH_STENCIL_DESC desc{};desc.DepthFunc=D3D11_COMPARISON_ALWAYS;
+                desc.FrontFace.StencilFunc=desc.BackFace.StencilFunc=D3D11_COMPARISON_ALWAYS;
+                desc.FrontFace.StencilPassOp=desc.FrontFace.StencilFailOp=desc.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;
+                desc.BackFace=desc.FrontFace;
+                if(FAILED(device->CreateDepthStencilState(&desc,depthProbe.out())))return false;}
             void** address=nullptr;SIZE_T read=0;std::array<void*,29> methods{};
             if(!ReadProcessMemory(GetCurrentProcess(),device,&address,sizeof address,&read)||read!=sizeof address||!address||
                 !ReadProcessMemory(GetCurrentProcess(),address,methods.data(),sizeof methods,&read)||read!=sizeof methods||
                 !methods[5]||!methods[28]||(targetCallback&&!methods[9])||
-                (bufferCallback&&!methods[3])||(layoutCallback&&!methods[11]))return false;
+                (bufferCallback&&!methods[3])||(layoutCallback&&!methods[11])||(depthCallback&&!methods[21]))return false;
             unsigned index=0;for(;index<tables.size();++index)if(tables[index].address==address||!tables[index].address)break;
             if(index==tables.size())return false;
             auto& table=tables[index];
@@ -140,12 +158,14 @@ private:
             else{
                 DWORD previous=0;if(!writable(address,previous))return false;
                 table.address=address;table.create=bits<Create>(methods[5]);table.open=bits<Open>(methods[28]);table.target=bits<Target>(methods[9]);
-                table.buffer=bits<Buffer>(methods[3]);table.layout=bits<Layout>(methods[11]);
+                table.buffer=bits<Buffer>(methods[3]);table.layout=bits<Layout>(methods[11]);table.depth=bits<Depth>(methods[21]);
                 const std::array<void*,4> creates{{bits<void*>(&create<0>),bits<void*>(&create<1>),bits<void*>(&create<2>),bits<void*>(&create<3>)}};
                 const std::array<void*,4> opens{{bits<void*>(&open<0>),bits<void*>(&open<1>),bits<void*>(&open<2>),bits<void*>(&open<3>)}};
                 const std::array<void*,4> targets{{bits<void*>(&target<0>),bits<void*>(&target<1>),bits<void*>(&target<2>),bits<void*>(&target<3>)}};
                 const std::array<void*,4> buffers{{bits<void*>(&buffer<0>),bits<void*>(&buffer<1>),bits<void*>(&buffer<2>),bits<void*>(&buffer<3>)}};
                 const std::array<void*,4> layouts{{bits<void*>(&layout<0>),bits<void*>(&layout<1>),bits<void*>(&layout<2>),bits<void*>(&layout<3>)}};
+                const std::array<void*,4> depths{{bits<void*>(&depth<0>),bits<void*>(&depth<1>),bits<void*>(&depth<2>),bits<void*>(&depth<3>)}};
+                if(depthCallback)table.wrappedDepth=depths[index];
                 table.wrappedCreate=creates[index];table.wrappedOpen=opens[index];
                 if(targetCallback)table.wrappedTarget=targets[index];
                 if(bufferCallback)table.wrappedBuffer=buffers[index];
@@ -156,14 +176,16 @@ private:
                 const bool third=second&&(!table.wrappedTarget||InterlockedCompareExchangePointer(address+9,table.wrappedTarget,methods[9])==methods[9]);
                 const bool fourth=third&&(!table.wrappedBuffer||InterlockedCompareExchangePointer(address+3,table.wrappedBuffer,methods[3])==methods[3]);
                 const bool fifth=fourth&&(!table.wrappedLayout||InterlockedCompareExchangePointer(address+11,table.wrappedLayout,methods[11])==methods[11]);
+                const bool sixth=fifth&&(!table.wrappedDepth||InterlockedCompareExchangePointer(address+21,table.wrappedDepth,methods[21])==methods[21]);
                 DWORD ignored=0;const bool restored=VirtualProtect(address+3,26*sizeof(void*),previous,&ignored)!=FALSE;
-                if(!fifth||!restored){
+                if(!sixth||!restored){
                     DWORD undo=0;if(writable(address,undo)){
                         InterlockedCompareExchangePointer(address+5,methods[5],table.wrappedCreate);
                         InterlockedCompareExchangePointer(address+28,methods[28],table.wrappedOpen);
                         if(table.wrappedTarget)InterlockedCompareExchangePointer(address+9,methods[9],table.wrappedTarget);
                         if(table.wrappedBuffer)InterlockedCompareExchangePointer(address+3,methods[3],table.wrappedBuffer);
                         if(table.wrappedLayout)InterlockedCompareExchangePointer(address+11,methods[11],table.wrappedLayout);
+                        if(table.wrappedDepth)InterlockedCompareExchangePointer(address+21,methods[21],table.wrappedDepth);
                         VirtualProtect(address+3,26*sizeof(void*),previous,&ignored);
                     }
                     return false;
@@ -180,14 +202,15 @@ private:
                 if(table.wrappedTarget)InterlockedCompareExchangePointer(table.address+9,bits<void*>(table.target),table.wrappedTarget);
                 if(table.wrappedBuffer)InterlockedCompareExchangePointer(table.address+3,bits<void*>(table.buffer),table.wrappedBuffer);
                 if(table.wrappedLayout)InterlockedCompareExchangePointer(table.address+11,bits<void*>(table.layout),table.wrappedLayout);
+                if(table.wrappedDepth)InterlockedCompareExchangePointer(table.address+21,bits<void*>(table.depth),table.wrappedDepth);
                 DWORD ignored=0;VirtualProtect(table.address+3,26*sizeof(void*),previous,&ignored);
             }
         }
     };
     Core* core_=new(std::nothrow) Core;
 public:
-    TextureObserver(Observed callback,void* opaque,TargetObserved target=nullptr,BufferObserved buffer=nullptr,LayoutObserved layout=nullptr)noexcept{
-        if(core_){core_->callback=callback;core_->targetCallback=target;core_->bufferCallback=buffer;core_->layoutCallback=layout;core_->opaque=opaque;}
+    TextureObserver(Observed callback,void* opaque,TargetObserved target=nullptr,BufferObserved buffer=nullptr,LayoutObserved layout=nullptr,DepthObserved depth=nullptr)noexcept{
+        if(core_){core_->callback=callback;core_->targetCallback=target;core_->bufferCallback=buffer;core_->layoutCallback=layout;core_->depthCallback=depth;core_->opaque=opaque;}
     }
     TextureObserver(const TextureObserver&)=delete;TextureObserver& operator=(const TextureObserver&)=delete;
     ~TextureObserver(){if(core_){core_->stop();if(!core_->published){Core* expected=core_;Core::instance.compare_exchange_strong(expected,nullptr);delete core_;}}}

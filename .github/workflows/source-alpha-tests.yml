@@ -154,6 +154,16 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\projected-producer-pressure.log
           exit /b %SFNP_RESULT%
+      - name: Verify padded viewport ancestry and native depth-stencil comparisons on the GPU
+        shell: cmd
+        run: |
+          build\projected-producer.exe --padded >build\projected-producer-padded.log 2>&1
+          if errorlevel 1 (type build\projected-producer-padded.log & exit /b 1)
+          type build\projected-producer-padded.log
+          build\projected-producer.exe --padded-depth >build\projected-producer-padded-depth.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-padded-depth.log
+          exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -168,6 +178,8 @@ jobs:
             build/projected-producer-float.log
             build/projected-producer-typeless.log
             build/projected-producer-pressure.log
+            build/projected-producer-padded.log
+            build/projected-producer-padded-depth.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc

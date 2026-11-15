@@ -16,6 +16,7 @@ class Producer {
         Allocation scene{};
         std::uint64_t handle=0,generation=0,version=0,lease=0;
         bool valid=false,empty=false,shared=false;unsigned row=ChannelImages;
+        UINT coveredWidth=0,coveredHeight=0;
         std::array<MutexLease,8> scopes{};
         std::array<Reference<IDXGIResource>,8> sealed{};
         ImageWitness witness{};
@@ -40,7 +41,7 @@ class Producer {
             static_cast<std::uint64_t>(InterlockedCompareExchange64(&page_->sourceLease,0,0))==lease;
     }
     void revoke(ImageState& image)noexcept{
-        image.valid=image.empty=false;image.lease=0;image.scene={};image.scopes={};image.witness={};
+        image.valid=image.empty=false;image.coveredWidth=image.coveredHeight=0;image.lease=0;image.scene={};image.scopes={};image.witness={};
         if(page_&&image.row<ChannelImages)page_->witnesses[index(image)].publish({});
         for(auto& retained:image.sealed)if(retained.value){retained->Release();retained.value=nullptr;}
         if(image.version==UINT64_MAX){page_=nullptr;return;}
@@ -94,6 +95,16 @@ class Producer {
         return refuse(!sameHandle?6:!sameOwner?7:8);
     }
     const ShaderFingerprint* policies_=nullptr;const unsigned* policyBytes_=nullptr;std::size_t policyCount_=0;
+    bool boundedY(const NativeShaderDescription& program)const noexcept{
+        if(program.kind!=NativeShader::MultiViewDownscaleY)return false;
+        if(boundedPolicy_)return program.hash==*boundedPolicy_;
+        // Both reviewed native Y variants use integer SV_Position.x and clamp
+        // every t0 load row to [0,int(logical b0[0].y)-1]. Other programs have
+        // no such permission, even if their constant prefix has the same size.
+        return program.hash==shaderDigest("63faa7c4c75298a8c4f270d55a925c12af972cc23b557c823c2ba49b47de544e")||
+            program.hash==shaderDigest("19d23135a8b403887043c106fb6aa998ad666a483959a9ee97a1d76bca744e69");
+    }
+    const std::array<std::uint8_t,32>* boundedPolicy_=nullptr;
     unsigned prefix(const NativeShaderDescription& program)const noexcept{
         if(policies_){for(std::size_t i=0;i<policyCount_;++i)if(policies_[i].kind==program.kind&&policies_[i].hash==program.hash)return policyBytes_[i];return 0;}
         const auto& hash=program.hash;
@@ -110,8 +121,8 @@ class Producer {
 public:
     // An explicit compiled contract table is also used by owned WARP fixtures;
     // shipping observers always use the reviewed native default above.
-    Producer(const ShaderFingerprint* policies=nullptr,const unsigned* bytes=nullptr,std::size_t count=0)noexcept:
-        policies_(policies),policyBytes_(bytes),policyCount_(policies&&bytes&&count<=32?count:0){}
+    Producer(const ShaderFingerprint* policies=nullptr,const unsigned* bytes=nullptr,std::size_t count=0,const std::array<std::uint8_t,32>* boundedPolicy=nullptr)noexcept:
+        policies_(policies),policyBytes_(bytes),policyCount_(policies&&bytes&&count<=32?count:0),boundedPolicy_(boundedPolicy){}
     bool prepare(ID3D11Device* device,ChannelPage* page,NativeShaders& shaders,MutexObserver& locks)noexcept{
         if(device_||!device||!page)return false;
         if(!replay_.prepare(device,{kernels::Clone64.data(),kernels::Clone64.size()},
@@ -139,6 +150,7 @@ public:
             fp16ZeroClears_.load(std::memory_order_relaxed),fp16OtherClears_.load(std::memory_order_relaxed)};
     }
     Geometry& geometry()noexcept{return geometry_;}
+    void depthState(ID3D11DepthStencilState* state)noexcept{replay_.observeDepth(state);}
     // Called only on native resource creation, never from raster callbacks.
     void target(ID3D11RenderTargetView* view)noexcept{
         if(!device_||!page_||!view)return;
@@ -221,6 +233,18 @@ public:
             image->empty=image->companion.clear(context);image->valid=false;
         }
     }
+    void clearView(ID3D11DeviceContext* context,ID3D11View* view,const FLOAT* color,const D3D11_RECT* rectangles,UINT count)noexcept{
+        Reference<ID3D11Resource> resource;if(view)view->GetResource(resource.out());auto* image=find(resource.value);
+        if(!image){invalidate(resource.value);return;}
+        Reference<ID3D11RenderTargetView> target;
+        if(!view||FAILED(view->QueryInterface(__uuidof(ID3D11RenderTargetView),reinterpret_cast<void**>(target.out())))){
+            invalidate(resource.value);return;}
+        // No rectangles clears the complete actual RTV. A single enclosing
+        // rectangle is equivalent; partial or multiple regions remain unknown.
+        const bool whole=(!count&&!rectangles)||(count==1&&rectangles&&rectangles[0].left<=0&&rectangles[0].top<=0&&
+            rectangles[0].right>=LONG(image->shape.Width)&&rectangles[0].bottom>=LONG(image->shape.Height));
+        if(whole)clear(context,target.value,color);else invalidate(resource.value);
+    }
     // Called BEFORE each ordinary Draw. Companion work follows on the same
     // context before original ReleaseSync; later writes revoke the witness.
     void draw(ID3D11DeviceContext* context,Draw original,UINT count,UINT start)noexcept{
@@ -228,6 +252,9 @@ public:
         Reference<ID3D11Resource> output;if(targetView.value)targetView->GetResource(output.out());
         auto* destination=find(output.value);if(!destination)return;stage_=10;
         const bool empty=destination->empty;
+        const bool priorComplete=destination->valid&&destination->coveredWidth==destination->shape.Width&&
+            destination->coveredHeight==destination->shape.Height&&live(destination->lease)&&owned(*destination);
+        const auto priorScene=destination->scene;const auto priorLease=destination->lease;
         revoke(*destination);
         D3D11_RENDER_TARGET_VIEW_DESC actualTarget{};targetView->GetDesc(&actualTarget);
         if(fp16(destination->shape.Format)&&actualTarget.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return;
@@ -249,8 +276,13 @@ public:
         Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
         context->GSGetShader(geometry.out(),nullptr,nullptr);context->HSGetShader(hull.out(),nullptr,nullptr);context->DSGetShader(domain.out(),nullptr,nullptr);
         if(geometry.value||hull.value||domain.value)return;
-        if(!full&&!empty)return;
-        if(!full&&(kind!=NativeShader::MultiViewReprojectX||vertexKind!=NativeShader::MultiViewVertexX||count!=4||start))return;
+        UINT coveredWidth=destination->shape.Width,coveredHeight=destination->shape.Height;
+        const bool rectangle=!full&&kind==NativeShader::MultiViewDownscaleX&&fullVertex&&
+            geometry_.viewportQuad(context,count,start,destination->shape.Width,destination->shape.Height,
+                destination->shape.SampleDesc.Count,coveredWidth,coveredHeight);
+        const bool clearedReprojection=!full&&kind==NativeShader::MultiViewReprojectX&&
+            vertexKind==NativeShader::MultiViewVertexX&&count==4&&!start&&(empty||priorComplete);
+        if(!full&&!rectangle&&!clearedReprojection)return;
         stage_=12;
         Reference<ID3D11ShaderResourceView> sourceView;Reference<ID3D11Resource> source;Reference<ID3D11Texture2D> sourceTexture;
         context->PSGetShaderResources(0,1,sourceView.out());D3D11_SHADER_RESOURCE_VIEW_DESC view{};
@@ -258,12 +290,42 @@ public:
         sourceView->GetDesc(&view);sourceView->GetResource(source.out());
         if(!source.value||FAILED(source->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(sourceTexture.out()))))return;
         stage_=13;Allocation scene{};std::uint64_t lease=0;auto* input=find(source.value);
-        if(x||inner){if(!root(sourceTexture.value,view,scene,lease))return;}
+        if(x||inner){if(!root(sourceTexture.value,view,scene,lease))return;
+            if(kind==NativeShader::MultiViewReprojectX){
+                // All three reviewed native reads must belong to the same
+                // retained current source; t0 alone cannot authorize t1/t2.
+                for(UINT slot=1;slot<3;++slot){
+                    Reference<ID3D11ShaderResourceView> other;context->PSGetShaderResources(slot,1,other.out());
+                    Reference<ID3D11Resource> resource;Reference<ID3D11Texture2D> texture;
+                    D3D11_SHADER_RESOURCE_VIEW_DESC desc{};Allocation known{};std::uint64_t otherLease=0;
+                    if(!other.value){stage_=2022;return;}other->GetDesc(&desc);other->GetResource(resource.out());
+                    if(!resource.value||FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out())))||
+                        !root(texture.value,desc,known,otherLease)||otherLease!=lease||known.generation!=scene.generation||
+                        known.pid!=scene.pid||!shapeMatches(known,scene)){stage_=2022;return;}
+                }
+            }
+        }
         else {
             const unsigned failure=!input?1:!input->valid?2:!live(input->lease)?3:!owned(*input)?4:0;
             inputFailure_=failure;if(failure)return;
             scene=input->scene;lease=input->lease;
+            if(input->coveredWidth!=input->shape.Width||input->coveredHeight!=input->shape.Height){
+                std::array<float,4> words{};
+                if(!boundedY(program)){stage_=2020;return;}
+                if(!geometry_.constantPrefix(context,words.data(),sizeof words)){stage_=2031;return;}
+                if(!std::isfinite(words[1])||words[1]<1||words[1]>float(input->coveredHeight)||words[1]!=std::floor(words[1])){stage_=2032;return;}
+                if(destination->shape.Width>input->coveredWidth){stage_=2033;return;}
+            }
         }
+        const bool completeBase=empty||(priorComplete&&priorLease==lease&&priorScene.generation==scene.generation&&
+            priorScene.pid==scene.pid&&shapeMatches(priorScene,scene));
+        // A tested subset draw can extend an already complete, currently owned
+        // image. Its depth/stencil comparison is replayed read-only before the
+        // ordinary draw updates the native attachment once.
+        const bool conditional=Replay::conditionalDepth(context);
+        if((conditional||clearedReprojection)&&!completeBase){stage_=2021;return;}
+        if(conditional&&!full&&!clearedReprojection){stage_=2021;return;}
+        if(completeBase){coveredWidth=destination->shape.Width;coveredHeight=destination->shape.Height;}
         stage_=14;std::array<MutexLease,8> scopes{};if(!locks_->capture(device_,scopes)||!live(lease))return;
         stage_=15;bool okay=false;
         if(x&&fp16(destination->shape.Format))
@@ -273,12 +335,13 @@ public:
         else if(inner)okay=replay_.replay(context,destination->companion,pixel.value,prefix(program),original,count,start);
         else if(resolve&&input)okay=replay_.resolve(context,destination->companion,input->companion,pixel.value,original,count,start);
         if(!okay||!live(lease))return;
-        stage_=16;destination->valid=true;destination->scene=scene;destination->lease=lease;destination->scopes=scopes;
+        stage_=16;destination->valid=true;destination->coveredWidth=coveredWidth;destination->coveredHeight=coveredHeight;destination->scene=scene;destination->lease=lease;destination->scopes=scopes;
         pairedDraws_.fetch_add(1,std::memory_order_relaxed);
     }
     void releasing(const MutexLease& scope,std::uint64_t key)noexcept{
         if(!page_||scope.device!=device_||!scope.retained)return;
-        for(auto& image:images_)if(image.shared&&image.valid&&live(image.lease)){
+        for(auto& image:images_)if(image.shared&&image.valid&&image.coveredWidth==image.shape.Width&&
+            image.coveredHeight==image.shape.Height&&live(image.lease)){
             unsigned choice=0;
             for(;choice<image.scopes.size();++choice)if(image.scopes[choice].allocation==scope.allocation&&image.scopes[choice].epoch==scope.epoch)break;
             if(choice==image.scopes.size())continue;

@@ -8,6 +8,9 @@
 #include <d3d11_1.h>
 #include <array>
 #include <cstddef>
+#include <cstdint>
+#include <atomic>
+#include <new>
 
 namespace stream_bridge::sender::projected_alpha {
 // Our shader copies the CURRENT logical b0 prefix on the GPU. All native
@@ -116,7 +119,39 @@ class Replay {
     Reference<ID3DDeviceContextState> scratch_;
     Reference<ID3D11BlendState> alphaOnly_;
     Reference<ID3D11BlendState> fullColor_;
+    struct DepthRecord final:IUnknown {
+        inline static constexpr GUID Id{0x3125884c,0x5714,0x4399,{0xaf,0x24,0x5b,0x73,0x36,0x95,0xc2,0xaa}};
+        inline static std::atomic<unsigned> live{0};
+        std::atomic<ULONG> references{1};std::uint64_t owner=0;bool self=false;Reference<ID3D11DepthStencilState> state;
+        ~DepthRecord(){live.fetch_sub(1,std::memory_order_relaxed);}
+        HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out)override{
+            if(!out)return E_POINTER;
+            *out=nullptr;
+            if(iid!=IID_IUnknown&&iid!=Id)return E_NOINTERFACE;
+            *out=static_cast<IUnknown*>(this);AddRef();return S_OK;
+        }
+        ULONG STDMETHODCALLTYPE AddRef()override{return references.fetch_add(1,std::memory_order_relaxed)+1;}
+        ULONG STDMETHODCALLTYPE Release()override{const auto n=references.fetch_sub(1,std::memory_order_acq_rel)-1;if(!n)delete this;return n;}
+    };
+    inline static std::atomic<std::uint64_t> nextOwner_{1};
+    const std::uint64_t owner_=nextOwner_.fetch_add(1,std::memory_order_relaxed);
+    Reference<ID3D11DepthStencilState> defaultDepth_;
     bool attempted_=false,ready_=false;
+    static D3D11_DEPTH_STENCIL_DESC readOnly(D3D11_DEPTH_STENCIL_DESC value)noexcept{
+        value.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ZERO;value.StencilWriteMask=0;
+        value.FrontFace.StencilFailOp=value.FrontFace.StencilDepthFailOp=value.FrontFace.StencilPassOp=D3D11_STENCIL_OP_KEEP;
+        value.BackFace.StencilFailOp=value.BackFace.StencilDepthFailOp=value.BackFace.StencilPassOp=D3D11_STENCIL_OP_KEEP;
+        return value;
+    }
+    Reference<ID3D11DepthStencilState> depthClone(ID3D11DepthStencilState* state)noexcept{
+        Reference<ID3D11DepthStencilState> result;
+        if(!state){if(defaultDepth_.value){defaultDepth_->AddRef();result.value=defaultDepth_.value;}return result;}
+        Reference<IUnknown> unknown;UINT bytes=sizeof(IUnknown*);Reference<DepthRecord> record;
+        if(SUCCEEDED(state->GetPrivateData(DepthRecord::Id,&bytes,unknown.out()))&&bytes==sizeof(IUnknown*)&&unknown.value&&
+            SUCCEEDED(unknown->QueryInterface(DepthRecord::Id,reinterpret_cast<void**>(record.out())))&&record->owner==owner_&&(record->self||record->state.value)){
+            result.value=record->self?state:record->state.value;result->AddRef();}
+        return result;
+    }
     static bool sameDevice(ID3D11DeviceChild* child,ID3D11Device* expected)noexcept{
         if(!child)return false;
         Reference<ID3D11Device> device;child->GetDevice(device.out());
@@ -170,9 +205,38 @@ public:
         if(FAILED(device->CreateBlendState(&blend,alphaOnly_.out())))return false;
         blend.RenderTarget[0].RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;
         if(FAILED(device->CreateBlendState(&blend,fullColor_.out())))return false;
+        D3D11_DEPTH_STENCIL_DESC defaultDepth{};defaultDepth.DepthEnable=TRUE;defaultDepth.DepthFunc=D3D11_COMPARISON_LESS;
+        defaultDepth.StencilReadMask=D3D11_DEFAULT_STENCIL_READ_MASK;
+        defaultDepth.FrontFace.StencilFunc=defaultDepth.BackFace.StencilFunc=D3D11_COMPARISON_ALWAYS;
+        const auto immutableDepth=readOnly(defaultDepth);
+        if(FAILED(device->CreateDepthStencilState(&immutableDepth,defaultDepth_.out())))return false;
         device->AddRef();device_.value=device;ready_=true;return true;
     }
 
+    // Cold callback only: retain the original comparison/read mask, suppress
+    // every depth/stencil write in the companion draw. The ordinary draw still
+    // uses its original state/view once. Records die with native state objects.
+    void observeDepth(ID3D11DepthStencilState* state)noexcept{
+        if(!ready_||!owner_||!state||!sameDevice(state,device_.value)||depthClone(state).value)return;
+        if(DepthRecord::live.fetch_add(1,std::memory_order_acq_rel)>=256){DepthRecord::live.fetch_sub(1,std::memory_order_release);return;}
+        Reference<DepthRecord> record;record.value=new(std::nothrow) DepthRecord;
+        if(!record.value){DepthRecord::live.fetch_sub(1,std::memory_order_release);return;}
+        record->owner=owner_;D3D11_DEPTH_STENCIL_DESC desc{};state->GetDesc(&desc);desc=readOnly(desc);
+        if(SUCCEEDED(device_->CreateDepthStencilState(&desc,record->state.out()))){
+            // D3D11 may intern an already read-only state. Do not create an
+            // object -> private record -> same object reference cycle.
+            if(record->state.value==state){record->self=true;record->state->Release();record->state.value=nullptr;}
+            (void)state->SetPrivateDataInterface(DepthRecord::Id,record.value);
+        }
+    }
+    static bool conditionalDepth(ID3D11DeviceContext* context)noexcept{
+        Reference<ID3D11DepthStencilView> view;context->OMGetRenderTargets(0,nullptr,view.out());if(!view.value)return false;
+        Reference<ID3D11DepthStencilState> state;context->OMGetDepthStencilState(state.out(),nullptr);
+        if(!state.value)return true;
+        D3D11_DEPTH_STENCIL_DESC desc{};state->GetDesc(&desc);
+        return (desc.DepthEnable&&desc.DepthFunc!=D3D11_COMPARISON_ALWAYS)||
+            (desc.StencilEnable&&(desc.FrontFace.StencilFunc!=D3D11_COMPARISON_ALWAYS||desc.BackFace.StencilFunc!=D3D11_COMPARISON_ALWAYS));
+    }
     bool replay(ID3D11DeviceContext* context,const Image& image,
         ID3D11PixelShader* reviewedBoundProgram,unsigned logicalConstantBytes,
         Draw originalDraw,UINT vertices,UINT firstVertex)noexcept{
@@ -216,7 +280,10 @@ private:
             decltype(targets)& refs;
             ~Targets(){for(auto* value:refs)if(value)value->Release();}
         } releaseTargets{targets};
-        if(!targets[0]||depth.value)return false;
+        if(!targets[0])return false;
+        Reference<ID3D11DepthStencilState> originalDepth,companionDepth;UINT stencilRef=0;
+        if(depth.value){context->OMGetDepthStencilState(originalDepth.out(),&stencilRef);auto clone=depthClone(originalDepth.value);companionDepth.value=clone.value;clone.value=nullptr;
+            if(!companionDepth.value)return false;}
         for(unsigned i=1;i<targets.size();++i)if(targets[i])return false;
         // Preserve every native UAV binding. The supported native contract has
         // no UAVs; reject all public output slots before changing OM state.
@@ -291,10 +358,12 @@ private:
             context->PSSetConstantBuffers(constantSlot,1,&clone->constant.value);
         }
         if(replacement)context->PSSetShaderResources(0,1,&replacement->source_.value);
-        context->OMSetRenderTargets(1,&companion,nullptr);
+        context->OMSetRenderTargets(1,&companion,depth.value);
+        if(depth.value)context->OMSetDepthStencilState(companionDepth.value,stencilRef);
         context->OMSetBlendState(intermediatePass?fullColor_.value:alphaOnly_.value,nullptr,samples);
         originalDraw(context,vertices,firstVertex);
-        context->OMSetRenderTargets(1,targets.data(),nullptr);
+        context->OMSetRenderTargets(1,targets.data(),depth.value);
+        if(depth.value)context->OMSetDepthStencilState(originalDepth.value,stencilRef);
         context->OMSetBlendState(blend.value,factors,samples);
         if(clone){context->PSSetConstantBuffers(constantSlot,1,&original.value);
             actual->PSSetConstantBuffers1(constantSlot,1,&original.value,&offset,&count);}

@@ -20,6 +20,13 @@ class Geometry {
         std::array<std::uint8_t,4096> bytes{};UINT size=0;
         std::uint64_t epoch=0;bool valid=false,immutable=false;void* mapped=nullptr;
     };
+    struct Constants {
+        inline static constexpr GUID Id{0x46b562ac,0xcc85,0x462b,{0x8a,0x65,0xb5,0x19,0x2e,0x36,0xf3,0xa4}};
+        inline static std::atomic<unsigned> live{0};
+        static constexpr unsigned Limit=128;
+        std::array<std::uint8_t,65536> bytes{};UINT size=0;
+        std::uint64_t epoch=0;bool valid=false;void* mapped=nullptr;
+    };
     struct Layout {
         inline static constexpr GUID Id{0x018eb540,0x92d1,0x4610,{0xa6,0xc5,0x81,0x43,0x7e,0x6b,0x32,0x20}};
         inline static std::atomic<unsigned> live{0};
@@ -93,6 +100,12 @@ class Geometry {
 public:
     Geometry()=default;Geometry(const Geometry&)=delete;Geometry& operator=(const Geometry&)=delete;
     void buffer(const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* initial,ID3D11Buffer* object)noexcept{
+        if(desc&&object&&(desc->BindFlags&D3D11_BIND_CONSTANT_BUFFER)&&desc->ByteWidth&&desc->ByteWidth<=65536&&!get<Constants>(object).value){
+            auto record=create<Constants>();if(record.value){auto& data=record->data;data.size=desc->ByteWidth;
+                data.valid=initial&&initial->pSysMem;data.epoch=writeEpoch_;
+                if(data.valid)std::memcpy(data.bytes.data(),initial->pSysMem,data.size);
+                (void)object->SetPrivateDataInterface(Constants::Id,record.value);}
+        }
         if(!desc||!object||!(desc->BindFlags&D3D11_BIND_VERTEX_BUFFER)||desc->ByteWidth<32||desc->ByteWidth>4096)return;
         if(get<Buffer>(object).value)return;
         auto record=create<Buffer>();if(!record.value)return;
@@ -138,18 +151,48 @@ public:
     }
     void beginMap(ID3D11Resource* resource,void* pointer)noexcept{
         auto record=get<Buffer>(resource);if(record.value){record->data.valid=false;record->data.mapped=pointer;}
+        auto constants=get<Constants>(resource);if(constants.value){constants->data.valid=false;constants->data.mapped=pointer;}
     }
     void beforeUnmap(ID3D11Resource* resource)noexcept{
-        auto record=get<Buffer>(resource);if(!record.value)return;auto& data=record->data;
-        if(data.mapped){std::memcpy(data.bytes.data(),data.mapped,data.size);data.mapped=nullptr;data.valid=true;data.epoch=writeEpoch_;}
+        const auto finish=[this](auto& record)noexcept{if(!record.value)return;auto& data=record->data;
+            if(data.mapped){std::memcpy(data.bytes.data(),data.mapped,data.size);data.mapped=nullptr;data.valid=true;data.epoch=writeEpoch_;}};
+        auto record=get<Buffer>(resource);finish(record);auto constants=get<Constants>(resource);finish(constants);
     }
     void update(ID3D11Resource* resource,const void* bytes)noexcept{
-        auto record=get<Buffer>(resource);if(!record.value)return;auto& data=record->data;
-        data.valid=bytes!=nullptr;if(bytes)std::memcpy(data.bytes.data(),bytes,data.size);data.mapped=nullptr;data.epoch=writeEpoch_;
+        const auto update=[this,bytes](auto& record)noexcept{if(!record.value)return;auto& data=record->data;
+            data.valid=bytes!=nullptr;if(bytes)std::memcpy(data.bytes.data(),bytes,data.size);data.mapped=nullptr;data.epoch=writeEpoch_;};
+        auto record=get<Buffer>(resource);update(record);auto constants=get<Constants>(resource);update(constants);
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
         if(!resource){if(writeEpoch_)++writeEpoch_;return;}
         auto record=get<Buffer>(resource);if(record.value){record->data.valid=false;record->data.mapped=nullptr;}
+        auto constants=get<Constants>(resource);if(constants.value){constants->data.valid=false;constants->data.mapped=nullptr;}
+    }
+    // Current logical public b0 range only. No GPU readback or guessed native
+    // constant offsets; unknown, copied, UAV-written or stale bytes refuse.
+    bool constantPrefix(ID3D11DeviceContext* context,void* output,UINT bytes)noexcept{
+        if(!context||!output||!bytes||bytes>80)return false;
+        Reference<ID3D11DeviceContext1> extended;
+        if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))))return false;
+        Reference<ID3D11Buffer> buffer;UINT offset=0,count=0;
+        extended->PSGetConstantBuffers1(0,1,buffer.out(),&offset,&count);
+        auto record=get<Constants>(buffer.value);if(!record.value)return false;const auto& data=record->data;
+        if(!data.valid||!writeEpoch_||data.epoch!=writeEpoch_||offset>data.size/16||count<((bytes+15)/16)||bytes>data.size-offset*16)return false;
+        std::memcpy(output,data.bytes.data()+offset*16,bytes);return true;
+    }
+    // Return a completely drawn integer viewport inside a larger allocation.
+    // This establishes only that rectangle, never the untouched padding.
+    bool viewportQuad(ID3D11DeviceContext* context,UINT count,UINT start,UINT width,UINT height,UINT samples,
+        UINT& coveredWidth,UINT& coveredHeight)noexcept{
+        if(!context)return false;
+        std::array<D3D11_VIEWPORT,D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> values{};
+        UINT n=UINT(values.size());context->RSGetViewports(&n,values.data());const auto& v=values[0];
+        if(n!=1||v.TopLeftX||v.TopLeftY||!std::isfinite(v.Width)||!std::isfinite(v.Height)||
+            v.Width<1||v.Height<1||v.Width>float(width)||v.Height>float(height)||
+            v.Width!=std::floor(v.Width)||v.Height!=std::floor(v.Height))return false;
+        const UINT w=UINT(v.Width),h=UINT(v.Height);
+        if(!fullUnitQuad(context,count,start,w,h,samples))return false;
+        coveredWidth=w;coveredHeight=h;return true;
     }
     // Caller separately recognizes a VS whose clip position is (2*input.xy-1,
     // 0,1), and a PS without discard. Reproject-X is NOT such a full-height VS.
@@ -197,7 +240,8 @@ public:
             corners|=bit;
         }
         if(corners!=15||points[1][0]==points[2][0]||points[1][1]==points[2][1])return refuse(11);
-        UINT viewports=1;D3D11_VIEWPORT viewport{};context->RSGetViewports(&viewports,&viewport);
+        std::array<D3D11_VIEWPORT,D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewportArray{};
+        UINT viewports=UINT(viewportArray.size());context->RSGetViewports(&viewports,viewportArray.data());const auto& viewport=viewportArray[0];
         if(viewports!=1||viewport.TopLeftX||viewport.TopLeftY||viewport.Width!=float(width)||viewport.Height!=float(height)||
             viewport.MinDepth!=0||viewport.MaxDepth!=1)return refuse(12);
         Reference<ID3D11RasterizerState> raster;context->RSGetState(raster.out());
