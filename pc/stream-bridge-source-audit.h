@@ -20,6 +20,9 @@ struct SourceAuditSample {
     std::uint32_t shader=0,slot=0,pid=0,width=0,height=0,format=0;
     std::uint32_t arraySize=0,samples=0,view=0,viewFormat=0,ownerMatches=0;
     std::uint32_t outputWidth=0,outputHeight=0,outputFormat=0;
+    // Public native target descriptor only, never image/frame authority:
+    // mips, arrays, samples, bind flags, usage, CPU flags, misc, RTV format/dim.
+    std::array<std::uint32_t,9> outputDescription{};
     std::uint32_t command=0,count=0,instances=0,start=0,firstInstance=0,argumentOffset=0;
     std::int32_t baseVertex=0;
     std::uint32_t vertexKind=0,programHashValid=0,programLinked=0;
@@ -47,6 +50,7 @@ struct SourceAuditStatus {
     struct Production {
         std::uint32_t rootFailure=0,inputFailure=0;
         std::uint64_t rootPasses=0,pairedDraws=0;
+        std::uint32_t fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
     };
     std::array<Production,4> production{};
 };

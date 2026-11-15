@@ -23,6 +23,7 @@ class Producer {
     std::array<ImageState,ChannelImages> images_{};
     std::atomic<unsigned> stage_{0},rootFailure_{0},inputFailure_{0};
     std::atomic<std::uint64_t> rootPasses_{0},pairedDraws_{0};
+    std::atomic<unsigned> fp16Calls_{0},fp16Prepared_{0},fp16Refusal_{0};
     ChannelPage* page_=nullptr;ID3D11Device* device_=nullptr;
     Replay replay_;Geometry geometry_;NativeShaders* shaders_=nullptr;MutexObserver* locks_=nullptr;
     std::uint64_t nextGeneration_=1;UINT uavSlots_=D3D11_PS_CS_UAV_REGISTER_COUNT;
@@ -119,42 +120,51 @@ public:
         stage_=1;return true;
     }
     unsigned stage()const noexcept{return stage_.load(std::memory_order_relaxed);}
-    struct Diagnostics {unsigned rootFailure=0,inputFailure=0;std::uint64_t rootPasses=0,pairedDraws=0;};
+    struct Diagnostics {
+        unsigned rootFailure=0,inputFailure=0;std::uint64_t rootPasses=0,pairedDraws=0;
+        unsigned fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
+    };
     Diagnostics diagnostics()const noexcept{
         return {rootFailure_.load(std::memory_order_relaxed),inputFailure_.load(std::memory_order_relaxed),
-            rootPasses_.load(std::memory_order_relaxed),pairedDraws_.load(std::memory_order_relaxed)};
+            rootPasses_.load(std::memory_order_relaxed),pairedDraws_.load(std::memory_order_relaxed),
+            fp16Calls_.load(std::memory_order_relaxed),fp16Prepared_.load(std::memory_order_relaxed),fp16Refusal_.load(std::memory_order_relaxed)};
     }
     Geometry& geometry()noexcept{return geometry_;}
     // Called only on native resource creation, never from raster callbacks.
     void target(ID3D11RenderTargetView* view)noexcept{
         if(!device_||!page_||!view)return;
         Reference<ID3D11Resource> resource;Reference<ID3D11Texture2D> texture;view->GetResource(resource.out());
-        if(!resource.value||FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out())))||find(resource.value))return;
+        if(!resource.value||FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return;
         D3D11_RENDER_TARGET_VIEW_DESC targetDesc{};view->GetDesc(&targetDesc);
         D3D11_TEXTURE2D_DESC desc{};texture->GetDesc(&desc);
-        if(desc.MipLevels!=1||desc.ArraySize!=1||desc.Usage!=D3D11_USAGE_DEFAULT||desc.CPUAccessFlags||
-            !(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE)||desc.BindFlags&D3D11_BIND_UNORDERED_ACCESS||
-            (desc.SampleDesc.Count!=1&&desc.SampleDesc.Count!=4)||desc.Width<32||desc.Height<32)return;
         // Native FP16 storage can be typeless. Its actual FLOAT RTV, not the
         // storage token alone, establishes the typed interpretation.
         const bool floating=fp16(desc.Format);
+        if(floating)fp16Calls_.fetch_add(1,std::memory_order_relaxed);
+        const auto refuse=[this,floating](unsigned reason)noexcept{if(floating)fp16Refusal_=reason;};
+        if(find(resource.value)){if(floating)fp16Refusal_=0;return;}
+        if(desc.MipLevels!=1||desc.ArraySize!=1||desc.Usage!=D3D11_USAGE_DEFAULT||desc.CPUAccessFlags){refuse(2);return;}
+        if(!(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE)){refuse(3);return;}
+        if(desc.BindFlags&D3D11_BIND_UNORDERED_ACCESS){refuse(4);return;}
+        if((desc.SampleDesc.Count!=1&&desc.SampleDesc.Count!=4)||desc.Width<32||desc.Height<32){refuse(5);return;}
         const bool rgba=desc.Format==DXGI_FORMAT_R8G8B8A8_TYPELESS||desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM||
             desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        if((!floating&&!rgba)||(floating&&(desc.SampleDesc.Count!=1||targetDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)))return;
-        if(targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D&&targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS)return;
+        if((!floating&&!rgba)||(floating&&(desc.SampleDesc.Count!=1||targetDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))){refuse(6);return;}
+        if(targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D&&targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS){refuse(7);return;}
         const auto bytes=std::uint64_t(desc.Width)*desc.Height*desc.SampleDesc.Count*(floating?8:4);
         for(auto& image:images_)if(!image.native.value){
             const auto retained=InterlockedCompareExchange64(&page_->companionBytes,0,0);
             if(retained<0||std::uint64_t(retained)>Budget||bytes>Budget-std::uint64_t(retained)||
-                InterlockedCompareExchange64(&page_->companionBytes,retained+LONG64(bytes),retained)!=retained)return;
+                InterlockedCompareExchange64(&page_->companionBytes,retained+LONG64(bytes),retained)!=retained){refuse(8);return;}
             Allocation native{};const bool shared=allocation(texture.value,native)&&desc.SampleDesc.Count==1&&!floating;
             if(!image.companion.prepare(device_,desc.Width,desc.Height,shared,desc.SampleDesc.Count,desc.SampleDesc.Quality,
                 floating?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM)){
-                image.companion.reset();InterlockedExchangeAdd64(&page_->companionBytes,-LONG64(bytes));return;}
+                image.companion.reset();InterlockedExchangeAdd64(&page_->companionBytes,-LONG64(bytes));refuse(9);return;}
             Reference<ID3D11DeviceContext> context;device_->GetImmediateContext(context.out());
-            if(!image.companion.clear(context.value))return;
+            if(!image.companion.clear(context.value)){refuse(10);return;}
             image.native.value=texture.value;texture.value=nullptr;image.shape=desc;image.shared=shared;
             image.generation=nextGeneration_++;stage_=2;
+            if(floating){fp16Prepared_.fetch_add(1,std::memory_order_relaxed);fp16Refusal_=0;}
             if(shared){
                 const auto row=InterlockedIncrement(&page_->nextImageSlot)-1;
                 if(row<0||unsigned(row)>=ChannelImages){image.shared=false;return;}
@@ -165,6 +175,7 @@ public:
                 page_->registrations[index(image)].publish(registration);}
             return;
         }
+        refuse(11);
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
         geometry_.invalidate(resource);
