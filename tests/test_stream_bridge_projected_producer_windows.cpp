@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-projected-alpha-producer.h"
+#include "pc/stream-bridge-projected-alpha-scene-capture.h"
 #include "pc/stream-bridge-projected-alpha-consumer.h"
 #include "pc/stream-bridge-projected-alpha-textures.h"
 #include <cstdio>
@@ -554,6 +555,22 @@ void nativeMrtControl(){
     const std::array<const char*,6> names{{"sceneNative","sceneReference","sceneCapture","resolveNative","resolveReference","resolveCapture"}};
     for(unsigned i=0;i<names.size();++i){auto code=compileCapture(names[i]);
         check(SUCCEEDED(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,programs[i].out())),"owned native/reference/augmented pixel programs");}
+    // Exercise the bounded cold bytecode derivation, not just a hand-authored
+    // paired shader. Original executable instructions and constants stay intact.
+    auto originalScene=compileCapture("sceneNative");std::vector<std::uint8_t> augmented;
+    check(scene_capture::derive(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),augmented),"cold original-scene bytecode derivation");
+    programs[2]->Release();programs[2].value=nullptr;
+    check(SUCCEEDED(device->CreatePixelShader(augmented.data(),augmented.size(),nullptr,programs[2].out())),"actual Windows validation accepts the derived MRT scene program");
+    Reference<ID3D11ShaderReflection> derivedReflection;D3D11_SHADER_DESC derivedDescription{};
+    check(SUCCEEDED(D3DReflect(augmented.data(),augmented.size(),IID_ID3D11ShaderReflection,reinterpret_cast<void**>(derivedReflection.out())))&&
+        SUCCEEDED(derivedReflection->GetDesc(&derivedDescription))&&derivedDescription.OutputParameters==2,"derived original program has native and private output signatures");
+    std::vector<std::uint8_t> refused;
+    for(std::size_t n=0;n<originalScene->GetBufferSize();++n)
+        check(!scene_capture::derive(originalScene->GetBufferPointer(),n,refused)&&refused.empty(),"every truncated original container refuses derivation");
+    auto resolveOriginal=compileCapture("resolveNative");
+    check(!scene_capture::derive(resolveOriginal->GetBufferPointer(),resolveOriginal->GetBufferSize(),refused)&&refused.empty(),"distinct alpha-dependent resolve cannot be mistaken for a scene-tail contract");
+    auto corrupt=augmented;corrupt[4]^=1;
+    check(!scene_capture::derive(corrupt.data(),corrupt.size(),refused)&&refused.empty(),"corrupt container checksum refuses transformation");
     auto xCode=compile("copyFp16","ps_5_0");Reference<ID3D11PixelShader> xProgram;
     check(SUCCEEDED(device->CreatePixelShader(xCode->GetBufferPointer(),xCode->GetBufferSize(),nullptr,xProgram.out())),"unchanged FP16 X program");
     struct Target {Reference<ID3D11Texture2D> image;Reference<ID3D11ShaderResourceView> source;Reference<ID3D11RenderTargetView> target;};

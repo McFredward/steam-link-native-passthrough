@@ -220,7 +220,28 @@ invalidation, actual output Present synchronization and encoder handoff remain
 to be implemented and verified. The existing production replay and stable
 ordinary-RGBA route remain unchanged. E049 is not an installer candidate.
 
-Status: local Windows/HLSL preflights and actual Windows/WARP execution pending.
+Software result: the corrected MRT control passed **60,673** checks in
+[Windows/WARP run 43758504268](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43758504268).
+The naive carrier changed **10,920 RGB bytes** in its owned negative control;
+the MRT route retained every native RGBA byte and matched true alpha, including
+MSAA and exactly-once stencil updates. The first attempt found a fixture SRV/RTV
+hazard: it sampled X before unbinding the X render target. Required nonzero and
+fractional-alpha checks prevented a vacuous all-zero pass. This was a test setup
+error, not a new diagnosis of the headset failure.
+
+A subsequent unshipped control derives the extra output from the original owned
+scene DXBC instead of relying on a separately authored paired shader. It checks
+container bounds/checksum, one original output and the exact final scene-alpha
+selection; it inserts only the private output declaration/writes and leaves
+original executable instructions in order. Runtime creation/activation on the
+compositor is still absent. The distinct resolve is refused by this derivation.
+So is reprojection with an early exit: its zero-game-alpha case needs a separate
+reviewed control rather than silently assuming that every path reaches the
+final selection. Private retained inner/Y containers match the structural
+transform; that is not native GPU execution or production activation.
+
+Status: the cold-derived-scene control is undergoing Windows/HLSL preflight and
+actual Windows/WARP execution. No new installer/native package was delivered.
 
 ## Evidence locations and maintenance
 
