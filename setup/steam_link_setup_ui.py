@@ -93,7 +93,11 @@ TEXT = {
         'bridge_untested_versions': 'Untested SteamVR software detected',
         'bridge_untested_inactive': 'Installed, inactive on this unrecognized runtime',
         'bridge_untested_installed': 'The patch files were installed. Native passthrough remains inactive where the runtime could not be verified; ordinary Steam Link is unchanged. Update to a compatible patch to enable passthrough.',
-        'bridge_partial': 'This action could not finish. Setup will try to restore the previous setup. The setup log shows the cause; log and recovery paths are listed below.',
+        'bridge_partial': 'The action failed. The cause is shown above. Setup is restoring the previous setup and checking its startup; this does not complete the requested update.',
+        'bridge_failure_title': 'Installation/update failed',
+        'bridge_failure_stage': 'Failed step: ',
+        'bridge_failure_unknown': 'This operation could not finish. See the setup log and recovery paths for diagnostic details.',
+        'bridge_failed_rolled_back': 'Installation/update failed. The previous setup was restored and verified. The requested changes were not installed. PC SteamVR stays closed.',
         'setup_log': 'Setup log: ',
         'setup_log_unavailable': 'Setup log could not be created: ',
         'recovery_pc': 'PC recovery record (if created): ',
@@ -244,7 +248,11 @@ TEXT = {
         'bridge_untested_versions': 'Ungetestete SteamVR-Software erkannt',
         'bridge_untested_inactive': 'Installiert, auf dieser unbekannten Laufzeit inaktiv',
         'bridge_untested_installed': 'Die Patch-Dateien wurden installiert. Wo die Laufzeit nicht verifiziert werden konnte, bleibt natives Passthrough inaktiv; normales Steam Link bleibt unverändert. Ein kompatibles Patch-Update kann Passthrough aktivieren.',
-        'bridge_partial': 'Diese Aktion konnte nicht abgeschlossen werden. Die Einrichtung versucht, den vorherigen Zustand wiederherzustellen. Den Grund findest du im Setup-Log; Log- und Wiederherstellungspfade stehen unten.',
+        'bridge_partial': 'Die Aktion ist fehlgeschlagen. Die Ursache steht oben. Die Einrichtung stellt den vorherigen Zustand wieder her und prüft seinen Start; das angeforderte Update ist damit nicht abgeschlossen.',
+        'bridge_failure_title': 'Installation/Update fehlgeschlagen',
+        'bridge_failure_stage': 'Fehlgeschlagener Schritt: ',
+        'bridge_failure_unknown': 'Die Aktion konnte nicht abgeschlossen werden. Diagnosedetails findest du im Setup-Log und bei den Wiederherstellungspfaden.',
+        'bridge_failed_rolled_back': 'Installation/Update fehlgeschlagen. Der vorherige Zustand wurde wiederhergestellt und geprüft. Die angeforderten Änderungen wurden nicht installiert. PC-SteamVR bleibt geschlossen.',
         'setup_log': 'Setup-Log: ',
         'setup_log_unavailable': 'Setup-Log konnte nicht erstellt werden: ',
         'recovery_pc': 'PC-Wiederherstellungsdatei (falls erstellt): ',
@@ -614,6 +622,13 @@ class Presenter:
             self._clear()
             self._paragraph(str(message)[:500])
             self._write('\n')
+
+    def operation_failed(self,stage,message,*,recovery=False):
+        self.status('bridge_failure_title',state='warning')
+        self.problem(self.text('bridge_failure_stage')+stage+'\n'+message)
+
+    def clear_failure(self):
+        pass
 
     def section(self, key):
         with self._lock:

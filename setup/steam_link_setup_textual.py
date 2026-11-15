@@ -44,6 +44,7 @@ WORDS = {
         "absent": "Not connected", "installed": "Installed", "not_installed": "Not installed",
         "connection_installed": "Patch installed", "connection_missing": "Patch not installed", "legacy_only": "Legacy patch only",
         "restored": "Previous setup restored", "removed": "Connection removed", "current": "Already up to date", "check_done": "Check complete · no changes",
+        "failed_restored": "Installation/update failed · previous setup restored",
         "installed_inactive": "Installed · passthrough inactive",
         "working": "Preparing your setup", "review": "Choose what happens next",
         "details": "Details & activity", "files": "Logs & recovery files", "empty_files": "Paths appear here when setup reports them.",
@@ -80,6 +81,7 @@ WORDS = {
         "absent": "Nicht verbunden", "installed": "Installiert", "not_installed": "Nicht installiert",
         "connection_installed": "Patch installiert", "connection_missing": "Patch nicht installiert", "legacy_only": "Nur der bisherige Patch",
         "restored": "Vorheriger Zustand wiederhergestellt", "removed": "Verbindung entfernt", "current": "Bereits aktuell", "check_done": "Prüfung fertig · nichts geändert",
+        "failed_restored": "Installation/Update fehlgeschlagen · vorheriger Stand wiederhergestellt",
         "installed_inactive": "Installiert · Passthrough inaktiv",
         "working": "Die Einrichtung wird vorbereitet", "review": "Wähle den nächsten Schritt",
         "details": "Details & Verlauf", "files": "Logs & Wiederherstellungsdateien", "empty_files": "Hier erscheinen die Pfade, sobald die Einrichtung sie meldet.",
@@ -523,6 +525,12 @@ class TextualPresenter:
         """Show only caller-vetted, public connection-failure context."""
         self._call(self.app.show_notice, _plain(message, 500), state="warning")
 
+    def operation_failed(self, stage, message, *, recovery=False):
+        self._call(self.app.show_failure, stage, _plain(message, 500), recovery)
+
+    def clear_failure(self):
+        self._call(self.app.clear_failure)
+
     def path(self, value, key="report"):
         self._call(self.app.add_path, self.text(key).strip(), _plain(value, 4096))
 
@@ -684,6 +692,8 @@ class SetupApp(App[int]):
     #notice { height: auto; padding: 1 2; border-left: thick #3c87a4; background: #112233; margin-bottom: 1; }
     #notice.warning { border-left: thick #e1aa69; background: #30261e; }
     #notice.ok { border-left: thick #75cba8; }
+    #failure { display: none; height: auto; padding: 1 2; border: solid #e1aa69; background: #30261e; color: #ffe0bc; margin-bottom: 1; }
+    #complete-title.failed { color: #e1aa69; }
     #action-area { height: auto; }
     #action-heading { height: auto; text-style: bold; margin-bottom: 1; }
     #actions { height: auto; max-height: 19; border: round #315a72; background: #101c2a; padding: 0 1; }
@@ -765,6 +775,7 @@ class SetupApp(App[int]):
         self.version_plan_prefix = ""
         self.untested_runtime_plan = ""
         self.outcome = None
+        self.failure_context = None
         self.stage_name = "pc_inventory"
         self.paths: dict[tuple[str, str], None] = {}
         self.detail_history: list[str] = []
@@ -799,6 +810,7 @@ class SetupApp(App[int]):
                 yield LoadingIndicator(id="spinner")
                 yield Static(self.words["working"], id="work-label", markup=False)
             yield Static(self.texts["setup"], id="notice", markup=False)
+            yield Static("", id="failure", markup=False)
             with Vertical(id="action-area"):
                 yield Static(self.words["review"], id="action-heading", markup=False)
                 yield OptionList(id="actions")
@@ -877,10 +889,10 @@ class SetupApp(App[int]):
     def show_notice(self, value, key="", state="info"):
         notice = self.query_one("#notice", Static)
         notice.update(_plain(value, 4096))
-        notice.set_class(state == "warning" or key in ("bridge_partial", "bridge_recovery_incomplete", "bridge_recovery_pending", "missing", "bridge_untested_installed"), "warning")
+        notice.set_class(state == "warning" or key in ("bridge_partial", "bridge_failed_rolled_back", "bridge_recovery_incomplete", "bridge_recovery_pending", "missing", "bridge_untested_installed"), "warning")
         notice.set_class(state == "ok", "ok")
         self.add_detail(value)
-        if key in ("bridge_installed", "bridge_pc_only_installed", "bridge_removed", "bridge_rolled_back", "bridge_pc_rolled_back", "bridge_current", "check_finish", "bridge_untested_installed"):
+        if key in ("bridge_installed", "bridge_pc_only_installed", "bridge_removed", "bridge_rolled_back", "bridge_pc_rolled_back", "bridge_failed_rolled_back", "bridge_current", "check_finish", "bridge_untested_installed"):
             self.outcome = key
         if key.endswith("_plan") or key in ("bridge_stop_first", "bridge_retry_ambiguous"):
             self.plan = value
@@ -889,6 +901,25 @@ class SetupApp(App[int]):
             self.query_one("#pc-status", Static).update(self.words["ready" if key == "pc_ready" else "attention"])
         if key in ("found", "receiver_ready", "receiver_changed", "pc_only"):
             self.query_one("#frame-status", Static).update(self.words[{"found": "connected", "receiver_ready": "ready", "receiver_changed": "attention", "pc_only": "absent"}[key]])
+
+    def show_failure(self, stage, message, recovery=False):
+        label = self.words.get(stage, self.words["failed"])
+        value = self.texts["bridge_failure_title"] + "\n" + self.texts["bridge_failure_stage"] + label + "\n\n" + message
+        self.add_detail(value)
+        # Keep the original cause visible throughout recovery. A deliberate
+        # retry starts a new attempt and clears this card.
+        if self.failure_context is None:
+            self.failure_context = value
+        card = self.query_one("#failure", Static)
+        card.update(self.failure_context)
+        card.display = True
+        card.scroll_visible()
+        self.query_one("#details", Collapsible).collapsed = False
+
+    def clear_failure(self):
+        self.failure_context = None
+        self.outcome = None
+        self.query_one("#failure").display = False
 
     def update_inventory(self, pc=None, frame=None, report=None):
         label=_existing_words().installer_label(lambda k:self.texts[k],report)
@@ -1003,9 +1034,8 @@ class SetupApp(App[int]):
             text.append(description, style="not bold #93adbf")
             choices.add_option(Option(text, id=action))
         choices.highlighted = actions.index(recommended) if recommended in actions else 0
-        # Inventory/review styles change the available height. Scroll only
-        # after that layout, without a second focus-triggered animation using
-        # the previous geometry and pushing the version cards out of view.
+        # Wait for review styles to settle before scrolling. Focusing with the
+        # old geometry can hide the runtime cards in a compact terminal.
         choices.focus(scroll_visible=False)
         self.call_after_refresh(choices.scroll_visible, animate=False)
 
@@ -1021,9 +1051,14 @@ class SetupApp(App[int]):
         self.query_one("#complete-area").display = True
         self.set_stage("complete")
         outcome = {"bridge_pc_only_installed": "connection_installed", "bridge_pc_rolled_back": "restored", "bridge_installed": "connection_installed", "bridge_untested_installed": "installed_inactive", "bridge_removed": "removed",
-                   "bridge_rolled_back": "restored", "bridge_current": "current", "check_finish": "check_done"}.get(self.outcome)
+                   "bridge_rolled_back": "restored", "bridge_failed_rolled_back": "failed_restored", "bridge_current": "current", "check_finish": "check_done"}.get(self.outcome)
+        if code != 0 and outcome not in ("restored", "failed_restored"):
+            outcome = None
+        if code != 0 and outcome == "restored":
+            outcome = "failed_restored"
         heading = "cancelled" if code == 130 else outcome or ("finished" if code == 0 else "failed")
         self.query_one("#complete-title", Static).update(self.words[heading])
+        self.query_one("#complete-title").set_class(code != 0, "failed")
         if code == 130:
             self.show_notice(self.words["cancelled_help"], state="warning")
         if code != 0:

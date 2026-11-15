@@ -725,7 +725,7 @@ class TextualSetupTests(unittest.IsolatedAsyncioTestCase):
             await pilot.press("right", "enter")  # Yes, original picture is usable.
             await until(pilot, lambda: app.prompt is not None and not isinstance(app.screen, UI.PictureScreen))
             self.assertEqual(ports.events.count("finished_original"), 1)
-            await pilot.press("down", "enter")  # Exit rather than repeating Update.
+            await pilot.press("enter")  # Exit is the default after a failed Update.
             await until(pilot, lambda: app.backend_finished)
             self.assertEqual(app.backend_result, 2)
         app.backend.join()
@@ -999,8 +999,42 @@ class TextualSetupTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Supported version", state)
             self.assertIn("Legacy patch only", state)
             self.assertIn("Patch not installed", state)
-            self.assertIn("Previous setup restored", str(app.query_one("#complete-title", Static).render()))
+            self.assertIn("Installation/update failed", str(app.query_one("#complete-title", Static).render()))
+            self.assertIn("previous setup restored", str(app.query_one("#complete-title", Static).render()))
             self.assertNotIn("Patch installed", str(app.query_one("#complete-title", Static).render()))
+        app.backend.join()
+
+    async def test_failure_cause_stays_visible_through_recovery_and_final_result(self):
+        ports = PicturePorts()
+        def failed_prepare(action):
+            raise ValueError("owned failure")
+        ports.prepare = failed_prepare
+        def backend():
+            presenter = UI.active_presenter()
+            ports.failure = lambda error, recovery=False: presenter.operation_failed(
+                "frame_prepare", "The locally generated shader differs from the reviewed output.", recovery=recovery)
+            return FLOW.Workflow(ports, presenter).run("update")
+        app = UI.SetupApp(backend, "de")
+        async with app.run_test(size=(80, 30)) as pilot:
+            await until(pilot, lambda: isinstance(app.screen, UI.PictureScreen))
+            # Recovery has already advanced to its picture check. The original
+            # preparation error must still be visible in the main screen.
+            self.assertIn("reviewed output", app.failure_context)
+            self.assertIn("Frame vorbereiten", app.failure_context)
+            self.assertIn("restore_files", ports.events)
+            await pilot.press("right", "enter")
+            await until(pilot, lambda: app.prompt is not None and app.action_names == ["retry", "exit"])
+            self.assertTrue(app.query_one("#failure").display)
+            self.assertIn("reviewed output", str(app.query_one("#failure", Static).render()))
+            choices = app.query_one("#actions", OptionList)
+            self.assertEqual(app.action_names[choices.highlighted], "exit")
+            await pilot.press("enter")
+            await until(pilot, lambda: app.backend_finished)
+            self.assertEqual(app.backend_result, 2)
+            title = str(app.query_one("#complete-title", Static).render())
+            self.assertIn("fehlgeschlagen", title)
+            self.assertIn("wiederhergestellt", title)
+            self.assertNotIn("Patch installiert", title)
         app.backend.join()
 
     async def test_inline_ssh_password_is_masked_preserves_spaces_and_clears_on_submit(self):
