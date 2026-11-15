@@ -366,9 +366,29 @@ An observed shared write during the original operation leaves that draw executed
 once but cannot certify a pair (`4460`); a clean subsequent operation can recover
 without resetting the session. These remain software controls, not headset proof.
 
-Status: final source CI and packaging checks are being completed for
-installer0.3.48 / PC0.3.34 / unchanged Frame0.3.13. Headset acceptance remains
-pending. No device changes have been made.
+Final single-draw controls passed in
+[Windows/WARP run43769444796](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43769444796),
+source `68ab0676c1e0943b5ccae696d37bbc9b08199090`. Each normal, reprojection and
+BGRA mode passed63 compositor-side checks; direct roots passed61. Each mode
+also passed2,933 sender-side checks. Incoming/returned native error values and
+an observed shared write during the original operation are now covered in the
+actual production controller. The previous61,578/61,719 MRT and legacy controls
+remain green.
+
+Delivery target is installer0.3.48 / PC0.3.34 / unchanged Frame0.3.13. The
+candidate changes only the PC native payload and package version metadata;
+stable setup and all Frame payload bytes are retained from0.3.47. The final
+source, software CI and artifact pins are recorded in
+`distribution/native-single-draw-0.3.48.json`. Headset acceptance remains pending.
+No device changes have been made.
+
+Next hardware test: install0.3.48 from dev, retain the existing resolution and
+Legacy settings, and start Battlemarked. Expected visible change is game
+geometry over live passthrough rather than camera-only recovery. Expected
+telemetry is mode2, nonzero admitted roots/paired draws/sealed versions, mask
+submission and a matching current Frame receipt. If it still fails, collect
+matched PC and Frame logs and locate the first refused stage before selecting
+another change. Only after Battlemarked works should Venture be tested.
 
 ## Evidence locations and maintenance
 
