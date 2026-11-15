@@ -15,7 +15,7 @@ void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){
 constexpr char ProducerFixture[]=R"(
 cbuffer Scene : register(b0) {float4 words[4];};
 Texture2D<float4> scene : register(t0);
-float4 vs(float2 uv:TEXCOORD0):SV_Position{return float4(2*uv-1,0,1);}
+float4 vs(float2 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position-1,0,1);}
 float4 ps(float4 xy:SV_Position):SV_Target{
     float4 value=scene.Load(int3(int2(xy.xy),0));
     value.rgb*=words[1].xyz;
@@ -44,6 +44,10 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
 }
 void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0");
+    Reference<ID3D11ShaderReflection> reflection;D3D11_SHADER_DESC signature{};
+    check(SUCCEEDED(D3DReflect(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),IID_ID3D11ShaderReflection,
+        reinterpret_cast<void**>(reflection.out())))&&SUCCEEDED(reflection->GetDesc(&signature))&&signature.InputParameters==2,
+        "actual owned vertex shader retains the native two-attribute input signature");
     std::array<ShaderFingerprint,2> contracts{};contracts[0].kind=NativeShader::StreamVertex;contracts[1].kind=NativeShader::MultiViewInner;
     check(dxbcFingerprint(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),contracts[0].hash)&&
         dxbcFingerprint(psCode->GetBufferPointer(),psCode->GetBufferSize(),contracts[1].hash),"owned shader contracts");
@@ -79,10 +83,13 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
         SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual observed native-model program objects");
     check(shaders.identify(vs.value)==NativeShader::StreamVertex&&shaders.identify(ps.value)==NativeShader::MultiViewInner,"actual shader observations survive cold companion preparation");
-    const D3D11_INPUT_ELEMENT_DESC element{"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0};
-    check(SUCCEEDED(device->CreateInputLayout(&element,1,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual input layout");
-    producer.geometry().layout(&element,1,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.value);
-    const std::array<float,8> points{{0,0,0,1,1,0,1,1}};D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    const D3D11_INPUT_ELEMENT_DESC elements[]{
+        {"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
+    check(SUCCEEDED(device->CreateInputLayout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual native-style position plus UV layout");
+    producer.geometry().layout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.value);
+    // Deliberately different UVs must not become position evidence.
+    const std::array<float,16> points{{0,0,7,7,0,1,7,8,1,0,8,7,1,1,8,8}};D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
     D3D11_SUBRESOURCE_DATA vertexData{points.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&vertexData,vertices.out())),"actual vertex buffer");
     producer.geometry().buffer(&buffer,&vertexData,vertices.value);
     std::array<float,16> words{};words[4]=words[5]=words[6]=1;buffer.ByteWidth=sizeof words;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
@@ -92,7 +99,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
         SUCCEEDED(native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(streamMutex.out()))),"original application and stream mutexes");
     check(sourceMutex->AcquireSync(0,0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"actual producer ownership");
     context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);context->PSSetConstantBuffers(0,1,&constants.value);
-    context->IASetInputLayout(layout.value);UINT stride=8,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    context->IASetInputLayout(layout.value);UINT stride=16,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     context->OMSetRenderTargets(1,&target.value,nullptr);context->PSSetShaderResources(0,1,&sourceView.value);
     const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
     Reference<ID3D11VertexShader> boundVertex;Reference<ID3D11RenderTargetView> boundTarget;

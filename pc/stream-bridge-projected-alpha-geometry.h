@@ -45,9 +45,20 @@ public:
         Reference<ID3D11ShaderReflection> reflection;
         if(FAILED(D3DReflect(code,bytes,IID_ID3D11ShaderReflection,reinterpret_cast<void**>(reflection.out()))))return;
         D3D11_SHADER_DESC shader{};
-        if(FAILED(reflection->GetDesc(&shader))||shader.InputParameters!=1)return;
-        D3D11_SIGNATURE_PARAMETER_DESC input{};
-        if(FAILED(reflection->GetInputParameterDesc(0,&input))||input.Register||input.Mask!=3||
+        if(FAILED(reflection->GetDesc(&shader))||!shader.InputParameters||shader.InputParameters>32)return;
+        // Reviewed native unit-quad shaders also declare a separate UV input.
+        // Only register0 determines their clip position; the original draw
+        // retains every other input. Do not confuse signature count with the
+        // position stream's format or with full-image raster coverage.
+        D3D11_SIGNATURE_PARAMETER_DESC input{};bool found=false;
+        for(UINT i=0;i<shader.InputParameters;++i){
+            D3D11_SIGNATURE_PARAMETER_DESC candidate{};
+            if(FAILED(reflection->GetInputParameterDesc(i,&candidate)))return;
+            if(candidate.Register)continue;
+            if(found)return;
+            input=candidate;found=true;
+        }
+        if(!found||input.Mask!=3||
             input.ComponentType!=D3D_REGISTER_COMPONENT_FLOAT32||input.SystemValueType!=D3D_NAME_UNDEFINED||!input.SemanticName)return;
         const D3D11_INPUT_ELEMENT_DESC* matched=nullptr;
         for(UINT i=0;i<count;++i){const auto& element=elements[i];
