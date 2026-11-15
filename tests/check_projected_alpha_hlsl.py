@@ -23,6 +23,7 @@ def main():
         ('tests/test_stream_bridge_projected_alpha_gpu.cpp', 'ResolveFixture', [('resolve', 'ps')]),
         ('tests/test_stream_bridge_projected_producer_windows.cpp', 'CaptureFixture', [
             ('sceneNative', 'ps'), ('sceneReference', 'ps'), ('sceneCapture', 'ps'),
+            ('sceneReprojectNative', 'ps'), ('sceneReprojectReference', 'ps'),
             ('resolveNative', 'ps'), ('resolveReference', 'ps'), ('resolveCapture', 'ps')]),
         ('tests/test_stream_bridge_projected_producer_windows.cpp', 'ProducerFixture', [('vs', 'vs'), ('layoutVS', 'vs'), ('ps', 'ps'), ('copyFp16', 'ps'), ('boundedY', 'ps'), ('reprojectVS', 'vs'), ('reprojectCopy', 'ps'), ('compute', 'cs'), ('outside', 'cs')]),
     ]

@@ -3,6 +3,7 @@
 #include <memory>
 struct ID3D11Device;
 struct ID3D11DeviceChild;
+struct ID3D11PixelShader;
 namespace stream_bridge::sender {
 struct NativeShaderStats {
     std::uint64_t devices=0,recognized=0,refused=0;bool factory=false;
@@ -21,7 +22,8 @@ public:
     NativeShaders(const ShaderFingerprint* contracts=nativeShaderContracts().data(),
                   std::size_t count=nativeShaderContracts().size(),
                   DeviceObserved observer=nullptr,void* opaque=nullptr,
-                  bool readOnlySingleThreaded=false,bool rememberUnknownPixels=false);
+                  bool readOnlySingleThreaded=false,bool rememberUnknownPixels=false,
+                  bool prepareProjectedCapture=false);
     ~NativeShaders();
     NativeShaders(const NativeShaders&)=delete;
     NativeShaders& operator=(const NativeShaders&)=delete;
@@ -31,6 +33,9 @@ public:
     // Optional diagnostic identity only. An unknown digest never recognizes
     // shader semantics or grants image, frame, mask or camera authority.
     bool describe(ID3D11DeviceChild*,NativeShaderDescription&)const noexcept;
+    // Cold-created derivative of this exact returned native program. Borrowed
+    // process-lifetime reference; a variant alone grants no image permission.
+    ID3D11PixelShader* captureProgram(ID3D11PixelShader*)const noexcept;
     NativeShaderStats stats()const noexcept;
     void stop()noexcept;
 private:

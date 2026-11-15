@@ -5,6 +5,7 @@
 #define NOMINMAX
 #endif
 #include "stream-bridge-sender-provider-shaders.h"
+#include "stream-bridge-projected-alpha-scene-capture.h"
 #include <d3d11.h>
 #include <atomic>
 #include <algorithm>
@@ -24,7 +25,7 @@ struct NativeShaders::Impl {
         void* wrappedVertex=nullptr;void* wrappedPixel=nullptr;bool published=false,attached=false;
     };
     struct Device {std::atomic<ID3D11Device*> object{nullptr};Table* methods=nullptr;std::atomic<bool> active{false};};
-    struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;std::atomic<bool> linked{false};};
+    struct Shader {std::atomic<IUnknown*> object{nullptr};NativeShader kind=NativeShader::Unknown;std::array<std::uint8_t,32> hash{};bool pixel=false;ID3D11PixelShader* capture=nullptr;std::atomic<bool> linked{false};};
     std::array<Table,4> tables{};std::array<Device,4> devices{};std::array<Shader,64> shaders{};
     std::array<Shader,512> unknownPixels{};
     std::atomic<std::uint64_t> unknownPixelOverflow{0};
@@ -35,7 +36,7 @@ struct NativeShaders::Impl {
     std::array<ShaderFingerprint,32> contracts{};std::size_t contractCount=0;
     std::mutex mutex;std::atomic<bool> stopped{false},published{false};
     DeviceObserved observer=nullptr;void* observerOpaque=nullptr;bool readOnlySingleThreaded=false;
-    bool rememberUnknownPixels=false;
+    bool rememberUnknownPixels=false,prepareProjectedCapture=false;
     std::atomic<std::uint64_t> deviceCount{0},recognized{0},refused{0};
     std::atomic<std::uint64_t> factoryCalls{0},factoryCreated{0},factoryRefused{0};
     void** import=nullptr;DeviceFactory originalFactory=nullptr;
@@ -61,7 +62,23 @@ struct NativeShaders::Impl {
         const auto keep=[&](auto& entries){
             for(const auto& old:entries)if(old.object.load(std::memory_order_acquire)==identity){identity->Release();return true;}
             for(auto& slot:entries)if(!slot.object.load(std::memory_order_relaxed)){
-                slot.kind=kind;slot.hash=hash;slot.pixel=pixel;slot.linked=linkage!=nullptr;slot.object.store(identity,std::memory_order_release);
+                slot.kind=kind;slot.hash=hash;slot.pixel=pixel;slot.linked=linkage!=nullptr;
+                if(prepareProjectedCapture&&pixel&&!linkage&&(kind==NativeShader::MultiViewInner||
+                    kind==NativeShader::MultiViewDownscaleY||kind==NativeShader::MultiViewReprojectY||kind==NativeShader::MultiViewResolve)){
+                    try{
+                        std::vector<std::uint8_t> augmented;
+                        const auto contract=kind==NativeShader::MultiViewResolve?projected_alpha::scene_capture::Contract::Resolve:
+                            kind==NativeShader::MultiViewReprojectY?projected_alpha::scene_capture::Contract::ReprojectScene:projected_alpha::scene_capture::Contract::Scene;
+                        // Call the original creation method directly. Do not
+                        // recurse through our observer or alter native output.
+                        if(projected_alpha::scene_capture::derive(code,size,augmented,contract)&&
+                            FAILED(owner->methods->pixel(device,augmented.data(),augmented.size(),nullptr,&slot.capture))){
+                            if(slot.capture)slot.capture->Release();
+                            slot.capture=nullptr;
+                        }
+                    }catch(...){slot.capture=nullptr;}
+                }
+                slot.object.store(identity,std::memory_order_release);
                 if(kind!=NativeShader::Unknown)++recognized;
                 return true;
             }
@@ -161,10 +178,10 @@ struct NativeShaders::Impl {
 };
 std::atomic<NativeShaders::Impl*> NativeShaders::Impl::instance{nullptr};
 NativeShaders::NativeShaders(const ShaderFingerprint* contracts,std::size_t count,
-    DeviceObserved observer,void* opaque,bool readOnlySingleThreaded,bool rememberUnknownPixels):impl_(new Impl){
+    DeviceObserved observer,void* opaque,bool readOnlySingleThreaded,bool rememberUnknownPixels,bool prepareProjectedCapture):impl_(new Impl){
     if(contracts&&count<=impl_->contracts.size()){std::copy_n(contracts,count,impl_->contracts.begin());impl_->contractCount=count;}
     impl_->observer=observer;impl_->observerOpaque=opaque;impl_->readOnlySingleThreaded=readOnlySingleThreaded;
-    impl_->rememberUnknownPixels=rememberUnknownPixels;
+    impl_->rememberUnknownPixels=rememberUnknownPixels;impl_->prepareProjectedCapture=prepareProjectedCapture;
 }
 NativeShaders::~NativeShaders(){stop();if(impl_->published)(void)impl_.release();}
 bool NativeShaders::arm(std::uintptr_t address)noexcept{
@@ -213,6 +230,17 @@ bool NativeShaders::describe(ID3D11DeviceChild* shader,NativeShaderDescription& 
         }
     }
     identity->Release();return found;
+}
+ID3D11PixelShader* NativeShaders::captureProgram(ID3D11PixelShader* shader)const noexcept{
+    if(!shader||impl_->stopped)return nullptr;
+    IUnknown* identity=nullptr;
+    if(FAILED(shader->QueryInterface(IID_IUnknown,reinterpret_cast<void**>(&identity)))||!identity)return nullptr;
+    ID3D11PixelShader* result=nullptr;
+    for(const auto& slot:impl_->shaders)if(slot.object.load(std::memory_order_acquire)==identity){
+        if(!slot.linked.load(std::memory_order_acquire))result=slot.capture;
+        break;
+    }
+    identity->Release();return result;
 }
 NativeShaderStats NativeShaders::stats()const noexcept{
     NativeShaderStats out{impl_->deviceCount.load(),impl_->recognized.load(),impl_->refused.load(),impl_->import&&!impl_->stopped};

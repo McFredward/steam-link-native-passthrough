@@ -175,8 +175,11 @@ jobs:
           if errorlevel 1 (type build\projected-producer-native-single.log & exit /b 1)
           type build\projected-producer-native-single.log
           build\projected-producer.exe --native-mrt >build\projected-producer-native-mrt.log 2>&1
-          set "SFNP_RESULT=%ERRORLEVEL%"
+          if errorlevel 1 (type build\projected-producer-native-mrt.log & exit /b 1)
           type build\projected-producer-native-mrt.log
+          build\projected-producer.exe --native-mrt-reproject >build\projected-producer-native-mrt-reproject.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-native-mrt-reproject.log
           exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
@@ -198,6 +201,7 @@ jobs:
             build/projected-producer-dxgi-sync.log
             build/projected-producer-native-single.log
             build/projected-producer-native-mrt.log
+            build/projected-producer-native-mrt-reproject.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc
