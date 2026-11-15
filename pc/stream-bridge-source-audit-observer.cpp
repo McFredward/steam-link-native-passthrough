@@ -73,6 +73,7 @@ struct Observer {
     std::array<Context,4> contexts{};
     std::array<std::atomic<ID3D11DeviceContext*>,4> activeContexts{};
     std::atomic<bool> stopped{false};std::atomic<std::uint64_t> draws{0},recognized{0},dropped{0};
+    std::atomic<std::uint64_t> productionOverlaps{0};
     std::array<std::atomic<std::uint64_t>,8> rasterCalls{};
     std::uint64_t serial=0;
     static std::atomic<Observer*> instance;
@@ -100,6 +101,7 @@ struct Observer {
             if(context.productionBusy.test_and_set(std::memory_order_acquire)){
                 // Sequential native callers may migrate between OS threads.
                 // Unsupported concurrent mutation cannot expose an old pair.
+                productionOverlaps.fetch_add(1,std::memory_order_relaxed);
                 InterlockedExchange(&productionPeer.page()->stopped,1);return {};
             }
             if(InterlockedCompareExchange(&productionPeer.page()->stopped,0,0)){
@@ -393,6 +395,8 @@ struct Observer {
         if(read(page->inventorySequence,page->inventory,fresh))inventory=fresh;
         const auto stats=shaders.stats();status.devices=stats.devices;status.shaders=stats.recognized;
         status.draws=draws.load();status.recognizedDraws=recognized.load();status.dropped=dropped.load();
+        status.productionStopped=productionPeer.page()?unsigned(InterlockedCompareExchange(&productionPeer.page()->stopped,0,0)):0;
+        status.productionOverlaps=productionOverlaps.load(std::memory_order_relaxed);
         status.streamShaderKinds=stats.streamKinds;status.unknownPixelPrograms=stats.unknownPixels;
         status.unknownPixelOverflow=stats.unknownPixelOverflow;
         status.multiViewShaderKinds=stats.multiViewKinds;

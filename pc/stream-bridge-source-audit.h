@@ -53,6 +53,8 @@ struct SourceAuditStatus {
         std::uint32_t fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
     };
     std::array<Production,4> production{};
+    std::uint32_t productionStopped=0;
+    std::uint64_t productionOverlaps=0;
 };
 // A numerical shared handle is considered only alongside retained registry
 // generation and exact physical shape. Multiple owners remain ambiguous.

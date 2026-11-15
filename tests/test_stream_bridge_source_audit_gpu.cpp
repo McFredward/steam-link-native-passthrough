@@ -38,7 +38,7 @@ void callerAdmissionControls(){
     check(migrated&&!InterlockedCompareExchange(&channel.page()->stopped,0,0),"serialized caller migration does not retire a valid device");
     {auto held=observer->production(token);check(bool(held),"original caller can resume after serialized migration");
         bool concurrent=true;std::thread other([&]{auto refused=observer->production(token);concurrent=bool(refused);});other.join();
-        check(!concurrent&&InterlockedCompareExchange(&channel.page()->stopped,0,0),"unsupported concurrent state mutation closes private admission without waiting");}
+        check(!concurrent&&InterlockedCompareExchange(&channel.page()->stopped,0,0)&&observer->productionOverlaps.load()==1,"unsupported concurrent state mutation closes private admission without waiting and records its cause");}
 }
 void dispatchControls(){
     static std::array<void*,116> storage{};auto* table=storage.data()+1;
