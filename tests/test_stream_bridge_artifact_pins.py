@@ -8,20 +8,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ArtifactPins(unittest.TestCase):
-    def test_installer_and_production_loader_admit_the_same_generated_outputs(self):
-        header = (ROOT / 'layer/stream_bridge_artifacts.h').read_text()
-        native = {}
-        for name, filename in (('Coverage', 'coverage.spv'), ('CameraOnly','camera-only.spv')):
-            size = re.search(r'\b' + name + r'Bytes=(\d+);', header)
-            digest = re.search(r'\b' + name + r'Sha256="([a-f0-9]{64})";', header)
-            self.assertIsNotNone(size)
-            self.assertIsNotNone(digest)
-            native[filename] = {'bytes': int(size[1]), 'sha256': digest[1]}
+    def test_installer_admits_both_actual_live_transform_outputs(self):
+        # The old artifact header describes rollback readers. It no longer
+        # describes what the generator and active native renderer produce.
+        header = (ROOT / 'layer/stream_bridge_coverage_transform_data.h').read_text()
         tree = ast.parse((ROOT / 'setup/stream_bridge_install.py').read_text())
-        generated = [ast.literal_eval(node.value) for node in tree.body
-                     if isinstance(node, ast.Assign) and any(
-                         isinstance(target, ast.Name) and target.id == 'GENERATED' for target in node.targets)]
-        self.assertEqual(generated, [native], 'Installed outputs and the actual native loader must share exact pins.')
+        assignments = {target.id: ast.literal_eval(node.value) for node in tree.body
+                       if isinstance(node, ast.Assign) for target in node.targets
+                       if isinstance(target, ast.Name) and target.id in ('GENERATED', 'GENERATED_CURRENT')}
+        for profile, constant in (('Stable', 'GENERATED'), ('Current', 'GENERATED_CURRENT')):
+            native = {}
+            for name, filename in (('Coverage', 'coverage.spv'), ('Camera', 'camera-only.spv')):
+                program = re.search(r'\bProgram ' + profile + name + r'\{[^\n]*Words,(\d+)u,\d+u,"([a-f0-9]{64})"\};', header)
+                self.assertIsNotNone(program)
+                native[filename] = {'bytes': int(program[1]), 'sha256': program[2]}
+            self.assertEqual(assignments[constant], native, profile)
 
     def test_product_runtime_has_no_atlas_decoder_selection(self):
         for name in ('layer/stream_bridge_renderer.cpp', 'layer/stream_bridge_process.cpp',

@@ -85,9 +85,9 @@ PROFILES = frozenset({'frame/tools/native_shader_contract.json'})
 LOG_DEFAULT = 'logging-default.conf'
 FRAME_DEFAULTS = frozenset({'frame/'+LOG_DEFAULT})
 MASK_CODEC_FILES = frozenset({'frame/libavcodec-sfnp-mask.so.62','frame/libavutil-sfnp-mask.so.60'})
-GENERATED = {'coverage.spv': {'bytes':7420,'sha256':'37602d15087deefbe8acc8bd7f53fea80f8b740bb726a25b2fe160f3ab175db3'},
+GENERATED = {'coverage.spv': {'bytes':8772,'sha256':'ead3a9d78f3cc9c98a6475585d5afd94b1f2498891e3ae8e2103397e0c03939b'},
              'camera-only.spv': {'bytes':7072,'sha256':'a8f7c2a375abb3f8d5188fdf129c00b2a2a1b13f3f3d8e7620b0a833510ea8ee'}}
-GENERATED_CURRENT = {'coverage.spv': {'bytes': 5388, 'sha256': 'c2e3be45f55545f5246a13e91be6785cba15c50cad56ecfb47eb4fe59e02c7b8'}, 'camera-only.spv': {'bytes': 4968, 'sha256': '11167e3d7b19362376af4eecc5335c203b7da5d7ca88caeefbf68e48250d7a36'}}
+GENERATED_CURRENT = {'coverage.spv': {'bytes': 6796, 'sha256': '57a9f017bbf3a2841705ee39db6846ec107b99a9bf2beb0d8a26963eb00a80da'}, 'camera-only.spv': {'bytes': 4968, 'sha256': '11167e3d7b19362376af4eecc5335c203b7da5d7ca88caeefbf68e48250d7a36'}}
 # Removal/recovery allowlist only. These files are never generated, installed or
 # selected by this version. An owned update removes them while retaining their
 # exact predecessors in the transaction so explicit Undo remains safe.
@@ -2227,7 +2227,24 @@ class Automation:
     def failure(self,error,*,recovery):
         record_failure(self.context['log'],self.e,self.context['stage'],error)
         support_paths(self.local,self.context)
-        if isinstance(error,self.e.SetupError):print(str(error),file=sys.stderr)
+        # Render authored diagnostics in the UI before recovery starts. stderr
+        # is captured as collapsed activity by the full-screen presenter.
+        try:
+            checks=fixed_checks(Path(self.e.__file__).read_bytes(),Path(__file__).read_bytes(),
+                *(Path(__file__).with_name(name+'.py').read_bytes() for name in
+                  ('steam_link_setup_pc','steam_link_setup_frame','steam_link_setup_checkpoint','steam_link_setup_workflow')))
+        except (OSError,ValueError,SyntaxError):checks={}
+        reason=failure_record(self.e,error,checks)['reason']
+        message=checks.get(reason)
+        if message is None and isinstance(error,OSError):
+            message='An operating system operation failed.'
+            if type(error.errno)is int and 0<error.errno<4096:message+=' OS error '+str(error.errno)+'.'
+        if message is None:
+            text=getattr(self.ui,'text',None)
+            message=text('bridge_failure_unknown') if text else 'The operation failed. Check the setup log and recovery paths.'
+        show=getattr(self.ui,'operation_failed',None)
+        if show:show(self.context['stage'],message,recovery=recovery)
+        else:print(message,file=sys.stderr)
 
 
 class PcOnlyAutomation(Automation):
@@ -2364,7 +2381,8 @@ def run(args,engine,local,*,input_fn=input,discover_frame=None,remote_factory=No
                 result=_run(args,engine,local,input_fn=input_fn,discover_frame=discover_frame,
                             remote_factory=remote_factory,context=context)
                 if result!=-1:
-                    if log:log.event('complete','complete',status='ok' if result==0 else 'failed')
+                    if log:log.event('complete','complete',status='ok' if result==0 else 'failed',
+                        action=context.get('operation_action'))
                     return result
             except BaseException as error:
                 record_failure(log,engine,context['stage'],error)

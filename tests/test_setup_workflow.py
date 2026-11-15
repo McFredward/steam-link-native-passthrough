@@ -25,6 +25,26 @@ class Files(fixtures.Tests):
         path=self.bundle_root/'stream-bridge-bundle.json';s.put(path,s.encoded(self.manifest),s.read(path))
         return b.Bundle(self.bundle_root,s)
 
+    def test_real_authored_failure_is_presented_before_any_restore(self):
+        ports=Ports();ui=UI();shown=[]
+        ui.operation_failed=lambda stage,message,**kw:shown.append((stage,message,ports.events[:]))
+        ui.path=lambda *a,**kw:None
+        actual=object.__new__(b.Automation)
+        actual.e=s;actual.local=self.local;actual.ui=ui
+        actual.context={'log':None,'ui':ui,'stage':'frame_prepare'}
+        ports.failure=actual.failure
+        def prepare(action):
+            ports.mark('prepare_'+action)
+            raise s.SetupError('The locally generated shader differs from the reviewed output.')
+        ports.prepare=prepare
+        self.assertEqual(flow.Workflow(ports,ui).run('update'),2)
+        self.assertEqual(len(shown),1)
+        self.assertEqual(shown[0][:2],('frame_prepare','The locally generated shader differs from the reviewed output.'))
+        self.assertNotIn('restore_files',shown[0][2])
+        self.assertIn('finished_original',ports.events)
+        self.assertIn('bridge_failed_rolled_back',ui.messages)
+        self.assertNotIn('bridge_installed',ui.messages)
+
     def test_explicit_ctrl_c_preserves_exact_real_pc_and_frame_operation_checkpoints(self):
         installer=b.LocalInstall(s,self.local);ports=Ports();ui=UI();snapshots={}
         def prepare(action):
