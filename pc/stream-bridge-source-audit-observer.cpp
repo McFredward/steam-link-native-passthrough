@@ -225,14 +225,14 @@ struct Observer {
     template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
         auto& s=*instance.load(std::memory_order_acquire); \
         const DWORD incoming=GetLastError(); \
-        auto admission=s.productionContext<Index>(ctx);bool executed=false; \
+        auto admission=s.productionContext<Index>(ctx);bool executed=false;DWORD returned=incoming; \
         if(auto* production=admission.context){OwnCommands own; \
-            if(Slot==13)executed=production->producer.draw(ctx,bits<projected_alpha::Draw>(s.contexts[Index].function(13)),callCount(Call),callStart(Call)); \
+            if(Slot==13)executed=production->producer.draw(ctx,bits<projected_alpha::Draw>(s.contexts[Index].function(13)),callCount(Call),callStart(Call),incoming); \
+            if(executed)returned=GetLastError(); \
             if(!executed)production->producer.targets(ctx); \
         } \
-        SetLastError(incoming); \
-        if(!executed)bits<decltype(&Name<Index>)>(s.contexts[Index].function(Slot)) Arguments; \
-        admission.reset(); \
+        if(executed)SetLastError(returned); \
+        else {SetLastError(incoming);bits<decltype(&Name<Index>)>(s.contexts[Index].function(Slot)) Arguments;} \
         struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error; \
         s.afterRaster<Index>(ctx,Counter,Call); \
     }

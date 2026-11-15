@@ -358,6 +358,14 @@ public-method facade and separately verifies that an absent facade closes
 production admission. The production guard is retained; this is not evidence
 of a headset dispatch failure.
 
+The corrected observer controls passed in
+[run43768080247](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43768080247).
+A final native-call check now also verifies incoming/returned Win32 error values
+through GPU binding restoration. Native admission covers diagnostic work too.
+An observed shared write during the original operation leaves that draw executed
+once but cannot certify a pair (`4460`); a clean subsequent operation can recover
+without resetting the session. These remain software controls, not headset proof.
+
 Status: final source CI and packaging checks are being completed for
 installer0.3.48 / PC0.3.34 / unchanged Frame0.3.13. Headset acceptance remains
 pending. No device changes have been made.

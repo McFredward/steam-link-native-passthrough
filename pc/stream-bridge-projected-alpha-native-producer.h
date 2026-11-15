@@ -283,7 +283,8 @@ public:
     }
     // Returns true ONLY when the original Draw has already run exactly once.
     // The facade must forward it normally on false, never run it again on true.
-    bool draw(ID3D11DeviceContext* context,Draw original,UINT count,UINT start)noexcept{
+    bool draw(ID3D11DeviceContext* context,Draw original,UINT count,UINT start,DWORD incoming=GetLastError())noexcept{
+        NativeDrawError error;
         Reference<ID3D11RenderTargetView> targetView;context->OMGetRenderTargets(1,targetView.out(),nullptr);
         Reference<ID3D11Resource> output;Reference<ID3D11Texture2D> outputTexture;if(targetView.value)targetView->GetResource(output.out());
         auto destination=get(output.value);if(!destination.value)return false;stage_=4010;
@@ -382,13 +383,18 @@ public:
         }
         read.release();
         if(!registered&&!exportImage(*destination.value,outputTexture.value,scene,lease))return false;
+        const auto beforeMutation=destination->native.handle?InterlockedCompareExchange64(&page_->imageMutations[destination->row],0,0):0;
         bool executed=false;
         if(x&&fp16(destination->shape.Format)){
             // Native X itself writes genuine RGBA; observe its single original
             // operation rather than sampling an unsynchronised source twice.
-            executed=replay_.nativeAlpha(context,pixel.value,0,false,original,count,start);
-        }else if(!x)executed=replay_.nativeCapture(context,destination->alpha,pixel.value,capture,original,count,start,resolving?&input->alpha:nullptr);
+            executed=replay_.nativeAlpha(context,pixel.value,0,false,original,count,start,incoming);
+        }else if(!x)executed=replay_.nativeCapture(context,destination->alpha,pixel.value,capture,original,count,start,resolving?&input->alpha:nullptr,incoming);
+        if(executed)error.capture();
         if(!executed){stage_=4450;return false;}
+        if(destination->native.handle&&beforeMutation!=InterlockedCompareExchange64(&page_->imageMutations[destination->row],0,0)){
+            stage_=4460;return true; // Original already ran; an overlapping write cannot certify it.
+        }
         if(live(lease)){
             destination->valid=true;destination->empty=false;destination->epoch=epoch_;destination->scene=scene;destination->lease=lease;
             destination->width=width;destination->height=height;destination->scopes=scopes;

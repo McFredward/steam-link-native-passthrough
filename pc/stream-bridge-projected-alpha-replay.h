@@ -45,6 +45,11 @@ RWByteAddressBuffer destination : register(u0);
 })";
 struct Bytecode {const void* data=nullptr;std::size_t size=0;};
 using Draw=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT);
+struct NativeDrawError {
+    DWORD value=0;bool captured=false;
+    void capture()noexcept{value=GetLastError();captured=true;}
+    ~NativeDrawError(){if(captured)SetLastError(value);}
+};
 
 template<class T>struct Reference {
     T* value=nullptr;
@@ -244,7 +249,8 @@ public:
     // geometry is replaced. The caller must authenticate source ancestry and
     // retain exact native output/Present synchronization before exporting A.
     bool nativeAlpha(ID3D11DeviceContext* context,ID3D11PixelShader* program,
-        unsigned logicalBytes,bool resolving,Draw original,UINT vertices,UINT start)noexcept{
+        unsigned logicalBytes,bool resolving,Draw original,UINT vertices,UINT start,DWORD incoming=GetLastError())noexcept{
+        NativeDrawError error;
         if(!ready_||!context||!program||!original||!vertices||
             !sameDevice(context,device_.value)||context->GetType()!=D3D11_DEVICE_CONTEXT_IMMEDIATE||
             resolving||(logicalBytes!=0&&logicalBytes!=64&&logicalBytes!=80))return false;
@@ -271,7 +277,7 @@ public:
                 D3D11_BLEND_DESC1 current{};extended->GetDesc1(&current);if(current.RenderTarget[0].LogicOpEnable)return false;
             }
         }
-        if(!logicalBytes){original(context,vertices,start);return true;}
+        if(!logicalBytes){SetLastError(incoming);original(context,vertices,start);error.capture();return true;}
         const UINT slot=resolving?2:0;
         Reference<ID3D11Buffer> native;UINT offset=0,count=0;
         actual->PSGetConstantBuffers1(slot,1,native.out(),&offset,&count);
@@ -287,7 +293,7 @@ public:
         ID3D11UnorderedAccessView* none=nullptr;context->CSSetUnorderedAccessViews(0,1,&none,nullptr);
         context->CopyResource(clone.constant.value,clone.raw.value);actual->SwapDeviceContextState(saved.value,nullptr);
         context->PSSetConstantBuffers(slot,1,&clone.constant.value);
-        original(context,vertices,start);
+        SetLastError(incoming);original(context,vertices,start);error.capture();
         context->PSSetConstantBuffers(slot,1,&native.value);actual->PSSetConstantBuffers1(slot,1,&native.value,&offset,&count);
         return true;
     }
@@ -298,7 +304,8 @@ public:
     // here; the production ancestry/Present controller is not wired to this.
     bool nativeCapture(ID3D11DeviceContext* context,const Image& capture,
         ID3D11PixelShader* nativeProgram,ID3D11PixelShader* augmentedProgram,
-        Draw original,UINT vertices,UINT start,const Image* alphaInput=nullptr)noexcept{
+        Draw original,UINT vertices,UINT start,const Image* alphaInput=nullptr,DWORD incoming=GetLastError())noexcept{
+        NativeDrawError error;
         if(!ready_||!context||!nativeProgram||!augmentedProgram||!original||!vertices||
             !capture.target_.value||!sameDevice(context,device_.value)||
             !sameDevice(augmentedProgram,device_.value)||!sameDevice(capture.target_.value,device_.value)||
@@ -350,7 +357,7 @@ public:
         // RT0 was already unblended/full-write; default gives the same native
         // colour behaviour and enables the new RT1. Preserve sample coverage.
         context->OMSetBlendState(nullptr,nullptr,sampleMask);
-        context->PSSetShader(augmentedProgram,nullptr,0);original(context,vertices,start);
+        context->PSSetShader(augmentedProgram,nullptr,0);SetLastError(incoming);original(context,vertices,start);error.capture();
         context->PSSetShader(nativeProgram,nullptr,0);
         context->OMSetRenderTargets(1,targets.data(),depth.value);
         context->OMSetBlendState(blend.value,factor.data(),sampleMask);
