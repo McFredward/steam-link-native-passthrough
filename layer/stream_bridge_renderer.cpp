@@ -185,7 +185,7 @@ struct Renderer::Impl {
         std::atomic<std::uint64_t> maskOpaque{0},maskTransparent{0},maskMixed{0};
         std::atomic<std::uint64_t> cameraOnlyDraws{0},ordinaryDraws{0},ordinarySubmits{0};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(ExactImageRefusal::Count)> exactImageRefusals{};
-        std::atomic<std::uint64_t> exactImageMatches{0},ordinaryPaddedMatches{0},lastImageExtent{0},lastPictureExtent{0};
+        std::atomic<std::uint64_t> exactImageMatches{0},ordinaryPaddedMatches{0},lastImageExtent{0},lastPictureExtent{0},lastVisibleAllocation{0},lastVisibleOrigin{0},lastVisibleExtent{0};
         std::atomic<std::uint64_t> begins{0},draws{0},selected{0},guardAttempts{0},guardAccepted{0},guardRefused{0},opaqueSubmits{0};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(DrawRefusal::Count)> refusals{};
         std::array<std::atomic<std::uint64_t>,static_cast<std::size_t>(CollectRefusal::Count)> collectRefusals{};
@@ -211,7 +211,7 @@ struct Renderer::Impl {
         COUNT(metadata) COUNT(maskNone) COUNT(maskDecoded) COUNT(maskRejected) COUNT(uploadAccepted) COUNT(uploadRefused) COUNT(pictures)
         COUNT(maskOpaque) COUNT(maskTransparent) COUNT(maskMixed)
         COUNT(cameraOnlyDraws) COUNT(ordinaryDraws) COUNT(ordinarySubmits) COUNT(begins) COUNT(draws) COUNT(selected) COUNT(guardAttempts) COUNT(guardAccepted) COUNT(guardRefused) COUNT(opaqueSubmits)
-        COUNT(exactImageMatches) COUNT(ordinaryPaddedMatches) COUNT(lastImageExtent) COUNT(lastPictureExtent)
+        COUNT(exactImageMatches) COUNT(ordinaryPaddedMatches) COUNT(lastImageExtent) COUNT(lastPictureExtent) COUNT(lastVisibleAllocation) COUNT(lastVisibleOrigin) COUNT(lastVisibleExtent)
         COUNT(collects) COUNT(collected) COUNT(coreSubmits) COUNT(submits2) COUNT(firstNextType) COUNT(firstRefusedNextType)
         COUNT(imageCapacityRefused) COUNT(memoryCapacityRefused) COUNT(viewCapacityRefused) COUNT(descriptorCapacityRefused)
         COUNT(descriptorUntrackedWrites) COUNT(descriptorUntrackedCopies)
@@ -264,6 +264,8 @@ struct Renderer::Impl {
             descriptor(DescriptorRefusal::MissingAllocation),descriptor(DescriptorRefusal::MissingEntry),descriptor(DescriptorRefusal::InvalidEntry),descriptor(DescriptorRefusal::MissingView),descriptor(DescriptorRefusal::ViewSerial),
             miss(DrawRefusal::Camera),static_cast<unsigned long long>(s.collectRefusals[static_cast<std::size_t>(CollectRefusal::Camera)]));
         const auto collect=[&](CollectRefusal r){return static_cast<unsigned long long>(s.collectRefusals[static_cast<std::size_t>(r)]);};
+        std::fprintf(stderr,"[Steam Link Native Passthrough] decoder visible metadata: allocation=%ux%u, origin=%u,%u, visible=%ux%u; unknown=0x0; scalar diagnostics only\n",
+            std::uint32_t(s.lastVisibleAllocation>>32),std::uint32_t(s.lastVisibleAllocation),std::uint32_t(s.lastVisibleOrigin>>32),std::uint32_t(s.lastVisibleOrigin),std::uint32_t(s.lastVisibleExtent>>32),std::uint32_t(s.lastVisibleExtent));
         const auto submit=[&](SubmitRefusal r){return static_cast<unsigned long long>(s.submitRefusals[static_cast<std::size_t>(r)]);};
         std::fprintf(stderr,"[Steam Link Native Passthrough] renderer submit: core/submit2=%llu/%llu; first-pNext/refused-pNext=%u/%u; unsupported busy/bounds/shape/extension/flags=%llu/%llu/%llu/%llu/%llu; collect accepted/attempts=%llu/%llu; collect miss cb/empty/ineligible/epoch/lease/descriptor/image/memory/capacity=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu\n",
             static_cast<unsigned long long>(s.coreSubmits),static_cast<unsigned long long>(s.submits2),s.firstNextType,s.firstRefusedNextType,
@@ -391,12 +393,19 @@ struct Renderer::Impl {
     static void picture(void* owner,const LocalPicture& value) noexcept{
         auto&p=*static_cast<Impl*>(owner);try{
             if(value.metadata.lease.slot>=p.pictures.size()||!current(value))return;
+            const auto& geometry=value.metadata.lease.capture.visible;
+            p.counts.lastVisibleAllocation=geometry.known?(std::uint64_t(geometry.allocationWidth)<<32)|geometry.allocationHeight:0;
+            p.counts.lastVisibleOrigin=geometry.known?(std::uint64_t(geometry.left)<<32)|geometry.top:0;
+            p.counts.lastVisibleExtent=geometry.known?(std::uint64_t(geometry.width)<<32)|geometry.height:0;
             auto& slot=p.pictures[value.metadata.lease.slot];const auto old=std::atomic_load_explicit(&slot,std::memory_order_acquire);
             const bool samePicture=old&&old->metadata.binding==value.metadata.binding&&same(old->metadata.descriptor,value.metadata.descriptor)
                 &&old->metadata.lease.epoch==value.metadata.lease.epoch&&old->metadata.lease.sequence==value.metadata.lease.sequence&&old->ordinaryVideo==value.ordinaryVideo;
             if(samePicture)return;
             std::shared_ptr<Retention> retained;
             if(!value.ordinaryVideo){
+                std::array<float,4> mapping{{1,1,0,0}};const auto& visible=value.metadata.lease.capture.visible;
+                if(visible.known&&!visible.mapping(visible.allocationWidth,visible.allocationHeight,value.metadata.descriptor.codedWidth,value.metadata.descriptor.codedHeight,mapping))return;
+                if(!p.pool.bindGeometry({value.metadata.binding,value.metadata.descriptor},mapping))return;
                 const auto lease=p.pool.acquireScheduled({value.metadata.binding,value.metadata.descriptor});if(!lease)return;
                 try{retained=std::make_shared<Retention>(p.pool,lease);}catch(...){p.pool.releaseRecorded(lease);return;}
             }
@@ -440,7 +449,10 @@ struct Renderer::Impl {
             // Masked pictures retain equality until their UV mapping is proved.
             const bool ordinaryPadding=picture->ordinaryVideo&&coded.codedWidth&&coded.codedHeight&&
                 i->width>=coded.codedWidth&&i->height>=coded.codedHeight;
-            if(!exactExtent&&!ordinaryPadding)continue;
+            std::array<float,4> mapping{};const auto& visible=picture->metadata.lease.capture.visible;
+            const bool maskPadding=!picture->ordinaryVideo&&visible.mapping(i->width,i->height,coded.codedWidth,coded.codedHeight,mapping);
+            if(!exactExtent&&!ordinaryPadding&&!maskPadding)continue;
+            if(!picture->ordinaryVideo&&visible.known&&!maskPadding)continue;
             if(output)return refuse(ExactImageRefusal::Ambiguous);
             output=std::move(picture);
         }

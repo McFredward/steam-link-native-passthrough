@@ -41,7 +41,7 @@ bool ordinaryBuffer(const v4l2_buffer& b) noexcept {
 }
 struct DecodeProvider::Impl{
     struct Buffer{bool queried=false,mapped=false,queued=false,pending=false;std::uint32_t offset=0,length=0;std::uintptr_t address=0;};
-    struct CaptureBuffer{bool queried=false,queued=false,decoded=false;int dmabuf=-1;std::uint64_t cycle=0;std::uint32_t token=0;};
+    struct CaptureBuffer{bool queried=false,queued=false,decoded=false;int dmabuf=-1;std::uint64_t cycle=0;std::uint32_t token=0;VisibleGeometry visible{};};
     struct Device{std::uint64_t captureGeneration=0;std::uint32_t captureCount=0;bool captureConfigured=false;std::array<CaptureBuffer,MaxBuffers> capture{};int fd=-1;bool hevc=false;std::uint32_t count=0;std::uint64_t generation=0,content=0;std::array<Buffer,MaxBuffers> buffers{};};
     struct Slot{enum State{Free,Reserved,Ready}state=Free;std::uint64_t ticket=0;Observation fact{};std::array<std::uint8_t,MaxCodedBytes> bytes{};};
     mutable std::mutex mutex;std::uintptr_t base=0;Originals calls{};Reader reader{};
@@ -82,7 +82,7 @@ struct DecodeProvider::Impl{
         const auto* d=find(fact.fd);if(!d||!d->hevc||d->generation!=fact.sourcePoolGeneration
             ||d->captureGeneration!=fact.capturePoolGeneration||fact.index>=d->captureCount)return false;
         const auto& buffer=d->capture[fact.index];return buffer.queried&&buffer.decoded&&!buffer.queued
-            &&buffer.dmabuf==fact.dmabufFd&&buffer.cycle==fact.contentGeneration&&buffer.token==fact.nativeTimestampToken;
+            &&buffer.dmabuf==fact.dmabufFd&&buffer.cycle==fact.contentGeneration&&buffer.token==fact.nativeTimestampToken&&buffer.visible==fact.visible;
     }
     bool read(void* out,const void* source,std::size_t n){return reader.copy&&source&&reader.copy(out,reinterpret_cast<std::uintptr_t>(source),n,reader.context);}
     bool shape(void* source,v4l2_buffer& b,v4l2_plane& plane){return read(&b,source,sizeof b)&&ordinaryBuffer(b)&&read(&plane,b.m.planes,sizeof plane);}
@@ -90,7 +90,7 @@ struct DecodeProvider::Impl{
 const char* resetReasonName(ResetReason reason) noexcept{
     constexpr const char* names[]{"none","output-format","output-buffer-allocation","output-stream-off",
         "capture-format","capture-buffer-allocation","capture-stream-off","unsupported-output-queue",
-        "unsupported-capture-queue","output-unmap","decoder-close","capture-close","provider-stop"};
+        "unsupported-capture-queue","output-unmap","decoder-close","capture-close","provider-stop","capture-geometry"};
     const auto index=static_cast<std::size_t>(reason);return index<sizeof(names)/sizeof(*names)?names[index]:"unknown";
 }
 DecodeProvider::DecodeProvider():impl_(new Impl){}
@@ -153,6 +153,13 @@ int DecodeProvider::invokeIoctl(std::uintptr_t caller,int fd,unsigned long reque
     bool shape=false;bool captureSite=caller==impl_->base+0x3242c||caller==impl_->base+0x324a8
         ||caller==impl_->base+0x325c8||caller==impl_->base+0x310f8||caller==impl_->base+0x32a5c;
     std::uint64_t captureGeneration=0;v4l2_buffer captureBuffer{};v4l2_plane capturePlane{};bool captureShape=false;
+    // A geometry mutation on an already tracked decoder retires its old
+    // captures even if this public request has no historical literal site.
+    // Invalidation grants no new source/allocation authority.
+    if(request==VIDIOC_S_SELECTION||request==VIDIOC_S_CROP){
+        std::lock_guard<std::mutex> lock(impl_->mutex);auto* d=impl_->find(fd);
+        if(impl_->active&&d&&d->hevc){impl_->revokeCapture(*d,false,ResetReason::CaptureGeometry,true);work=true;}
+    }
     if(admitted){
         std::lock_guard<std::mutex> lock(impl_->mutex);
         auto* d=impl_->find(fd);
@@ -217,6 +224,20 @@ int DecodeProvider::invokeIoctl(std::uintptr_t caller,int fd,unsigned long reque
         }
     }
     errno=incoming;const int result=original(fd,request,argument);const int error=errno;
+    VisibleGeometry visible{};
+    if(admitted&&result==0&&captureSite&&request==VIDIOC_DQBUF){
+        // Read-only public metadata queries occur outside the provider lock.
+        // Successful DQBUF establishes that the decoder has parsed the stream.
+        // kernel.org/doc/html/latest/userspace-api/media/v4l/dev-decoder.html
+        v4l2_format actual{};actual.type=V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
+        v4l2_selection selection{};selection.type=V4L2_BUF_TYPE_VIDEO_CAPTURE;selection.target=V4L2_SEL_TGT_COMPOSE;
+        const bool formatKnown=original(fd,VIDIOC_G_FMT,&actual)==0&&actual.type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE&&actual.fmt.pix_mp.num_planes==1;
+        const bool selectionKnown=original(fd,VIDIOC_G_SELECTION,&selection)==0&&selection.type==V4L2_BUF_TYPE_VIDEO_CAPTURE&&selection.target==V4L2_SEL_TGT_COMPOSE;
+        if(formatKnown&&selectionKnown&&selection.r.left>=0&&selection.r.top>=0){
+            visible={actual.fmt.pix_mp.width,actual.fmt.pix_mp.height,unsigned(selection.r.left),unsigned(selection.r.top),selection.r.width,selection.r.height,true};
+            if(!visible.valid())visible={};
+        }
+    }
     if(admitted){
         std::lock_guard<std::mutex> lock(impl_->mutex);auto* d=impl_->find(fd);
         if(result==0&&impl_->active&&d&&d->hevc&&d->captureGeneration==captureGeneration){
@@ -246,6 +267,7 @@ int DecodeProvider::invokeIoctl(std::uintptr_t caller,int fd,unsigned long reque
                         &&actual.timestamp.tv_usec==0&&!(actual.flags&V4L2_BUF_FLAG_ERROR)){
                         b.decoded=true;b.token=static_cast<std::uint32_t>(actual.timestamp.tv_sec);
                         completed={CaptureKind::Decoded,fd,b.dmabuf,actual.index,static_cast<std::uint32_t>(actual.timestamp.tv_sec),d->generation,d->captureGeneration,b.cycle};
+                        completed.visible=visible;b.visible=visible;
                         impl_->captureEvent(completed);
                         handoff=impl_->handoff;handoffContext=impl_->handoffContext;
                         work=true;

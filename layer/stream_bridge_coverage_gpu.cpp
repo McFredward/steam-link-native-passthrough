@@ -5,6 +5,7 @@
 #include <limits>
 #include <mutex>
 #include <new>
+#include <cmath>
 
 namespace stream_bridge_coverage_gpu {
 namespace {
@@ -49,6 +50,9 @@ struct Pool::Impl {
         std::atomic<State> state{State::Free};FrameIdentity frame{};std::uint64_t generation=0;
         std::atomic<std::uint64_t> refs{0};std::atomic<bool> quarantine{false};
         std::atomic<std::uint32_t> gpuRefs{0};VkImage image{};VkDeviceMemory imageMemory{};
+        VkBuffer geometryBuffer{};VkDeviceMemory geometryMemory{};void* geometryMapped=nullptr;
+        bool geometryCoherent=false;std::atomic<bool> geometryFrozen{false};
+        std::array<float,4> geometry{{1,1,0,0}};
         VkImageView view{};VkBuffer staging{};VkDeviceMemory stagingMemory{};
         void* mapped=nullptr;std::size_t bytes=0;std::uint32_t width=0,height=0;bool coherent=false;std::atomic<bool> initializedShaderReadLayout{false};VkDescriptorSet set{};
         VkCommandBuffer copy{};VkFence uploaded{};
@@ -91,6 +95,10 @@ struct Pool::Impl {
         return UINT32_MAX;
     }
     void releaseResource(Slot&s) noexcept {
+        if(s.geometryMapped)UnmapMemory(device,s.geometryMemory);
+        if(s.geometryBuffer)DestroyBuffer(device,s.geometryBuffer,nullptr);
+        if(s.geometryMemory)FreeMemory(device,s.geometryMemory,nullptr);
+        s.geometryBuffer={};s.geometryMemory={};s.geometryMapped=nullptr;s.geometryFrozen=false;s.geometry={{1,1,0,0}};
         if(s.mapped)UnmapMemory(device,s.stagingMemory);
         if(s.view)DestroyImageView(device,s.view,nullptr);
         if(s.image)DestroyImage(device,s.image,nullptr);
@@ -139,7 +147,8 @@ struct Pool::Impl {
                 if(!s.refs.compare_exchange_strong(refs,refs+1,std::memory_order_acq_rel))continue;
                 const auto state=s.state.load(std::memory_order_acquire);
                 const bool usable=state==State::Ready||(scheduled&&(state==State::Pending||state==State::Submitting||state==State::Copying));
-                if(usable&&!s.quarantine.load(std::memory_order_acquire)&&same(s.frame,frame))return {index,refs>>16,s.set};
+                if(usable&&!s.quarantine.load(std::memory_order_acquire)&&same(s.frame,frame)){
+                    s.geometryFrozen.store(true,std::memory_order_release);return {index,refs>>16,s.set};}
                 // This claim still owns one reference, so neither the writer
                 // bit nor its generation can change until this decrement.
                 s.refs.fetch_sub(1,std::memory_order_release);break;
@@ -174,7 +183,19 @@ struct Pool::Impl {
             MapMemory(device,s.stagingMemory,0,VK_WHOLE_SIZE,0,&s.mapped)!=VK_SUCCESS)return false;
         s.bytes=bytes.size;s.width=w;s.height=h;
         s.coherent=(memory.memoryTypes[type].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)!=0;
+        buffer.size=16;buffer.usage=VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        if(CreateBuffer(device,&buffer,nullptr,&s.geometryBuffer)!=VK_SUCCESS)return false;
+        GetBufferMemoryRequirements(device,s.geometryBuffer,&req);
+        type=memoryType(req.memoryTypeBits,VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);if(type==UINT32_MAX)return false;
+        allocation.allocationSize=req.size;allocation.memoryTypeIndex=type;
+        if(AllocateMemory(device,&allocation,nullptr,&s.geometryMemory)!=VK_SUCCESS||BindBufferMemory(device,s.geometryBuffer,s.geometryMemory,0)!=VK_SUCCESS||
+            MapMemory(device,s.geometryMemory,0,VK_WHOLE_SIZE,0,&s.geometryMapped)!=VK_SUCCESS)return false;
+        s.geometryCoherent=(memory.memoryTypes[type].propertyFlags&VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)!=0;
         }
+        s.geometry={{1,1,0,0}};s.geometryFrozen=false;
+        std::memcpy(s.geometryMapped,s.geometry.data(),16);
+        if(!s.geometryCoherent){VkMappedMemoryRange geometryRange{};geometryRange.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;geometryRange.memory=s.geometryMemory;geometryRange.size=VK_WHOLE_SIZE;
+            if(FlushMappedMemoryRanges(device,1,&geometryRange)!=VK_SUCCESS)return false;}
         std::memcpy(s.mapped,bytes.data,bytes.size);
         if(!s.coherent){
             VkMappedMemoryRange range{};range.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;range.memory=s.stagingMemory;range.size=VK_WHOLE_SIZE;
@@ -184,7 +205,11 @@ struct Pool::Impl {
         VkDescriptorImageInfo imageInfo{sampler,s.view,VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
         VkWriteDescriptorSet write{};write.sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;write.dstSet=s.set;write.descriptorCount=1;
         write.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;write.pImageInfo=&imageInfo;
-        UpdateDescriptorSets(device,1,&write,0,nullptr);
+        VkDescriptorBufferInfo geometryInfo{s.geometryBuffer,0,16};
+        std::array<VkWriteDescriptorSet,2> writes{};writes[0]=write;writes[1].sType=VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[1].dstSet=s.set;writes[1].dstBinding=1;writes[1].descriptorCount=1;
+        writes[1].descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;writes[1].pBufferInfo=&geometryInfo;
+        UpdateDescriptorSets(device,UINT32_C(2),writes.data(),0,nullptr);
         }
         VkCommandBufferBeginInfo begin{};begin.sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;begin.flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
         if(BeginCommandBuffer(s.copy,&begin)!=VK_SUCCESS)return false;
@@ -212,10 +237,11 @@ bool Pool::prepare(VkDevice d,PFN_vkGetDeviceProcAddr get,const VkPhysicalDevice
     p.device=d;p.memory=m;p.GetDeviceQueue(d,family,0,&p.queue);
     if(!p.queue){p.destroyIdle();return false;}
     VkDescriptorSetLayoutBinding binding{};binding.descriptorType=VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;binding.descriptorCount=1;binding.stageFlags=VK_SHADER_STAGE_FRAGMENT_BIT;
-    VkDescriptorSetLayoutCreateInfo layout{};layout.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;layout.bindingCount=1;layout.pBindings=&binding;
+    std::array<VkDescriptorSetLayoutBinding,2> bindings{{binding,{1,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr}}};
+    VkDescriptorSetLayoutCreateInfo layout{};layout.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;layout.bindingCount=2;layout.pBindings=bindings.data();
     if(p.CreateDescriptorSetLayout(d,&layout,nullptr,&p.layout)!=VK_SUCCESS){p.destroyIdle();return false;}
-    VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,MaximumSlots};
-    VkDescriptorPoolCreateInfo pool{};pool.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;pool.maxSets=MaximumSlots;pool.poolSizeCount=1;pool.pPoolSizes=&size;
+    const std::array<VkDescriptorPoolSize,2> sizes{{{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,MaximumSlots},{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,MaximumSlots}}};
+    VkDescriptorPoolCreateInfo pool{};pool.sType=VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;pool.maxSets=MaximumSlots;pool.poolSizeCount=2;pool.pPoolSizes=sizes.data();
     if(p.CreateDescriptorPool(d,&pool,nullptr,&p.descriptors)!=VK_SUCCESS){p.destroyIdle();return false;}
     VkSamplerCreateInfo sampler{};sampler.sType=VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;sampler.magFilter=VK_FILTER_LINEAR;sampler.minFilter=VK_FILTER_LINEAR;
     sampler.mipmapMode=VK_SAMPLER_MIPMAP_MODE_NEAREST;sampler.addressModeU=sampler.addressModeV=sampler.addressModeW=VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -268,6 +294,25 @@ bool Pool::upload(const FrameIdentity&f,std::uint32_t w,std::uint32_t h,stream_b
         selected->refs.store(selected->generation<<16,std::memory_order_release);
         if(ok)++p.uploadedCount;else ++p.refusals;}
     return ok;
+}
+bool Pool::bindGeometry(const FrameIdentity& frame,const std::array<float,4>& mapping) noexcept{
+    for(float value:mapping)if(!std::isfinite(value))return false;
+    if(mapping[0]<=0||mapping[1]<=0||mapping[0]>16384||mapping[1]>16384)return false;
+    auto& p=*impl_;std::lock_guard<std::mutex> cold(p.cold);
+    for(auto& slot:p.slots)if(slot.state!=Impl::State::Free&&same(slot.frame,frame)){
+        auto refs=slot.refs.load(std::memory_order_acquire);
+        if(slot.geometryFrozen.load(std::memory_order_acquire))return slot.geometry==mapping;
+        if((refs&(Writer|RefMask))||slot.gpuRefs.load(std::memory_order_acquire)||
+            !slot.refs.compare_exchange_strong(refs,refs|Writer,std::memory_order_acq_rel))return false;
+        struct Release{Impl::Slot& slot;std::uint64_t refs;~Release(){slot.refs.store(refs,std::memory_order_release);}} release{slot,refs};
+        if(slot.geometryFrozen.load(std::memory_order_acquire))return slot.geometry==mapping;
+        if(!slot.geometryMapped||slot.quarantine.load(std::memory_order_acquire))return false;
+        std::memcpy(slot.geometryMapped,mapping.data(),16);
+        if(!slot.geometryCoherent){VkMappedMemoryRange range{};range.sType=VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;range.memory=slot.geometryMemory;range.size=VK_WHOLE_SIZE;
+            if(p.FlushMappedMemoryRanges(p.device,1,&range)!=VK_SUCCESS){slot.quarantine.store(true,std::memory_order_release);return false;}}
+        slot.geometry=mapping;slot.geometryFrozen.store(true,std::memory_order_release);return true;
+    }
+    return false;
 }
 void Pool::drainUploads(VkQueue q) noexcept {
     auto&p=*impl_;if(!p.prepared||q!=p.queue)return;

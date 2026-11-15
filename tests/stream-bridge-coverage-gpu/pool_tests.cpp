@@ -36,7 +36,7 @@ struct Fake {
     DESTROY(CommandPool,VkCommandPool) DESTROY(ImageView,VkImageView) DESTROY(Image,VkImage) DESTROY(Buffer,VkBuffer)
 #undef DESTROY
     static VkResult VKAPI_CALL allocateSets(VkDevice,const VkDescriptorSetAllocateInfo*i,VkDescriptorSet*out){for(unsigned n=0;n<i->descriptorSetCount;++n)out[n]=active->make<VkDescriptorSet>();return VK_SUCCESS;}
-    static void VKAPI_CALL update(VkDevice,std::uint32_t n,const VkWriteDescriptorSet*w,std::uint32_t,const VkCopyDescriptorSet*){++active->calls;check(n==1&&w->dstBinding==0&&w->descriptorType==VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,"set1binding0 sampled mask");}
+    static void VKAPI_CALL update(VkDevice,std::uint32_t n,const VkWriteDescriptorSet*w,std::uint32_t,const VkCopyDescriptorSet*){++active->calls;check(n==2&&w[0].dstBinding==0&&w[0].descriptorType==VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER&&w[1].dstBinding==1&&w[1].descriptorType==VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER&&w[1].pBufferInfo->range==16,"mask and immutable visible-image transform descriptors");}
     static VkResult VKAPI_CALL allocateCommands(VkDevice,const VkCommandBufferAllocateInfo*i,VkCommandBuffer*out){for(unsigned n=0;n<i->commandBufferCount;++n)out[n]=active->make<VkCommandBuffer>();return VK_SUCCESS;}
     static VkResult VKAPI_CALL resetCommand(VkCommandBuffer,VkCommandBufferResetFlags){++active->calls;return VK_SUCCESS;}
     static VkResult VKAPI_CALL begin(VkCommandBuffer,const VkCommandBufferBeginInfo*i){++active->calls;check(i->flags==VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,"copy one-time only");return VK_SUCCESS;}
@@ -175,6 +175,13 @@ void concurrentReuse(){Fixture f;warmSlots(f);std::atomic<std::uint64_t> publish
     }
     cold.join();check(!invalid&&held.load()>0,"concurrent cold slot reuse never changes metadata protected by a hot reference claim");check(!f.pool.statusCold().quarantined,"concurrent ref/writer claims retain bounded storage without quarantine");
 }
+void geometryBinding(){Fixture f;check(f.upload(1),"exact frame geometry source uploaded");
+    const std::array<float,4> first{{1.5f,1.25f,-.125f,-.25f}},second{{2,1,0,0}};
+    check(f.pool.bindGeometry(f.frame(1),first),"visible-image transform bound before recording");auto lease=f.pool.acquireScheduled(f.frame(1));
+    check(bool(lease)&&f.pool.bindGeometry(f.frame(1),first)&&!f.pool.bindGeometry(f.frame(1),second),"recorded frame geometry is immutable, including exact duplicate binding");
+    f.pool.releaseRecorded(lease);check(!f.pool.bindGeometry(f.frame(1),second),"releasing recordings cannot change an existing frame transform");
+    check(!f.pool.bindGeometry(f.frame(99),first)&&!f.pool.bindGeometry(f.frame(1),{{0,1,0,0}}),"unknown frame and invalid geometry grant no mapping");
+}
 void nonblocking(){Fixture f;check(f.upload(1),"pending for contention");f.vk.block=true;std::thread queue([&]{f.pool.drainUploads(f.vk.queue);});while(!f.vk.inside.load())std::this_thread::yield();auto start=std::chrono::steady_clock::now();check(!f.pool.acquire(f.frame(1)),"busy queue state refuses draw");check(std::chrono::steady_clock::now()-start<std::chrono::milliseconds(50),"draw never waits for queue owner");f.vk.block=false;queue.join();}
 }
-int main(){try{lifecycle();inputs();bounded();failure();scheduled();reservations();gpuReferencedReuse();submitting();concurrentReuse();nonblocking();std::cout<<"{\"checks\":"<<checks<<",\"result\":\"PASS\"}\n";return 0;}catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}
+int main(){try{lifecycle();inputs();bounded();failure();scheduled();reservations();gpuReferencedReuse();submitting();concurrentReuse();geometryBinding();nonblocking();std::cout<<"{\"checks\":"<<checks<<",\"result\":\"PASS\"}\n";return 0;}catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

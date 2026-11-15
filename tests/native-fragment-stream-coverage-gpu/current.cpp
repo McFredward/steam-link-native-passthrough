@@ -58,6 +58,22 @@ int main(int argc,char** argv){try{
     }
     if(!visible||!transparentEmission)std::cerr<<"visible cases="<<visible<<" transparent RGB cases="<<transparentEmission<<'\n';
     require(visible>0&&transparentEmission>0,"test exercises real RGB and nonzero RGB at zero coverage");
+    unsigned padded=0,refused=0;
+    const std::array<float,4> mapping{{1.5f,1.25f,-.125f,-.125f}};gpu.visibleMapping(mapping);
+    for(unsigned flags:{0u,2u<<16})for(float x:{.15625f,.40625f,.65625f,.90625f})for(float innerX:{.15625f,.90625f})for(float y:{.5f,.99f}){
+        Case c{};c.u={x,y,innerX,.5f};c.tint={.73f,.59f,.91f,1};c.flags=flags;
+        const auto native=oracle.draw(c,oracle.original),weights=oracle.draw(c,oracle.probe),covered=gpu.draw(c,gpu.probe,1,0,true);
+        const float w=floating(weights[2]);const float outerX=x*mapping[0]+mapping[2],outerY=y*mapping[1]+mapping[3];
+        const float mappedInner=innerX*mapping[0]+mapping[2];
+        const auto inside=[](float u,float v){return u>=0&&u<=1&&v>=0&&v<=1;};
+        const bool valid=(!floating(weights[0])||w==1||inside(outerX,outerY))&&(!floating(weights[1])||w==0||inside(mappedInner,.5f));
+        if(valid){require(std::equal(native.begin(),native.begin()+3,covered.begin()),"padded current valid samples preserve every native RGB bit");
+            const float expected=(sample(outerX,outerY)*floating(weights[0])*(1-w)+sample(mappedInner,.5f)*floating(weights[1])*w)*floating(weights[3]);
+            near(floating(covered[3]),expected,"current mask uses the proved visible-image mapping with original blend weight");++padded;
+        }else {require(covered==std::array<std::uint32_t,4>{},"padded current invalid samples emit zero RGBA, including additive colour");++refused;}
+        require(gpu.draw(c,gpu.probe,0,0,true)==native,"ordinary current RGBA remains unchanged with nonidentity coverage mapping");
+    }
+    require(padded&&refused,"current padding controls exercise both admitted and rejected native sample branches");
     require(validationErrors.load()==0,"zero Vulkan validation errors");
     std::cout<<"{\"current_native_cases\":"<<cases<<",\"checks\":"<<checks<<",\"rgb_bit_identical\":true,\"validation_errors\":0,\"headset_test\":false}\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

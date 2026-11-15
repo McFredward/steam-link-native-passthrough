@@ -62,6 +62,7 @@ bool adaptiveTest=false;
 std::uintptr_t site(std::uintptr_t offset){return base+offset+(adaptiveTest?0x80000:0);}
 struct Fake{
     std::array<std::array<std::uint8_t,4096>,nd::MaxBuffers> memory{};
+    unsigned geometryQueries=0;bool geometryUnavailable=false;
     unsigned ioctlCalls=0,mapCalls=0,unmapCalls=0,closeCalls=0,reads=0,dataReads=0;
     int result=0,error=EOVERFLOW,receivedErrno=0;std::uint32_t dequeue=0;
     bool readFails=false,dataReadFails=false,mapFails=false,zeroCopyDuringQbuf=false;
@@ -79,7 +80,14 @@ bool copy(void* output,std::uintptr_t source,std::size_t n,void*) noexcept{
     std::memcpy(output,reinterpret_cast<const void*>(source),n);return true;
 }
 int originalIoctl(int fd,unsigned long request,...){
-    ++fake.ioctlCalls;fake.receivedErrno=errno;va_list args;va_start(args,request);void* p=va_arg(args,void*);va_end(args);
+    va_list args;va_start(args,request);void* p=va_arg(args,void*);va_end(args);
+    if(request==VIDIOC_G_FMT||request==VIDIOC_G_SELECTION){
+        ++fake.geometryQueries;errno=ENODATA;if(fake.geometryUnavailable)return -1;
+        if(request==VIDIOC_G_FMT){auto& f=*static_cast<v4l2_format*>(p);check(f.type==V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE,"read-only geometry format type");f.fmt.pix_mp.width=1344;f.fmt.pix_mp.height=4864;f.fmt.pix_mp.num_planes=1;}
+        else {auto& selection=*static_cast<v4l2_selection*>(p);check(selection.type==V4L2_BUF_TYPE_VIDEO_CAPTURE&&selection.target==V4L2_SEL_TGT_COMPOSE,"read-only actual compose request");selection.r={16,0,1216,4864};}
+        return 0;
+    }
+    ++fake.ioctlCalls;fake.receivedErrno=errno;
     check(fd==23||fd==24,"original fd exact");
     if(request==VIDIOC_QBUF&&fake.inspectDuringQbuf){
         fake.duringCounts=fake.inspectDuringQbuf->stats();nd::CaptureObservation event{};
@@ -319,9 +327,15 @@ void captureOwnership(){
     fake.dequeue=0;check(p->invokeIoctl(site(0x32a5c),23,VIDIOC_DQBUF,&b.b)==0,"actual capture result original once");
     check(p->pollCapture(event)&&event.kind==nd::CaptureKind::Decoded&&event.dmabufFd==73&&event.nativeTimestampToken==0x4321
         &&event.capturePoolGeneration==generation&&event.contentGeneration==1,"decoded timestamp distinct from capture index and content lease");
-    const auto validLease=event;check(p->captureLeaseCurrent(validLease)&&p->captureLeaseCurrentOnWorker(validLease),"render and worker scalar checks admit only successful actual current DQBUF lease");
+    check(event.visible.valid()&&event.visible.allocationWidth==1344&&event.visible.left==16&&event.visible.width==1216&&fake.geometryQueries==2,"current successful native decode retains queried allocation and compose geometry");
+    const auto validLease=event;auto wrongGeometry=event;++wrongGeometry.visible.left;
+    check(!p->captureLeaseCurrent(wrongGeometry),"exact native capture lease also binds its visible-image origin");
+    check(p->captureLeaseCurrent(validLease)&&p->captureLeaseCurrentOnWorker(validLease),"render and worker scalar checks admit only successful actual current DQBUF lease");
     auto wrongLease=validLease;++wrongLease.nativeTimestampToken;
     check(!p->captureLeaseCurrent(wrongLease),"current scalar lease also binds actual timestamp token");
+    v4l2_selection changed{};changed.type=V4L2_BUF_TYPE_VIDEO_CAPTURE;changed.target=V4L2_SEL_TGT_COMPOSE;
+    check(p->invokeIoctl(0,23,VIDIOC_S_SELECTION,&changed)==0,"public geometry mutation forwards even without a historical literal callsite");
+    check(p->pollCapture(event)&&event.kind==nd::CaptureKind::Reset&&event.resetReason==nd::ResetReason::CaptureGeometry&&!p->captureLeaseCurrent(validLease),"visible geometry mutation retires previously decoded image leases before reuse");
     check(p->invokeIoctl(site(0x32a5c),23,VIDIOC_DQBUF,&b.b)==0&&!p->pollCapture(event),"unqueued duplicate capture gives no evidence");
     queue(*p,0);poll(*p,0x42); // Capture setup must not destroy unrelated OUTPUT mappings.
     fake.result=-1;check(p->invokeIoctl(site(0x310f8),23,VIDIOC_QBUF,&b.b)==-1,"failed capture queue original preserved");

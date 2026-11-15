@@ -1,4 +1,5 @@
 #pragma once
+#include "stream_bridge_visible_geometry.h"
 #include "stream_bridge_native_elf.h"
 #include <array>
 #include <cstddef>
@@ -37,7 +38,7 @@ enum class CaptureKind:std::uint8_t{Reset,Requeue,Decoded,SourceReset,InputGap};
 enum class InputLoss:std::uint8_t{None,SnapshotFull,CopyRejected};
 enum class ResetReason:std::uint8_t{None,OutputFormat,OutputBuffers,OutputStreamOff,
     CaptureFormat,CaptureBuffers,CaptureStreamOff,UnsupportedOutputQueue,
-    UnsupportedCaptureQueue,OutputUnmap,DecoderClose,CaptureClose,ProviderStop};
+    UnsupportedCaptureQueue,OutputUnmap,DecoderClose,CaptureClose,ProviderStop,CaptureGeometry};
 const char* resetReasonName(ResetReason) noexcept;
 struct CaptureObservation{
     CaptureKind kind=CaptureKind::Reset;int fd=-1,dmabufFd=-1;
@@ -49,6 +50,7 @@ struct CaptureObservation{
     InputLoss inputLoss=InputLoss::None;std::uint64_t lossSequence=0;
     // Cold worker diagnostics only; no per-frame logging or borrowed addresses.
     ResetReason resetReason=ResetReason::None;
+    VisibleGeometry visible{};
 };
 struct SnapshotStats{std::uint64_t accepted=0,dropped=0,rejected=0,captureDropped=0;};
 using CaptureSink=void(*)(const CaptureObservation&,void*) noexcept;

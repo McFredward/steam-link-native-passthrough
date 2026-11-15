@@ -8,7 +8,7 @@ using namespace stream_bridge::sender;
 namespace {
 unsigned checks=0;
 void check(bool value,const char* reason){++checks;if(!value)throw std::runtime_error(reason);}
-void word(std::vector<std::uint8_t>& b,unsigned at,std::uint32_t value){for(unsigned i=0;i<4;++i)b[at+i]=std::uint8_t(value>>(8*i));}
+void word(std::vector<std::uint8_t>& b,unsigned at,std::uint32_t value){for(unsigned i=0;i<4;++i)b.at(at+i)=std::uint8_t(value>>(8*i));}
 std::vector<std::uint8_t> fixture(bool metadata=false){
     const unsigned count=metadata?4:3,first=32+4*count;
     std::vector<std::uint8_t> b(first+48+(metadata?16:0));std::memcpy(b.data(),"DXBC",4);word(b,20,1);word(b,24,static_cast<unsigned>(b.size()));word(b,28,count);
@@ -30,8 +30,8 @@ void shaders(){
         if(mode==2)word(changed,36,44);
         if(mode==3)word(changed,48,0xfffffffcu);
         if(mode==4)word(changed,56,3);
-        if(mode==5)std::memcpy(changed.data()+60,"SHEX",4);
-        if(mode==6)std::memcpy(changed.data()+60,"ISG1",4);
+        if(mode==5)word(changed,60,0x58454853u);
+        if(mode==6)word(changed,60,0x31475349u);
         check(!dxbcFingerprint(changed.data(),changed.size(),hash),"malformed, overlapping, duplicate or unknown semantic chunks refuse admission");
     }
     const ShaderFingerprint duplicate[]{pin,pin};check(classifyNativeShader(b.data(),b.size(),duplicate,2)==NativeShader::Unknown,"ambiguous contract table never chooses a shader");

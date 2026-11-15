@@ -23,9 +23,10 @@ void pump(local::Channel& source,local::Channel& target){for(unsigned i=0;i<80;+
 local::Message certified(){local::Message m;m.kind=local::Kind::Certified;m.source.stream.connection.fill(1);m.source.stream.generation=m.source.outputPoolGeneration=7;
     m.descriptor={1000,41,2048,2048};m.binding.fill(3);m.nativeTimestampToken=71;m.submittedContent=6;m.peerConfirmed=true;m.certifiedMetadata={0,0,0,1,0x26,1,0x80};return m;}
 void sharedLeases(){File file;local::LeaseWriter writer;check(writer.prepareCold()&&writer.associateResourceFd(file.fd),"cold own shared lease and resource identities");
-    const auto c=capture(file.fd);writer.captureEvent(c);local::LeaseReference ref{};check(writer.reference(c,ref)&&ref.sequence&&ref.kernel[1],"actual decoded event owns exact atomic lease reference");
+    auto c=capture(file.fd);c.visible={1344,4864,16,8,1216,4800,true};writer.captureEvent(c);local::LeaseReference ref{};check(writer.reference(c,ref)&&ref.sequence&&ref.kernel[1],"actual decoded event owns exact atomic lease reference");
     const int fd=writer.duplicateReadOnly();check(fd>=0&&(fcntl(fd,F_GETFL)&O_ACCMODE)==O_RDONLY,"lease descriptor is genuinely read-only");
     local::LeaseReader reader;check(reader.mapReadOnly(fd)&&reader.current(ref),"actual shared memfd mapping validates source lease");
+    auto altered=ref;++altered.capture.visible.left;check(!reader.current(altered),"read-only capture lease rejects a changed visible-image origin");
     check(pwrite(fd,"x",1,0)==-1,"receiver cannot write shared lease fd");
     auto wrong=ref;++wrong.capture.contentGeneration;check(!reader.current(wrong),"shared current check binds exact content rather than latest slot");
     auto next=c;next.kind=nd::CaptureKind::Requeue;writer.captureEvent(next);check(!reader.current(ref)&&!writer.reference(c,wrong),"synchronous pre-QBUF event invalidates independently of socket/worker timing");

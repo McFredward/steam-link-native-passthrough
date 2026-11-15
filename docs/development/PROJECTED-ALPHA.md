@@ -41,5 +41,25 @@ application RGBA routes remain available.
 Windows fixtures exercise embedded owned kernels, original RGB preservation,
 zero/fractional/opaque coverage, geometry, FP16 filtering, MSAA, native ownership
 transfers and private loader/channel boundaries. These checks do not establish
-a headset result. Decoder allocation padding still needs independently verified
-visible geometry and mask sampling before a new headset candidate is complete.
+a headset result.
+
+## Decoder allocation padding
+
+The Frame queries the public raw CAPTURE format and COMPOSE rectangle after a
+successful native decode. The exact read-only capture lease retains these
+integers along with its DMA allocation/content identity. Format, pool, queue or
+crop/compose changes revoke the old proof. The local channel uses SFL3 and the
+capture lease backing uses V2; both endpoints ship together in the Frame patch.
+
+An immutable per-mask uniform maps native allocation UVs into coded mask UVs.
+The original RGB sampling, filtering and foveation weights remain native.
+Sampling outside a verified visible rectangle produces zero RGBA when it could
+otherwise consume padding. Identity mappings retain the previous shader output,
+and ordinary pictures retain native output. A padded image with missing or
+inconsistent geometry cannot acquire game rendering permission.
+
+The geometry uniform is frozen before the first recording reference. The GPU
+pool retains it through the same exact frame, recording and submission lifetime
+as the R8 mask. No latest geometry, guessed zero origin or fixed resolution is
+used. Real Vulkan controls cover old/current native programs, fractional alpha,
+nonzero origins, padding, ordinary mode and zero-RGBA recovery.

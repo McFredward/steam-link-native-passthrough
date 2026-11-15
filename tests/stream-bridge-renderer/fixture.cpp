@@ -61,7 +61,7 @@ struct Driver:Fake {
  static VkResult VKAPI_CALL bind(VkDevice d,VkBuffer buffer,VkDeviceMemory memory,VkDeviceSize at){self->boundMemory[number(buffer)]=number(memory);return Fake::bindBuffer(d,buffer,memory,at);}
  static void VKAPI_CALL update(VkDevice d,std::uint32_t n,const VkWriteDescriptorSet* writes,std::uint32_t copies,const VkCopyDescriptorSet* c){
   if(n==1&&writes->descriptorType==VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER){check(writes->pBufferInfo&&writes->pBufferInfo->range==16,"control descriptor is sixteen-byte UBO");self->setBuffer[number(writes->dstSet)]=number(writes->pBufferInfo->buffer);self->setOffset[number(writes->dstSet)]=writes->pBufferInfo->offset;check(writes->pBufferInfo->offset%256==0,"each control descriptor has independent aligned byte offset");return;}
-  if(n==1&&writes->descriptorType==VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER&&writes->pImageInfo)self->coverageView[number(writes->dstSet)]=number(writes->pImageInfo->imageView);
+  if(n==2&&writes->descriptorType==VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER&&writes->pImageInfo)self->coverageView[number(writes->dstSet)]=number(writes->pImageInfo->imageView);
   Fake::update(d,n,writes,copies,c);
  }
  static VkResult VKAPI_CALL createView(VkDevice device,const VkImageViewCreateInfo* info,const VkAllocationCallbacks* allocator,VkImageView* view){const auto result=Fake::createImageView(device,info,allocator,view);if(result==VK_SUCCESS)self->viewImage[number(*view)]=number(info->image);return result;}
@@ -728,6 +728,19 @@ void ordinaryPadding(const std::vector<std::uint32_t>& vs,const std::vector<std:
    previous=true;
   }
  }
+ for(unsigned mode=0;mode<5;++mode){
+  Integration f(vs,ps,1,true,true,false,false,false);resize(f,20,4);
+  f.picture.metadata.lease.capture.visible={20,4,2,1,16,2,true};
+  if(mode==1)f.picture.metadata.lease.capture.visible.known=false;
+  if(mode==2)f.picture.metadata.lease.capture.visible.allocationWidth=24;
+  if(mode==3)f.picture.metadata.lease.capture.visible.width=15;
+  if(mode==4)f.picture.metadata.lease.capture.visible.left=5;
+  f.publish();consumer.picture(consumer.owner,f.picture);const auto draw=f.record();
+  if(!mode){check(draw.ready&&f.renderer.statsCold().selected==1,"masked picture admits verified native allocation padding and nonzero visible origin");
+   check(f.submit(false)==VK_SUCCESS&&f.vk.reads.back()==1,"padded masked image retains exact per-frame GPU upload and submission proof");
+  }else check(!f.renderer.statsCold().selected,"missing or inconsistent visible geometry never grants padded game pixels");
+ }
+
  cameraRecovery=false;
 }
 void cameraOnlyRecovery(const std::vector<std::uint32_t>& vs,const std::vector<std::uint32_t>& ps){

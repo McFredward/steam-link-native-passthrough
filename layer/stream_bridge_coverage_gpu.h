@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <array>
 
 namespace stream_bridge_coverage_gpu {
 constexpr std::uint32_t MaximumSlots=32;
@@ -46,6 +47,9 @@ public:
     // Identity/extent must already originate in authenticated native association.
     bool upload(const FrameIdentity&,std::uint32_t width,std::uint32_t height,
         stream_bridge::Bytes rawR8) noexcept;
+    // Worker only. One immutable native-allocation-to-coded-mask transform
+    // per frame, fixed before its first recording reference is published.
+    bool bindGeometry(const FrameIdentity&,const std::array<float,4>&) noexcept;
     // Called under the admitted ORIGINAL queue's external synchronization.
     // Enqueue pending copies before sampling on this exact ordered queue.
     void drainUploads(VkQueue) noexcept;
