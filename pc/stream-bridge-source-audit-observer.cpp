@@ -98,6 +98,7 @@ struct Observer {
     Admission production(ID3D11Device* device)noexcept {
         if(!device||stopped||ownCommands||!productionPeer.page())return {};
         for(auto& context:contexts)if(context.producerDevice==device){
+            if(!context.owns()){InterlockedExchange(&productionPeer.page()->stopped,1);return {};}
             if(context.productionBusy.test_and_set(std::memory_order_acquire)){
                 // Sequential native callers may migrate between OS threads.
                 // Unsupported concurrent mutation cannot expose an old pair.

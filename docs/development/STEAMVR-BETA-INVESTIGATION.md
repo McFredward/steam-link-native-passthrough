@@ -303,7 +303,8 @@ blank base even when its ordinary A is one; this is command provenance, not
 classification of game pixels by colour. FP16 blank bases still require zero A.
 
 Per-resource COM metadata dies with native objects. Cold private-alpha allocation
-is limited to512MiB and1024 records; FP16 X needs no private image. The32 export
+is limited to512MiB and1024 records per observed native device (at most four
+devices); FP16 X needs no private image. The32 export
 rows are assigned only to admitted outputs and reclaimed after their native
 retained generations retire. Cold imports use the same nonblocking registry gate
 and refresh changed row generations under the sender's native context lock.
@@ -318,9 +319,32 @@ retired output/registration replacement. These call the actual production
 controller, cold shader observer, private channel and consumer. They do not
 substitute a manually published test witness for producer execution.
 
-Status: local Windows syntax/link and29 owned HLSL entry points pass. The new
-complete native-controller GPU controls are pending. Installer delivery and
-headset acceptance are still pending; no device changes have been made.
+The complete producer/consumer controls passed in
+[Windows/WARP run 43763682568](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43763682568),
+source `1a0e96566bb2d9331a6dcf3d05937154125d8fad`: each normal/reprojection
+mode completed61 compositor-side and2,931 sender-side checks. Both generated
+real production witnesses from actual original draws and native mutex releases.
+All prior private-replay, padded-input, stencil, primitive and channel controls
+remained in the same successful GPU job.
+
+Final controls add direct scene roots and BGRA native outputs. Existing export
+rows use a shared registry read rather than requesting an exclusive gate every
+frame. A per-row observed-write mutation check invalidates aliases even when
+the writer has no private producer record, on another native device or in the
+sender process. This check never grants a frame permit; the actual native
+Present ownership transfer and complete ancestry remain mandatory. Export rows
+are allocated across the shared channel and cannot collide between devices.
+The source context facade must still own its native dispatch before it can
+supply image ancestry.
+
+Private structural checks also confirmed the separate required contracts for
+all retained old/current inner, Y, reproject-Y and resolve containers. Their
+shader bodies were not redistributed; actual original native GPU execution is
+still a headset test, not established by these owned controls.
+
+Status: final local Windows syntax/link and29 owned HLSL entries pass; the
+expanded final GPU controls are running before packaging. Installer delivery
+and headset acceptance remain pending. No device changes have been made.
 
 ## Evidence locations and maintenance
 

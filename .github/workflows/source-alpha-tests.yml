@@ -186,8 +186,14 @@ jobs:
           if errorlevel 1 (type build\projected-producer-native-pipeline.log & exit /b 1)
           type build\projected-producer-native-pipeline.log
           build\projected-producer.exe --native-pipeline-reproject >build\projected-producer-native-pipeline-reproject.log 2>&1
-          set "SFNP_RESULT=%ERRORLEVEL%"
+          if errorlevel 1 (type build\projected-producer-native-pipeline-reproject.log & exit /b 1)
           type build\projected-producer-native-pipeline-reproject.log
+          build\projected-producer.exe --native-pipeline-bgra >build\projected-producer-native-pipeline-bgra.log 2>&1
+          if errorlevel 1 (type build\projected-producer-native-pipeline-bgra.log & exit /b 1)
+          type build\projected-producer-native-pipeline-bgra.log
+          build\projected-producer.exe --native-pipeline-direct >build\projected-producer-native-pipeline-direct.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-native-pipeline-direct.log
           exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
@@ -212,6 +218,8 @@ jobs:
             build/projected-producer-native-mrt-reproject.log
             build/projected-producer-native-pipeline.log
             build/projected-producer-native-pipeline-reproject.log
+            build/projected-producer-native-pipeline-bgra.log
+            build/projected-producer-native-pipeline-direct.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc

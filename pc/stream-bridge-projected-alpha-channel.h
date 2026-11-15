@@ -44,6 +44,7 @@ struct ImageWitness {
     // those retained unchanged through a partial native image update.
     std::array<Allocation,8> contributors{};
     std::uint32_t contributorCount=0;
+    std::uint64_t nativeMutation=0; // Invalidates writes; never substitutes for native Present ownership.
 };
 template<class T>struct Row {
     alignas(8) volatile LONG64 sequence=0;T value{};
@@ -78,10 +79,35 @@ struct ChannelPage {
     Row<Registry> registry{};
     std::array<Row<MaskRegistration>,ChannelImages> registrations{};
     std::array<Row<ImageWitness>,ChannelImages> witnesses{};
+    alignas(8) volatile LONG64 imageMutations[ChannelImages]{};
 };
 static_assert(std::is_trivially_copyable<Registry>::value&&std::is_trivially_copyable<ImageWitness>::value,
     "fixed private production payloads");
 static_assert(sizeof(ChannelPage)<=32768,"bounded private section");
+// Every observed write invalidates all registered aliases of that actual
+// shared kernel allocation, including writers on another native device. This
+// counter grants nothing: selection still requires the exact native release,
+// current retained generations, source lease and original frame/eye proof.
+inline void invalidateSharedImages(ChannelPage* page,const Allocation& actual)noexcept{
+    if(!page||!actual.handle)return;
+    for(unsigned i=0;i<ChannelImages;++i){MaskRegistration registration{};
+        if(!page->registrations[i].read(registration)||registration.native.handle!=actual.handle||
+            registration.native.width!=actual.width||registration.native.height!=actual.height||registration.native.format!=actual.format||
+            registration.native.samples!=actual.samples||registration.native.arraySize!=actual.arraySize)continue;
+        if(InterlockedIncrement64(&page->imageMutations[i])<=0)InterlockedExchange(&page->stopped,1);
+    }
+}
+inline void invalidateSharedImages(ChannelPage* page,ID3D11Resource* resource)noexcept{
+    if(!page)return;
+    if(!resource){for(auto& value:page->imageMutations)if(InterlockedIncrement64(&value)<=0)InterlockedExchange(&page->stopped,1);return;}
+    Reference<ID3D11Texture2D> texture;Reference<IDXGIResource> shared;HANDLE handle=nullptr;
+    if(FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out())))||
+        FAILED(resource->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(shared.out())))||
+        FAILED(shared->GetSharedHandle(&handle))||!handle)return;
+    D3D11_TEXTURE2D_DESC shape{};texture->GetDesc(&shape);
+    invalidateSharedImages(page,Allocation{std::uint64_t(reinterpret_cast<std::uintptr_t>(handle)),0,0,
+        shape.Width,shape.Height,unsigned(shape.Format),shape.SampleDesc.Count,shape.ArraySize});
+}
 constexpr std::uint64_t CompanionClassBudget=256ull*1024*1024;
 // Cold resource creation only. Failed preparation returns its reservation,
 // including early exits after the image exists but its clear failed.

@@ -734,14 +734,14 @@ void nativeMrtControl(bool reproject=false){
     context->ClearState();
     std::printf("owned MRT chain: plain-shared non-keyed source/output; FP16 X,4x MSAA,64/80-byte ranged scene constants, both ranged resolve policies; native RGBA unchanged; true alpha; stencil once; naive carrier changes %u RGB bytes. No production image/frame permit.\n",changedByNaive);
 }
-struct NativePipelineMessage {ChannelLaunch launch{};std::uint64_t source=0,native=0,sync=0;std::uint32_t reproject=0;};
+struct NativePipelineMessage {ChannelLaunch launch{};std::uint64_t source=0,native=0,sync=0;std::uint32_t reproject=0,bgra=0,direct=0;};
 void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
     constexpr UINT width=40,height=36;
     auto vsCode=compile("vs","vs_5_0"),xCode=compile("copyFp16","ps_5_0");
     auto yCode=compileCapture(message.reproject?"sceneReprojectNative":"sceneNative"),resolveCode=compileCapture("resolveNative");
     std::array<ShaderFingerprint,4> contracts{};
     contracts[0].kind=message.reproject?NativeShader::MultiViewVertexY:NativeShader::StreamVertex;
-    contracts[1].kind=NativeShader::MultiViewDownscaleX;contracts[2].kind=message.reproject?NativeShader::MultiViewReprojectY:NativeShader::MultiViewDownscaleY;
+    contracts[1].kind=NativeShader::MultiViewDownscaleX;contracts[2].kind=message.direct?NativeShader::MultiViewInner:message.reproject?NativeShader::MultiViewReprojectY:NativeShader::MultiViewDownscaleY;
     contracts[3].kind=NativeShader::MultiViewResolve;
     const std::array<ID3DBlob*,4> codes{{vsCode.value,xCode.value,yCode.value,resolveCode.value}};
     for(unsigned i=0;i<4;++i)check(dxbcFingerprint(codes[i]->GetBufferPointer(),codes[i]->GetBufferSize(),contracts[i].hash),"actual owned native pipeline contracts");
@@ -779,9 +779,9 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
     check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,msaa.out()))&&SUCCEEDED(device->CreateRenderTargetView(msaa.value,nullptr,yTarget.out()))&&
         SUCCEEDED(device->CreateShaderResourceView(msaa.value,nullptr,yView.out()))&&SUCCEEDED(device->CreateTexture2D(&shape,nullptr,baselineMsaa.out()))&&
         SUCCEEDED(device->CreateRenderTargetView(baselineMsaa.value,nullptr,baselineY.out()))&&SUCCEEDED(device->CreateShaderResourceView(baselineMsaa.value,nullptr,baselineYView.out())),"actual four-sample native and independent reference targets");
-    shape.SampleDesc.Count=1;shape.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    shape.SampleDesc.Count=1;shape.Format=message.bgra?DXGI_FORMAT_B8G8R8A8_TYPELESS:DXGI_FORMAT_R8G8B8A8_TYPELESS;
     Reference<ID3D11Texture2D> baseline;Reference<ID3D11RenderTargetView> baselineFinal,nativeTarget;
-    D3D11_RENDER_TARGET_VIEW_DESC finalView{};finalView.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;finalView.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
+    D3D11_RENDER_TARGET_VIEW_DESC finalView{};finalView.Format=message.bgra?DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;finalView.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
     check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,baseline.out()))&&SUCCEEDED(device->CreateRenderTargetView(baseline.value,&finalView,baselineFinal.out()))&&
         SUCCEEDED(device->CreateRenderTargetView(native.value,&finalView,nativeTarget.out())),"native and independent sRGB resolve outputs");
     Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> x,y,resolve;Reference<ID3D11InputLayout> layout;
@@ -822,13 +822,14 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
         context->OMSetRenderTargets(1,&xTarget.value,nullptr);context->PSSetShader(x.value,nullptr,0);context->PSSetShaderResources(0,1,&sourceView.value);
         auto before=nativeDrawCalls;
         check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"plain-shared root is read once by original native X, with no private FP16 replay");
-        context->OMSetRenderTargets(1,&baselineY.value,nullptr);context->PSSetShaderResources(0,1,&xView.value);context->PSSetShader(y.value,nullptr,0);
+        context->OMSetRenderTargets(1,&baselineY.value,nullptr);auto* ySource=message.direct?sourceView.value:xView.value;
+        context->PSSetShaderResources(0,1,&ySource);context->PSSetShader(y.value,nullptr,0);
         context->ClearRenderTargetView(baselineY.value,blank);draw(context.value,4,0);
         producer.clear(context.value,yTarget.value,blank);context->ClearRenderTargetView(yTarget.value,blank);context->OMSetRenderTargets(1,&yTarget.value,nullptr);
         // Poison/unknown logical bounds must refuse private capture. Restoring
         // observed bytes restores availability without a session reset.
         producer.geometry().invalidate(constants.value);before=nativeDrawCalls;
-        if(!message.reproject)check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"unknown padded-Y bounds refuse without an extra original draw");
+        if(!message.reproject&&!message.direct)check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"unknown padded-Y bounds refuse without an extra original draw");
         producer.geometry().update(constants.value,words.data());
         if(message.reproject){const float outside=2;std::memcpy(&boundsWords[30*4+1],&outside,4);
             context->UpdateSubresource(viewBounds.value,0,nullptr,boundsWords.data(),0,0);producer.geometry().update(viewBounds.value,boundsWords.data());
@@ -849,7 +850,8 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
     render();BYTE acknowledgement=0;DWORD got=0;
     check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&acknowledgement,1,&got,nullptr)&&got==1&&acknowledgement==1,"parent copied first exact pair before the next native ownership interval");
     check(sync->AcquireSync(0,5000)==S_OK,"next original native ownership interval for alias-write control");
-    Reference<ID3D11Texture2D> alias;open(message.native,alias);producer.invalidate(alias.value);context->ClearRenderTargetView(nativeTarget.value,blank);
+    Reference<ID3D11Texture2D> alias;open(message.native,alias);
+    invalidateSharedImages(page,alias.value);context->ClearRenderTargetView(nativeTarget.value,blank);
     check(sync->ReleaseSync(3)==S_OK,"unknown write through a reopened native alias preserves actual synchronization but revokes its mask");
     std::uint64_t replacement=0;
     check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&replacement,sizeof replacement,&got,nullptr)&&got==sizeof replacement&&replacement,
@@ -859,14 +861,14 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
     render();check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&acknowledgement,1,&got,nullptr)&&got==1&&acknowledgement==2,"parent acknowledged refreshed image generation and alpha");
     nativeActive=nullptr;activeLocks=nullptr;context->ClearState();
 }
-void nativePipelineControl(bool reproject){
+void nativePipelineControl(bool reproject,bool bgra=false,bool direct=false){
     constexpr UINT width=40,height=36;Consumer consumer;auto& channel=consumer.channel();
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"independent sender-side WARP device");
     D3D11_TEXTURE2D_DESC shape{};shape.Width=width;shape.Height=height;shape.MipLevels=shape.ArraySize=shape.SampleDesc.Count=1;
     shape.Format=DXGI_FORMAT_R8G8B8A8_UNORM;shape.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;shape.MiscFlags=D3D11_RESOURCE_MISC_SHARED;
     Reference<ID3D11Texture2D> source,native,replacement,syncImage,unrelated;
-    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,source.out())),"actual non-keyed game source");shape.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,source.out())),"actual non-keyed game source");shape.Format=bgra?DXGI_FORMAT_B8G8R8A8_TYPELESS:DXGI_FORMAT_R8G8B8A8_TYPELESS;
     check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,native.out()))&&SUCCEEDED(device->CreateTexture2D(&shape,nullptr,replacement.out())),"actual non-keyed native output generations");
     auto syncShape=shape;syncShape.Width=syncShape.Height=32;syncShape.Format=DXGI_FORMAT_R8G8B8A8_UNORM;syncShape.MiscFlags=D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
     check(SUCCEEDED(device->CreateTexture2D(&syncShape,nullptr,syncImage.out()))&&SUCCEEDED(device->CreateTexture2D(&syncShape,nullptr,unrelated.out())),"separate actual native Present mutex and unrelated negative control");
@@ -888,10 +890,10 @@ void nativePipelineControl(bool reproject){
     PROCESS_INFORMATION process{};check(CreateProcessW(path.data(),args.data(),nullptr,nullptr,TRUE,0,nullptr,nullptr,&startup,&process)!=0,"separate original compositor-side process");
     pipes.process=process.hProcess;pipes.thread=process.hThread;
     NativePipelineMessage message{};check(channel.duplicateToVerifiedPeer(pipes.process,message.launch),"actual private channel bound to owned compositor process birth");
-    message.source=handle(source.value);message.native=handle(native.value);message.sync=handle(syncImage.value);message.reproject=reproject?1u:0u;
+    message.source=handle(source.value);message.native=handle(native.value);message.sync=handle(syncImage.value);message.reproject=reproject?1u:0u;message.bgra=bgra?1u:0u;message.direct=direct?1u:0u;
     constexpr std::uint64_t lease=(1ull<<32)|77u;channel.sourceLease(lease);Registry registry{};registry.sourceLease=lease;registry.revision=1;
     registry.retained[0]={message.source,11,77,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
-    registry.retained[1]={message.native,22,process.dwProcessId,width,height,DXGI_FORMAT_R8G8B8A8_TYPELESS,1,1};
+    registry.retained[1]={message.native,22,process.dwProcessId,width,height,unsigned(shape.Format),1,1};
     std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=source.value;pins[1]=native.value;
     check(channel.publishRetained(registry,pins),"real native opens pin the current game and compositor allocations");
     DWORD sent=0;check(WriteFile(pipes.write,&message,sizeof message,&sent,nullptr)&&sent==sizeof message,"original private launch parameters");
@@ -915,6 +917,13 @@ void nativePipelineControl(bool reproject){
     const auto readyDeadline=GetTickCount64()+5000;while(!consumer.prepare(device.value)&&GetTickCount64()<readyDeadline)Sleep(10);
     check(consumer.prepare(device.value)&&sync->AcquireSync(3,5000)==S_OK,"actual native Present consumer owns the first output version");
     verify(registry.retained[1],native.value);
+    for(unsigned row=0;row<ChannelImages;++row){ImageWitness witness{};
+        if(!channel.page()->witnesses[row].read(witness)||!witness.complete||witness.native.handle!=message.native)continue;
+        auto wrongContributor=witness;++wrongContributor.contributors[0].generation;
+        check(channel.page()->witnesses[row].publish(wrongContributor)&&!consumer.select(device.value,registry.retained[1],message.sync,lease).view,
+            "wrong contributor generation refuses even with unchanged primary scene and native output");
+        check(channel.page()->witnesses[row].publish(witness),"restore owned exact witness after negative control");
+    }
     auto wrong=registry.retained[1];++wrong.generation;check(!consumer.select(device.value,wrong,message.sync,lease).view,"wrong native output generation refuses");
     check(other->AcquireSync(0,0)==S_OK&&!consumer.select(device.value,registry.retained[1],handle(unrelated.value),lease).view&&other->ReleaseSync(0)==S_OK,
         "a held unrelated mutex cannot authorize this exact frame");
@@ -934,7 +943,7 @@ void nativePipelineControl(bool reproject){
     check(WriteFile(pipes.write,&ack,1,&sent,nullptr)&&sent==1&&WaitForSingleObject(pipes.process,5000)==WAIT_OBJECT_0,"owned native producer finishes after acknowledgement");
     DWORD result=1;check(GetExitCodeProcess(pipes.process,&result)&&!result,"real native controller's separate process completed every production check");
     consumer.stop();context->ClearState();
-    std::printf("owned production native MRT: real non-keyed source/output, separate native sync, padded typeless FP16, native4xMSAA, original sRGB RGBA equality, source withdrawal, alias-write revocation, retired-generation row reuse, current-frame alpha; reproject=%u. No headset acceptance.\n",unsigned(reproject));
+    std::printf("owned production native MRT: real non-keyed source/output, separate native sync, padded typeless FP16, native4xMSAA, original sRGB RGBA equality, source withdrawal, alias-write revocation, retired-generation row reuse, current-frame alpha; reproject/bgra/direct=%u/%u/%u. No headset acceptance.\n",unsigned(reproject),unsigned(bgra),unsigned(direct));
 }
 
 void consumerControl(){
@@ -1006,6 +1015,8 @@ int main(int argc,char** argv){try{
         ChannelPeer peer;check(peer.open(message.launch),"actual private peer lifetime");pipelineChild(message,peer.page());
     }else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline"))nativePipelineControl(false);
     else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline-reproject"))nativePipelineControl(true);
+    else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline-bgra"))nativePipelineControl(false,true);
+    else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline-direct"))nativePipelineControl(false,false,true);
     else if(argc==2&&!std::strcmp(argv[1],"--native-single"))nativeSingleDrawControl();
     else if(argc==2&&!std::strcmp(argv[1],"--native-mrt"))nativeMrtControl();
     else if(argc==2&&!std::strcmp(argv[1],"--native-mrt-reproject"))nativeMrtControl(true);
