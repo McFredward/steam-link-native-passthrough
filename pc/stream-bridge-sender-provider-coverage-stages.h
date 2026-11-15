@@ -18,7 +18,7 @@ public:
         std::uintptr_t input=0;
         std::uint64_t contract=0,present=0,copyMicros=0,submissionMicros=0,submission=0,encoderGeneration=0;
         void* encoder=nullptr;
-        std::uint32_t pid=0,width=0,height=0;
+        std::uint32_t pid=0,width=0,height=0,nativeProducerPid=0;
         bool ordinaryVideo=false;
     };
     struct Entry {Resources resources{};Receipt receipt{};};

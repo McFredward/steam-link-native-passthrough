@@ -2,6 +2,7 @@
 #include "stream-bridge-projected-alpha-replay.h"
 #include <d3dcompiler.h>
 #include <d3d11shader.h>
+#include <d3d11_3.h>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -87,6 +88,9 @@ public:
         if(!context||count!=4||!width||!height||(samples!=1&&samples!=4))return false;
         Reference<ID3D11Predicate> predicate;BOOL predicated=FALSE;context->GetPredication(predicate.out(),&predicated);
         if(predicate.value)return false;
+        Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
+        context->GSGetShader(geometry.out(),nullptr,nullptr);context->HSGetShader(hull.out(),nullptr,nullptr);context->DSGetShader(domain.out(),nullptr,nullptr);
+        if(geometry.value||hull.value||domain.value)return false;
         D3D11_PRIMITIVE_TOPOLOGY topology{};context->IAGetPrimitiveTopology(&topology);
         if(topology!=D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP)return false;
         Reference<ID3D11InputLayout> actualLayout;context->IAGetInputLayout(actualLayout.out());
@@ -122,7 +126,12 @@ public:
         D3D11_RASTERIZER_DESC desc{};desc.FillMode=D3D11_FILL_SOLID;desc.CullMode=D3D11_CULL_BACK;
         if(raster.value)raster->GetDesc(&desc);
         if(desc.FillMode!=D3D11_FILL_SOLID)return false;
-        if(raster.value){Reference<ID3D11RasterizerState1> extended;
+        if(raster.value){Reference<ID3D11RasterizerState2> latest;
+            if(SUCCEEDED(raster->QueryInterface(__uuidof(ID3D11RasterizerState2),reinterpret_cast<void**>(latest.out())))){
+                D3D11_RASTERIZER_DESC2 desc2{};latest->GetDesc2(&desc2);
+                if(desc2.ForcedSampleCount||desc2.ConservativeRaster!=D3D11_CONSERVATIVE_RASTERIZATION_MODE_OFF)return false;
+            }
+            Reference<ID3D11RasterizerState1> extended;
             if(SUCCEEDED(raster->QueryInterface(__uuidof(ID3D11RasterizerState1),reinterpret_cast<void**>(extended.out())))){
                 D3D11_RASTERIZER_DESC1 desc1{};extended->GetDesc1(&desc1);if(desc1.ForcedSampleCount)return false;
             }

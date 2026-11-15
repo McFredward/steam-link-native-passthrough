@@ -60,6 +60,8 @@ struct ChannelPage {
     std::array<std::uint8_t,16> cookie{};
     std::uint32_t bytes=sizeof(ChannelPage),parentPid=0,peerPid=0,reserved=0;
     volatile LONG bound=0,stopped=0,peerReady=0;
+    volatile LONG nextImageSlot=0;
+    alignas(8) volatile LONG64 companionBytes=0;
     // Nonblocking publication gate. A reader keeps published allocations pinned
     // until it has retained the actual native source binding. No stale numeric
     // KMT value can be reclassified after its previous allocation is destroyed.

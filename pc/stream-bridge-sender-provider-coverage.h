@@ -249,6 +249,7 @@ struct HevcMaskStats {
     std::uint64_t encoded=0,pending=0,refused=0,syntaxRefused=0;
     std::uint64_t submissionToPollUs=0,maxSubmissionToPollUs=0;
 };
+namespace projected_alpha {class ChannelParent;}
 class SenderCoverage {
 public:
     struct Readiness {bool enabled=false,prepared=false;std::uint32_t preparedPid=0,capturedPid=0;};
@@ -266,6 +267,7 @@ public:
     bool hevcTemporalAvailable()const noexcept;
     HevcMaskStats hevcMaskStats()const noexcept;
     bool takeHevcSyntaxTrace(MaskHevcSyntaxTrace&)noexcept; // Cold one-shot diagnostic only.
+    projected_alpha::ChannelParent* projectedChannel()noexcept;
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
     void stop()noexcept;
     // Cold format capability only: a game may need this permission before

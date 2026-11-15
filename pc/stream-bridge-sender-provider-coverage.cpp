@@ -10,6 +10,7 @@
 #include "stream-bridge-sender-provider-coverage-stages.h"
 #include "stream-bridge-source-contract.h"
 #include "stream-bridge-native-draw.h"
+#include "stream-bridge-projected-alpha-consumer.h"
 #include "stream-bridge-native-composition.h"
 #include "stream-bridge-sender-provider-shaders.h"
 #include <d3d11_4.h>
@@ -144,6 +145,8 @@ struct SenderCoverage::Impl {
     void* nativeDevicePointer=nullptr; // Comparison only; never dereferenced as a guessed interface.
     ID3D11Multithread* multithread=nullptr;CoverageContextFacade facade;
     SourceContract sourceContract;
+    projected_alpha::Consumer projected;std::uint64_t projectedRegistryLease=0,projectedRegistryEpoch=0;
+    std::uint32_t activeScenePid=0;
     SourceAlphaProbe sourceAlpha;
     BasicSourceAlphaProbe<8> tileAlpha;
     NativeShaders nativeShaders;
@@ -399,6 +402,7 @@ struct SenderCoverage::Impl {
         std::array<std::uintptr_t,17> writes{};
         if(adaptive)writes={{bits<std::uintptr_t>(&drawIndexed),bits<std::uintptr_t>(&drawIndexedInstanced),bits<std::uintptr_t>(&drawInstanced),bits<std::uintptr_t>(&drawAuto),bits<std::uintptr_t>(&drawIndexedIndirect),bits<std::uintptr_t>(&drawIndirect),bits<std::uintptr_t>(&copyRegion),bits<std::uintptr_t>(&update),bits<std::uintptr_t>(&clearTarget),bits<std::uintptr_t>(&resolve),bits<std::uintptr_t>(&execute),bits<std::uintptr_t>(&copyRegion1),bits<std::uintptr_t>(&update1),bits<std::uintptr_t>(&discardResource),bits<std::uintptr_t>(&discardView),bits<std::uintptr_t>(&clearView),bits<std::uintptr_t>(&discardView1)}};
         if(!facade.prepare(context,callbacks,writes)||!facade.publish())return false;
+        if(adaptive)(void)projected.prepare(device);
         enabled=true;gates.signal(CoverageSignal::ContextsReady);return true;
     }
     bool dispatchOwned()const noexcept{return context&&multithread&&multithread->GetMultithreadProtected()&&facade.installed();}
@@ -486,11 +490,23 @@ struct SenderCoverage::Impl {
         }
         inventoryEpoch=inventory.epoch;prepared=target&&targetView&&blend;
     }
+    void publishProjectedRegistry()noexcept{
+        const auto lease=sourceContract.cameraAuthority();
+        if(projectedRegistryLease==lease&&projectedRegistryEpoch==inventoryEpoch)return;
+        projected_alpha::Registry registry{};registry.sourceLease=lease;registry.revision=inventoryEpoch;
+        std::array<ID3D11Texture2D*,projected_alpha::ChannelAllocations> pins{};
+        for(unsigned i=0;i<opened.size();++i){const auto& item=opened[i];if(!item.texture)continue;
+            D3D11_TEXTURE2D_DESC desc{};item.texture->GetDesc(&desc);
+            registry.retained[i]={item.handle,item.generation,item.pid,desc.Width,desc.Height,unsigned(desc.Format),desc.SampleDesc.Count,desc.ArraySize};
+            pins[i]=item.texture;
+        }
+        if(projected.channel().publishRetained(registry,pins)){projectedRegistryLease=lease;projectedRegistryEpoch=inventoryEpoch;}
+    }
     bool beginFrame(ID3D11DeviceContext* ctx,const DirectFrame& frame){
         if(!prepared)return gates.refuse(CoverageGate::Prepared);
         if(frame.registryEpoch!=inventoryEpoch||frame.presentSerial==failedSerial||!frame.layerCount||frame.layerCount>4)return gates.refuse(CoverageGate::FrameEpoch);
         if(activeSerial!=frame.presentSerial){
-            activeSerial=frame.presentSerial;activeEpoch=frame.registryEpoch;drawBits=0;activeContract=0;invalid=false;activePid=0;
+            activeSerial=frame.presentSerial;activeEpoch=frame.registryEpoch;drawBits=0;activeContract=0;invalid=false;activePid=0;activeScenePid=0;
             release(nativeOutput);release(intermediate);release(nativeChroma);stagedComposition=false;
             if(!composition.begin(frame.presentSerial,frame.registryEpoch,width,height,(1u<<(2*frame.layerCount))-1))return gates.refuse(CoverageGate::Composition);
             const float one[4]{1,1,1,1};ctx->ClearRenderTargetView(targetView,one);
@@ -708,21 +724,34 @@ struct SenderCoverage::Impl {
             gates.source(sourceDesc.Width,sourceDesc.Height,unsigned(viewDesc.Format));
             gates.nativeSourceShape({sourceDesc.ArraySize,sourceDesc.MipLevels,sourceDesc.SampleDesc.Count,unsigned(viewDesc.ViewDimension),unsigned(sourceDesc.Format),0,1,0});
             if(!rgba&&!bgra)return fail(CoverageGate::SourceShape);
-            unsigned sourceBit=0;std::uint32_t pid=0;
+            unsigned sourceBit=0;std::uint32_t pid=0;projected_alpha::Allocation nativeAllocation{};
             for(unsigned layer=0;layer<frame.layerCount;++layer)for(unsigned eye=0;eye<2;++eye){
                 const auto& requested=frame.layers[layer][eye];SharedTextureShape sourceShape{};if(!decodeSwapTextureSetDesc(requested.description,sourceShape))continue;
                 for(const auto& known:opened)if(known.handle==requested.submitted.hTexture&&known.generation==requested.swapGeneration&&submittedSharedResource(source,known.texture,{known.handle,known.generation,known.pid},{requested.submitted.hTexture,requested.swapGeneration,requested.processId},sourceShape)){
                     if(sourceBit)return fail(CoverageGate::AmbiguousSource);
                     sourceBit=1u<<(2*layer+eye);pid=requested.processId;
+                    nativeAllocation={known.handle,known.generation,known.pid,sourceDesc.Width,sourceDesc.Height,unsigned(sourceDesc.Format),sourceDesc.SampleDesc.Count,sourceDesc.ArraySize};
                 }
             }
             if(!sourceBit)return fail(CoverageGate::SharedResource);
             if(activePid&&activePid!=pid)return fail(CoverageGate::MixedProcess);
-            const auto declared=sourceContract.snapshot(pid);
-            if(drawBits&&activeContract!=declared)return fail(CoverageGate::SourceContract);
+            auto declared=sourceContract.snapshot(pid);std::uint32_t scenePid=pid;
+            projected_alpha::Consumer::Selection selected{};
+            const auto authority=sourceContract.cameraAuthority();
+            if(!declared&&authority&&projected.nativeProducer(pid)){
+                selected=projected.select(device,nativeAllocation,frame.syncTexture,authority);
+                if(!selected.view)return fail(CoverageGate::SourceContract);
+                declared=selected.lease;scenePid=selected.scenePid;
+            }
+            if(drawBits&&(activeContract!=declared||activeScenePid!=scenePid))return fail(CoverageGate::SourceContract);
             if(!intermediate)intermediate=identity(targetState.resource);
             if(!same(targetState.resource,intermediate)||!composition.image(reinterpret_cast<std::uintptr_t>(intermediate))||!composition.draw(sourceBit,rect))return failComposition(CoverageGate::CompositionImage);
-            if(!drawCopyViewCoverage(ctx,targetView,copyCoverageShader,forwardDraw,count,start))return fail(CoverageGate::BlendDraw);
+            // The native RGB draw already used its original SRV. Only our
+            // separate alpha point-load samples the sealed companion image.
+            if(selected.view)ctx->PSSetShaderResources(sourceSlot,1,&selected.view);
+            const bool coverageDrawn=drawCopyViewCoverage(ctx,targetView,copyCoverageShader,forwardDraw,count,start);
+            if(selected.view){auto* original=view.value;ctx->PSSetShaderResources(sourceSlot,1,&original);}
+            if(!coverageDrawn)return fail(CoverageGate::BlendDraw);
             if(logging::debug()&&sourceContract.cameraAuthority()){
                 unsigned slot=0;for(auto bit=sourceBit;bit>1;bit>>=1)++slot;
                 SourceAlphaMetadata alpha{};alpha.present=frame.presentSerial;alpha.origin=1;
@@ -732,7 +761,7 @@ struct SenderCoverage::Impl {
                 alpha.resourceFormat=unsigned(sourceDesc.Format);alpha.viewFormat=unsigned(viewDesc.Format);
                 tileAlpha.sample(ctx,source,slot,alpha,clockMicros(),{forwardGetData,forwardMap,forwardUnmap});
             }
-            stagedComposition=true;activePid=pid;activeContract=declared;drawBits|=sourceBit;gates.signal(CoverageSignal::EyeDraws);
+            stagedComposition=true;activePid=pid;activeScenePid=scenePid;activeContract=declared;drawBits|=sourceBit;gates.signal(CoverageSignal::EyeDraws);
             return 1;
         }
         if(!stagedComposition||!composition.complete())return failComposition(CoverageGate::CompositionIncomplete);
@@ -840,8 +869,10 @@ struct SenderCoverage::Impl {
         if(!s.prepared||s.invalid||frame->presentSerial!=s.activeSerial||frame->presentSerial==s.failedSerial||frame->registryEpoch!=s.activeEpoch||!same(source,s.nativeOutput)||s.drawBits!=((1u<<(2*frame->layerCount))-1)||
            (s.stagedComposition&&!s.composition.ready(frame->presentSerial,frame->registryEpoch,reinterpret_cast<std::uintptr_t>(s.nativeOutput)))){s.gates.refuse(CoverageGate::CopyPair);forwardCopy(ctx,destination,source);return;}
         const auto authority=s.sourceContract.cameraAuthority();
-        const bool ordinary=s.sourceContract.ordinaryPicture(authority,s.activePid);
-        if(!ordinary&&!s.sourceCurrent(s.activeContract,s.activePid)){s.gates.refuse(CoverageGate::SourceContract);forwardCopy(ctx,destination,source);return;}
+        const bool projectedProducer=s.projected.nativeProducer(s.activePid);
+        const auto scenePid=s.activeScenePid?s.activeScenePid:s.activePid;
+        const bool ordinary=!projectedProducer&&s.sourceContract.ordinaryPicture(authority,s.activePid);
+        if(!ordinary&&!s.sourceCurrent(s.activeContract,scenePid)){s.gates.refuse(CoverageGate::SourceContract);forwardCopy(ctx,destination,source);return;}
         auto* input=identity(destination);if(!input){s.gates.refuse(CoverageGate::InputReceipt);forwardCopy(ctx,destination,source);return;}
         // A stage is frozen from the native input handoff through matching
         // Unlock; another accepted frame and cold maintenance cannot evict it.
@@ -856,7 +887,7 @@ struct SenderCoverage::Impl {
         gpu.hevcSurfaceReady=gpu.hevcSubmitted=false;gpu.hevcKey={};
         free->receipt={};auto& receipt=free->receipt;
         receipt.input=reinterpret_cast<std::uintptr_t>(input);receipt.contract=ordinary?authority:s.activeContract;receipt.present=frame->presentSerial;receipt.ordinaryVideo=ordinary;
-        receipt.pid=s.activePid;receipt.width=s.width;receipt.height=s.height;
+        receipt.pid=ordinary?s.activePid:scenePid;receipt.nativeProducerPid=s.activePid;receipt.width=s.width;receipt.height=s.height;
         MultithreadScope protect(s.multithread);const auto captured=clockMicros();
         // Native NVENC completion is input-resource-specific. Explicitly submit
         // this independent readback and its own EVENT before the handoff; do
@@ -914,7 +945,8 @@ void SenderCoverage::tick()noexcept{
                 qos.known?qos.requestedAverageBitRate/Impl::TemporalLanes:0,std::max(100000u,s.hevcBitrate/Impl::TemporalLanes));
         }else (void)s.maskEncoder.updateRate(qos.frameRateNum,qos.frameRateDen,qos.known?qos.requestedAverageBitRate:0,s.hevcBitrate);
     }
-    if(s.enabled&&s.prepared&&count==1&&actual.width==s.width&&actual.height==s.height&&s.direct.inventoryRevision()==s.inventoryEpoch&&s.dispatchOwned()&&!s.hevcDirty.load(std::memory_order_acquire))return;
+    if(s.device){MultithreadScope protect(s.multithread);s.projected.poll(s.device);}
+    if(s.enabled&&s.prepared&&s.projectedRegistryLease==s.sourceContract.cameraAuthority()&&s.projectedRegistryEpoch==s.inventoryEpoch&&count==1&&actual.width==s.width&&actual.height==s.height&&s.direct.inventoryRevision()==s.inventoryEpoch&&s.dispatchOwned()&&!s.hevcDirty.load(std::memory_order_acquire))return;
     const auto inventory=s.direct.inventory();
     std::unique_lock<std::mutex> lock(s.mutex,std::try_to_lock);if(!lock||s.stopped||!s.module)return;
     try{
@@ -925,7 +957,7 @@ void SenderCoverage::tick()noexcept{
         if(s.width!=actual.width||s.height!=actual.height||!s.poolReady){if(!s.allocate(actual.width,actual.height)){s.gates.refuse(CoverageGate::Prepared);s.state=5;return;}}
         s.prepareHevc(actual);
         s.prepared=s.target&&s.targetView&&s.blend&&s.poolReady;
-        s.refresh(inventory);
+        s.refresh(inventory);s.publishProjectedRegistry();
     }catch(...){s.prepared=false;s.state=5;}
 }
 void SenderCoverage::configureMaskCapture(const std::filesystem::path& root)noexcept{impl_->maskCapture.configure(root);}
@@ -958,9 +990,12 @@ HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
     stats.submissionToPollUs=s.hevcCollectAgeUs.load(std::memory_order_relaxed);
     stats.maxSubmissionToPollUs=s.hevcMaxCollectAgeUs.load(std::memory_order_relaxed);return stats;
 }
-void SenderCoverage::sourceProcess(std::uint32_t pid,bool budget)noexcept{impl_->sourceContract.publish(pid,budget);}
+projected_alpha::ChannelParent* SenderCoverage::projectedChannel()noexcept{return &impl_->projected.channel();}
+void SenderCoverage::sourceProcess(std::uint32_t pid,bool budget)noexcept{
+    impl_->sourceContract.publish(pid,budget);impl_->projected.channel().sourceLease(impl_->sourceContract.cameraAuthority());
+}
 void SenderCoverage::stop()noexcept{
-    auto& s=*impl_;s.sourceContract.publish(0);s.enabled=false;s.prepared=false;s.lastPid=0;s.preparedPid=0;s.state=8;
+    auto& s=*impl_;s.sourceContract.publish(0);s.projected.stop();s.enabled=false;s.prepared=false;s.lastPid=0;s.preparedPid=0;s.state=8;
     s.hevcPrepared.store(false,std::memory_order_release);
     s.hevcPeerReady.store(false,std::memory_order_release);
     s.maskCapture.stop(); // Cold owner only; no disk work or joining in native callbacks.
