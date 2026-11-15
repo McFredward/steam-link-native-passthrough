@@ -406,7 +406,7 @@ struct Observer {
             status.projectedAlphaStages[context]=contexts[context].producer.stage();
             const auto production=contexts[context].producer.diagnostics();
             status.production[context]={production.rootFailure,production.inputFailure,production.rootPasses,production.pairedDraws,
-                production.fp16Calls,production.fp16Prepared,production.fp16Refusal};
+                production.fp16Calls,production.fp16Prepared,production.fp16Refusal,production.rgbaBytes,production.fp16Bytes};
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();

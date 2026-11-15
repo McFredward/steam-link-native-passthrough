@@ -147,6 +147,13 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\projected-producer-typeless.log
           exit /b %SFNP_RESULT%
+      - name: Verify complete production alpha under actual ordinary-target GPU memory pressure
+        shell: cmd
+        run: |
+          build\projected-producer.exe --pressure >build\projected-producer-pressure.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-pressure.log
+          exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -160,6 +167,7 @@ jobs:
             build/projected-producer-consumer.log
             build/projected-producer-float.log
             build/projected-producer-typeless.log
+            build/projected-producer-pressure.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc

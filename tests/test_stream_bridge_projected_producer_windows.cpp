@@ -60,7 +60,7 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
     check(SUCCEEDED(image->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(resource.out())))&&SUCCEEDED(resource->GetSharedHandle(&result))&&result,"owned shared allocation identity");
     return std::uint64_t(reinterpret_cast<std::uintptr_t>(result));
 }
-void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN){
+void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false){
     const bool filtering=intermediateFormat!=DXGI_FORMAT_UNKNOWN;
     auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0"),copyCode=compile("copyFp16","ps_5_0");
     Reference<ID3D11ShaderReflection> reflection;D3D11_SHADER_DESC signature{};
@@ -85,6 +85,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     TextureObserver textures(textureObserved,nullptr,targetObserved,bufferObserved,layoutObserved);
     check(textures.prepare(device.value),"real public creation callbacks connect native targets and geometry to the producer");
     constexpr UINT width=40,height=36;const std::uint32_t scenePid=77,compositorPid=incoming?incoming->compositorPid:88;
+    const UINT intermediateWidth=pressure?1216:width,intermediateHeight=pressure?4608:height;
     const std::uint64_t lease=(std::uint64_t(7)<<32)|scenePid;channel.sourceLease(lease);
     std::vector<std::uint8_t> input(width*height*4);
     for(UINT i=0;i<width*height;++i){input[i*4]=UINT(i*17)%256;input[i*4+1]=UINT(i*39)%256;input[i*4+2]=UINT(i*71)%256;input[i*4+3]=i%3==0?0:i%3==1?127:255;}
@@ -103,6 +104,25 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     registry.retained[1]={nativeHandle,22,compositorPid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
     std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=source.value;pins[1]=native.value;
     check(external||channel.publishRetained(registry,pins),"real held source registry publication");
+    // Actual live GPU targets occupy 240 MiB of ordinary companion storage.
+    // The native-like 1216x4608 FP16 image then exceeds the old shared budget.
+    std::array<Reference<ID3D11Texture2D>,15> otherTargets;
+    std::array<Reference<ID3D11RenderTargetView>,15> otherViews;
+    Reference<ID3D11Texture2D> refusedOrdinary;Reference<ID3D11RenderTargetView> refusedOrdinaryView;
+    if(pressure){
+        auto large=desc;large.Width=large.Height=2048;large.MiscFlags=0;
+        for(unsigned i=0;i<otherTargets.size();++i)
+            check(SUCCEEDED(device->CreateTexture2D(&large,nullptr,otherTargets[i].out()))&&
+                SUCCEEDED(device->CreateRenderTargetView(otherTargets[i].value,nullptr,otherViews[i].out())),"actual live ordinary GPU target pressure");
+        const auto before=producer.diagnostics().rgbaBytes;
+        const auto floatingBytes=std::uint64_t(intermediateWidth)*intermediateHeight*8;
+        check(before==240ull*1024*1024+width*height*4&&before+floatingBytes>CompanionClassBudget,
+            "actual admitted ordinary targets would reject the required FP16 image under the old common budget");
+        large.Height=3072;
+        check(SUCCEEDED(device->CreateTexture2D(&large,nullptr,refusedOrdinary.out()))&&
+            SUCCEEDED(device->CreateRenderTargetView(refusedOrdinary.value,nullptr,refusedOrdinaryView.out()))&&
+            producer.diagnostics().rgbaBytes==before,"ordinary targets still cannot consume their reserved FP16 allowance");
+    }
     Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> ps,copy;Reference<ID3D11InputLayout> layout;Reference<ID3D11Buffer> vertices,constants;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
         SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out()))&&
@@ -112,7 +132,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     Reference<ID3D11Texture2D> intermediate;Reference<ID3D11RenderTargetView> intermediateTarget,integerTarget;
     Reference<ID3D11ShaderResourceView> intermediateView;
     if(filtering){
-        auto floating=desc;floating.Format=intermediateFormat;floating.MiscFlags=0;
+        auto floating=desc;floating.Format=intermediateFormat;floating.MiscFlags=0;floating.Width=intermediateWidth;floating.Height=intermediateHeight;
         D3D11_RENDER_TARGET_VIEW_DESC rtv{};rtv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;rtv.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
         D3D11_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;srv.Texture2D.MipLevels=1;
         check(SUCCEEDED(device->CreateTexture2D(&floating,nullptr,intermediate.out()))&&
@@ -126,6 +146,9 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         rtv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
         check(SUCCEEDED(device->CreateRenderTargetView(intermediate.value,&rtv,intermediateTarget.out())),"actual native FLOAT RTV creation");
         check(producer.diagnostics().fp16Prepared==1,"the real FLOAT RTV creation callback prepared the native intermediate");
+        check(producer.diagnostics().fp16Bytes==std::uint64_t(intermediateWidth)*intermediateHeight*8&&
+            producer.diagnostics().rgbaBytes<=CompanionClassBudget&&producer.diagnostics().fp16Bytes<=CompanionClassBudget,
+            "FP16 preparation owns its exact separate bounded reservation");
     }
     // Keep more than sixteen distinct live native objects before the actual
     // game quad. Metadata must follow each object, not the first sixteen ever.
@@ -208,11 +231,13 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
             check(producer.diagnostics().pairedDraws==before,"integer RTV cannot borrow the FLOAT interpretation of the same native storage");
         }
         context->OMSetRenderTargets(1,&intermediateTarget.value,nullptr);
+        const D3D11_VIEWPORT floatingViewport{0,0,float(intermediateWidth),float(intermediateHeight),0,1};context->RSSetViewports(1,&floatingViewport);
         producer.draw(context.value,draw,4,0);draw(context.value,4,0);
         check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==1,
             "production X pass captures actual source ancestry into an FP16 companion for this exact native target");
         ID3D11RenderTargetView* none=nullptr;context->OMSetRenderTargets(1,&none,nullptr);
         context->PSSetShaderResources(0,1,&intermediateView.value);context->OMSetRenderTargets(1,&target.value,nullptr);
+        context->RSSetViewports(1,&viewport);
         context->PSSetShader(ps.value,nullptr,0);
     }
     producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();
@@ -228,6 +253,9 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         active=nullptr;context->ClearState();return;
     }
     std::printf("production stage after release=%u\n",producer.stage());
+    if(pressure){const auto storage=producer.diagnostics();
+        std::printf("actual GPU pressure: rgba/fp16 bytes=%llu/%llu; bounded independently; native image sealed\n",
+            static_cast<unsigned long long>(storage.rgbaBytes),static_cast<unsigned long long>(storage.fp16Bytes));}
     ImageWitness witness{};check(page->witnesses[0].read(witness)&&witness.complete&&witness.sourceLease==lease&&
         witness.scene.pid==scenePid&&witness.native.pid==compositorPid&&witness.native.generation==22,"production witness separates authenticated game ancestry from actual compositor ownership");
     bool sealed=false;for(const auto& release:witness.releases)sealed|=release.allocation==nativeHandle&&release.key==3&&release.scope>1;
@@ -312,6 +340,7 @@ int main(int argc,char** argv){try{
     }else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
     else if(argc==2&&!std::strcmp(argv[1],"--float"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT);
     else if(argc==2&&!std::strcmp(argv[1],"--typeless"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS);
+    else if(argc==2&&!std::strcmp(argv[1],"--pressure"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,true);
     else {check(argc==1,"known fixture mode");run();}
     std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
 catch(const std::exception& error){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,error.what());return 1;}}

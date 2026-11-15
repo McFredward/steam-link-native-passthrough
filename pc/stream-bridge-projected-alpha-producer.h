@@ -27,7 +27,6 @@ class Producer {
     ChannelPage* page_=nullptr;ID3D11Device* device_=nullptr;
     Replay replay_;Geometry geometry_;NativeShaders* shaders_=nullptr;MutexObserver* locks_=nullptr;
     std::uint64_t nextGeneration_=1;UINT uavSlots_=D3D11_PS_CS_UAV_REGISTER_COUNT;
-    static constexpr std::uint64_t Budget=256ull*1024*1024;
     ImageState* find(ID3D11Resource* resource)noexcept{
         if(!resource)return nullptr;
         for(auto& image:images_)if(image.native.value==resource)return &image;
@@ -123,11 +122,14 @@ public:
     struct Diagnostics {
         unsigned rootFailure=0,inputFailure=0;std::uint64_t rootPasses=0,pairedDraws=0;
         unsigned fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
+        std::uint64_t rgbaBytes=0,fp16Bytes=0;
     };
     Diagnostics diagnostics()const noexcept{
         return {rootFailure_.load(std::memory_order_relaxed),inputFailure_.load(std::memory_order_relaxed),
             rootPasses_.load(std::memory_order_relaxed),pairedDraws_.load(std::memory_order_relaxed),
-            fp16Calls_.load(std::memory_order_relaxed),fp16Prepared_.load(std::memory_order_relaxed),fp16Refusal_.load(std::memory_order_relaxed)};
+            fp16Calls_.load(std::memory_order_relaxed),fp16Prepared_.load(std::memory_order_relaxed),fp16Refusal_.load(std::memory_order_relaxed),
+            page_?std::uint64_t(InterlockedCompareExchange64(&page_->companionBytes,0,0)):0,
+            page_?std::uint64_t(InterlockedCompareExchange64(&page_->fp16CompanionBytes,0,0)):0};
     }
     Geometry& geometry()noexcept{return geometry_;}
     // Called only on native resource creation, never from raster callbacks.
@@ -153,16 +155,16 @@ public:
         if(targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D&&targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS){refuse(7);return;}
         const auto bytes=std::uint64_t(desc.Width)*desc.Height*desc.SampleDesc.Count*(floating?8:4);
         for(auto& image:images_)if(!image.native.value){
-            const auto retained=InterlockedCompareExchange64(&page_->companionBytes,0,0);
-            if(retained<0||std::uint64_t(retained)>Budget||bytes>Budget-std::uint64_t(retained)||
-                InterlockedCompareExchange64(&page_->companionBytes,retained+LONG64(bytes),retained)!=retained){refuse(8);return;}
+            CompanionReservation reservation;
+            if(!reservation.claim(page_,floating,bytes)){refuse(8);return;}
             Allocation native{};const bool shared=allocation(texture.value,native)&&desc.SampleDesc.Count==1&&!floating;
             if(!image.companion.prepare(device_,desc.Width,desc.Height,shared,desc.SampleDesc.Count,desc.SampleDesc.Quality,
                 floating?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM)){
-                image.companion.reset();InterlockedExchangeAdd64(&page_->companionBytes,-LONG64(bytes));refuse(9);return;}
+                image.companion.reset();refuse(9);return;}
             Reference<ID3D11DeviceContext> context;device_->GetImmediateContext(context.out());
-            if(!image.companion.clear(context.value)){refuse(10);return;}
+            if(!image.companion.clear(context.value)){image.companion.reset();refuse(10);return;}
             image.native.value=texture.value;texture.value=nullptr;image.shape=desc;image.shared=shared;
+            reservation.commit();
             image.generation=nextGeneration_++;stage_=2;
             if(floating){fp16Prepared_.fetch_add(1,std::memory_order_relaxed);fp16Refusal_=0;}
             if(shared){
