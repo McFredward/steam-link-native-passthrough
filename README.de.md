@@ -38,11 +38,6 @@ Details zu Softwaretests und dem noch offenen Brillentest stehen in der
 [Kompatibilitätsdokumentation](docs/development/FRAME-RUNTIME-COMPATIBILITY.md).
 Installer0.3.21 berücksichtigt zusätzlich einen [Prozessabfragefehler beim Beenden von PC-SteamVR](docs/development/SETUP-PC-SHUTDOWN.md).
 
-Im stabilen Release0.3.18 behebt PC0.3.13 einen Rundungsfehler an nativen Texturgrenzen, durch den
-Passthrough in Venture schwarz bleiben konnte. Die Korrektur wurde auf Steam
-Frame bestätigt. Beim Update auf dieses stabile Release wird bei intakter Frame0.3.5-Installation nur der PC-Patch
-aktualisiert; die Frame wird dabei nicht neu gestartet.
-
 ## Native Transparenz, kein Farbersatz
 
 Das Spiel sendet Transparenz getrennt von seinen Farben; keine Farbe wird aus
@@ -71,10 +66,6 @@ Steam Link kann mit **Auto oder fester Bitrate** verwendet werden.
 | PC SteamVR | **2.18.4**, 2.17.10 |
 | Steam Frame SteamVR | **2.18.2** |
 | SteamOS auf der Steam Frame | **0.4.5** · Build `20261022.6150929` |
-
-Nach dem Frame-Update am 8. November 2026 meldet der Maintainer weiterhin
-funktionierendes Passthrough mit diesem System-Build und SteamVR 2.18.2.
-Details stehen unter [Versionsprüfung und Testumfang](docs/COMPATIBILITY.md#frame-update-follow-up-november-8-2026).
 
 ## Installation
 

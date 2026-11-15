@@ -37,10 +37,6 @@ The same Frame patch retains the previous runtime path and adds the new beta pat
 See [software validation and the remaining headset test](docs/development/FRAME-RUNTIME-COMPATIBILITY.md).
 Installer0.3.21 also handles a [process-query race during PC shutdown](docs/development/SETUP-PC-SHUTDOWN.md).
 
-In stable release0.3.18, PC0.3.13 fixes a native texture-edge rounding error that could leave passthrough
-black in Venture. The fix was confirmed on Steam Frame. Updating an intact
-Frame0.3.5 installation to that stable release changes only the PC patch and does not restart the Frame.
-
 ## Native transparency, no colour replacement
 
 The game sends transparency separately from its colours, so no colour is removed
@@ -69,10 +65,6 @@ Steam Link can use **Auto or a fixed bitrate**.
 | PC SteamVR | **2.18.4**, 2.17.10 |
 | Steam Frame SteamVR | **2.18.2** |
 | Steam Frame SteamOS | **0.4.5** · build `20261022.6150929` |
-
-After the Frame update on November 8, 2026, the maintainer reports that
-passthrough still works with this system build and SteamVR 2.18.2.
-See the [version check and test scope](docs/COMPATIBILITY.md#frame-update-follow-up-november-8-2026).
 
 ## Installation
 
