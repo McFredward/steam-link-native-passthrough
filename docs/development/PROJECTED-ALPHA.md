@@ -1,7 +1,15 @@
 # Projected game alpha
 
-Development candidate: installer0.3.37, PC0.3.24, Frame0.3.13.
-Software validation is separate from headset acceptance.
+Last delivered diagnostic candidate: installer0.3.47, PC0.3.33, Frame0.3.13.
+Headset acceptance is still failing. See the
+[central beta evidence and decision log](STEAMVR-BETA-INVESTIGATION.md) before
+changing this path or requesting another hardware test.
+
+The 0.3.47 hardware trace establishes that the game colour textures are plain
+shared resources (`MiscFlags=0x2`) without a keyed-mutex interface. Other native
+mutex calls are observed successfully. The root keyed-ownership premise below
+describes the implemented replay candidate, not a working match for that
+runtime. Its owned keyed-source fixtures do not establish actual beta support.
 
 The current PC investigation preserves coverage before the native multiview
 scene/resolve programs make their streaming tiles opaque. The ordinary native
@@ -18,7 +26,7 @@ remain diagnostics. The sender publishes only its current retained native
 opens, their actual kernel shapes and the live application lease. Numerical
 shared-handle reuse cannot bypass the retained-allocation publication gate.
 
-A root sample requires the actual application allocation and its observed
+A root sample in this replay implementation requires the actual application allocation and its observed
 successful native keyed-mutex ownership. Complete image coverage requires the
 actual vertex buffer, input layout, vertex range, viewport, clipping and native
 program contract. A partial X replay can start from an observed zero-RGBA native
