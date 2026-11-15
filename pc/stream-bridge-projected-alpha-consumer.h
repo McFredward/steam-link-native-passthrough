@@ -2,7 +2,8 @@
 #include "stream-bridge-projected-alpha-channel.h"
 
 namespace stream_bridge::sender::projected_alpha {
-// Cold mask imports remain pinned for this process. Hot selection requires the
+// Cold imports are refreshed under the caller's native context serialization.
+// The registry gate pins each registration during import/retirement. Hot selection requires the
 // actual native consumer lock and the exact producer-sealed RGB/mask version.
 class Consumer {
     struct Imported {
@@ -31,10 +32,19 @@ public:
         auto* page=channel_.page();const auto now=GetTickCount64();
         if(!device||!page||!prepare(device)||now<nextPoll_||InterlockedCompareExchange(&page->stopped,0,0))return;
         nextPoll_=now+100;
-        for(unsigned i=0;i<images_.size();++i){auto& slot=images_[i];if(slot.published.load(std::memory_order_acquire))continue;
-            MaskRegistration registration{};
-            if(!page->registrations[i].read(registration)||!registration.maskHandle||!registration.maskGeneration||
-                !registration.native.handle||!registration.native.width||!registration.native.height)continue;
+        RegistryRead retained;if(!retained.acquire(page))return;
+        for(unsigned i=0;i<images_.size();++i){auto& slot=images_[i];MaskRegistration registration{};
+            if(!page->registrations[i].read(registration))continue;
+            const auto& old=slot.registration;
+            if(slot.published.load(std::memory_order_acquire)&&old.maskHandle==registration.maskHandle&&old.maskGeneration==registration.maskGeneration&&
+                old.native.handle==registration.native.handle&&old.native.generation==registration.native.generation&&old.native.pid==registration.native.pid&&
+                old.native.width==registration.native.width&&old.native.height==registration.native.height&&old.native.format==registration.native.format&&
+                old.native.samples==registration.native.samples&&old.native.arraySize==registration.native.arraySize)continue;
+            slot.published.store(nullptr,std::memory_order_release);slot.registration={};
+            if(slot.view.value){slot.view->Release();slot.view.value=nullptr;}
+            if(slot.texture.value){slot.texture->Release();slot.texture.value=nullptr;}
+            if(!registration.maskHandle||!registration.maskGeneration||!registration.native.handle||
+                !registration.native.width||!registration.native.height)continue;
             Reference<ID3D11Texture2D> texture;Reference<ID3D11ShaderResourceView> view;
             if(FAILED(device->OpenSharedResource(reinterpret_cast<HANDLE>(std::uintptr_t(registration.maskHandle)),
                 __uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))continue;
@@ -52,15 +62,30 @@ public:
         if(!page||!liveLease||!sync||InterlockedCompareExchange(&page->stopped,0,0)||
             static_cast<std::uint64_t>(InterlockedCompareExchange64(&page->sourceLease,0,0))!=liveLease)return {};
         const auto lock=locks_.current(device,sync);if(!lock)return {};
+        RegistryRead retained;if(!retained.acquire(page))return {};
+        const auto current=[&](const Allocation& value){
+            unsigned matches=0;
+            for(const auto& known:retained.snapshot().retained)if(known.handle==value.handle&&known.generation==value.generation&&known.pid==value.pid&&
+                known.width==value.width&&known.height==value.height&&known.format==value.format&&known.samples==value.samples&&known.arraySize==value.arraySize)++matches;
+            return matches==1;
+        };
+        if(!current(native))return {};
         Selection selected{};
         for(unsigned i=0;i<images_.size();++i){auto& image=images_[i];auto* view=image.published.load(std::memory_order_acquire);
             if(!view||image.registration.native.handle!=native.handle)continue;
-            ImageWitness witness{};if(!page->witnesses[i].read(witness)||!witness.complete||!witness.imageVersion||
+            ImageWitness witness{};if(!page->witnesses[i].read(witness)||!witness.complete||!witness.imageVersion||(witness.route!=1&&witness.route!=2)||!current(witness.scene)||
                 witness.sourceLease!=liveLease||witness.scene.pid!=std::uint32_t(liveLease)||!witness.scene.generation||
                 witness.native.handle!=native.handle||witness.native.generation!=native.generation||witness.native.pid!=native.pid||
                 witness.native.width!=native.width||witness.native.height!=native.height||witness.native.format!=native.format||
                 witness.native.samples!=native.samples||witness.native.arraySize!=native.arraySize||
                 witness.maskHandle!=image.registration.maskHandle||witness.maskGeneration!=image.registration.maskGeneration)continue;
+            if(witness.route==2){
+                if(!witness.contributorCount||witness.contributorCount>witness.contributors.size())continue;
+                bool complete=true;
+                for(unsigned contributor=0;contributor<witness.contributorCount;++contributor)
+                    if(witness.contributors[contributor].pid!=std::uint32_t(liveLease)||!current(witness.contributors[contributor]))complete=false;
+                if(!complete)continue;
+            }
             bool transfer=false;
             for(const auto& release:witness.releases)if(release.allocation==lock.allocation&&release.scope>1&&release.key==lock.key)transfer=true;
             if(!transfer)continue;

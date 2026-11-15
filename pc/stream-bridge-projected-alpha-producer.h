@@ -141,6 +141,7 @@ public:
         unsigned geometryReason=0,geometryPixel=0,geometryVertex=0,geometryEmpty=0;
         std::uint64_t fp16ZeroClears=0,fp16OtherClears=0;
         unsigned rootMisc=0,rootKeyed=0;
+        unsigned captureMode=1;std::uint64_t sealedVersions=0,targetRecords=0;
     };
     Diagnostics diagnostics()const noexcept{
         return {rootFailure_.load(std::memory_order_relaxed),inputFailure_.load(std::memory_order_relaxed),

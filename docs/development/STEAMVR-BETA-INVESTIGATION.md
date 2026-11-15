@@ -288,7 +288,39 @@ sealed output versions, mask submissions and matching Frame receipt. Preserve
 the previous ordinary-RGBA and native program families, Auto/fixed resolution,
 and normal/Legacy conversion paths. This is a hypothesis, not headset acceptance.
 
-Status: implementation and required Windows/GPU controls in progress.
+Cold-creation scene/resolve/reprojection controls passed in
+[Windows/WARP run 43761470075](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43761470075),
+source `7f55dbc38847f3df3f9d7a5a4bacd22b6a1d519b`. Native source-format permission,
+observer, Windows sender resource and full native checks passed on that source.
+
+The production facade now uses `NativeProducer`: X records its one original
+RGBA operation; Y/inner/resolve emit private MRT alpha at their actual draw.
+Root admission authenticates retained game allocations without inventing a source
+keyed interface. Complete/bounded input domains, original geometry and current
+source leases remain mandatory. Conditional draws require a known blank or
+already paired native base. A compositor RGBA clear with zero RGB supplies a
+blank base even when its ordinary A is one; this is command provenance, not
+classification of game pixels by colour. FP16 blank bases still require zero A.
+
+Per-resource COM metadata dies with native objects. Cold private-alpha allocation
+is limited to512MiB and1024 records; FP16 X needs no private image. The32 export
+rows are assigned only to admitted outputs and reclaimed after their native
+retained generations retire. Cold imports use the same nonblocking registry gate
+and refresh changed row generations under the sender's native context lock.
+All actual retained contributors of an image are recorded, including multiple
+reprojection inputs from the same live game; no unrelated owner is accepted.
+
+Two-process production controls exercise plain-shared game **and** native colour
+outputs, a separate real native sync allocation, padded typeless FP16, four-sample
+scene targets, original sRGB RGBA equality, unknown logical bounds, source
+withdrawal, unknown writes through reopened aliases, changed frame data and
+retired output/registration replacement. These call the actual production
+controller, cold shader observer, private channel and consumer. They do not
+substitute a manually published test witness for producer execution.
+
+Status: local Windows syntax/link and29 owned HLSL entry points pass. The new
+complete native-controller GPU controls are pending. Installer delivery and
+headset acceptance are still pending; no device changes have been made.
 
 ## Evidence locations and maintenance
 
