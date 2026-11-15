@@ -307,7 +307,19 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         state.BackFace=state.FrontFace;
         check(SUCCEEDED(device->CreateTexture2D(&depthShape,nullptr,depthImage.out()))&&SUCCEEDED(device->CreateDepthStencilView(depthImage.value,&dsv,depthView.out()))&&
             SUCCEEDED(device->CreateDepthStencilState(&state,nativeDepth.out())),"owned real native depth/stencil target and comparison state");
-        context->ClearDepthStencilView(depthView.value,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,7);
+        context->ClearDepthStencilView(depthView.value,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,3);
+        // Prepare an actual split stencil image on the GPU. Only the left
+        // half will pass either native comparison; the right must stay zero
+        // in both ordinary RGB and the companion's fractional alpha.
+        auto fill=state;fill.DepthEnable=FALSE;fill.DepthFunc=D3D11_COMPARISON_ALWAYS;
+        fill.FrontFace.StencilFunc=D3D11_COMPARISON_ALWAYS;fill.FrontFace.StencilPassOp=D3D11_STENCIL_OP_REPLACE;fill.BackFace=fill.FrontFace;
+        Reference<ID3D11DepthStencilState> fillState;Reference<ID3D11RasterizerState> scissorState,priorRaster;
+        D3D11_RASTERIZER_DESC scissor{};scissor.FillMode=D3D11_FILL_SOLID;scissor.CullMode=D3D11_CULL_NONE;scissor.ScissorEnable=TRUE;scissor.DepthClipEnable=TRUE;
+        check(SUCCEEDED(device->CreateDepthStencilState(&fill,fillState.out()))&&SUCCEEDED(device->CreateRasterizerState(&scissor,scissorState.out())),"owned split stencil preparation states");
+        context->RSGetState(priorRaster.out());context->RSSetState(scissorState.value);
+        const D3D11_RECT leftHalf{0,0,LONG(width/2),LONG(height)};context->RSSetScissorRects(1,&leftHalf);
+        context->OMSetRenderTargets(0,nullptr,depthView.value);context->OMSetDepthStencilState(fillState.value,7);draw(context.value,4,0);
+        context->RSSetState(priorRaster.value);
         context->OMSetRenderTargets(1,&target.value,depthView.value);context->OMSetDepthStencilState(nativeDepth.value,7);
         const auto before=producer.diagnostics().pairedDraws;producer.draw(context.value,draw,4,0);
         check(producer.stage()==2021&&producer.diagnostics().pairedDraws==before,"conditional depth/stencil draw cannot complete an unknown destination");
@@ -348,12 +360,15 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         __uuidof(ID3D11Texture2D),reinterpret_cast<void**>(mask.out()))),"import actual production mask");
     check(streamMutex->AcquireSync(3,0)==S_OK,"actual consumer owns the exact image version");
     const auto nativePixels=pixels(device.value,context.value,native.value),maskPixels=pixels(device.value,context.value,mask.value);
-    for(UINT i=0;i<width*height;++i){check(nativePixels[i*4+3]==255,"ordinary native alpha policy remains opaque");
-        check(maskPixels[i*4+3]==input[i*4+3],"production mask preserves every zero/fractional/opaque source alpha");
-        for(unsigned c=0;c<3;++c)check(nativePixels[i*4+c]==input[i*4+c]&&!maskPixels[i*4+c],"native RGB including additive zero-alpha colour unchanged; no RGB exported");}
+    for(UINT i=0;i<width*height;++i){const bool visible=!depthTests||(i%width)<width/2;
+        check(nativePixels[i*4+3]==(visible?255:0),"native opaque-alpha policy and actual rejected stencil region remain unchanged");
+        check(maskPixels[i*4+3]==(visible?input[i*4+3]:0),"production alpha preserves source coverage only where the native comparison passed");
+        for(unsigned c=0;c<3;++c)check(nativePixels[i*4+c]==(visible?input[i*4+c]:0)&&!maskPixels[i*4+c],"native RGB including additive zero-alpha colour unchanged; no RGB exported");}
     if(depthTests){
         const auto actual=pixels(device.value,context.value,depthImage.value);
-        for(UINT i=0;i<width*height;++i)check(actual[i*4+3]==9,"the original native passes increment stencil exactly once each; companion writes none");
+        for(UINT i=0;i<width*height;++i){const bool visible=(i%width)<width/2;
+            check(actual[i*4+3]==(visible?9:3),"original passes increment accepted stencil exactly once and preserve rejected pixels; companion writes none");
+            check(visible?(!actual[i*4]&&!actual[i*4+1]&&!actual[i*4+2]):(actual[i*4]==255&&actual[i*4+1]==255&&actual[i*4+2]==255),"actual depth writes belong only to accepted native pixels");}
         std::printf("owned depth/stencil comparison: two exact native updates, no companion attachment writes; native RGB and alpha-only image verified\n");
     }
     producer.invalidate(native.value);check(page->witnesses[0].read(witness)&&!witness.complete,"unsupported native write revokes the previously sealed image before reuse");
