@@ -7,7 +7,7 @@
 using namespace stream_bridge::sender;
 using namespace stream_bridge::sender::projected_alpha;
 namespace {
-unsigned checks=0;Producer* active=nullptr;MutexObserver* activeLocks=nullptr;
+unsigned checks=0,nativeDrawCalls=0;Producer* active=nullptr;MutexObserver* activeLocks=nullptr;
 struct CrossProcess {ChannelLaunch launch{};std::uint64_t source=0,native=0;std::uint32_t compositorPid=0;};
 void check(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
 void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);}
@@ -21,7 +21,7 @@ void bufferObserved(ID3D11Device*,const D3D11_BUFFER_DESC* desc,const D3D11_SUBR
 void layoutObserved(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T bytes,ID3D11InputLayout* layout,void*)noexcept{
     if(active)active->geometry().layout(desc,count,code,bytes,layout);
 }
-void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){context->Draw(count,start);}
+void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){++nativeDrawCalls;context->Draw(count,start);}
 // Owned DXGI-only forwarding control: a distinct public method table, no
 // reverse D3D texture QI, and nested forwarding into the real WARP mutex.
 // All keys/results/GPU synchronization still come from the original resource.
@@ -425,6 +425,69 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     check(nativeRelease(sourceMutex.value,0)==S_OK,"native application ownership ends");
     active=nullptr;activeLocks=nullptr;context->ClearState();
 }
+void nativeSingleDrawControl(){
+    auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0");
+    Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,
+        D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"actual single-draw WARP device");
+    Replay operation;check(operation.prepare(device.value,{kernels::Clone64.data(),kernels::Clone64.size()},
+        {kernels::Clone80.data(),kernels::Clone80.size()},{kernels::Clone32.data(),kernels::Clone32.size()}),"cold single-draw policy preparation");
+    constexpr UINT width=40,height=36;
+    std::vector<std::uint8_t> data(width*height*4);
+    for(UINT i=0;i<width*height;++i){data[i*4]=UINT(i*17)%256;data[i*4+1]=UINT(i*39)%256;data[i*4+2]=UINT(i*71)%256;data[i*4+3]=i%3==0?0:i%3==1?127:255;}
+    D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=desc.SampleDesc.Count=1;
+    desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
+    desc.MiscFlags=D3D11_RESOURCE_MISC_SHARED;
+    D3D11_SUBRESOURCE_DATA initial{data.data(),width*4,0};
+    Reference<ID3D11Texture2D> source,output;Reference<ID3D11ShaderResourceView> view;Reference<ID3D11RenderTargetView> target;
+    check(SUCCEEDED(device->CreateTexture2D(&desc,&initial,source.out()))&&SUCCEEDED(device->CreateTexture2D(&desc,nullptr,output.out()))&&
+        SUCCEEDED(device->CreateShaderResourceView(source.value,nullptr,view.out()))&&SUCCEEDED(device->CreateRenderTargetView(output.value,nullptr,target.out())),"plain shared colour resources");
+    Reference<IDXGIKeyedMutex> absent;
+    check(source->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(absent.out()))==E_NOINTERFACE&&
+        output->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(absent.out()))==E_NOINTERFACE,
+        "both actual source and output deliberately have no keyed-mutex interface");
+    Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> ps;Reference<ID3D11InputLayout> layout;
+    check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
+        SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"unchanged original shaders");
+    const D3D11_INPUT_ELEMENT_DESC elements[]{{"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
+    check(SUCCEEDED(device->CreateInputLayout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual original layout");
+    const std::array<float,16> points{{0,0,7,7,0,1,7,8,1,0,8,7,1,1,8,8}};
+    D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA verticesData{points.data(),0,0};Reference<ID3D11Buffer> vertices;
+    check(SUCCEEDED(device->CreateBuffer(&buffer,&verticesData,vertices.out())),"native original vertex bytes");
+    context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);context->PSSetShaderResources(0,1,&view.value);
+    context->IASetInputLayout(layout.value);UINT stride=16,offset=0;context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);context->OMSetRenderTargets(1,&target.value,nullptr);
+    const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
+    for(unsigned bytes:std::array<unsigned,2>{64,80}){
+        std::array<float,20> words{};words[4]=words[5]=words[6]=1;
+        buffer={};buffer.ByteWidth=bytes;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        D3D11_SUBRESOURCE_DATA constantsData{words.data(),0,0};Reference<ID3D11Buffer> constants;
+        check(SUCCEEDED(device->CreateBuffer(&buffer,&constantsData,constants.out())),"native policy buffer for both reviewed sizes");
+        context->PSSetConstantBuffers(0,1,&constants.value);draw(context.value,4,0);
+        const auto ordinary=pixels(device.value,context.value,output.value);const auto before=nativeDrawCalls;
+        check(operation.nativeAlpha(context.value,ps.value,bytes,false,draw,4,0)&&nativeDrawCalls==before+1,
+            "native alpha executes the original scene draw exactly once, without replaying its source");
+        const auto alpha=pixels(device.value,context.value,output.value);
+        for(UINT i=0;i<width*height;++i){
+            check(ordinary[i*4+3]==255&&alpha[i*4+3]==data[i*4+3],"real alpha survives the original opaque-output policy");
+            for(unsigned c=0;c<3;++c)check(ordinary[i*4+c]==alpha[i*4+c]&&alpha[i*4+c]==data[i*4+c],"every native RGB byte, including positive emission at alpha zero, remains unchanged");
+        }
+        Reference<ID3D11Buffer> restored;context->PSGetConstantBuffers(0,1,restored.out());
+        Reference<ID3D11PixelShader> restoredProgram;context->PSGetShader(restoredProgram.out(),nullptr,nullptr);
+        Reference<ID3D11RenderTargetView> restoredTarget;context->OMGetRenderTargets(1,restoredTarget.out(),nullptr);
+        check(restored.value==constants.value&&restoredProgram.value==ps.value&&restoredTarget.value==target.value,
+            "original buffer, program and render target remain bound after the single native draw");
+        check(!operation.nativeAlpha(context.value,ps.value,48,false,draw,4,0)&&nativeDrawCalls==before+1,"unknown policy prefix neither draws nor grants alpha capture");
+    }
+    D3D11_BLEND_DESC blend{};blend.RenderTarget[0].RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;blend.AlphaToCoverageEnable=TRUE;
+    Reference<ID3D11BlendState> coverageBlend;check(SUCCEEDED(device->CreateBlendState(&blend,coverageBlend.out())),"actual alpha-dependent sample coverage state");
+    context->OMSetBlendState(coverageBlend.value,nullptr,UINT_MAX);const auto before=nativeDrawCalls;
+    check(!operation.nativeAlpha(context.value,ps.value,64,false,draw,4,0)&&nativeDrawCalls==before,"alpha-to-coverage cannot silently change RGB sample coverage");
+    context->OMSetBlendState(nullptr,nullptr,UINT_MAX);context->ClearState();
+    std::printf("owned single native draw: plain-shared non-keyed input/output;64/80-byte policies; exact original RGB and true alpha; no image/frame permit yet\n");
+}
 void consumerControl(){
     Consumer consumer;auto& channel=consumer.channel();check(channel.page()!=nullptr,"private parent consumer channel");
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
@@ -488,7 +551,8 @@ int main(int argc,char** argv){try{
         CrossProcess message{};DWORD received=0;
         check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&message,sizeof message,&received,nullptr)&&received==sizeof message,"owned launch pipe payload");
         ChannelPeer peer;check(peer.open(message.launch),"child binds the actual private kernel channel");run(&message,peer.page());
-    }else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
+    }else if(argc==2&&!std::strcmp(argv[1],"--native-single"))nativeSingleDrawControl();
+    else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
     else if(argc==2&&!std::strcmp(argv[1],"--float"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT);
     else if(argc==2&&!std::strcmp(argv[1],"--typeless"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS);
     else if(argc==2&&!std::strcmp(argv[1],"--pressure"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,true);
