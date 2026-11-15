@@ -558,7 +558,12 @@ void nativeMrtControl(){
     // Exercise the bounded cold bytecode derivation, not just a hand-authored
     // paired shader. Original executable instructions and constants stay intact.
     auto originalScene=compileCapture("sceneNative");std::vector<std::uint8_t> augmented;
-    check(scene_capture::derive(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),augmented),"cold original-scene bytecode derivation");
+    const auto derived=scene_capture::derive(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),augmented);
+    if(!derived){Reference<ID3DBlob> diagnostic;
+        if(SUCCEEDED(D3DDisassemble(originalScene->GetBufferPointer(),originalScene->GetBufferSize(),0,nullptr,diagnostic.out())))
+            std::fwrite(diagnostic->GetBufferPointer(),1,diagnostic->GetBufferSize(),stderr);
+    }
+    check(derived,"cold original-scene bytecode derivation");
     programs[2]->Release();programs[2].value=nullptr;
     check(SUCCEEDED(device->CreatePixelShader(augmented.data(),augmented.size(),nullptr,programs[2].out())),"actual Windows validation accepts the derived MRT scene program");
     Reference<ID3D11ShaderReflection> derivedReflection;D3D11_SHADER_DESC derivedDescription{};
