@@ -21,7 +21,7 @@ def main():
             ('vertex', 'vs'), ('quad', 'vs'), ('unitQuad', 'vs'), ('white', 'ps'),
             ('pixel', 'ps'), ('pixel64', 'ps'), ('copyRgba', 'ps'), ('compute', 'cs')]),
         ('tests/test_stream_bridge_projected_alpha_gpu.cpp', 'ResolveFixture', [('resolve', 'ps')]),
-        ('tests/test_stream_bridge_projected_producer_windows.cpp', 'ProducerFixture', [('vs', 'vs'), ('layoutVS', 'vs'), ('ps', 'ps'), ('copyFp16', 'ps'), ('boundedY', 'ps'), ('compute', 'cs'), ('outside', 'cs')]),
+        ('tests/test_stream_bridge_projected_producer_windows.cpp', 'ProducerFixture', [('vs', 'vs'), ('layoutVS', 'vs'), ('ps', 'ps'), ('copyFp16', 'ps'), ('boundedY', 'ps'), ('reprojectVS', 'vs'), ('reprojectCopy', 'ps'), ('compute', 'cs'), ('outside', 'cs')]),
     ]
     checked = 0
     with tempfile.TemporaryDirectory(prefix='sfnp-owned-hlsl-') as temporary:
