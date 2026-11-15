@@ -80,6 +80,50 @@ float4 boundedY(float4 xy:SV_Position):SV_Target{
     value.a=words[3].y==0?1:value.a;return value;
 }
 )";
+// Entirely owned semantic controls, not redistributed native shader bodies.
+// The resolve deliberately includes alpha-dependent RGB, which the earlier
+// opaque-alpha-only resolve fixture omitted.
+constexpr char CaptureFixture[]=R"(
+cbuffer Scene : register(b0) {float4 words[4];};
+cbuffer Policy : register(b2) {float4 flags[2];};
+Texture2D<float4> scene : register(t0);
+Texture2DMS<float4,4> nativeSamples : register(t0);
+Texture2DMS<float4,4> privateSamples : register(t1);
+struct Pair {float4 native : SV_Target0;float4 coverage : SV_Target1;};
+float4 sceneValue(float4 xy){float4 v=scene.Load(int3(int2(xy.xy),0));v.rgb*=words[1].xyz;return v;}
+float4 sceneNative(float4 xy:SV_Position):SV_Target{
+    float4 v=sceneValue(xy);if(words[3].y==0)v.a=1;return v;
+}
+float4 sceneReference(float4 xy:SV_Position):SV_Target{return sceneValue(xy);}
+Pair sceneCapture(float4 xy:SV_Position){
+    float4 v=sceneValue(xy);Pair p;p.coverage=float4(0,0,0,v.a);
+    if(words[3].y==0)v.a=1;p.native=v;return p;
+}
+float4 nativeAverage(float4 xy){
+    int2 p=int2(xy.xy);return ((nativeSamples.Load(p,0)+nativeSamples.Load(p,1))+
+        (nativeSamples.Load(p,2)+nativeSamples.Load(p,3)))*0.25;
+}
+float4 resolveValue(float4 xy){
+    float4 v=nativeAverage(xy);
+    if(flags[0].x>0){v=saturate(v);v.rgb+=flags[1].xyz*(1-v.a);v.a=1;}
+    return v;
+}
+float4 resolveNative(float4 xy:SV_Position):SV_Target{return resolveValue(xy);}
+float4 resolveReference(float4 xy:SV_Position):SV_Target{return nativeAverage(xy);}
+Pair resolveCapture(float4 xy:SV_Position){
+    Pair p;p.native=resolveValue(xy);int2 at=int2(xy.xy);
+    float a=((privateSamples.Load(at,0).a+privateSamples.Load(at,1).a)+
+        (privateSamples.Load(at,2).a+privateSamples.Load(at,3).a))*0.25;
+    p.coverage=float4(0,0,0,a);return p;
+}
+)";
+Reference<ID3DBlob> compileCapture(const char* entry){
+    Reference<ID3DBlob> code,error;
+    const auto result=D3DCompile(CaptureFixture,sizeof CaptureFixture-1,nullptr,nullptr,nullptr,
+        entry,"ps_5_0",D3DCOMPILE_ENABLE_STRICTNESS,0,code.out(),error.out());
+    if(error.value)std::fwrite(error->GetBufferPointer(),1,error->GetBufferSize(),stderr);
+    check(SUCCEEDED(result),"owned native RGBA plus same-draw alpha shader");return code;
+}
 Reference<ID3DBlob> compile(const char* entry,const char* target){
     Reference<ID3DBlob> code,error;const auto result=D3DCompile(ProducerFixture,sizeof ProducerFixture-1,nullptr,nullptr,nullptr,
         entry,target,D3DCOMPILE_ENABLE_STRICTNESS,0,code.out(),error.out());
@@ -488,6 +532,159 @@ void nativeSingleDrawControl(){
     context->OMSetBlendState(nullptr,nullptr,UINT_MAX);context->ClearState();
     std::printf("owned single native draw: plain-shared non-keyed input/output;64/80-byte policies; exact original RGB and true alpha; no image/frame permit yet\n");
 }
+void nativeMrtControl(){
+    Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,
+        D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"actual MRT single-threaded WARP device");
+    Replay operation;check(operation.prepare(device.value,{kernels::Clone64.data(),kernels::Clone64.size()},
+        {kernels::Clone80.data(),kernels::Clone80.size()},{kernels::Clone32.data(),kernels::Clone32.size()}),"cold MRT preparation");
+    constexpr UINT width=40,height=36;
+    auto vsCode=compile("vs","vs_5_0");Reference<ID3D11VertexShader> vs;Reference<ID3D11InputLayout> layout;
+    const D3D11_INPUT_ELEMENT_DESC elements[]{{"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
+    check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
+        SUCCEEDED(device->CreateInputLayout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"unchanged owned native vertex pipeline");
+    const std::array<float,16> points{{0,0,7,7,0,1,7,8,1,0,8,7,1,1,8,8}};
+    D3D11_BUFFER_DESC bd{};bd.ByteWidth=sizeof points;bd.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA verticesData{points.data(),0,0};Reference<ID3D11Buffer> vertices;
+    check(SUCCEEDED(device->CreateBuffer(&bd,&verticesData,vertices.out())),"original owned quad");
+    UINT stride=16,offset=0;context->IASetInputLayout(layout.value);context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);context->VSSetShader(vs.value,nullptr,0);
+    std::array<Reference<ID3D11PixelShader>,6> programs;
+    const std::array<const char*,6> names{{"sceneNative","sceneReference","sceneCapture","resolveNative","resolveReference","resolveCapture"}};
+    for(unsigned i=0;i<names.size();++i){auto code=compileCapture(names[i]);
+        check(SUCCEEDED(device->CreatePixelShader(code->GetBufferPointer(),code->GetBufferSize(),nullptr,programs[i].out())),"owned native/reference/augmented pixel programs");}
+    auto xCode=compile("copyFp16","ps_5_0");Reference<ID3D11PixelShader> xProgram;
+    check(SUCCEEDED(device->CreatePixelShader(xCode->GetBufferPointer(),xCode->GetBufferSize(),nullptr,xProgram.out())),"unchanged FP16 X program");
+    struct Target {Reference<ID3D11Texture2D> image;Reference<ID3D11ShaderResourceView> source;Reference<ID3D11RenderTargetView> target;};
+    const auto create=[&](Target& target,UINT samples,DXGI_FORMAT format,bool shared){
+        D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;desc.MipLevels=desc.ArraySize=1;
+        desc.SampleDesc.Count=samples;desc.Format=format;desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+        desc.MiscFlags=shared?D3D11_RESOURCE_MISC_SHARED:0;
+        check(SUCCEEDED(device->CreateTexture2D(&desc,nullptr,target.image.out()))&&
+            SUCCEEDED(device->CreateShaderResourceView(target.image.value,nullptr,target.source.out()))&&
+            SUCCEEDED(device->CreateRenderTargetView(target.image.value,nullptr,target.target.out())),"native chain resource");
+    };
+    Target source,x,normalMsaa,pairedMsaa,referenceMsaa,naiveMsaa,normalFinal,pairedFinal,referenceFinal,naiveFinal;
+    create(source,1,DXGI_FORMAT_R8G8B8A8_UNORM,true);create(x,1,DXGI_FORMAT_R16G16B16A16_FLOAT,false);
+    for(auto* target:{&normalMsaa,&pairedMsaa,&referenceMsaa,&naiveMsaa})create(*target,4,DXGI_FORMAT_R8G8B8A8_UNORM,false);
+    for(auto* target:{&normalFinal,&pairedFinal,&referenceFinal,&naiveFinal})create(*target,1,DXGI_FORMAT_R8G8B8A8_UNORM,true);
+    Reference<IDXGIKeyedMutex> absent;
+    check(source.image->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(absent.out()))==E_NOINTERFACE&&
+        pairedFinal.image->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(absent.out()))==E_NOINTERFACE,
+        "actual plain-shared game and output images have no keyed interface");
+    Image capturedMsaa,capturedFinal;
+    check(capturedMsaa.prepare(device.value,width,height,false,4)&&capturedFinal.prepare(device.value,width,height,true),"private alpha targets prepared cold");
+    Reference<ID3D11DeviceContext1> ranges;
+    check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(ranges.out()))),"native logical constant range interface");
+    D3D11_RASTERIZER_DESC rasterDesc{};rasterDesc.FillMode=D3D11_FILL_SOLID;rasterDesc.CullMode=D3D11_CULL_NONE;
+    rasterDesc.MultisampleEnable=TRUE;rasterDesc.DepthClipEnable=TRUE;
+    Reference<ID3D11RasterizerState> raster;
+    check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,raster.out())),"native sample positions and raster state");context->RSSetState(raster.value);
+    const D3D11_VIEWPORT full{0,0,float(width),float(height),0,1},fractional{.25f,.5f,float(width)-1,float(height)-1,0,1};
+    const FLOAT zero[4]{};std::vector<std::uint8_t> input(width*height*4);
+    unsigned changedByNaive=0;
+    for(unsigned bytes:{64u,80u})for(UINT rangeOffset:{0u,256u}){
+        for(UINT i=0;i<width*height;++i){input[i*4]=UINT(i*17+bytes)%256;input[i*4+1]=UINT(i*39+rangeOffset)%256;
+            input[i*4+2]=UINT(i*71)%256;input[i*4+3]=i%3==0?0:i%3==1?127:255;}
+        context->UpdateSubresource(source.image.value,0,nullptr,input.data(),width*4,0);
+        context->OMSetRenderTargets(1,&x.target.value,nullptr);context->PSSetShaderResources(0,1,&source.source.value);
+        context->PSSetShader(xProgram.value,nullptr,0);context->RSSetViewports(1,&full);context->OMSetBlendState(nullptr,nullptr,UINT_MAX);draw(context.value,4,0);
+        std::vector<float> words(rangeOffset?128:bytes/4);words[rangeOffset/4+4]=words[rangeOffset/4+5]=words[rangeOffset/4+6]=1;
+        bd={};bd.ByteWidth=UINT(words.size()*4);bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        D3D11_SUBRESOURCE_DATA initial{words.data(),0,0};Reference<ID3D11Buffer> cb;
+        check(SUCCEEDED(device->CreateBuffer(&bd,&initial,cb.out())),"64/80-byte scene constants, also at nonzero logical offsets");
+        UINT first=rangeOffset/16,number=rangeOffset?16:bytes/16;
+        context->PSSetConstantBuffers(0,1,&cb.value);if(rangeOffset)ranges->PSSetConstantBuffers1(0,1,&cb.value,&first,&number);
+        UINT sceneFirst=0,sceneNumber=0;Reference<ID3D11Buffer> sceneBound;
+        ranges->PSGetConstantBuffers1(0,1,sceneBound.out(),&sceneFirst,&sceneNumber);
+        context->RSSetViewports(1,&fractional);context->OMSetBlendState(nullptr,nullptr,0xbu);
+        for(auto* target:{&normalMsaa,&pairedMsaa,&referenceMsaa,&naiveMsaa})context->ClearRenderTargetView(target->target.value,zero);
+        check(capturedMsaa.clear(context.value),"only an explicit known clear supplies this fixture's private untouched region");
+        context->PSSetShaderResources(0,1,&x.source.value);context->PSSetShader(programs[0].value,nullptr,0);
+        context->OMSetRenderTargets(1,&normalMsaa.target.value,nullptr);draw(context.value,4,0);
+        context->PSSetShader(programs[1].value,nullptr,0);context->OMSetRenderTargets(1,&referenceMsaa.target.value,nullptr);draw(context.value,4,0);
+        context->PSSetShader(programs[0].value,nullptr,0);context->OMSetRenderTargets(1,&naiveMsaa.target.value,nullptr);
+        check(operation.nativeAlpha(context.value,programs[0].value,bytes,false,draw,4,0),"counterexample executes the scene-only carrier primitive");
+        context->OMSetRenderTargets(1,&pairedMsaa.target.value,nullptr);const auto before=nativeDrawCalls;
+        check(operation.nativeCapture(context.value,capturedMsaa,programs[0].value,programs[2].value,draw,4,0)&&nativeDrawCalls==before+1,
+            "MRT captures genuine alpha in exactly one original scene operation");
+        Reference<ID3D11Buffer> bound;UINT gotFirst=0,gotNumber=0;ranges->PSGetConstantBuffers1(0,1,bound.out(),&gotFirst,&gotNumber);
+        check(bound.value==cb.value&&gotFirst==sceneFirst&&gotNumber==sceneNumber,"MRT leaves the native scene constant buffer and logical range unchanged");
+        for(unsigned policy:{0u,1u}){
+            std::array<float,128> flags{};flags[rangeOffset/4]=float(policy);
+            flags[rangeOffset/4+4]=.2f;flags[rangeOffset/4+5]=.3f;flags[rangeOffset/4+6]=.4f;
+            bd.ByteWidth=rangeOffset?512:32;D3D11_SUBRESOURCE_DATA policyData{flags.data(),0,0};Reference<ID3D11Buffer> policyBuffer;
+            check(SUCCEEDED(device->CreateBuffer(&bd,&policyData,policyBuffer.out())),"unchanged real resolve policy buffer");
+            first=rangeOffset/16;number=rangeOffset?16:2;
+            context->PSSetConstantBuffers(2,1,&policyBuffer.value);if(rangeOffset)ranges->PSSetConstantBuffers1(2,1,&policyBuffer.value,&first,&number);
+            UINT policyFirst=0,policyNumber=0;Reference<ID3D11Buffer> policyBound;
+            ranges->PSGetConstantBuffers1(2,1,policyBound.out(),&policyFirst,&policyNumber);
+            context->RSSetViewports(1,&full);context->OMSetBlendState(nullptr,nullptr,UINT_MAX);
+            context->PSSetShader(programs[3].value,nullptr,0);context->PSSetShaderResources(0,1,&normalMsaa.source.value);
+            context->OMSetRenderTargets(1,&normalFinal.target.value,nullptr);draw(context.value,4,0);
+            context->PSSetShaderResources(0,1,&naiveMsaa.source.value);context->OMSetRenderTargets(1,&naiveFinal.target.value,nullptr);draw(context.value,4,0);
+            context->PSSetShaderResources(0,1,&pairedMsaa.source.value);context->OMSetRenderTargets(1,&pairedFinal.target.value,nullptr);
+            const auto preResolve=nativeDrawCalls;
+            check(!operation.nativeAlpha(context.value,programs[3].value,32,true,draw,4,0)&&nativeDrawCalls==preResolve,
+                "resolve constant rewriting is explicitly excluded from the native carrier experiment");
+            check(operation.nativeCapture(context.value,capturedFinal,programs[3].value,programs[5].value,draw,4,0,&capturedMsaa)&&nativeDrawCalls==preResolve+1,
+                "one native resolve preserves original t0/b2 and pairs private true alpha");
+            Reference<ID3D11ShaderResourceView> t1;context->PSGetShaderResources(1,1,t1.out());
+            check(!t1.value,"temporary private resolve input is unbound after the original operation");
+            Reference<ID3D11Buffer> restoredPolicy;
+            ranges->PSGetConstantBuffers1(2,1,restoredPolicy.out(),&gotFirst,&gotNumber);
+            check(restoredPolicy.value==policyBuffer.value&&gotFirst==policyFirst&&gotNumber==policyNumber,"native resolve policy and its exact range are untouched");
+            const auto ordinary=pixels(device.value,context.value,normalFinal.image.value),paired=pixels(device.value,context.value,pairedFinal.image.value);
+            const auto naive=pixels(device.value,context.value,naiveFinal.image.value),alpha=pixels(device.value,context.value,capturedFinal.resource());
+            context->PSSetShader(programs[4].value,nullptr,0);context->PSSetShaderResources(0,1,&referenceMsaa.source.value);
+            context->OMSetRenderTargets(1,&referenceFinal.target.value,nullptr);draw(context.value,4,0);
+            const auto reference=pixels(device.value,context.value,referenceFinal.image.value);
+            unsigned transparent=0,fractionalAlpha=0;
+            for(UINT i=0;i<width*height;++i){
+                check(alpha[i*4+3]==reference[i*4+3]&&!alpha[i*4]&&!alpha[i*4+1]&&!alpha[i*4+2],"same-draw MSAA coverage matches independent reference without exporting RGB");
+                transparent+=alpha[i*4+3]==0;fractionalAlpha+=alpha[i*4+3]>0&&alpha[i*4+3]<255;
+                for(unsigned c=0;c<4;++c)check(ordinary[i*4+c]==paired[i*4+c],"every downstream native RGBA byte stays equal with either resolve policy");
+                for(unsigned c=0;c<3;++c)if(policy&&ordinary[i*4+c]!=naive[i*4+c])++changedByNaive;
+            }
+            check(transparent&&fractionalAlpha,"real holes, fractional alpha, MSAA sample mask and subpixel edges exercised");
+            context->PSSetShader(programs[3].value,nullptr,0);
+        }
+    }
+    check(changedByNaive>0,"negative control proves native-alpha propagation changes downstream RGB when the real resolve policy depends on alpha");
+    // Original depth/stencil updates run once, in the same raster operation.
+    Target depthColour;create(depthColour,1,DXGI_FORMAT_R8G8B8A8_UNORM,true);Image depthAlpha;
+    check(depthAlpha.prepare(device.value,width,height),"private single-sample depth coverage target");
+    D3D11_TEXTURE2D_DESC dd{};dd.Width=width;dd.Height=height;dd.MipLevels=dd.ArraySize=dd.SampleDesc.Count=1;
+    dd.Format=DXGI_FORMAT_R24G8_TYPELESS;dd.BindFlags=D3D11_BIND_DEPTH_STENCIL;
+    Reference<ID3D11Texture2D> depth;Reference<ID3D11DepthStencilView> dsv;
+    D3D11_DEPTH_STENCIL_VIEW_DESC dv{};dv.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;dv.ViewDimension=D3D11_DSV_DIMENSION_TEXTURE2D;
+    D3D11_DEPTH_STENCIL_DESC ds{};ds.DepthEnable=TRUE;ds.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;ds.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
+    ds.StencilEnable=TRUE;ds.StencilReadMask=ds.StencilWriteMask=255;ds.FrontFace.StencilFunc=D3D11_COMPARISON_ALWAYS;
+    ds.FrontFace.StencilFailOp=ds.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;ds.FrontFace.StencilPassOp=D3D11_STENCIL_OP_INCR_SAT;ds.BackFace=ds.FrontFace;
+    Reference<ID3D11DepthStencilState> state;
+    check(SUCCEEDED(device->CreateTexture2D(&dd,nullptr,depth.out()))&&SUCCEEDED(device->CreateDepthStencilView(depth.value,&dv,dsv.out()))&&
+        SUCCEEDED(device->CreateDepthStencilState(&ds,state.out())),"actual owned native depth and stencil attachments");
+    context->ClearDepthStencilView(dsv.value,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,7);
+    context->ClearRenderTargetView(depthColour.target.value,zero);check(depthAlpha.clear(context.value),"explicit depth control clear");
+    rasterDesc.ScissorEnable=TRUE;Reference<ID3D11RasterizerState> scissor;
+    check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,scissor.out())),"actual split native raster coverage");context->RSSetState(scissor.value);
+    const D3D11_RECT leftHalf{0,0,LONG(width/2),LONG(height)};context->RSSetScissorRects(1,&leftHalf);context->RSSetViewports(1,&full);
+    context->PSSetShader(programs[0].value,nullptr,0);context->PSSetShaderResources(0,1,&source.source.value);
+    context->OMSetRenderTargets(1,&depthColour.target.value,dsv.value);context->OMSetDepthStencilState(state.value,0);
+    const auto before=nativeDrawCalls;
+    check(operation.nativeCapture(context.value,depthAlpha,programs[0].value,programs[2].value,draw,4,0)&&nativeDrawCalls==before+1,"original depth/stencil operation is executed once with native and private output");
+    const auto depthBytes=pixels(device.value,context.value,depth.value),alpha=pixels(device.value,context.value,depthAlpha.resource());
+    for(UINT i=0;i<width*height;++i){const bool visible=(i%width)<width/2;
+        check(depthBytes[i*4+3]==(visible?8:7),"native stencil increments exactly once and rejected region remains untouched");
+        check(alpha[i*4+3]==(visible?input[i*4+3]:0),"private coverage uses the actual native scissor/depth/stencil decisions");}
+    Reference<ID3D11RenderTargetView> restoredTarget;Reference<ID3D11DepthStencilView> restoredDepth;
+    context->OMGetRenderTargets(1,restoredTarget.out(),restoredDepth.out());Reference<ID3D11PixelShader> restoredShader;
+    context->PSGetShader(restoredShader.out(),nullptr,nullptr);
+    check(restoredTarget.value==depthColour.target.value&&restoredDepth.value==dsv.value&&restoredShader.value==programs[0].value,"original native target/depth/program restored");
+    context->ClearState();
+    std::printf("owned MRT chain: plain-shared non-keyed source/output; FP16 X,4x MSAA,64/80-byte ranged scene constants, both ranged resolve policies; native RGBA unchanged; true alpha; stencil once; naive carrier changes %u RGB bytes. No production image/frame permit.\n",changedByNaive);
+}
 void consumerControl(){
     Consumer consumer;auto& channel=consumer.channel();check(channel.page()!=nullptr,"private parent consumer channel");
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
@@ -552,6 +749,7 @@ int main(int argc,char** argv){try{
         check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&message,sizeof message,&received,nullptr)&&received==sizeof message,"owned launch pipe payload");
         ChannelPeer peer;check(peer.open(message.launch),"child binds the actual private kernel channel");run(&message,peer.page());
     }else if(argc==2&&!std::strcmp(argv[1],"--native-single"))nativeSingleDrawControl();
+    else if(argc==2&&!std::strcmp(argv[1],"--native-mrt"))nativeMrtControl();
     else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
     else if(argc==2&&!std::strcmp(argv[1],"--float"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT);
     else if(argc==2&&!std::strcmp(argv[1],"--typeless"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS);

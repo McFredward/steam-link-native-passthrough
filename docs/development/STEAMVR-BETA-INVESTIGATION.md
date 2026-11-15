@@ -175,9 +175,52 @@ This tests a primitive only. Its source, complete native scene/filter/resolve
 graph, unknown-write handling and Present/encoder handoff remain to be integrated
 and validated before another headset candidate. It grants no image/frame permit.
 
-Status: local syntax/HLSL checks and actual Windows GPU execution are being run.
-No installer or native patch version has been delivered for E048. Retain this
-distinction when recording its eventual software result.
+Software result: Windows/WARP control `--native-single` passed **11,547**
+checks in [run 43756945330](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43756945330).
+The source observation and native Windows sender checks also passed. This proves
+the local scene operation only; it does not prove downstream RGB preservation.
+
+**Do not activate the naive carrier.** Review of the retained native resolve
+shows that the positive logical-b2 byte-0 branch also computes RGB using input
+alpha and background/colour policy. It is not solely an opaque-alpha switch.
+Changing the upstream native alpha, or disabling that resolve branch, can thus
+change native RGB. The earlier owned `ResolveFixture` modelled only its alpha
+selection, so its passing result cannot establish whole-pipeline RGB equality.
+The private replay remains valid only for its existing alpha-only extraction
+purpose; that is different from applying the same constant edit to native RGB.
+The experimental native carrier now explicitly refuses resolve operations.
+
+This is a static review of the retained reviewed program, not proof that every
+installed frame enables that branch. The requirement to preserve native output
+must hold with either current policy. No installer or native patch version was
+delivered for E048; no new headset test was requested.
+
+### E049: unshipped same-draw MRT and resolve counterexample
+
+Hypothesis: capture genuine alpha to a second private render target in the same
+scene raster operation while retaining the original native RGBA. At resolve,
+keep the original native t0, b2 and RGB arithmetic; obtain private alpha from the
+four samples of the matching private MSAA image. Do not change native alpha to
+transport coverage through RGB-dependent operations.
+
+The owned control `--native-mrt` includes actual plain-shared non-keyed game and
+final output allocations, an FP16 X pass, four-sample scene rendering, both
+64/80-byte constant layouts and nonzero logical CB offsets, subpixel viewport,
+restricted sample mask and both resolve policies. Its deliberately owned resolve
+model contains an alpha-dependent RGB/background operation. The naive carrier
+must produce different RGB in that negative control, while the MRT route must
+retain every native RGBA byte and match independent real-alpha readback.
+A separate real depth/stencil control requires exactly one native update with
+the original scissor and restored bindings.
+
+This uses owned, cold-compiled shader pairs, not runtime derivatives of Valve
+programs. It proves no production source/root/eye/frame permission. Cold bounded
+native shader derivation, complete/partial image ancestry, unknown-write
+invalidation, actual output Present synchronization and encoder handoff remain
+to be implemented and verified. The existing production replay and stable
+ordinary-RGBA route remain unchanged. E049 is not an installer candidate.
+
+Status: local Windows/HLSL preflights and actual Windows/WARP execution pending.
 
 ## Evidence locations and maintenance
 
