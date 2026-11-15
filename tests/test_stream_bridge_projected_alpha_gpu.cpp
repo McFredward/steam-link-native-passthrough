@@ -297,7 +297,7 @@ void intermediateControl(ID3D11Device* device,ID3D11DeviceContext* context,Repla
     check(replay.intermediate(context,shadow,copy.value,countedDraw,4,0),"native X-stage draw copied to a distinct FP16 shadow without a policy override");
     check(bytes(native.value)==before&&bytes(shadow.resource())==before,"every native FP16 word is unchanged and private RGBA shadow matches exactly");
     Texture output,coverage;check(output.prepare(device,width,height)&&coverage.prepare(device,width,height),"owned Y-stage output and coverage verification");
-    context->PSSetShader(scene,nullptr,0);context->PSSetShaderResources(0,1,&view.value);context->OMSetRenderTargets(1,&output.target.value,nullptr);
+    context->PSSetShader(scene,nullptr,0);context->OMSetRenderTargets(1,&output.target.value,nullptr);context->PSSetShaderResources(0,1,&view.value);
     context->Draw(4,0);const auto original=output.bytes(context);
     check(mask.clear(context)&&replay.filtered(context,mask,shadow,scene,64,countedDraw,4,0),"Y-stage alpha uses the matching private FP16 ancestry with unchanged native geometry");
     check(output.bytes(context)==original,"original opaque Y-stage RGB/alpha remains byte-identical");
