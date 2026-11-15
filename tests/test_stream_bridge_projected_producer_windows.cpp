@@ -601,8 +601,11 @@ void nativeMrtControl(){
         context->RSSetViewports(1,&fractional);context->OMSetBlendState(nullptr,nullptr,0xbu);
         for(auto* target:{&normalMsaa,&pairedMsaa,&referenceMsaa,&naiveMsaa})context->ClearRenderTargetView(target->target.value,zero);
         check(capturedMsaa.clear(context.value),"only an explicit known clear supplies this fixture's private untouched region");
-        context->PSSetShaderResources(0,1,&x.source.value);context->PSSetShader(programs[0].value,nullptr,0);
-        context->OMSetRenderTargets(1,&normalMsaa.target.value,nullptr);draw(context.value,4,0);
+        // Unbind the previous X RTV before sampling it. D3D11 otherwise
+        // nulls the SRV for a read/write hazard, making an all-zero comparison
+        // vacuously equal; the required fractional-alpha check catches that.
+        context->OMSetRenderTargets(1,&normalMsaa.target.value,nullptr);
+        context->PSSetShaderResources(0,1,&x.source.value);context->PSSetShader(programs[0].value,nullptr,0);draw(context.value,4,0);
         context->PSSetShader(programs[1].value,nullptr,0);context->OMSetRenderTargets(1,&referenceMsaa.target.value,nullptr);draw(context.value,4,0);
         context->PSSetShader(programs[0].value,nullptr,0);context->OMSetRenderTargets(1,&naiveMsaa.target.value,nullptr);
         check(operation.nativeAlpha(context.value,programs[0].value,bytes,false,draw,4,0),"counterexample executes the scene-only carrier primitive");
