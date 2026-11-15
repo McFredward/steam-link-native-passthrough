@@ -25,6 +25,8 @@ void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){
 constexpr char ProducerFixture[]=R"(
 cbuffer Scene : register(b0) {float4 words[4];};
 Texture2D<float4> scene : register(t0);
+Texture2D<float4> second : register(t1);
+Texture2D<float4> third : register(t2);
 RWTexture2D<uint> scratch : register(u0);
 RWByteAddressBuffer positions : register(u1);
 [numthreads(1,1,1)] void compute(uint3 id:SV_DispatchThreadID){scratch[id.xy]=123;}
@@ -33,6 +35,7 @@ RWByteAddressBuffer positions : register(u1);
     positions.Store4(32,asuint(float4(5,4,8,7)));positions.Store4(48,asuint(float4(5,5,8,8)));
 }
 float4 vs(float2 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position-1,0,1);}
+float4 reprojectVS(float2 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position-1,0.5,1);}
 float4 layoutVS(float3 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position.xy-1,position.z,1);}
 float4 ps(float4 xy:SV_Position):SV_Target{
     float4 value=scene.Load(int3(int2(xy.xy),0));
@@ -41,6 +44,9 @@ float4 ps(float4 xy:SV_Position):SV_Target{
     return value;
 }
 float4 copyFp16(float4 xy:SV_Position):SV_Target{return scene.Load(int3(int2(xy.xy),0));}
+float4 reprojectCopy(float4 xy:SV_Position):SV_Target{
+    int3 p=int3(int2(xy.xy),0);return (scene.Load(p)+second.Load(p)+third.Load(p))/3;
+}
 float4 boundedY(float4 xy:SV_Position):SV_Target{
     int2 p=int2(xy.xy);p.y=clamp(p.y,0,int(words[0].y)-1);
     float4 value=scene.Load(int3(p,0));value.rgb*=words[1].xyz;
@@ -66,19 +72,22 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
     check(SUCCEEDED(image->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(resource.out())))&&SUCCEEDED(resource->GetSharedHandle(&result))&&result,"owned shared allocation identity");
     return std::uint64_t(reinterpret_cast<std::uintptr_t>(result));
 }
-void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false,bool padded=false,bool depthTests=false){
+void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false,bool padded=false,bool depthTests=false,bool reproject=false){
     const bool filtering=intermediateFormat!=DXGI_FORMAT_UNKNOWN;
-    auto vsCode=compile("vs","vs_5_0"),psCode=compile(padded?"boundedY":"ps","ps_5_0"),copyCode=compile("copyFp16","ps_5_0");
+    auto vsCode=compile("vs","vs_5_0"),psCode=compile(padded?"boundedY":"ps","ps_5_0"),copyCode=compile(reproject?"reprojectCopy":"copyFp16","ps_5_0");
     Reference<ID3D11ShaderReflection> reflection;D3D11_SHADER_DESC signature{};
     check(SUCCEEDED(D3DReflect(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),IID_ID3D11ShaderReflection,
         reinterpret_cast<void**>(reflection.out())))&&SUCCEEDED(reflection->GetDesc(&signature))&&signature.InputParameters==2,
         "actual owned vertex shader retains the native two-attribute input signature");
-    std::array<ShaderFingerprint,3> contracts{};contracts[0].kind=NativeShader::StreamVertex;
-    contracts[1].kind=filtering?NativeShader::MultiViewDownscaleY:NativeShader::MultiViewInner;
-    contracts[2].kind=NativeShader::MultiViewDownscaleX;
+    auto reprojectCode=compile("reprojectVS","vs_5_0");
+    std::array<ShaderFingerprint,4> contracts{};contracts[0].kind=NativeShader::StreamVertex;
+    contracts[1].kind=filtering?(reproject?NativeShader::MultiViewReprojectY:NativeShader::MultiViewDownscaleY):NativeShader::MultiViewInner;
+    contracts[2].kind=reproject?NativeShader::MultiViewReprojectX:NativeShader::MultiViewDownscaleX;
+    contracts[3].kind=NativeShader::MultiViewVertexX;
     check(dxbcFingerprint(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),contracts[0].hash)&&
         dxbcFingerprint(psCode->GetBufferPointer(),psCode->GetBufferSize(),contracts[1].hash)&&
-        dxbcFingerprint(copyCode->GetBufferPointer(),copyCode->GetBufferSize(),contracts[2].hash),"owned shader contracts");
+        dxbcFingerprint(copyCode->GetBufferPointer(),copyCode->GetBufferSize(),contracts[2].hash)&&
+        dxbcFingerprint(reprojectCode->GetBufferPointer(),reprojectCode->GetBufferSize(),contracts[3].hash),"owned shader contracts");
     NativeShaders shaders(contracts.data(),contracts.size(),nullptr,nullptr,true);
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,
@@ -134,7 +143,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out()))&&
         SUCCEEDED(device->CreatePixelShader(copyCode->GetBufferPointer(),copyCode->GetBufferSize(),nullptr,copy.out())),"actual observed native-model program objects");
     check(shaders.identify(vs.value)==NativeShader::StreamVertex&&shaders.identify(ps.value)==contracts[1].kind&&
-        shaders.identify(copy.value)==NativeShader::MultiViewDownscaleX,"actual shader observations survive cold companion preparation");
+        shaders.identify(copy.value)==contracts[2].kind,"actual shader observations survive cold companion preparation");
     Reference<ID3D11Texture2D> intermediate;Reference<ID3D11RenderTargetView> intermediateTarget,integerTarget;
     Reference<ID3D11ShaderResourceView> intermediateView;
     if(filtering){
@@ -237,21 +246,34 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
             check(producer.diagnostics().pairedDraws==before,"integer RTV cannot borrow the FLOAT interpretation of the same native storage");
         }
         context->OMSetRenderTargets(1,&intermediateTarget.value,nullptr);
+        Reference<ID3D11VertexShader> reprojectionVertex;
+        if(reproject){
+            check(SUCCEEDED(device->CreateVertexShader(reprojectCode->GetBufferPointer(),reprojectCode->GetBufferSize(),nullptr,reprojectionVertex.out())),"owned separate reprojection vertex contract");
+            context->VSSetShader(reprojectionVertex.value,nullptr,0);
+            const auto before=producer.diagnostics().pairedDraws;producer.draw(context.value,draw,4,0);
+            check(producer.diagnostics().pairedDraws==before,"private cold companion initialization alone cannot authorize a reprojection draw");
+            ID3D11ShaderResourceView* same[3]{sourceView.value,sourceView.value,sourceView.value};context->PSSetShaderResources(0,3,same);
+        }
         const FLOAT zero[4]{},paddingPoison[4]{0.75f,0.25f,0.5f,1};
-        if(!padded)producer.clear(context.value,intermediateTarget.value,zero);
-        context->ClearRenderTargetView(intermediateTarget.value,padded?paddingPoison:zero);
+        if(reproject){
+            Reference<ID3D11DeviceContext1> extended;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"real public reprojection ClearView");
+            producer.clearView(context.value,intermediateTarget.value,zero,nullptr,0);extended->ClearView(intermediateTarget.value,zero,nullptr,0);
+        }else{
+            if(!padded)producer.clear(context.value,intermediateTarget.value,zero);
+            context->ClearRenderTargetView(intermediateTarget.value,padded?paddingPoison:zero);
+        }
         // Only the real native viewport is written. The trailing allocation
         // rows deliberately retain opaque, nonzero data and confer no proof.
         const D3D11_VIEWPORT floatingViewport{0,0,float(intermediateWidth),float(padded?height:intermediateHeight),0,1};context->RSSetViewports(1,&floatingViewport);
         producer.draw(context.value,draw,4,0);draw(context.value,4,0);
-        check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==1,
+        check(producer.stage()==16&&producer.diagnostics().rootPasses==(reproject?3u:1u)&&producer.diagnostics().pairedDraws==1,
             "production X pass captures actual source ancestry into an FP16 companion for this exact native target");
         check(producer.diagnostics().fp16ZeroClears==(padded?0u:1u)&&producer.diagnostics().fp16OtherClears==0&&producer.diagnostics().geometryEmpty==(padded?0u:1u),
             "the diagnostic distinguishes an observed native zero clear from private companion initialization");
         ID3D11RenderTargetView* none=nullptr;context->OMSetRenderTargets(1,&none,nullptr);
         context->PSSetShaderResources(0,1,&intermediateView.value);context->OMSetRenderTargets(1,&target.value,nullptr);
         context->RSSetViewports(1,&viewport);
-        context->PSSetShader(ps.value,nullptr,0);
+        context->PSSetShader(ps.value,nullptr,0);context->VSSetShader(vs.value,nullptr,0);
     }
     Reference<ID3D11Texture2D> depthImage;Reference<ID3D11DepthStencilView> depthView;Reference<ID3D11DepthStencilState> nativeDepth;
     if(padded){
@@ -303,7 +325,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         check(after.value==nativeDepth.value&&reference==8,"both companion passes restore the exact original depth/stencil state and reference");
     }
     context->Flush();
-    check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==(filtering?(depthTests?3u:2u):1u),
+    check(producer.stage()==16&&producer.diagnostics().rootPasses==(reproject?3u:1u)&&producer.diagnostics().pairedDraws==(filtering?(depthTests?3u:2u):1u),
         "actual producer completes the owned direct or filtered ancestry route before original release");
     producer.dispatch(context.value);context->Dispatch(1,1,1);
     std::printf("production stage after draw=%u\n",producer.stage());
@@ -410,6 +432,7 @@ int main(int argc,char** argv){try{
     else if(argc==2&&!std::strcmp(argv[1],"--pressure"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,true);
     else if(argc==2&&!std::strcmp(argv[1],"--padded"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,true);
     else if(argc==2&&!std::strcmp(argv[1],"--padded-depth"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,true,true);
+    else if(argc==2&&!std::strcmp(argv[1],"--reproject-depth"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,false,true,true);
     else {check(argc==1,"known fixture mode");run();}
     std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
 catch(const std::exception& error){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,error.what());return 1;}}
