@@ -26,6 +26,14 @@ void layoutObserved(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC* desc,UINT coun
     if(nativeActive)nativeActive->geometry().layout(desc,count,code,bytes,layout);
 }
 void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){++nativeDrawCalls;context->Draw(count,start);}
+bool nativeIncomingError=false;
+void STDMETHODCALLTYPE errorDraw(ID3D11DeviceContext* context,UINT count,UINT start){
+    nativeIncomingError=GetLastError()==7654;draw(context,count,start);SetLastError(4321);
+}
+ChannelPage* mutationPage=nullptr;ID3D11Resource* mutationTarget=nullptr;
+void STDMETHODCALLTYPE mutationDraw(ID3D11DeviceContext* context,UINT count,UINT start){
+    draw(context,count,start);invalidateSharedImages(mutationPage,mutationTarget);
+}
 // Owned DXGI-only forwarding control: a distinct public method table, no
 // reverse D3D texture QI, and nested forwarding into the real WARP mutex.
 // All keys/results/GPU synchronization still come from the original resource.
@@ -656,8 +664,11 @@ void nativeMrtControl(bool reproject=false){
         context->PSSetShader(programs[0].value,nullptr,0);context->OMSetRenderTargets(1,&naiveMsaa.target.value,nullptr);
         check(operation.nativeAlpha(context.value,programs[0].value,bytes,false,draw,4,0),"counterexample executes the scene-only carrier primitive");
         context->OMSetRenderTargets(1,&pairedMsaa.target.value,nullptr);const auto before=nativeDrawCalls;
-        check(operation.nativeCapture(context.value,capturedMsaa,programs[0].value,programs[2].value,draw,4,0)&&nativeDrawCalls==before+1,
-            "MRT captures genuine alpha in exactly one original scene operation");
+        SetLastError(7654);
+        const auto captured=operation.nativeCapture(context.value,capturedMsaa,programs[0].value,programs[2].value,errorDraw,4,0);
+        const auto returnedError=GetLastError();
+        check(captured&&nativeDrawCalls==before+1&&nativeIncomingError&&returnedError==4321,
+            "MRT executes once and preserves original incoming/returned native error across GPU state restoration");
         Reference<ID3D11Buffer> bound;UINT gotFirst=0,gotNumber=0;ranges->PSGetConstantBuffers1(0,1,bound.out(),&gotFirst,&gotNumber);
         check(bound.value==cb.value&&gotFirst==sceneFirst&&gotNumber==sceneNumber,"MRT leaves the native scene constant buffer and logical range unchanged");
         for(unsigned policy:{0u,1u}){
@@ -840,7 +851,12 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
         check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"native Y MRT consumes only proven padded-input rows and runs its original draw once");
         context->OMSetRenderTargets(1,&baselineFinal.value,nullptr);context->PSSetShaderResources(0,1,&baselineYView.value);context->PSSetShader(resolve.value,nullptr,0);draw(context.value,4,0);
         context->OMSetRenderTargets(1,&nativeTarget.value,nullptr);context->PSSetShaderResources(0,1,&yView.value);before=nativeDrawCalls;
-        check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"native resolve MRT preserves original t0/b2 and pairs its actual private MSAA alpha");
+        mutationPage=page;mutationTarget=native.value;
+        check(producer.draw(context.value,mutationDraw,4,0)&&nativeDrawCalls==before+1&&producer.stage()==4460,
+            "an unknown write during the original draw cannot certify a pair and does not execute the native draw twice");
+        mutationPage=nullptr;mutationTarget=nullptr;before=nativeDrawCalls;SetLastError(7654);
+        const auto captured=producer.draw(context.value,errorDraw,4,0);const auto returned=GetLastError();
+        check(captured&&nativeDrawCalls==before+1&&nativeIncomingError&&returned==4321,"native resolve preserves original call/error semantics while pairing its exact private alpha");
         const auto ordinary=pixels(device.value,context.value,baseline.value),actual=pixels(device.value,context.value,native.value);
         check(ordinary==actual,"all native sRGB RGBA bytes equal an independent original scene/resolve reference");
         check(sync->ReleaseSync(3)==S_OK&&producer.stage()==4020,"original native release seals the exact output/coverage version");
