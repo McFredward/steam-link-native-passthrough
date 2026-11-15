@@ -342,7 +342,9 @@ struct Observer {
                      [](ID3D11DeviceContext* c,ID3D11Resource* r,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* p){return c->Map(r,sub,type,flags,p);},
                      [](ID3D11DeviceContext* c,ID3D11Resource* r,UINT sub){c->Unmap(r,sub);}});
             }
-            UINT viewportCount=1;D3D11_VIEWPORT viewport{};ctx->RSGetViewports(&viewportCount,&viewport);
+            std::array<D3D11_VIEWPORT,D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> viewports{};
+            UINT viewportCount=UINT(viewports.size());ctx->RSGetViewports(&viewportCount,viewports.data());
+            const auto& viewport=viewports[0];
             sample.viewportCount=viewportCount;
             sample.viewport={viewport.TopLeftX,viewport.TopLeftY,viewport.Width,viewport.Height,viewport.MinDepth,viewport.MaxDepth};
             Held<ID3D11RenderTargetView> out;Held<ID3D11DepthStencilView> depth;ctx->OMGetRenderTargets(1,out.out(),depth.out());

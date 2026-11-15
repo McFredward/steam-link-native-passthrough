@@ -153,9 +153,15 @@ void run(){
         const D3D11_VIEWPORT viewports[]{varied,viewport};context.p->RSSetViewports(viewportCount,viewports);
         context.p->ClearRenderTargetView(rtv.p,zero);bits<Draw>(dispatch.function(13))(context.p,3,0);
         const auto expected=pixels(context.p,target.p,staging.p);
+        std::array<D3D11_VIEWPORT,D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE> reported{};
+        UINT reportedCount=UINT(reported.size());context.p->RSGetViewports(&reportedCount,reported.data());const auto& first=reported[0];
+        const std::array<float,6> actual{first.TopLeftX,first.TopLeftY,first.Width,first.Height,first.MinDepth,first.MaxDepth};
         context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
         const auto& sample=observer->status.samples[(observer->serial-1)%SourceAuditSamples];
-        check(sample.viewportCount==viewportCount&&sample.viewport==std::array<float,6>{.25f,.5f,float(W)-.5f,float(H)-1,.2f,.8f},
+        std::printf("owned viewport requested/reported/observed=%u/%u/%u; first=%.9g,%.9g,%.9g,%.9g,%.9g,%.9g; observed=%.9g,%.9g,%.9g,%.9g,%.9g,%.9g\n",
+            viewportCount,reportedCount,sample.viewportCount,double(actual[0]),double(actual[1]),double(actual[2]),double(actual[3]),double(actual[4]),double(actual[5]),
+            double(sample.viewport[0]),double(sample.viewport[1]),double(sample.viewport[2]),double(sample.viewport[3]),double(sample.viewport[4]),double(sample.viewport[5]));
+        check(reportedCount==viewportCount&&sample.viewportCount==reportedCount&&sample.viewport==actual,
             "actual fractional origin, cropped extent, depth interval and multi-viewport count are captured independently of allocation size");
         check(expected==pixels(context.p,target.p,staging.p),"viewport diagnostics preserve every native RGBA byte");
     }
