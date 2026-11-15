@@ -7,10 +7,10 @@ param([switch] $InspectionOnly, [switch] $Manage, [switch] $BridgePreview, [Vali
     $sfnpStage = $null
     $sfnpTls = [Net.ServicePointManager]::SecurityProtocol
     $sfnpRepo = 'McFredward/steam-link-native-passthrough'
-    $sfnpRepositoryCommit = '89cb4dd7347377a1ee9ead1ef17b563269e8f5cb'
+    $sfnpRepositoryCommit = '671c3e20aea5f40229c467118df5db050999f4b7'
     $sfnpRepositoryAsset = 'distribution/steam-link-native-passthrough.zip'
-    $sfnpRepositoryBytes = 20318683
-    $sfnpRepositorySha256 = '108b32f3459828255638e01eaeece0a8c10887682ae35706e81448db5a9103df'
+    $sfnpRepositoryBytes = 20319570
+    $sfnpRepositorySha256 = 'db14f53e1770d4a942728263a77659234d5b2d546354f0430ab622b42558f088'
     $sfnpAsset = 'steam-link-native-passthrough-bridge-preview.zip'
     $sfnpEndpoint = '/releases/tags/stream-bridge-preview-v1'
     if ($sfnpInspection) {
