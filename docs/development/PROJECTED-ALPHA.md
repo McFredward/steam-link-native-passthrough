@@ -1,5 +1,8 @@
 # Projected game alpha
 
+Development candidate: installer0.3.37, PC0.3.24, Frame0.3.13.
+Software validation is separate from headset acceptance.
+
 The current PC investigation preserves coverage before the native multiview
 scene/resolve programs make their streaming tiles opaque. The ordinary native
 RGB pipeline keeps its resources, programs, constants and rendering operations.
