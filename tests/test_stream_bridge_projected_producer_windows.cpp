@@ -30,6 +30,7 @@ float4 ps(float4 xy:SV_Position):SV_Target{
     value.a=words[3].y==0?1:value.a;
     return value;
 }
+float4 copyFp16(float4 xy:SV_Position):SV_Target{return scene.Load(int3(int2(xy.xy),0));}
 )";
 Reference<ID3DBlob> compile(const char* entry,const char* target){
     Reference<ID3DBlob> code,error;const auto result=D3DCompile(ProducerFixture,sizeof ProducerFixture-1,nullptr,nullptr,nullptr,
@@ -50,15 +51,19 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
     check(SUCCEEDED(image->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(resource.out())))&&SUCCEEDED(resource->GetSharedHandle(&result))&&result,"owned shared allocation identity");
     return std::uint64_t(reinterpret_cast<std::uintptr_t>(result));
 }
-void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
-    auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0");
+void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN){
+    const bool filtering=intermediateFormat!=DXGI_FORMAT_UNKNOWN;
+    auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0"),copyCode=compile("copyFp16","ps_5_0");
     Reference<ID3D11ShaderReflection> reflection;D3D11_SHADER_DESC signature{};
     check(SUCCEEDED(D3DReflect(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),IID_ID3D11ShaderReflection,
         reinterpret_cast<void**>(reflection.out())))&&SUCCEEDED(reflection->GetDesc(&signature))&&signature.InputParameters==2,
         "actual owned vertex shader retains the native two-attribute input signature");
-    std::array<ShaderFingerprint,2> contracts{};contracts[0].kind=NativeShader::StreamVertex;contracts[1].kind=NativeShader::MultiViewInner;
+    std::array<ShaderFingerprint,3> contracts{};contracts[0].kind=NativeShader::StreamVertex;
+    contracts[1].kind=filtering?NativeShader::MultiViewDownscaleY:NativeShader::MultiViewInner;
+    contracts[2].kind=NativeShader::MultiViewDownscaleX;
     check(dxbcFingerprint(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),contracts[0].hash)&&
-        dxbcFingerprint(psCode->GetBufferPointer(),psCode->GetBufferSize(),contracts[1].hash),"owned shader contracts");
+        dxbcFingerprint(psCode->GetBufferPointer(),psCode->GetBufferSize(),contracts[1].hash)&&
+        dxbcFingerprint(copyCode->GetBufferPointer(),copyCode->GetBufferSize(),contracts[2].hash),"owned shader contracts");
     NativeShaders shaders(contracts.data(),contracts.size(),nullptr,nullptr,true);
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
     check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,
@@ -87,10 +92,28 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     registry.retained[1]={nativeHandle,22,compositorPid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
     std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=source.value;pins[1]=native.value;
     check(external||channel.publishRetained(registry,pins),"real held source registry publication");
-    Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> ps;Reference<ID3D11InputLayout> layout;Reference<ID3D11Buffer> vertices,constants;
+    Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> ps,copy;Reference<ID3D11InputLayout> layout;Reference<ID3D11Buffer> vertices,constants;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
-        SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual observed native-model program objects");
-    check(shaders.identify(vs.value)==NativeShader::StreamVertex&&shaders.identify(ps.value)==NativeShader::MultiViewInner,"actual shader observations survive cold companion preparation");
+        SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out()))&&
+        SUCCEEDED(device->CreatePixelShader(copyCode->GetBufferPointer(),copyCode->GetBufferSize(),nullptr,copy.out())),"actual observed native-model program objects");
+    check(shaders.identify(vs.value)==NativeShader::StreamVertex&&shaders.identify(ps.value)==contracts[1].kind&&
+        shaders.identify(copy.value)==NativeShader::MultiViewDownscaleX,"actual shader observations survive cold companion preparation");
+    Reference<ID3D11Texture2D> intermediate;Reference<ID3D11RenderTargetView> intermediateTarget,integerTarget;
+    Reference<ID3D11ShaderResourceView> intermediateView;
+    if(filtering){
+        auto floating=desc;floating.Format=intermediateFormat;floating.MiscFlags=0;
+        D3D11_RENDER_TARGET_VIEW_DESC rtv{};rtv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;rtv.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
+        D3D11_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;srv.Texture2D.MipLevels=1;
+        check(SUCCEEDED(device->CreateTexture2D(&floating,nullptr,intermediate.out()))&&
+            SUCCEEDED(device->CreateRenderTargetView(intermediate.value,&rtv,intermediateTarget.out()))&&
+            SUCCEEDED(device->CreateShaderResourceView(intermediate.value,&srv,intermediateView.out())),"actual native-like FP16 storage and typed FLOAT views");
+        if(intermediateFormat==DXGI_FORMAT_R16G16B16A16_TYPELESS){
+            rtv.Format=DXGI_FORMAT_R16G16B16A16_UINT;
+            check(SUCCEEDED(device->CreateRenderTargetView(intermediate.value,&rtv,integerTarget.out())),"typeless storage also has a distinct integer interpretation");
+            producer.target(integerTarget.value);
+        }
+        producer.target(intermediateTarget.value);
+    }
     // Keep more than sixteen distinct live native objects before the actual
     // game quad. Metadata must follow each object, not the first sixteen ever.
     std::array<Reference<ID3D11InputLayout>,48> otherLayouts;
@@ -169,7 +192,24 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     context->UpdateSubresource(mutableVertices.value,0,nullptr,points.data(),0,0);producer.geometry().update(mutableVertices.value,points.data());
     check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"fresh public vertex data repairs only its actual allocation");
     context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->CSSetShader(compute.value,nullptr,0);
+    if(filtering){
+        context->PSSetShader(copy.value,nullptr,0);
+        if(integerTarget.value){
+            context->OMSetRenderTargets(1,&integerTarget.value,nullptr);
+            const auto before=producer.diagnostics().pairedDraws;producer.draw(context.value,draw,4,0);
+            check(producer.diagnostics().pairedDraws==before,"integer RTV cannot borrow the FLOAT interpretation of the same native storage");
+        }
+        context->OMSetRenderTargets(1,&intermediateTarget.value,nullptr);
+        producer.draw(context.value,draw,4,0);draw(context.value,4,0);
+        check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==1,
+            "production X pass captures actual source ancestry into an FP16 companion for this exact native target");
+        ID3D11RenderTargetView* none=nullptr;context->OMSetRenderTargets(1,&none,nullptr);
+        context->PSSetShaderResources(0,1,&intermediateView.value);context->OMSetRenderTargets(1,&target.value,nullptr);
+        context->PSSetShader(ps.value,nullptr,0);
+    }
     producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();
+    check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==(filtering?2u:1u),
+        "actual producer completes the owned direct or filtered ancestry route before original release");
     producer.dispatch(context.value);context->Dispatch(1,1,1);
     std::printf("production stage after draw=%u\n",producer.stage());
     check(streamMutex->ReleaseSync(3)==S_OK,"native stream ownership transferred with its unchanged release key");
@@ -262,6 +302,8 @@ int main(int argc,char** argv){try{
         check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&message,sizeof message,&received,nullptr)&&received==sizeof message,"owned launch pipe payload");
         ChannelPeer peer;check(peer.open(message.launch),"child binds the actual private kernel channel");run(&message,peer.page());
     }else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();
+    else if(argc==2&&!std::strcmp(argv[1],"--float"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT);
+    else if(argc==2&&!std::strcmp(argv[1],"--typeless"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS);
     else {check(argc==1,"known fixture mode");run();}
     std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
 catch(const std::exception& error){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,error.what());return 1;}}

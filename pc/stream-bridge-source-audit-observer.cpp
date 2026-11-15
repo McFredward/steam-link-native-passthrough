@@ -398,6 +398,8 @@ struct Observer {
         for(unsigned context=0;context<contexts.size();++context){
             status.sourceAlphaErrors[context]=contexts[context].alpha.error();
             status.projectedAlphaStages[context]=contexts[context].producer.stage();
+            const auto production=contexts[context].producer.diagnostics();
+            status.production[context]={production.rootFailure,production.inputFailure,production.rootPasses,production.pairedDraws};
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();

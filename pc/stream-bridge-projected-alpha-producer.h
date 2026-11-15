@@ -21,7 +21,8 @@ class Producer {
         ImageWitness witness{};
     };
     std::array<ImageState,ChannelImages> images_{};
-    std::atomic<unsigned> stage_{0};
+    std::atomic<unsigned> stage_{0},rootFailure_{0},inputFailure_{0};
+    std::atomic<std::uint64_t> rootPasses_{0},pairedDraws_{0};
     ChannelPage* page_=nullptr;ID3D11Device* device_=nullptr;
     Replay replay_;Geometry geometry_;NativeShaders* shaders_=nullptr;MutexObserver* locks_=nullptr;
     std::uint64_t nextGeneration_=1;UINT uavSlots_=D3D11_PS_CS_UAV_REGISTER_COUNT;
@@ -63,22 +64,32 @@ class Producer {
         return a.handle==b.handle&&a.width==b.width&&a.height==b.height&&a.format==b.format&&
             a.samples==b.samples&&a.arraySize==b.arraySize;
     }
+    static bool fp16(DXGI_FORMAT format)noexcept{
+        return format==DXGI_FORMAT_R16G16B16A16_FLOAT||format==DXGI_FORMAT_R16G16B16A16_TYPELESS;
+    }
     bool root(ID3D11Texture2D* texture,const D3D11_SHADER_RESOURCE_VIEW_DESC& view,Allocation& scene,std::uint64_t& lease)noexcept{
+        const auto refuse=[this](unsigned reason)noexcept{rootFailure_=reason;return false;};
         if(view.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D||view.Texture2D.MostDetailedMip||
             (view.Format!=DXGI_FORMAT_R8G8B8A8_UNORM&&view.Format!=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB&&
-             view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM&&view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))return false;
-        Allocation actual{};if(!allocation(texture,actual)||actual.samples!=1||actual.arraySize!=1)return false;
-        RegistryRead read;if(!read.acquire(page_))return false;const auto& registry=read.snapshot();
-        std::uint64_t luid=0;if(!registry.adapterKnown||!deviceLuid(device_,luid)||luid!=registry.adapterLuid)return false;
+             view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM&&view.Format!=DXGI_FORMAT_B8G8R8A8_UNORM_SRGB))return refuse(1);
+        Allocation actual{};if(!allocation(texture,actual)||actual.samples!=1||actual.arraySize!=1)return refuse(2);
+        RegistryRead read;if(!read.acquire(page_))return refuse(3);const auto& registry=read.snapshot();
+        if(!registry.sourceLease)return refuse(4);
+        std::uint64_t luid=0;if(!registry.adapterKnown||!deviceLuid(device_,luid)||luid!=registry.adapterLuid)return refuse(5);
+        bool sameHandle=false,sameOwner=false;
+        for(const auto& known:registry.retained)if(known.handle==actual.handle){
+            sameHandle=true;sameOwner|=known.pid==std::uint32_t(registry.sourceLease);
+        }
         for(const auto& known:registry.retained)if(known.pid==std::uint32_t(registry.sourceLease)&&
             known.generation&&shapeMatches(known,actual)){
             // The actual application allocation must remain natively owned
             // through both the ordinary and companion samples. An unrelated
             // keyed mutex or a latest observed app texture is insufficient.
-            if(!locks_->current(device_,known.handle)){stage_=1305;return false;}
-            scene=known;lease=registry.sourceLease;return live(lease);
+            if(!locks_->current(device_,known.handle)){stage_=1305;return refuse(9);}
+            scene=known;lease=registry.sourceLease;if(!live(lease))return refuse(10);
+            rootFailure_=0;rootPasses_.fetch_add(1,std::memory_order_relaxed);return true;
         }
-        return false;
+        return refuse(!sameHandle?6:!sameOwner?7:8);
     }
     const ShaderFingerprint* policies_=nullptr;const unsigned* policyBytes_=nullptr;std::size_t policyCount_=0;
     unsigned prefix(const NativeShaderDescription& program)const noexcept{
@@ -108,6 +119,11 @@ public:
         stage_=1;return true;
     }
     unsigned stage()const noexcept{return stage_.load(std::memory_order_relaxed);}
+    struct Diagnostics {unsigned rootFailure=0,inputFailure=0;std::uint64_t rootPasses=0,pairedDraws=0;};
+    Diagnostics diagnostics()const noexcept{
+        return {rootFailure_.load(std::memory_order_relaxed),inputFailure_.load(std::memory_order_relaxed),
+            rootPasses_.load(std::memory_order_relaxed),pairedDraws_.load(std::memory_order_relaxed)};
+    }
     Geometry& geometry()noexcept{return geometry_;}
     // Called only on native resource creation, never from raster callbacks.
     void target(ID3D11RenderTargetView* view)noexcept{
@@ -119,19 +135,21 @@ public:
         if(desc.MipLevels!=1||desc.ArraySize!=1||desc.Usage!=D3D11_USAGE_DEFAULT||desc.CPUAccessFlags||
             !(desc.BindFlags&D3D11_BIND_SHADER_RESOURCE)||desc.BindFlags&D3D11_BIND_UNORDERED_ACCESS||
             (desc.SampleDesc.Count!=1&&desc.SampleDesc.Count!=4)||desc.Width<32||desc.Height<32)return;
-        const bool fp16=desc.Format==DXGI_FORMAT_R16G16B16A16_FLOAT;
+        // Native FP16 storage can be typeless. Its actual FLOAT RTV, not the
+        // storage token alone, establishes the typed interpretation.
+        const bool floating=fp16(desc.Format);
         const bool rgba=desc.Format==DXGI_FORMAT_R8G8B8A8_TYPELESS||desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM||
             desc.Format==DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-        if((!fp16&&!rgba)||(fp16&&desc.SampleDesc.Count!=1))return;
+        if((!floating&&!rgba)||(floating&&(desc.SampleDesc.Count!=1||targetDesc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)))return;
         if(targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2D&&targetDesc.ViewDimension!=D3D11_RTV_DIMENSION_TEXTURE2DMS)return;
-        const auto bytes=std::uint64_t(desc.Width)*desc.Height*desc.SampleDesc.Count*(fp16?8:4);
+        const auto bytes=std::uint64_t(desc.Width)*desc.Height*desc.SampleDesc.Count*(floating?8:4);
         for(auto& image:images_)if(!image.native.value){
             const auto retained=InterlockedCompareExchange64(&page_->companionBytes,0,0);
             if(retained<0||std::uint64_t(retained)>Budget||bytes>Budget-std::uint64_t(retained)||
                 InterlockedCompareExchange64(&page_->companionBytes,retained+LONG64(bytes),retained)!=retained)return;
-            Allocation native{};const bool shared=allocation(texture.value,native)&&desc.SampleDesc.Count==1&&!fp16;
+            Allocation native{};const bool shared=allocation(texture.value,native)&&desc.SampleDesc.Count==1&&!floating;
             if(!image.companion.prepare(device_,desc.Width,desc.Height,shared,desc.SampleDesc.Count,desc.SampleDesc.Quality,
-                fp16?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM)){
+                floating?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM)){
                 image.companion.reset();InterlockedExchangeAdd64(&page_->companionBytes,-LONG64(bytes));return;}
             Reference<ID3D11DeviceContext> context;device_->GetImmediateContext(context.out());
             if(!image.companion.clear(context.value))return;
@@ -186,6 +204,8 @@ public:
         auto* destination=find(output.value);if(!destination)return;stage_=10;
         const bool empty=destination->empty;
         revoke(*destination);
+        D3D11_RENDER_TARGET_VIEW_DESC actualTarget{};targetView->GetDesc(&actualTarget);
+        if(fp16(destination->shape.Format)&&actualTarget.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return;
         Reference<ID3D11PixelShader> pixel;Reference<ID3D11VertexShader> vertex;UINT pixelClasses=0,vertexClasses=0;
         context->PSGetShader(pixel.out(),nullptr,&pixelClasses);context->VSGetShader(vertex.out(),nullptr,&vertexClasses);
         NativeShaderDescription program{};
@@ -214,19 +234,21 @@ public:
         stage_=13;Allocation scene{};std::uint64_t lease=0;auto* input=find(source.value);
         if(x||inner){if(!root(sourceTexture.value,view,scene,lease))return;}
         else {
-            if(!input||!input->valid||!live(input->lease)||!owned(*input))return;
+            const unsigned failure=!input?1:!input->valid?2:!live(input->lease)?3:!owned(*input)?4:0;
+            inputFailure_=failure;if(failure)return;
             scene=input->scene;lease=input->lease;
         }
         stage_=14;std::array<MutexLease,8> scopes{};if(!locks_->capture(device_,scopes)||!live(lease))return;
         stage_=15;bool okay=false;
-        if(x&&destination->shape.Format==DXGI_FORMAT_R16G16B16A16_FLOAT)
+        if(x&&fp16(destination->shape.Format))
             okay=replay_.intermediate(context,destination->companion,pixel.value,original,count,start);
-        else if(y&&input&&input->shape.Format==DXGI_FORMAT_R16G16B16A16_FLOAT)
+        else if(y&&input&&fp16(input->shape.Format))
             okay=replay_.filtered(context,destination->companion,input->companion,pixel.value,prefix(program),original,count,start);
         else if(inner)okay=replay_.replay(context,destination->companion,pixel.value,prefix(program),original,count,start);
         else if(resolve&&input)okay=replay_.resolve(context,destination->companion,input->companion,pixel.value,original,count,start);
         if(!okay||!live(lease))return;
         stage_=16;destination->valid=true;destination->scene=scene;destination->lease=lease;destination->scopes=scopes;
+        pairedDraws_.fetch_add(1,std::memory_order_relaxed);
     }
     void releasing(const MutexLease& scope,std::uint64_t key)noexcept{
         if(!page_||scope.device!=device_||!scope.retained)return;
