@@ -1,5 +1,6 @@
 #include "stream-bridge-source-audit-windows.h"
 #include "stream-bridge-source-audit-shared.h"
+#include "stream-bridge-projected-alpha-launch.h"
 #include "stream-bridge-source-audit-modules-windows.h"
 #include <tlhelp32.h>
 #include <sddl.h>
@@ -62,7 +63,7 @@ bool createPage(HANDLE& mapping,Page*& view){
 }
 }
 struct SourceAuditServer::Impl {
-    SourceAuditDiscovery discovery;
+    SourceAuditDiscovery discovery;projected_alpha::ChannelParent* channel=nullptr;
     explicit Impl(SourceAuditDiscovery value):discovery(value){}
     mutable std::mutex mutex;HANDLE mapping=nullptr;Page* page=nullptr;
     std::thread worker;
@@ -104,7 +105,7 @@ struct SourceAuditServer::Impl {
         Handle candidate;candidate.reset(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE,FALSE,pid));
         if(!candidate||!eligible(pid,candidate.value))return true;
         const auto expectedBirth=birth(candidate.value);if(!expectedBirth)return true;
-        process.reset(OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE,FALSE,pid));
+        process.reset(OpenProcess(PROCESS_CREATE_THREAD|PROCESS_VM_OPERATION|PROCESS_VM_WRITE|PROCESS_QUERY_LIMITED_INFORMATION|SYNCHRONIZE|(channel?PROCESS_DUP_HANDLE:0),FALSE,pid));
         if(!process)return false;
         if(!eligible(pid,process.value)||birth(process.value)!=expectedBirth){SetLastError(ERROR_INVALID_HANDLE);return false;}
         const auto self=processPath(GetCurrentProcess());const auto slash=self.find_last_of(L"\\/");
@@ -165,11 +166,15 @@ struct SourceAuditServer::Impl {
             if((module.error==ERROR_BAD_LENGTH||module.error==ERROR_PARTIAL_COPY||module.error==ERROR_MOD_NOT_FOUND)&&GetTickCount64()<deadline)return;
             failed(module.error);return;
         }
-        const auto offset=reinterpret_cast<std::uintptr_t>(&SFNP_CompositorSourceAuditStartV1)-reinterpret_cast<std::uintptr_t>(ownModule);
+        const auto entry=channel?reinterpret_cast<std::uintptr_t>(GetProcAddress(ownModule,"SFNP_CompositorSourceAuditStartV2")):reinterpret_cast<std::uintptr_t>(&SFNP_CompositorSourceAuditStartV1);
+        if(!entry){failed(ERROR_PROC_NOT_FOUND);return;}
+        const auto offset=entry-reinterpret_cast<std::uintptr_t>(ownModule);
         if(offset>=module.bytes){failed(ERROR_INVALID_ADDRESS);return;}
-        const Launch launch{Magic,birth(GetCurrentProcess()),GetCurrentProcessId(),0};
-        remoteArgument=VirtualAllocEx(process.value,nullptr,sizeof launch,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);SIZE_T used=0;
-        if(!remoteArgument||!WriteProcessMemory(process.value,remoteArgument,&launch,sizeof launch,&used)||used!=sizeof launch){failed(GetLastError());return;}
+        LaunchV2 launch{};launch.diagnostic={Magic,birth(GetCurrentProcess()),GetCurrentProcessId(),0};
+        if(channel&&!channel->duplicateToVerifiedPeer(process.value,launch.production)){failed(GetLastError());return;}
+        const SIZE_T launchBytes=channel?sizeof launch:sizeof launch.diagnostic;
+        remoteArgument=VirtualAllocEx(process.value,nullptr,launchBytes,MEM_RESERVE|MEM_COMMIT,PAGE_READWRITE);SIZE_T used=0;
+        if(!remoteArgument||!WriteProcessMemory(process.value,remoteArgument,&launch,launchBytes,&used)||used!=launchBytes){failed(GetLastError());return;}
         thread.reset(CreateRemoteThread(process.value,nullptr,0,reinterpret_cast<LPTHREAD_START_ROUTINE>(module.base+offset),remoteArgument,0,nullptr));
         if(!thread){failed(GetLastError());return;}
         ++local.entryCalls;phase=2;local.state=3;deadline=GetTickCount64()+3000;
@@ -193,9 +198,10 @@ struct SourceAuditServer::Impl {
 };
 SourceAuditServer::SourceAuditServer(SourceAuditDiscovery discovery):impl_(new Impl(discovery)){}
 SourceAuditServer::~SourceAuditServer(){stop();}
-bool SourceAuditServer::start(VerifyFile verify,Inventory inventory,void* opaque)noexcept{
+bool SourceAuditServer::start(VerifyFile verify,Inventory inventory,void* opaque,projected_alpha::ChannelParent* channel)noexcept{
     auto& s=*impl_;std::lock_guard<std::mutex> guard(s.mutex);
     if(!verify||s.stopped||s.worker.joinable())return false;
+    s.channel=channel;
     try{s.worker=std::thread([this,verify,inventory,opaque]{
         for(;;){
             {std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->stopped)break;}

@@ -353,8 +353,8 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
         bootstrapStatus.store(1);
         if(!configure()){bootstrapStatus.store(3);return;}
         struct AuditLifetime{stream_bridge::sender::SourceAuditServer& server;~AuditLifetime(){server.stop();}} auditLifetime{sourceAudit_};
-        if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&
-            !sourceAudit_.start(valvePublisher,sourceAuditInventory))
+        if(request_.explicitlyEnabled&&
+            !sourceAudit_.start(valvePublisher,sourceAuditInventory,nullptr,coverage_.projectedChannel()))
             report("compositor source discovery worker unavailable",stream_bridge::logging::Level::Debug);
         bool attached=false;
         for(;;){

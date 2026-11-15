@@ -3,6 +3,9 @@
 #include "stream-bridge-sender-provider-shaders.h"
 #include "stream-bridge-native-image.h"
 #include "stream-bridge-source-alpha-probe.h"
+#include "stream-bridge-projected-alpha-launch.h"
+#include "stream-bridge-projected-alpha-producer.h"
+#include "stream-bridge-projected-alpha-textures.h"
 #include <d3d11_4.h>
 #include <algorithm>
 #include <atomic>
@@ -46,10 +49,16 @@ const std::array<ShaderFingerprint,19> Contracts{{
 // without colour export, source mutation, graphics waits or coverage grants.
 struct Observer {
     Launch launch;Page* page=nullptr;HANDLE mapping=nullptr,parent=nullptr;
+    projected_alpha::ChannelLaunch productionLaunch{};projected_alpha::ChannelPeer productionPeer;
+    projected_alpha::MutexObserver nativeLocks{{nullptr,lockReleasing,lockReleased,this}};
+    projected_alpha::TextureObserver textures{textureObserved,this,targetObserved,bufferObserved,layoutObserved};
+    inline static thread_local unsigned ownCommands=0;
+    struct OwnCommands {OwnCommands(){++ownCommands;}~OwnCommands(){--ownCommands;}};
     NativeShaders shaders;
     std::mutex mutex;SourceAuditInventory inventory{};SourceAuditStatus status{};
     struct Context {
         BasicSourceAlphaProbe<8> alpha;
+        projected_alpha::Producer producer;ID3D11Device* producerDevice=nullptr;DWORD producerThread=0;
         ID3D11DeviceContext* object=nullptr;void** original=nullptr;void** facade=nullptr;
         std::array<void*,149> expected{};unsigned count=0;void* allocation=nullptr;
         bool owns()const noexcept {
@@ -77,6 +86,36 @@ struct Observer {
         auto& s=*static_cast<Observer*>(opaque);
         try{s.attachContext(device,true);}catch(...){std::lock_guard<std::mutex> guard(s.mutex);s.status.state=8;s.status.error=ERROR_UNHANDLED_EXCEPTION;}
     }
+    Context* production(ID3D11Device* device)noexcept {
+        if(!device||stopped||ownCommands||!productionPeer.page())return nullptr;
+        for(auto& context:contexts)if(context.producerDevice==device){
+            if(context.producerThread!=GetCurrentThreadId()){
+                InterlockedExchange(&productionPeer.page()->stopped,1);return nullptr;
+            }
+            if(InterlockedCompareExchange(&productionPeer.page()->stopped,0,0))return nullptr;
+            return &context;
+        }
+        return nullptr;
+    }
+    static void textureObserved(ID3D11Device*,ID3D11Texture2D*,projected_alpha::TextureOrigin,void*)noexcept{}
+    static void targetObserved(ID3D11Device* device,ID3D11RenderTargetView* view,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto* context=self.production(device)){OwnCommands own;context->producer.target(view);}
+    }
+    static void bufferObserved(ID3D11Device* device,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto* context=self.production(device))context->producer.geometry().buffer(desc,data,buffer);
+    }
+    static void layoutObserved(ID3D11Device* device,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T bytes,ID3D11InputLayout* layout,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto* context=self.production(device))context->producer.geometry().layout(desc,count,code,bytes,layout);
+    }
+    static void lockReleasing(const projected_alpha::MutexLease& lease,std::uint64_t key,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto* context=self.production(lease.device))context->producer.releasing(lease,key);
+    }
+    static void lockReleased(const projected_alpha::MutexLease& lease,HRESULT result,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto* context=self.production(lease.device))context->producer.released(lease,result);
+    }
+    template<unsigned Index>Context* productionContext(ID3D11DeviceContext* object)noexcept{
+        auto& context=contexts[Index];return context.object==object?production(context.producerDevice):nullptr;
+    }
     void attachContext(ID3D11Device* device,bool prepareAlpha=false){
         std::lock_guard<std::mutex> guard(mutex);if(stopped)return;
         Held<ID3D11DeviceContext> native;device->GetImmediateContext(native.out());
@@ -88,6 +127,11 @@ struct Observer {
         // The actual device-creation callback runs on its owning caller before
         // native rendering begins. Cold status publication never calls D3D.
         if(prepareAlpha)(void)ctx.alpha.prepare(device);
+        if(productionPeer.page()&&nativeLocks.prepare(device)&&
+            ctx.producer.prepare(device,productionPeer.page(),shaders,nativeLocks)){
+            ctx.producerDevice=device;ctx.producerThread=GetCurrentThreadId();
+            if(!textures.prepare(device)){ctx.producerDevice=nullptr;InterlockedExchange(&productionPeer.page()->stopped,1);}
+        }
         const std::array<GUID,4> versions{{__uuidof(ID3D11DeviceContext4),__uuidof(ID3D11DeviceContext3),__uuidof(ID3D11DeviceContext2),__uuidof(ID3D11DeviceContext1)}};
         const unsigned lengths[4]{149,147,144,134};
         for(unsigned i=0;i<versions.size();++i){void* alias=nullptr;
@@ -117,6 +161,14 @@ struct Observer {
         SFNP_AUDIT_ATTACH(20,drawIndexedInstanced) SFNP_AUDIT_ATTACH(21,drawInstanced)
         SFNP_AUDIT_ATTACH(38,drawAuto) SFNP_AUDIT_ATTACH(39,drawIndexedIndirect)
         SFNP_AUDIT_ATTACH(40,drawIndirect) SFNP_AUDIT_ATTACH(58,execute)
+        SFNP_AUDIT_ATTACH(14,map) SFNP_AUDIT_ATTACH(15,unmap)
+        SFNP_AUDIT_ATTACH(41,dispatch) SFNP_AUDIT_ATTACH(42,dispatchIndirect)
+        SFNP_AUDIT_ATTACH(46,copyRegion) SFNP_AUDIT_ATTACH(47,copyResource) SFNP_AUDIT_ATTACH(48,update)
+        SFNP_AUDIT_ATTACH(50,clearTarget) SFNP_AUDIT_ATTACH(51,clearUint) SFNP_AUDIT_ATTACH(52,clearFloat)
+        SFNP_AUDIT_ATTACH(54,mips) SFNP_AUDIT_ATTACH(57,resolve)
+        if(ctx.count>115){SFNP_AUDIT_ATTACH(115,copyRegion1) SFNP_AUDIT_ATTACH(116,update1)
+            SFNP_AUDIT_ATTACH(117,discardResource) SFNP_AUDIT_ATTACH(118,discardView)
+            SFNP_AUDIT_ATTACH(132,clearView) SFNP_AUDIT_ATTACH(133,discardView1)}
 #undef SFNP_AUDIT_ATTACH
         std::memcpy(ctx.facade,ctx.expected.data(),ctx.count*sizeof(void*));DWORD old=0;
         if(!VirtualProtect(code,bytes,PAGE_EXECUTE_READ,&old)||!FlushInstructionCache(GetCurrentProcess(),code,bytes)){
@@ -145,9 +197,17 @@ struct Observer {
         ++draws;++rasterCalls[counter];if(stopped||ctx!=activeContexts[Index].load(std::memory_order_acquire))return;
         try{inspect(ctx,call);}catch(...){++dropped;}
     }
+    static UINT callCount(const Raster& value)noexcept{return value.count;}
+    static UINT callStart(const Raster& value)noexcept{return value.start;}
 #define SFNP_AUDIT_RASTER(Name,Slot,Counter,Parameters,Arguments,Call) \
     template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
         auto& s=*instance.load(std::memory_order_acquire); \
+        const DWORD incoming=GetLastError(); \
+        if(auto* production=s.productionContext<Index>(ctx)){OwnCommands own; \
+            if(Slot==13)production->producer.draw(ctx,bits<projected_alpha::Draw>(s.contexts[Index].function(13)),callCount(Call),callStart(Call)); \
+            else production->producer.targets(ctx); \
+        } \
+        SetLastError(incoming); \
         bits<decltype(&Name<Index>)>(s.contexts[Index].function(Slot)) Arguments; \
         struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error; \
         s.afterRaster<Index>(ctx,Counter,Call); \
@@ -162,12 +222,56 @@ struct Observer {
 #undef SFNP_AUDIT_RASTER
     template<unsigned Index>static void STDMETHODCALLTYPE execute(ID3D11DeviceContext* ctx,ID3D11CommandList* commands,BOOL restore){
         auto& s=*instance.load(std::memory_order_acquire);
+        const DWORD incoming=GetLastError();
+        if(auto* production=s.productionContext<Index>(ctx))production->producer.invalidate();
+        SetLastError(incoming);
         bits<decltype(&execute<Index>)>(s.contexts[Index].function(58))(ctx,commands,restore);
         struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error;
         // Current bindings after a replay do not prove the command list's
         // sources. Count this boundary without assigning it image ancestry.
         ++s.rasterCalls[7];
     }
+    template<unsigned Index>static HRESULT STDMETHODCALLTYPE map(ID3D11DeviceContext* ctx,ID3D11Resource* resource,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* output){
+        auto& self=*instance.load();const DWORD incoming=GetLastError();
+        if(auto* c=self.productionContext<Index>(ctx))if(type!=D3D11_MAP_READ)c->producer.invalidate(resource);
+        SetLastError(incoming);const auto result=bits<decltype(&map<Index>)>(self.contexts[Index].function(14))(ctx,resource,sub,type,flags,output);
+        const DWORD error=GetLastError();
+        if(result==S_OK&&!sub&&output&&type!=D3D11_MAP_READ)if(auto* c=self.productionContext<Index>(ctx))c->producer.geometry().beginMap(resource,output->pData);
+        SetLastError(error);return result;
+    }
+    template<unsigned Index>static void STDMETHODCALLTYPE unmap(ID3D11DeviceContext* ctx,ID3D11Resource* resource,UINT sub){
+        auto& self=*instance.load();const DWORD incoming=GetLastError();
+        if(!sub)if(auto* c=self.productionContext<Index>(ctx))c->producer.geometry().beforeUnmap(resource);
+        SetLastError(incoming);bits<decltype(&unmap<Index>)>(self.contexts[Index].function(15))(ctx,resource,sub);
+    }
+    template<unsigned Index>static void STDMETHODCALLTYPE clearTarget(ID3D11DeviceContext* ctx,ID3D11RenderTargetView* view,const FLOAT* color){
+        auto& self=*instance.load();const DWORD incoming=GetLastError();
+        if(auto* c=self.productionContext<Index>(ctx)){OwnCommands own;c->producer.clear(ctx,view,color);}
+        SetLastError(incoming);bits<decltype(&clearTarget<Index>)>(self.contexts[Index].function(50))(ctx,view,color);
+    }
+    static ID3D11Resource* resourceOf(ID3D11View* view,Held<ID3D11Resource>& held)noexcept{if(view)view->GetResource(held.out());return held.p;}
+#define SFNP_PRODUCTION_WRITE(Name,Slot,Parameters,Arguments,Operation) \
+    template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
+        auto& self=*instance.load();const DWORD incoming=GetLastError(); \
+        if(auto* c=self.productionContext<Index>(ctx)){OwnCommands own;Operation;} \
+        SetLastError(incoming);bits<decltype(&Name<Index>)>(self.contexts[Index].function(Slot)) Arguments; \
+    }
+    SFNP_PRODUCTION_WRITE(dispatch,41,(ID3D11DeviceContext* ctx,UINT x,UINT y,UINT z),(ctx,x,y,z),c->producer.invalidate())
+    SFNP_PRODUCTION_WRITE(dispatchIndirect,42,(ID3D11DeviceContext* ctx,ID3D11Buffer* args,UINT offset),(ctx,args,offset),c->producer.invalidate())
+    SFNP_PRODUCTION_WRITE(copyRegion,46,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,UINT x,UINT y,UINT z,ID3D11Resource* src,UINT sourceSub,const D3D11_BOX* box),(ctx,dst,sub,x,y,z,src,sourceSub,box),c->producer.invalidate(dst))
+    SFNP_PRODUCTION_WRITE(copyResource,47,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,ID3D11Resource* src),(ctx,dst,src),c->producer.invalidate(dst))
+    SFNP_PRODUCTION_WRITE(update,48,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,const D3D11_BOX* box,const void* data,UINT row,UINT depth),(ctx,dst,sub,box,data,row,depth),c->producer.invalidate(dst);if(!sub&&!box)c->producer.geometry().update(dst,data))
+    SFNP_PRODUCTION_WRITE(clearUint,51,(ID3D11DeviceContext* ctx,ID3D11UnorderedAccessView* view,const UINT* data),(ctx,view,data),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+    SFNP_PRODUCTION_WRITE(clearFloat,52,(ID3D11DeviceContext* ctx,ID3D11UnorderedAccessView* view,const FLOAT* data),(ctx,view,data),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+    SFNP_PRODUCTION_WRITE(mips,54,(ID3D11DeviceContext* ctx,ID3D11ShaderResourceView* view),(ctx,view),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+    SFNP_PRODUCTION_WRITE(resolve,57,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,ID3D11Resource* src,UINT sourceSub,DXGI_FORMAT format),(ctx,dst,sub,src,sourceSub,format),c->producer.invalidate(dst))
+    SFNP_PRODUCTION_WRITE(copyRegion1,115,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,UINT x,UINT y,UINT z,ID3D11Resource* src,UINT sourceSub,const D3D11_BOX* box,UINT flags),(ctx,dst,sub,x,y,z,src,sourceSub,box,flags),c->producer.invalidate(dst))
+    SFNP_PRODUCTION_WRITE(update1,116,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,const D3D11_BOX* box,const void* data,UINT row,UINT depth,UINT flags),(ctx,dst,sub,box,data,row,depth,flags),c->producer.invalidate(dst);if(!sub&&!box)c->producer.geometry().update(dst,data))
+    SFNP_PRODUCTION_WRITE(discardResource,117,(ID3D11DeviceContext* ctx,ID3D11Resource* resource),(ctx,resource),c->producer.invalidate(resource))
+    SFNP_PRODUCTION_WRITE(discardView,118,(ID3D11DeviceContext* ctx,ID3D11View* view),(ctx,view),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+    SFNP_PRODUCTION_WRITE(clearView,132,(ID3D11DeviceContext* ctx,ID3D11View* view,const FLOAT* data,const D3D11_RECT* rectangles,UINT count),(ctx,view,data,rectangles,count),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+    SFNP_PRODUCTION_WRITE(discardView1,133,(ID3D11DeviceContext* ctx,ID3D11View* view,const D3D11_RECT* rectangles,UINT count),(ctx,view,rectangles,count),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+#undef SFNP_PRODUCTION_WRITE
     void inspect(ID3D11DeviceContext* ctx,const Raster& call){
         Held<ID3D11PixelShader> shader;ctx->PSGetShader(shader.out(),nullptr,nullptr);if(!shader.p)return;
         const auto kind=shaders.identify(shader.p);
@@ -258,6 +362,7 @@ struct Observer {
         HMODULE retained=nullptr;
         if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,
             reinterpret_cast<LPCWSTR>(&SFNP_CompositorSourceAuditStartV1),&retained))return false;
+        if(productionLaunch.mapping&&!productionPeer.open(productionLaunch))return false;
         status.state=4;
         return shaders.arm(reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr))+slot);
     }
@@ -289,7 +394,8 @@ struct Observer {
         // exit. Never reinstall over a foreign owner.
         {std::lock_guard<std::mutex> guard(mutex);
             detach();
-            shaders.stop();if(ready)status.state=7;if(page)publish(page->statusSequence,page->status,status);
+            if(productionPeer.page())InterlockedExchange(&productionPeer.page()->stopped,1);
+            textures.stop();nativeLocks.stop();shaders.stop();if(ready)status.state=7;if(page)publish(page->statusSequence,page->status,status);
         }
         if(page){UnmapViewOfFile(page);page=nullptr;}
         if(mapping){CloseHandle(mapping);mapping=nullptr;}
@@ -304,6 +410,19 @@ extern "C" __declspec(dllexport) DWORD WINAPI SFNP_CompositorSourceAuditStartV1(
     Launch launch{};
     if(!readable(argument,&launch,sizeof launch)||launch.magic!=Magic||!launch.server||!launch.serverBirth||launch.reserved)return 0;
     try{auto* observer=new Observer(launch);Observer* expected=nullptr;
+        if(!Observer::instance.compare_exchange_strong(expected,observer)){delete observer;return 0;}
+        try{std::thread([observer]{observer->run();}).detach();return 1;}
+        catch(...){Observer::instance.store(nullptr);delete observer;return 0;}
+    }catch(...){return 0;}
+}
+
+extern "C" __declspec(dllexport) DWORD WINAPI SFNP_CompositorSourceAuditStartV2(void* argument)noexcept{
+    using namespace stream_bridge::sender::source_audit;
+    LaunchV2 launch{};
+    if(!readable(argument,&launch,sizeof launch)||launch.diagnostic.magic!=Magic||!launch.diagnostic.server||
+        !launch.diagnostic.serverBirth||launch.diagnostic.reserved||launch.production.parentPid!=launch.diagnostic.server||
+        launch.production.parentBirth!=launch.diagnostic.serverBirth)return 0;
+    try{auto* observer=new Observer(launch.diagnostic);observer->productionLaunch=launch.production;Observer* expected=nullptr;
         if(!Observer::instance.compare_exchange_strong(expected,observer)){delete observer;return 0;}
         try{std::thread([observer]{observer->run();}).detach();return 1;}
         catch(...){Observer::instance.store(nullptr);delete observer;return 0;}

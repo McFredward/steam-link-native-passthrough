@@ -10,6 +10,11 @@ on:
       - 'pc/stream-bridge-projected-alpha-kernels.h'
       - 'pc/stream-bridge-projected-alpha-textures.h'
       - 'pc/stream-bridge-projected-alpha-geometry.h'
+      - 'pc/stream-bridge-projected-alpha-producer.h'
+      - 'pc/stream-bridge-projected-alpha-consumer.h'
+      - 'pc/stream-bridge-projected-alpha-launch.h'
+      - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-sender-provider-shaders*'
       - 'pc/stream-bridge-sender-provider-coverage*'
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'tests/test_stream_bridge_source_alpha*'
@@ -17,6 +22,7 @@ on:
       - 'tests/check_projected_alpha_hlsl.py'
       - 'tests/build_projected_windows_fixtures.py'
       - 'tests/test_stream_bridge_projected_channel_windows.cpp'
+      - 'tests/test_stream_bridge_projected_producer_windows.cpp'
       - 'tools/generate_projected_alpha_kernels.py'
       - '.github/workflows/source-alpha-tests.yml'
   pull_request:
@@ -28,6 +34,11 @@ on:
       - 'pc/stream-bridge-projected-alpha-kernels.h'
       - 'pc/stream-bridge-projected-alpha-textures.h'
       - 'pc/stream-bridge-projected-alpha-geometry.h'
+      - 'pc/stream-bridge-projected-alpha-producer.h'
+      - 'pc/stream-bridge-projected-alpha-consumer.h'
+      - 'pc/stream-bridge-projected-alpha-launch.h'
+      - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-sender-provider-shaders*'
       - 'pc/stream-bridge-sender-provider-coverage*'
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'tests/test_stream_bridge_source_alpha*'
@@ -35,6 +46,7 @@ on:
       - 'tests/check_projected_alpha_hlsl.py'
       - 'tests/build_projected_windows_fixtures.py'
       - 'tests/test_stream_bridge_projected_channel_windows.cpp'
+      - 'tests/test_stream_bridge_projected_producer_windows.cpp'
       - 'tools/generate_projected_alpha_kernels.py'
       - '.github/workflows/source-alpha-tests.yml'
   workflow_dispatch:
@@ -111,6 +123,13 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\projected-channel.log
           exit /b %SFNP_RESULT%
+      - name: Verify production alpha ancestry and original ownership boundaries
+        shell: cmd
+        run: |
+          build\projected-producer.exe >build\projected-producer.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer.log
+          exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -120,6 +139,7 @@ jobs:
             build/projected-alpha.log
             build/projected-alpha-embedded.log
             build/projected-channel.log
+            build/projected-producer.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc

@@ -17,6 +17,7 @@ struct SourceAuditDiscovery {
     decltype(&Module32NextW) next=&Module32NextW;
 };
 // Dev diagnostics only. No format, frame, mask or camera authority is added.
+namespace projected_alpha {class ChannelParent;}
 class SourceAuditServer {
 public:
     using VerifyFile=bool(*)(const wchar_t*,HANDLE);
@@ -24,7 +25,7 @@ public:
     explicit SourceAuditServer(SourceAuditDiscovery={});~SourceAuditServer();
     // Start before native sender/encoder preparation. Discovery must not wait
     // behind shader compilation, authentication or a coverage-worker tick.
-    bool start(VerifyFile,Inventory=nullptr,void* opaque=nullptr)noexcept;
+    bool start(VerifyFile,Inventory=nullptr,void* opaque=nullptr,projected_alpha::ChannelParent* channel=nullptr)noexcept;
     void tick(VerifyFile,Inventory=nullptr,void* opaque=nullptr)noexcept;
     SourceAuditStatus status()const noexcept;
     void stop()noexcept;

@@ -4,6 +4,7 @@ on:
     branches: [dev]
     paths:
       - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-projected-alpha-*'
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-image.h'
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - 'pc/stream-bridge-source-audit*'
+      - 'pc/stream-bridge-projected-alpha-*'
       - 'pc/stream-bridge-sender-provider.cpp'
       - 'pc/stream-bridge-sender-provider-shaders.*'
       - 'pc/stream-bridge-native-image.h'
@@ -103,9 +105,9 @@ jobs:
         shell: cmd
         run: |
           mkdir build
-          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_source_audit_gpu.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build\audit-gpu.exe /Fo:build\ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_source_audit_gpu.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build\audit-gpu.exe /Fo:build\ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib bcrypt.lib
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX /I. /LD tests/source_audit_loader_fixture.cpp pc/stream-bridge-source-audit-windows.cpp pc/stream-bridge-source-audit-observer.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build\audit_fixture.dll /Fo:build\ /link advapi32.lib d3d11.lib dxgi.lib dxguid.lib uuid.lib
+          cl /nologo /std:c++17 /EHsc /W4 /WX /I. /LD tests/source_audit_loader_fixture.cpp pc/stream-bridge-source-audit-windows.cpp pc/stream-bridge-source-audit-observer.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build\audit_fixture.dll /Fo:build\ /link advapi32.lib d3d11.lib dxgi.lib dxguid.lib uuid.lib bcrypt.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /I. tests/test_stream_bridge_source_audit_loader.cpp /Fe:build\vrserver.exe /Fo:build\ /link d3d11.lib dxgi.lib uuid.lib
           if errorlevel 1 exit /b 1
@@ -141,7 +143,7 @@ jobs:
       - name: Exercise module churn, path aliases and exact once-only loading
         shell: pwsh
         run: |
-          foreach ($case in 4,5,6,7,8,9,10,11) {
+          foreach ($case in 4,5,6,7,8,9,10,11,12) {
             & build/vrserver.exe $case normal *>"build/loader-case$case.log"
             $result = $LASTEXITCODE
             Get-Content "build/loader-case$case.log"
