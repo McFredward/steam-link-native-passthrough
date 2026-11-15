@@ -28,9 +28,13 @@ struct MaskRegistration {
     std::uint64_t maskHandle=0,maskGeneration=0;
 };
 struct ImageWitness {
+    struct Release {std::uint64_t allocation=0,scope=0,key=0;};
     Allocation native{},scene{};
     std::uint64_t sourceLease=0,maskHandle=0,maskGeneration=0;
     std::uint64_t syncAllocation=0,producerScope=0,releaseKey=0,imageVersion=0;
+    // A frame can hold both an app lock and the stream lock. Seal each observed
+    // matching release; the consumer selects its actual Present sync texture.
+    std::array<Release,8> releases{};
     // Not a frame counter. The producer invalidates BEFORE ANY native output
     // write. A witness is published only for that exact RGB/coverage version
     // under observed native ownership; it holds its sync allocation alive.
