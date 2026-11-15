@@ -28,6 +28,18 @@ ULONG STDMETHODCALLTYPE fakeRef(ID3D11DeviceContext*){return 1;}
 void STDMETHODCALLTYPE noShader(ID3D11DeviceContext*,ID3D11PixelShader** out,ID3D11ClassInstance**,UINT*){*out=nullptr;SetLastError(999);}
 ID3D11DeviceContext* fakeContext=nullptr;
 void STDMETHODCALLTYPE getFakeContext(ID3D11Device*,ID3D11DeviceContext** out){*out=fakeContext;}
+void callerAdmissionControls(){
+    projected_alpha::ChannelParent channel;check(channel.create(),"owned native-caller channel");
+    projected_alpha::ChannelLaunch launch{};check(channel.duplicateToVerifiedPeer(GetCurrentProcess(),launch),"owned same-process admission control handle");
+    auto* observer=new Observer(Launch{});check(observer->productionPeer.open(launch),"owned native-caller private peer");
+    auto* token=reinterpret_cast<ID3D11Device*>(std::uintptr_t(0x1000));observer->contexts[0].producerDevice=token;
+    {auto admitted=observer->production(token);check(bool(admitted),"first serialized native caller admitted");}
+    bool migrated=false;std::thread second([&]{auto admitted=observer->production(token);migrated=bool(admitted);});second.join();
+    check(migrated&&!InterlockedCompareExchange(&channel.page()->stopped,0,0),"serialized caller migration does not retire a valid device");
+    {auto held=observer->production(token);check(bool(held),"original caller can resume after serialized migration");
+        bool concurrent=true;std::thread other([&]{auto refused=observer->production(token);concurrent=bool(refused);});other.join();
+        check(!concurrent&&InterlockedCompareExchange(&channel.page()->stopped,0,0),"unsupported concurrent state mutation closes private admission without waiting");}
+}
 void dispatchControls(){
     static std::array<void*,116> storage{};auto* table=storage.data()+1;
     for(unsigned i=0;i<115;++i)table[i]=bits<void*>(&fakeRef);
@@ -252,4 +264,4 @@ void run(){
 
 }
 }
-int main(){try{dispatchControls();run();std::printf("source audit owned WARP: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"source audit failed after %u: %s\n",checks,e.what());return 1;}}
+int main(){try{callerAdmissionControls();dispatchControls();run();std::printf("source audit owned WARP: %u checks PASS\n",checks);return 0;}catch(const std::exception& e){std::fprintf(stderr,"source audit failed after %u: %s\n",checks,e.what());return 1;}}

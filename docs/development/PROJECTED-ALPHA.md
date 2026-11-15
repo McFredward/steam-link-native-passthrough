@@ -34,8 +34,9 @@ game without this proof uses camera-only recovery.
 Resources are bounded to 32 published images and 256 MiB of companion texture
 storage across the private producer channel. Preparation runs on native resource
 creation. Rendering callbacks perform no allocation, shader compilation or
-blocking synchronization. The owning device thread is required; an unexpected
-thread migration retires the private channel. Previously supported direct
+blocking synchronization. Calls follow the actual native caller. A nonblocking
+per-context guard permits sequential thread migration; unsupported concurrent
+mutation retires the private channel. Previously supported direct
 application RGBA routes remain available.
 
 Windows fixtures exercise embedded owned kernels, original RGB preservation,
