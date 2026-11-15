@@ -231,11 +231,14 @@ error, not a new diagnosis of the headset failure.
 
 A subsequent unshipped control derives the extra output from the original owned
 scene DXBC instead of relying on a separately authored paired shader. It checks
-container bounds/checksum, one original output and the exact final scene-alpha
+container bounds/checksum, one original output and the exact scene-alpha
 selection; it inserts only the private output declaration/writes and leaves
 original executable instructions in order. Runtime creation/activation on the
 compositor is still absent. The distinct resolve is refused by this derivation.
-So is reprojection with an early exit: its zero-game-alpha case needs a separate
+The owned compiler schedules an independent RGB write after its alpha output;
+the transform accepts that order while requiring exactly one native alpha write
+and leaving all original instruction positions relative to each other unchanged.
+Reprojection with an early exit is also refused: its zero-game-alpha case needs a separate
 reviewed control rather than silently assuming that every path reaches the
 final selection. Private retained inner/Y containers match the structural
 transform; that is not native GPU execution or production activation.
