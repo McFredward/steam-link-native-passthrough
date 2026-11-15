@@ -1,4 +1,5 @@
 #include "pc/stream-bridge-projected-alpha-producer.h"
+#include "pc/stream-bridge-projected-alpha-native-producer.h"
 #include "pc/stream-bridge-projected-alpha-scene-capture.h"
 #include "pc/stream-bridge-projected-alpha-consumer.h"
 #include "pc/stream-bridge-projected-alpha-textures.h"
@@ -8,19 +9,21 @@
 using namespace stream_bridge::sender;
 using namespace stream_bridge::sender::projected_alpha;
 namespace {
-unsigned checks=0,nativeDrawCalls=0;Producer* active=nullptr;MutexObserver* activeLocks=nullptr;
+unsigned checks=0,nativeDrawCalls=0;Producer* active=nullptr;NativeProducer* nativeActive=nullptr;MutexObserver* activeLocks=nullptr;
 struct CrossProcess {ChannelLaunch launch{};std::uint64_t source=0,native=0;std::uint32_t compositorPid=0;};
 void check(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
-void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);}
-void released(const MutexLease& lease,HRESULT result,void*)noexcept{if(active)active->released(lease,result);}
+void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);if(nativeActive)nativeActive->releasing(lease,key);}
+void released(const MutexLease& lease,HRESULT result,void*)noexcept{if(active)active->released(lease,result);if(nativeActive)nativeActive->released(lease,result);}
 void depthObserved(ID3D11Device*,ID3D11DepthStencilState* state,void*)noexcept{if(active)active->depthState(state);}
 void textureObserved(ID3D11Device* device,ID3D11Texture2D* texture,TextureOrigin,void*)noexcept{if(activeLocks)activeLocks->observeTexture(device,texture);}
-void targetObserved(ID3D11Device*,ID3D11RenderTargetView* view,void*)noexcept{if(active)active->target(view);}
+void targetObserved(ID3D11Device*,ID3D11RenderTargetView* view,void*)noexcept{if(active)active->target(view);if(nativeActive)nativeActive->target(view);}
 void bufferObserved(ID3D11Device*,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void*)noexcept{
     if(active)active->geometry().buffer(desc,data,buffer);
+    if(nativeActive)nativeActive->geometry().buffer(desc,data,buffer);
 }
 void layoutObserved(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T bytes,ID3D11InputLayout* layout,void*)noexcept{
     if(active)active->geometry().layout(desc,count,code,bytes,layout);
+    if(nativeActive)nativeActive->geometry().layout(desc,count,code,bytes,layout);
 }
 void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){++nativeDrawCalls;context->Draw(count,start);}
 // Owned DXGI-only forwarding control: a distinct public method table, no
@@ -731,6 +734,209 @@ void nativeMrtControl(bool reproject=false){
     context->ClearState();
     std::printf("owned MRT chain: plain-shared non-keyed source/output; FP16 X,4x MSAA,64/80-byte ranged scene constants, both ranged resolve policies; native RGBA unchanged; true alpha; stencil once; naive carrier changes %u RGB bytes. No production image/frame permit.\n",changedByNaive);
 }
+struct NativePipelineMessage {ChannelLaunch launch{};std::uint64_t source=0,native=0,sync=0;std::uint32_t reproject=0;};
+void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
+    constexpr UINT width=40,height=36;
+    auto vsCode=compile("vs","vs_5_0"),xCode=compile("copyFp16","ps_5_0");
+    auto yCode=compileCapture(message.reproject?"sceneReprojectNative":"sceneNative"),resolveCode=compileCapture("resolveNative");
+    std::array<ShaderFingerprint,4> contracts{};
+    contracts[0].kind=message.reproject?NativeShader::MultiViewVertexY:NativeShader::StreamVertex;
+    contracts[1].kind=NativeShader::MultiViewDownscaleX;contracts[2].kind=message.reproject?NativeShader::MultiViewReprojectY:NativeShader::MultiViewDownscaleY;
+    contracts[3].kind=NativeShader::MultiViewResolve;
+    const std::array<ID3DBlob*,4> codes{{vsCode.value,xCode.value,yCode.value,resolveCode.value}};
+    for(unsigned i=0;i<4;++i)check(dxbcFingerprint(codes[i]->GetBufferPointer(),codes[i]->GetBufferSize(),contracts[i].hash),"actual owned native pipeline contracts");
+    NativeShaders shaders(contracts.data(),contracts.size(),nullptr,nullptr,true,false,true);
+    Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,D3D11_CREATE_DEVICE_SINGLETHREADED,nullptr,0,D3D11_SDK_VERSION,
+        device.out(),nullptr,context.out()))&&shaders.observeDevice(device.value),"actual single-threaded compositor-side device and cold shader observer");
+    NativeProducer producer(&contracts[2],1);nativeActive=&producer;
+    MutexObserver locks({nullptr,releasing,released,nullptr});activeLocks=&locks;
+    check(locks.prepare(device.value)&&producer.prepare(device.value,page,shaders,locks),"actual native MRT controller prepared before native resource creation");
+    TextureObserver observed(textureObserved,nullptr,targetObserved,bufferObserved,layoutObserved,depthObserved);
+    check(observed.prepare(device.value),"actual texture/geometry lifetime callbacks");
+    const auto open=[&](std::uint64_t value,Reference<ID3D11Texture2D>& texture){
+        check(SUCCEEDED(device->OpenSharedResource(reinterpret_cast<HANDLE>(std::uintptr_t(value)),__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))),"open exact original native allocation");
+    };
+    Reference<ID3D11Texture2D> source,native,syncImage;open(message.source,source);open(message.native,native);open(message.sync,syncImage);
+    Reference<IDXGIKeyedMutex> sync,absent;
+    check(SUCCEEDED(syncImage->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sync.out())))&&
+        source->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(absent.out()))==E_NOINTERFACE&&
+        native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(absent.out()))==E_NOINTERFACE,
+        "both real colour allocations are non-keyed; native Present synchronization is a separate actual resource");
+    Reference<ID3D11ShaderResourceView> sourceView;
+    check(SUCCEEDED(device->CreateShaderResourceView(source.value,nullptr,sourceView.out())),"native actual game source view");
+    D3D11_TEXTURE2D_DESC shape{};shape.Width=width;shape.Height=height+12;shape.MipLevels=shape.ArraySize=shape.SampleDesc.Count=1;
+    shape.Format=DXGI_FORMAT_R16G16B16A16_TYPELESS;shape.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
+    Reference<ID3D11Texture2D> fp16;Reference<ID3D11RenderTargetView> xTarget;
+    Reference<ID3D11ShaderResourceView> xView;
+    D3D11_RENDER_TARGET_VIEW_DESC xv{};xv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;xv.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
+    D3D11_SHADER_RESOURCE_VIEW_DESC xs{};xs.Format=xv.Format;xs.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;xs.Texture2D.MipLevels=1;
+    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,fp16.out()))&&SUCCEEDED(device->CreateRenderTargetView(fp16.value,&xv,xTarget.out()))&&
+        SUCCEEDED(device->CreateShaderResourceView(fp16.value,&xs,xView.out())),"actual typeless FP16 X storage with genuine FLOAT views and unused padding");
+    shape.Height=height;shape.Format=DXGI_FORMAT_R8G8B8A8_UNORM;shape.SampleDesc.Count=4;
+    Reference<ID3D11Texture2D> msaa,baselineMsaa;Reference<ID3D11RenderTargetView> yTarget,baselineY;
+    Reference<ID3D11ShaderResourceView> yView,baselineYView;
+    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,msaa.out()))&&SUCCEEDED(device->CreateRenderTargetView(msaa.value,nullptr,yTarget.out()))&&
+        SUCCEEDED(device->CreateShaderResourceView(msaa.value,nullptr,yView.out()))&&SUCCEEDED(device->CreateTexture2D(&shape,nullptr,baselineMsaa.out()))&&
+        SUCCEEDED(device->CreateRenderTargetView(baselineMsaa.value,nullptr,baselineY.out()))&&SUCCEEDED(device->CreateShaderResourceView(baselineMsaa.value,nullptr,baselineYView.out())),"actual four-sample native and independent reference targets");
+    shape.SampleDesc.Count=1;shape.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    Reference<ID3D11Texture2D> baseline;Reference<ID3D11RenderTargetView> baselineFinal,nativeTarget;
+    D3D11_RENDER_TARGET_VIEW_DESC finalView{};finalView.Format=DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;finalView.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
+    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,baseline.out()))&&SUCCEEDED(device->CreateRenderTargetView(baseline.value,&finalView,baselineFinal.out()))&&
+        SUCCEEDED(device->CreateRenderTargetView(native.value,&finalView,nativeTarget.out())),"native and independent sRGB resolve outputs");
+    Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> x,y,resolve;Reference<ID3D11InputLayout> layout;
+    check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
+        SUCCEEDED(device->CreatePixelShader(xCode->GetBufferPointer(),xCode->GetBufferSize(),nullptr,x.out()))&&
+        SUCCEEDED(device->CreatePixelShader(yCode->GetBufferPointer(),yCode->GetBufferSize(),nullptr,y.out()))&&
+        SUCCEEDED(device->CreatePixelShader(resolveCode->GetBufferPointer(),resolveCode->GetBufferSize(),nullptr,resolve.out()))&&
+        shaders.captureProgram(y.value)&&shaders.captureProgram(resolve.value),"exact original native objects have cold-created scene/resolve derivatives");
+    const D3D11_INPUT_ELEMENT_DESC elements[]{{"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
+        {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
+    check(SUCCEEDED(device->CreateInputLayout(elements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual native input layout callback");
+    const std::array<float,16> points{{0,0,7,7,0,1,7,8,1,0,8,7,1,1,8,8}};
+    D3D11_BUFFER_DESC bd{};bd.ByteWidth=sizeof points;bd.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA verticesData{points.data(),0,0};Reference<ID3D11Buffer> vertices,constants,policy;
+    check(SUCCEEDED(device->CreateBuffer(&bd,&verticesData,vertices.out())),"original native vertex metadata");
+    std::array<float,16> words{};words[0]=float(width);words[1]=float(height);words[4]=words[5]=words[6]=1;
+    bd.ByteWidth=sizeof words;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;D3D11_SUBRESOURCE_DATA constantData{words.data(),0,0};
+    std::array<float,8> flags{{1,0,0,0,.2f,.3f,.4f,0}};D3D11_SUBRESOURCE_DATA policyData{flags.data(),0,0};
+    check(SUCCEEDED(device->CreateBuffer(&bd,&constantData,constants.out())),"actual logical native scene constants");bd.ByteWidth=sizeof flags;
+    check(SUCCEEDED(device->CreateBuffer(&bd,&policyData,policy.out())),"actual native resolve colour policy, unchanged by MRT");
+    Reference<ID3D11Buffer> viewState,viewBounds;
+    std::array<std::uint32_t,76> stateWords{};std::array<std::uint32_t,700> boundsWords{};const float one=1;
+    std::memcpy(&boundsWords[30*4+1],&one,4);bd.ByteWidth=sizeof stateWords;D3D11_SUBRESOURCE_DATA stateData{stateWords.data(),0,0};
+    check(SUCCEEDED(device->CreateBuffer(&bd,&stateData,viewState.out())),"observed selected native eye constants");
+    bd.ByteWidth=sizeof boundsWords;D3D11_SUBRESOURCE_DATA boundsData{boundsWords.data(),0,0};
+    check(SUCCEEDED(device->CreateBuffer(&bd,&boundsData,viewBounds.out())),"observed normalized native view bounds");
+    context->VSSetConstantBuffers(0,1,&constants.value);context->VSSetConstantBuffers(1,1,&viewState.value);context->VSSetConstantBuffers(2,1,&viewBounds.value);
+    D3D11_RASTERIZER_DESC rasterDesc{};rasterDesc.FillMode=D3D11_FILL_SOLID;rasterDesc.CullMode=D3D11_CULL_NONE;rasterDesc.DepthClipEnable=TRUE;rasterDesc.MultisampleEnable=TRUE;
+    Reference<ID3D11RasterizerState> raster;check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,raster.out())),"original native raster state");
+    context->RSSetState(raster.value);context->VSSetShader(vs.value,nullptr,0);context->IASetInputLayout(layout.value);UINT stride=16,offset=0;
+    context->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    context->PSSetConstantBuffers(0,1,&constants.value);context->PSSetConstantBuffers(2,1,&policy.value);
+    context->OMSetBlendState(nullptr,nullptr,UINT_MAX);const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
+    const FLOAT blank[4]{0,0,0,1},poison[4]{.6f,.2f,.8f,1};
+    const auto render=[&](){
+        check(sync->AcquireSync(0,5000)==S_OK,"original native producer acquires only its actual separate Present mutex");
+        producer.clear(context.value,xTarget.value,poison);context->ClearRenderTargetView(xTarget.value,poison);
+        context->OMSetRenderTargets(1,&xTarget.value,nullptr);context->PSSetShader(x.value,nullptr,0);context->PSSetShaderResources(0,1,&sourceView.value);
+        auto before=nativeDrawCalls;
+        check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"plain-shared root is read once by original native X, with no private FP16 replay");
+        context->OMSetRenderTargets(1,&baselineY.value,nullptr);context->PSSetShaderResources(0,1,&xView.value);context->PSSetShader(y.value,nullptr,0);
+        context->ClearRenderTargetView(baselineY.value,blank);draw(context.value,4,0);
+        producer.clear(context.value,yTarget.value,blank);context->ClearRenderTargetView(yTarget.value,blank);context->OMSetRenderTargets(1,&yTarget.value,nullptr);
+        // Poison/unknown logical bounds must refuse private capture. Restoring
+        // observed bytes restores availability without a session reset.
+        producer.geometry().invalidate(constants.value);before=nativeDrawCalls;
+        if(!message.reproject)check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"unknown padded-Y bounds refuse without an extra original draw");
+        producer.geometry().update(constants.value,words.data());
+        if(message.reproject){const float outside=2;std::memcpy(&boundsWords[30*4+1],&outside,4);
+            context->UpdateSubresource(viewBounds.value,0,nullptr,boundsWords.data(),0,0);producer.geometry().update(viewBounds.value,boundsWords.data());
+            before=nativeDrawCalls;check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"reprojection bounds outside the written input region refuse");
+            std::memcpy(&boundsWords[30*4+1],&one,4);context->UpdateSubresource(viewBounds.value,0,nullptr,boundsWords.data(),0,0);producer.geometry().update(viewBounds.value,boundsWords.data());
+        }
+        before=nativeDrawCalls;
+        check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"native Y MRT consumes only proven padded-input rows and runs its original draw once");
+        context->OMSetRenderTargets(1,&baselineFinal.value,nullptr);context->PSSetShaderResources(0,1,&baselineYView.value);context->PSSetShader(resolve.value,nullptr,0);draw(context.value,4,0);
+        context->OMSetRenderTargets(1,&nativeTarget.value,nullptr);context->PSSetShaderResources(0,1,&yView.value);before=nativeDrawCalls;
+        check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"native resolve MRT preserves original t0/b2 and pairs its actual private MSAA alpha");
+        const auto ordinary=pixels(device.value,context.value,baseline.value),actual=pixels(device.value,context.value,native.value);
+        check(ordinary==actual,"all native sRGB RGBA bytes equal an independent original scene/resolve reference");
+        check(sync->ReleaseSync(3)==S_OK&&producer.stage()==4020,"original native release seals the exact output/coverage version");
+        const auto diagnostic=producer.diagnostics();check(diagnostic.rootMisc==D3D11_RESOURCE_MISC_SHARED&&!diagnostic.rootKeyed&&diagnostic.rootPasses&&diagnostic.pairedDraws&&diagnostic.sealedVersions,
+            "production controller actually admits non-keyed roots and seals native MRT pairs");
+    };
+    render();BYTE acknowledgement=0;DWORD got=0;
+    check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&acknowledgement,1,&got,nullptr)&&got==1&&acknowledgement==1,"parent copied first exact pair before the next native ownership interval");
+    check(sync->AcquireSync(0,5000)==S_OK,"next original native ownership interval for alias-write control");
+    Reference<ID3D11Texture2D> alias;open(message.native,alias);producer.invalidate(alias.value);context->ClearRenderTargetView(nativeTarget.value,blank);
+    check(sync->ReleaseSync(3)==S_OK,"unknown write through a reopened native alias preserves actual synchronization but revokes its mask");
+    std::uint64_t replacement=0;
+    check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&replacement,sizeof replacement,&got,nullptr)&&got==sizeof replacement&&replacement,
+        "parent publishes the exact replacement output allocation after retiring its old generation");
+    nativeTarget->Release();nativeTarget.value=nullptr;native->Release();native.value=nullptr;alias->Release();alias.value=nullptr;
+    open(replacement,native);check(SUCCEEDED(device->CreateRenderTargetView(native.value,&finalView,nativeTarget.out())),"cold creation prepares the replacement output's own capture image");
+    render();check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&acknowledgement,1,&got,nullptr)&&got==1&&acknowledgement==2,"parent acknowledged refreshed image generation and alpha");
+    nativeActive=nullptr;activeLocks=nullptr;context->ClearState();
+}
+void nativePipelineControl(bool reproject){
+    constexpr UINT width=40,height=36;Consumer consumer;auto& channel=consumer.channel();
+    Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,context.out())),"independent sender-side WARP device");
+    D3D11_TEXTURE2D_DESC shape{};shape.Width=width;shape.Height=height;shape.MipLevels=shape.ArraySize=shape.SampleDesc.Count=1;
+    shape.Format=DXGI_FORMAT_R8G8B8A8_UNORM;shape.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;shape.MiscFlags=D3D11_RESOURCE_MISC_SHARED;
+    Reference<ID3D11Texture2D> source,native,replacement,syncImage,unrelated;
+    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,source.out())),"actual non-keyed game source");shape.Format=DXGI_FORMAT_R8G8B8A8_TYPELESS;
+    check(SUCCEEDED(device->CreateTexture2D(&shape,nullptr,native.out()))&&SUCCEEDED(device->CreateTexture2D(&shape,nullptr,replacement.out())),"actual non-keyed native output generations");
+    auto syncShape=shape;syncShape.Width=syncShape.Height=32;syncShape.Format=DXGI_FORMAT_R8G8B8A8_UNORM;syncShape.MiscFlags=D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
+    check(SUCCEEDED(device->CreateTexture2D(&syncShape,nullptr,syncImage.out()))&&SUCCEEDED(device->CreateTexture2D(&syncShape,nullptr,unrelated.out())),"separate actual native Present mutex and unrelated negative control");
+    Reference<IDXGIKeyedMutex> sync,other;
+    check(SUCCEEDED(syncImage->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sync.out())))&&
+        SUCCEEDED(unrelated->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(other.out()))),"actual original synchronization interfaces");
+    std::vector<std::uint8_t> data(width*height*4);
+    const auto upload=[&](unsigned phase){for(UINT i=0;i<width*height;++i){data[i*4]=UINT(i*17+phase*19)%256;data[i*4+1]=UINT(i*39)%256;
+            data[i*4+2]=UINT(i*71)%256;data[i*4+3]=(i+phase)%3==0?0:(i+phase)%3==1?127:255;}
+        context->UpdateSubresource(source.value,0,nullptr,data.data(),width*4,0);
+        check(pixels(device.value,context.value,source.value)==data,"owned game producer completes its upload before submitting the non-keyed source");
+    };upload(0);
+    struct Pipes {HANDLE read=nullptr,write=nullptr,process=nullptr,thread=nullptr;
+        ~Pipes(){if(write)CloseHandle(write);if(read)CloseHandle(read);if(process){if(WaitForSingleObject(process,0)!=WAIT_OBJECT_0)TerminateProcess(process,1);CloseHandle(process);}if(thread)CloseHandle(thread);}} pipes;
+    SECURITY_ATTRIBUTES security{sizeof security,nullptr,TRUE};check(CreatePipe(&pipes.read,&pipes.write,&security,4096)&&SetHandleInformation(pipes.write,HANDLE_FLAG_INHERIT,0),"owned native pipeline launch pipe");
+    std::array<wchar_t,32768> path{};const auto length=GetModuleFileNameW(nullptr,path.data(),UINT(path.size()));check(length&&length<path.size(),"owned current executable");
+    std::wstring command=L"\""+std::wstring(path.data())+L"\" --native-pipeline-child";std::vector<wchar_t> args(command.begin(),command.end());args.push_back(0);
+    STARTUPINFOW startup{};startup.cb=sizeof startup;startup.dwFlags=STARTF_USESTDHANDLES;startup.hStdInput=pipes.read;startup.hStdOutput=GetStdHandle(STD_OUTPUT_HANDLE);startup.hStdError=GetStdHandle(STD_ERROR_HANDLE);
+    PROCESS_INFORMATION process{};check(CreateProcessW(path.data(),args.data(),nullptr,nullptr,TRUE,0,nullptr,nullptr,&startup,&process)!=0,"separate original compositor-side process");
+    pipes.process=process.hProcess;pipes.thread=process.hThread;
+    NativePipelineMessage message{};check(channel.duplicateToVerifiedPeer(pipes.process,message.launch),"actual private channel bound to owned compositor process birth");
+    message.source=handle(source.value);message.native=handle(native.value);message.sync=handle(syncImage.value);message.reproject=reproject?1u:0u;
+    constexpr std::uint64_t lease=(1ull<<32)|77u;channel.sourceLease(lease);Registry registry{};registry.sourceLease=lease;registry.revision=1;
+    registry.retained[0]={message.source,11,77,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
+    registry.retained[1]={message.native,22,process.dwProcessId,width,height,DXGI_FORMAT_R8G8B8A8_TYPELESS,1,1};
+    std::array<ID3D11Texture2D*,ChannelAllocations> pins{};pins[0]=source.value;pins[1]=native.value;
+    check(channel.publishRetained(registry,pins),"real native opens pin the current game and compositor allocations");
+    DWORD sent=0;check(WriteFile(pipes.write,&message,sizeof message,&sent,nullptr)&&sent==sizeof message,"original private launch parameters");
+    const auto select=[&](const Allocation& allocation){
+        Consumer::Selection selected{};const auto deadline=GetTickCount64()+1500;
+        do {consumer.poll(device.value);selected=consumer.select(device.value,allocation,message.sync,lease);if(selected.view)break;Sleep(10);}while(GetTickCount64()<deadline);
+        return selected;
+    };
+    const auto verify=[&](const Allocation& allocation,ID3D11Texture2D* output){
+        const auto selected=select(allocation);check(selected.view&&selected.lease==lease&&selected.scenePid==77,"actual cross-process native MRT pair selected under exact Present synchronization");
+        Reference<ID3D11Resource> resource;Reference<ID3D11Texture2D> alpha;selected.view->GetResource(resource.out());
+        check(SUCCEEDED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(alpha.out()))),"actual imported private image");
+        const auto a=pixels(device.value,context.value,alpha.value),rgb=pixels(device.value,context.value,output);unsigned nonzero=0;
+        for(UINT i=0;i<width*height;++i){const auto expected=reproject&&i%width>=width/2?0:data[i*4+3];
+            check(a[i*4+3]==expected&&!a[i*4]&&!a[i*4+1]&&!a[i*4+2],"current exact genuine alpha survives plain-shared source, padding, native MSAA, resolve and process transfer without RGB payload");
+            for(unsigned c=0;c<3;++c)nonzero+=rgb[i*4+c]!=0;}
+        check(nonzero>0,"actual game RGB is present alongside the imported coverage");
+    };
+    // Prepare after child binding; only the actual parent Acquire grants an
+    // ownership interval. The unrelated mutex cannot authorize this image.
+    const auto readyDeadline=GetTickCount64()+5000;while(!consumer.prepare(device.value)&&GetTickCount64()<readyDeadline)Sleep(10);
+    check(consumer.prepare(device.value)&&sync->AcquireSync(3,5000)==S_OK,"actual native Present consumer owns the first output version");
+    verify(registry.retained[1],native.value);
+    auto wrong=registry.retained[1];++wrong.generation;check(!consumer.select(device.value,wrong,message.sync,lease).view,"wrong native output generation refuses");
+    check(other->AcquireSync(0,0)==S_OK&&!consumer.select(device.value,registry.retained[1],handle(unrelated.value),lease).view&&other->ReleaseSync(0)==S_OK,
+        "a held unrelated mutex cannot authorize this exact frame");
+    channel.sourceLease(0);check(!consumer.select(device.value,registry.retained[1],message.sync,lease).view,"source withdrawal revokes the exact pair");channel.sourceLease(lease);
+    context->Flush();check(sync->ReleaseSync(0)==S_OK,"parent releases only after its exact paired copies");BYTE ack=1;
+    check(WriteFile(pipes.write,&ack,1,&sent,nullptr)&&sent==1,"allow next original native interval");
+    check(sync->AcquireSync(3,5000)==S_OK&&!consumer.select(device.value,registry.retained[1],message.sync,lease).view,"actual unknown GPU write through a reopened native alias revokes stale private alpha");
+    check(sync->ReleaseSync(0)==S_OK,"parent ends invalid image's actual native interval");
+    const auto oldAllocation=registry.retained[1];const auto newHandle=handle(replacement.value);upload(1);++registry.revision;
+    registry.retained[1].handle=newHandle;++registry.retained[1].generation;pins[1]=replacement.value;
+    check(channel.publishRetained(registry,pins),"retired native allocation is replaced by its exact new retained generation");
+    check(WriteFile(pipes.write,&newHandle,sizeof newHandle,&sent,nullptr)&&sent==sizeof newHandle,"submit exact replacement allocation to native compositor");
+    check(sync->AcquireSync(3,5000)==S_OK,"actual native consumer owns the replacement frame");
+    verify(registry.retained[1],replacement.value);
+    check(!consumer.select(device.value,oldAllocation,message.sync,lease).view,"retired native generation cannot select the reused private registration slot");
+    context->Flush();check(sync->ReleaseSync(0)==S_OK,"parent releases replacement after its exact copy");ack=2;
+    check(WriteFile(pipes.write,&ack,1,&sent,nullptr)&&sent==1&&WaitForSingleObject(pipes.process,5000)==WAIT_OBJECT_0,"owned native producer finishes after acknowledgement");
+    DWORD result=1;check(GetExitCodeProcess(pipes.process,&result)&&!result,"real native controller's separate process completed every production check");
+    consumer.stop();context->ClearState();
+    std::printf("owned production native MRT: real non-keyed source/output, separate native sync, padded typeless FP16, native4xMSAA, original sRGB RGBA equality, source withdrawal, alias-write revocation, retired-generation row reuse, current-frame alpha; reproject=%u. No headset acceptance.\n",unsigned(reproject));
+}
+
 void consumerControl(){
     Consumer consumer;auto& channel=consumer.channel();check(channel.page()!=nullptr,"private parent consumer channel");
     Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> context;
@@ -794,7 +1000,13 @@ int main(int argc,char** argv){try{
         CrossProcess message{};DWORD received=0;
         check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&message,sizeof message,&received,nullptr)&&received==sizeof message,"owned launch pipe payload");
         ChannelPeer peer;check(peer.open(message.launch),"child binds the actual private kernel channel");run(&message,peer.page());
-    }else if(argc==2&&!std::strcmp(argv[1],"--native-single"))nativeSingleDrawControl();
+    }else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline-child")){
+        NativePipelineMessage message{};DWORD received=0;
+        check(ReadFile(GetStdHandle(STD_INPUT_HANDLE),&message,sizeof message,&received,nullptr)&&received==sizeof message,"owned native MRT launch payload");
+        ChannelPeer peer;check(peer.open(message.launch),"actual private peer lifetime");pipelineChild(message,peer.page());
+    }else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline"))nativePipelineControl(false);
+    else if(argc==2&&!std::strcmp(argv[1],"--native-pipeline-reproject"))nativePipelineControl(true);
+    else if(argc==2&&!std::strcmp(argv[1],"--native-single"))nativeSingleDrawControl();
     else if(argc==2&&!std::strcmp(argv[1],"--native-mrt"))nativeMrtControl();
     else if(argc==2&&!std::strcmp(argv[1],"--native-mrt-reproject"))nativeMrtControl(true);
     else if(argc==2&&!std::strcmp(argv[1],"--consumer"))consumerControl();

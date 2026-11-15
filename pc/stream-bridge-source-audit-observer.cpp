@@ -4,7 +4,7 @@
 #include "stream-bridge-native-image.h"
 #include "stream-bridge-source-alpha-probe.h"
 #include "stream-bridge-projected-alpha-launch.h"
-#include "stream-bridge-projected-alpha-producer.h"
+#include "stream-bridge-projected-alpha-native-producer.h"
 #include "stream-bridge-projected-alpha-textures.h"
 #include <d3d11_4.h>
 #include <algorithm>
@@ -58,7 +58,7 @@ struct Observer {
     std::mutex mutex;SourceAuditInventory inventory{};SourceAuditStatus status{};
     struct Context {
         BasicSourceAlphaProbe<8> alpha;
-        projected_alpha::Producer producer;ID3D11Device* producerDevice=nullptr;std::atomic_flag productionBusy=ATOMIC_FLAG_INIT;
+        projected_alpha::NativeProducer producer;ID3D11Device* producerDevice=nullptr;std::atomic_flag productionBusy=ATOMIC_FLAG_INIT;
         ID3D11DeviceContext* object=nullptr;void** original=nullptr;void** facade=nullptr;
         std::array<void*,149> expected{};unsigned count=0;void* allocation=nullptr;
         bool owns()const noexcept {
@@ -78,7 +78,7 @@ struct Observer {
     std::uint64_t serial=0;
     static std::atomic<Observer*> instance;
     explicit Observer(const Launch& value,const ShaderFingerprint* contracts=Contracts.data(),std::size_t count=Contracts.size()):
-        launch(value),shaders(contracts,count,deviceObserved,this,true,true){}
+        launch(value),shaders(contracts,count,deviceObserved,this,true,true,true){}
     void detach()noexcept {
         for(auto& context:contexts)if(context.owns())
             InterlockedCompareExchangePointer(reinterpret_cast<void**>(context.object),context.original,context.facade);
@@ -224,13 +224,13 @@ struct Observer {
     template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
         auto& s=*instance.load(std::memory_order_acquire); \
         const DWORD incoming=GetLastError(); \
-        auto admission=s.productionContext<Index>(ctx); \
+        auto admission=s.productionContext<Index>(ctx);bool executed=false; \
         if(auto* production=admission.context){OwnCommands own; \
-            if(Slot==13)production->producer.draw(ctx,bits<projected_alpha::Draw>(s.contexts[Index].function(13)),callCount(Call),callStart(Call)); \
-            else production->producer.targets(ctx); \
+            if(Slot==13)executed=production->producer.draw(ctx,bits<projected_alpha::Draw>(s.contexts[Index].function(13)),callCount(Call),callStart(Call)); \
+            if(!executed)production->producer.targets(ctx); \
         } \
         SetLastError(incoming); \
-        bits<decltype(&Name<Index>)>(s.contexts[Index].function(Slot)) Arguments; \
+        if(!executed)bits<decltype(&Name<Index>)>(s.contexts[Index].function(Slot)) Arguments; \
         admission.reset(); \
         struct PreserveError{DWORD value=GetLastError();~PreserveError(){SetLastError(value);}} error; \
         s.afterRaster<Index>(ctx,Counter,Call); \
@@ -423,7 +423,8 @@ struct Observer {
                 production.geometryReason,production.geometryPixel,production.geometryVertex,production.geometryEmpty,
                 production.fp16ZeroClears,production.fp16OtherClears,production.rootMisc,production.rootKeyed,
                 {sync.textures,sync.shared,sync.keyed,sync.nonKeyed,sync.tables,sync.admissionRefused,sync.acquireCalls,sync.acquireOkay,
-                 sync.releaseCalls,sync.identityRefused,sync.slotRefused,sync.active,sync.identityReason}};
+                 sync.releaseCalls,sync.identityRefused,sync.slotRefused,sync.active,sync.identityReason},
+                production.captureMode,production.sealedVersions,production.targetRecords};
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();

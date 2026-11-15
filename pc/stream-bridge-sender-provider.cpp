@@ -518,6 +518,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                         context,production.geometryReason,production.geometryPixel,production.geometryVertex,production.geometryEmpty,
                         static_cast<unsigned long long>(production.fp16ZeroClears),static_cast<unsigned long long>(production.fp16OtherClears));
                     report(text,stream_bridge::logging::Level::Debug);
+                    std::snprintf(text,sizeof text,"projected alpha capture: context=%u, mode=%u (1=private-replay,2=single-native-draw-MRT), sealed-versions=%llu, live-target-records=%llu; MRT stages:4001=prepared,4002=metadata,4010=draw,4016=paired,4020=sealed,4101=missing-cold-variant,4200+reason=geometry,4300+reason=source,4400+reason=input,4421=conditional-without-base,4431=unproved-read-domain,4440=missing-native-output-lock,4450=capture-state,4510=registry-busy,4511=revoked,4512=output-or-scene-unretained,4513=export-capacity,4514=private-handle; MRT alpha budget=536870912, FP16 has no private allocation",
+                        context,production.captureMode,static_cast<unsigned long long>(production.sealedVersions),static_cast<unsigned long long>(production.targetRecords));
+                    report(text,stream_bridge::logging::Level::Debug);
                     const auto& sync=production.nativeSync;
                     std::snprintf(text,sizeof text,"projected alpha native synchronization: context=%u; source-misc=0x%x, source-keyed-interface=%u; observed-textures/shared/keyed/non-keyed=%llu/%llu/%llu/%llu; tables/admission-refused=%llu/%llu; original-acquire/success/release=%llu/%llu/%llu; identity/slot-refused=%llu/%llu, active-leases=%llu, last-identity-reason=%llu (1=resource/texture-QI,2=device,3=resource-QI,4=shared-handle); approximate public API diagnostics only, not ownership authority",
                         context,production.rootMisc,production.rootKeyed,

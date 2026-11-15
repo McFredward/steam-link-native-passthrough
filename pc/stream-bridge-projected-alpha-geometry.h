@@ -170,12 +170,13 @@ public:
     }
     // Current logical public b0 range only. No GPU readback or guessed native
     // constant offsets; unknown, copied, UAV-written or stale bytes refuse.
-    bool constantPrefix(ID3D11DeviceContext* context,void* output,UINT bytes)noexcept{
-        if(!context||!output||!bytes||bytes>80)return false;
+    bool constantPrefix(ID3D11DeviceContext* context,void* output,UINT bytes,bool vertex=false,UINT slot=0)noexcept{
+        if(!context||!output||!bytes||bytes>(vertex?4096u:80u)||slot>=D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT)return false;
         Reference<ID3D11DeviceContext1> extended;
         if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))))return false;
         Reference<ID3D11Buffer> buffer;UINT offset=0,count=0;
-        extended->PSGetConstantBuffers1(0,1,buffer.out(),&offset,&count);
+        if(vertex)extended->VSGetConstantBuffers1(slot,1,buffer.out(),&offset,&count);
+        else extended->PSGetConstantBuffers1(slot,1,buffer.out(),&offset,&count);
         auto record=get<Constants>(buffer.value);if(!record.value)return false;const auto& data=record->data;
         if(!data.valid||!writeEpoch_||data.epoch!=writeEpoch_||offset>data.size/16||count<((bytes+15)/16)||bytes>data.size-offset*16)return false;
         std::memcpy(output,data.bytes.data()+offset*16,bytes);return true;

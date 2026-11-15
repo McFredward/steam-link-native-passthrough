@@ -39,6 +39,11 @@ struct ImageWitness {
     // write. A witness is published only for that exact RGB/coverage version
     // under observed native ownership; it holds its sync allocation alive.
     std::uint32_t complete=0,route=0;
+    // Native reprojection can combine several retained colour allocations
+    // from the same live game. Preserve every actual contributor, including
+    // those retained unchanged through a partial native image update.
+    std::array<Allocation,8> contributors{};
+    std::uint32_t contributorCount=0;
 };
 template<class T>struct Row {
     alignas(8) volatile LONG64 sequence=0;T value{};

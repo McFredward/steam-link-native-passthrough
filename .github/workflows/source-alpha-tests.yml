@@ -12,6 +12,7 @@ on:
       - 'pc/stream-bridge-projected-alpha-textures.h'
       - 'pc/stream-bridge-projected-alpha-geometry.h'
       - 'pc/stream-bridge-projected-alpha-producer.h'
+      - 'pc/stream-bridge-projected-alpha-native-producer.h'
       - 'pc/stream-bridge-projected-alpha-consumer.h'
       - 'pc/stream-bridge-projected-alpha-launch.h'
       - 'pc/stream-bridge-source-audit*'
@@ -37,6 +38,7 @@ on:
       - 'pc/stream-bridge-projected-alpha-textures.h'
       - 'pc/stream-bridge-projected-alpha-geometry.h'
       - 'pc/stream-bridge-projected-alpha-producer.h'
+      - 'pc/stream-bridge-projected-alpha-native-producer.h'
       - 'pc/stream-bridge-projected-alpha-consumer.h'
       - 'pc/stream-bridge-projected-alpha-launch.h'
       - 'pc/stream-bridge-source-audit*'
@@ -178,8 +180,14 @@ jobs:
           if errorlevel 1 (type build\projected-producer-native-mrt.log & exit /b 1)
           type build\projected-producer-native-mrt.log
           build\projected-producer.exe --native-mrt-reproject >build\projected-producer-native-mrt-reproject.log 2>&1
-          set "SFNP_RESULT=%ERRORLEVEL%"
+          if errorlevel 1 (type build\projected-producer-native-mrt-reproject.log & exit /b 1)
           type build\projected-producer-native-mrt-reproject.log
+          build\projected-producer.exe --native-pipeline >build\projected-producer-native-pipeline.log 2>&1
+          if errorlevel 1 (type build\projected-producer-native-pipeline.log & exit /b 1)
+          type build\projected-producer-native-pipeline.log
+          build\projected-producer.exe --native-pipeline-reproject >build\projected-producer-native-pipeline-reproject.log 2>&1
+          set "SFNP_RESULT=%ERRORLEVEL%"
+          type build\projected-producer-native-pipeline-reproject.log
           exit /b %SFNP_RESULT%
       - uses: actions/upload-artifact@v4
         if: always()
@@ -202,6 +210,8 @@ jobs:
             build/projected-producer-native-single.log
             build/projected-producer-native-mrt.log
             build/projected-producer-native-mrt-reproject.log
+            build/projected-producer-native-pipeline.log
+            build/projected-producer-native-pipeline-reproject.log
             build/projected-alpha-clone64.dxbc
             build/projected-alpha-clone80.dxbc
             build/projected-alpha-clone32.dxbc
