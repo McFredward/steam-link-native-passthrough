@@ -18,7 +18,8 @@ def main():
         ('pc/stream-bridge-projected-alpha-replay.h', 'Clone80Hlsl', [('main', 'cs')]),
         ('pc/stream-bridge-projected-alpha-replay.h', 'CloneResolve32Hlsl', [('main', 'cs')]),
         ('tests/test_stream_bridge_projected_alpha_gpu.cpp', 'Fixture', [
-            ('vertex', 'vs'), ('quad', 'vs'), ('pixel', 'ps'), ('pixel64', 'ps'), ('compute', 'cs')]),
+            ('vertex', 'vs'), ('quad', 'vs'), ('unitQuad', 'vs'), ('white', 'ps'),
+            ('pixel', 'ps'), ('pixel64', 'ps'), ('copyRgba', 'ps'), ('compute', 'cs')]),
         ('tests/test_stream_bridge_projected_alpha_gpu.cpp', 'ResolveFixture', [('resolve', 'ps')]),
     ]
     checked = 0

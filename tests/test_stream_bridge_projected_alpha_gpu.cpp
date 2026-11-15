@@ -3,6 +3,7 @@
 #include "pc/stream-bridge-projected-alpha-kernels.h"
 #include "pc/stream-bridge-projected-alpha-textures.h"
 #include "pc/stream-bridge-projected-alpha-channel.h"
+#include "pc/stream-bridge-projected-alpha-geometry.h"
 #include <d3dcompiler.h>
 #include <array>
 #include <cstdint>
@@ -20,7 +21,14 @@ bool eventInvalid=false;
 unsigned textureCreates=0,textureOpens=0,nestedTextureCreates=0,textureTargets=0;
 bool nestedTextureFailure=false;
 ID3D11Device* lastTextureDevice=nullptr;
+Geometry* activeGeometry=nullptr;ID3D11Device* geometryDevice=nullptr;
 void targetObserved(ID3D11Device*,ID3D11RenderTargetView*,void*)noexcept{++textureTargets;}
+void bufferObserved(ID3D11Device* device,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void*)noexcept{
+    if(activeGeometry&&device==geometryDevice)activeGeometry->buffer(desc,data,buffer);
+}
+void layoutObserved(ID3D11Device* device,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T size,ID3D11InputLayout* layout,void*)noexcept{
+    if(activeGeometry&&device==geometryDevice)activeGeometry->layout(desc,count,code,size,layout);
+}
 void textureObserved(ID3D11Device* device,ID3D11Texture2D*,TextureOrigin origin,void*)noexcept{
     lastTextureDevice=device;
     if(origin==TextureOrigin::Created)++textureCreates;else ++textureOpens;
@@ -55,6 +63,13 @@ float4 vertex(uint id:SV_VertexID):SV_Position {
 }
 float4 quad(uint id:SV_VertexID):SV_Position {
     return float4(id>=2?1:-1,(id&1)?1:-1,0,1);
+}
+float4 unitQuad(float2 uv:TEXCOORD0):SV_Position {return float4(uv*2-1,0,1);}
+float4 white():SV_Target {return float4(1,0,0,1);}
+float4 copyRgba(float4 position:SV_Position):SV_Target {
+    float4 value=source.Load(int3(int2(position.xy),0));
+    value.rgb*=parameters[1].xyz;
+    return value;
 }
 float4 pixel(float4 pos:SV_Position):SV_Target {
     uint2 xy=uint2(pos.xy)+uint2(parameters[0].xy);
@@ -96,7 +111,7 @@ struct Texture {
         desc.Usage=D3D11_USAGE_STAGING;desc.BindFlags=0;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
         return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,read.out()));
     }
-    std::vector<std::uint8_t> bytes(ID3D11DeviceContext* context){
+    std::vector<std::uint8_t> bytes(ID3D11DeviceContext* context)const{
         D3D11_TEXTURE2D_DESC desc{};image->GetDesc(&desc);
         if(desc.SampleDesc.Count!=1)context->ResolveSubresource(resolved.value,0,image.value,0,desc.Format);
         context->CopyResource(read.value,resolved.value?resolved.value:image.value);
@@ -203,6 +218,97 @@ void exportKernel(const char* name,ID3DBlob* code){
     const bool okay=std::fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),out)==code->GetBufferSize();
     check(std::fclose(out)==0&&okay,"complete owned kernel bytes");
 }
+void geometryControl(ID3D11Device* device,ID3D11DeviceContext* context,Geometry& geometry){
+    auto vsCode=compile(Fixture,"unitQuad","vs_5_0"),psCode=compile(Fixture,"white","ps_5_0");
+    Com<ID3D11VertexShader> vs;Com<ID3D11PixelShader> ps;Com<ID3D11InputLayout> layout;
+    check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
+        SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"owned register0 unit-quad geometry model");
+    const D3D11_INPUT_ELEMENT_DESC element{"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0};
+    check(SUCCEEDED(device->CreateInputLayout(&element,1,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual native-style layout reflected by creation callback");
+    const std::array<float,16> points{{4,4,4,5,5,4,5,5, 0,0,0,1,1,0,1,1}};
+    D3D11_BUFFER_DESC desc{};desc.ByteWidth=sizeof points;desc.Usage=D3D11_USAGE_IMMUTABLE;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    D3D11_SUBRESOURCE_DATA input{points.data(),0,0};Com<ID3D11Buffer> buffer;
+    check(SUCCEEDED(device->CreateBuffer(&desc,&input,buffer.out())),"actual vertex bytes retained from public immutable creation data");
+    context->IASetInputLayout(layout.value);UINT stride=8,offset=0;context->IASetVertexBuffers(0,1,&buffer.value,&stride,&offset);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);context->VSSetShader(vs.value,nullptr,0);context->PSSetShader(ps.value,nullptr,0);
+    context->OMSetBlendState(nullptr,nullptr,0xffffffffu);
+    D3D11_RASTERIZER_DESC rasterDesc{};rasterDesc.FillMode=D3D11_FILL_SOLID;rasterDesc.CullMode=D3D11_CULL_NONE;rasterDesc.DepthClipEnable=TRUE;
+    Com<ID3D11RasterizerState> raster;check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,raster.out())),"owned geometry rasterizer");context->RSSetState(raster.value);
+    constexpr UINT width=37,height=29;
+    const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
+    Texture output;check(output.prepare(device,width,height),"owned geometry reference output");context->OMSetRenderTargets(1,&output.target.value,nullptr);
+    check(geometry.fullUnitQuad(context,4,4,width,height,1),"full overwrite is proved from the actual nonzero vertex range and bound layout");
+    const FLOAT zero[4]{};context->ClearRenderTargetView(output.target.value,zero);context->Draw(4,4);const auto full=output.bytes(context);
+    for(unsigned i=0;i<width*height;++i)check(full[i*4+3]==255,"real GPU confirms every pixel of the metadata-proved quad");
+    check(!geometry.fullUnitQuad(context,4,0,width,height,1),"same count/topology cannot certify the offscreen vertex prefix");
+    context->ClearRenderTargetView(output.target.value,zero);context->Draw(4,0);const auto offscreen=output.bytes(context);
+    for(unsigned i=0;i<width*height;++i)check(!offscreen[i*4+3],"wrong start is a causal all-offscreen geometry control");
+    rasterDesc.CullMode=D3D11_CULL_BACK;Com<ID3D11RasterizerState> culled;
+    check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,culled.out())),"native back-face culling control");context->RSSetState(culled.value);
+    check(geometry.fullUnitQuad(context,4,4,width,height,1),"front-face winding is included in overwrite admission");
+    context->ClearRenderTargetView(output.target.value,zero);context->Draw(4,4);const auto front=output.bytes(context);
+    for(unsigned i=0;i<width*height;++i)check(front[i*4+3]==255,"real GPU agrees with admitted clockwise front-face coverage");
+    rasterDesc.FrontCounterClockwise=TRUE;Com<ID3D11RasterizerState> wrongFace;
+    check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,wrongFace.out())),"opposite front-face fixture");context->RSSetState(wrongFace.value);
+    check(!geometry.fullUnitQuad(context,4,4,width,height,1),"culled quad cannot repair unknown image content");
+    context->RSSetState(raster.value);
+    desc.ByteWidth=32;desc.Usage=D3D11_USAGE_DYNAMIC;desc.CPUAccessFlags=D3D11_CPU_ACCESS_WRITE;input.pSysMem=points.data()+8;
+    Com<ID3D11Buffer> dynamic;check(SUCCEEDED(device->CreateBuffer(&desc,&input,dynamic.out())),"actual small native mapped vertex buffer");
+    context->IASetVertexBuffers(0,1,&dynamic.value,&stride,&offset);
+    D3D11_MAPPED_SUBRESOURCE mapped{};
+    check(SUCCEEDED(context->Map(dynamic.value,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)),"real native vertex map");geometry.beginMap(dynamic.value,mapped.pData);
+    const std::array<float,8> partial{{0,0,0,.5f,.5f,0,.5f,.5f}};std::memcpy(mapped.pData,partial.data(),sizeof partial);
+    geometry.beforeUnmap(dynamic.value);context->Unmap(dynamic.value,0);
+    check(!geometry.fullUnitQuad(context,4,0,width,height,1),"native mapped changes cannot reuse old full-quad metadata");
+    check(SUCCEEDED(context->Map(dynamic.value,0,D3D11_MAP_WRITE_DISCARD,0,&mapped)),"real native full-quad restore map");geometry.beginMap(dynamic.value,mapped.pData);
+    std::memcpy(mapped.pData,points.data()+8,32);geometry.beforeUnmap(dynamic.value);context->Unmap(dynamic.value,0);
+    check(geometry.fullUnitQuad(context,4,0,width,height,1),"fresh public Unmap metadata restores only the actual whole quad");
+}
+void intermediateControl(ID3D11Device* device,ID3D11DeviceContext* context,Replay& replay,
+    ID3D11VertexShader* quad,ID3D11PixelShader* scene,const Texture& source){
+    D3D11_TEXTURE2D_DESC desc{};source.image->GetDesc(&desc);const auto width=desc.Width,height=desc.Height;
+    desc.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+    Com<ID3D11Texture2D> native,read;Com<ID3D11RenderTargetView> target;Com<ID3D11ShaderResourceView> view;
+    check(SUCCEEDED(device->CreateTexture2D(&desc,nullptr,native.out()))&&SUCCEEDED(device->CreateRenderTargetView(native.value,nullptr,target.out()))&&
+        SUCCEEDED(device->CreateShaderResourceView(native.value,nullptr,view.out())),"native-style FP16 intermediate");
+    desc.Usage=D3D11_USAGE_STAGING;desc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;desc.BindFlags=0;
+    check(SUCCEEDED(device->CreateTexture2D(&desc,nullptr,read.out())),"test-only native FP16 readback");
+    const auto bytes=[&](ID3D11Texture2D* texture){
+        context->CopyResource(read.value,texture);D3D11_MAPPED_SUBRESOURCE mapped{};
+        check(SUCCEEDED(context->Map(read.value,0,D3D11_MAP_READ,0,&mapped)),"owned FP16 readback");
+        std::vector<std::uint8_t> result(width*height*8);
+        for(UINT y=0;y<height;++y)std::memcpy(result.data()+y*width*8,static_cast<const std::uint8_t*>(mapped.pData)+y*mapped.RowPitch,width*8);
+        context->Unmap(read.value,0);return result;
+    };
+    Image shadow,mask;
+    check(shadow.prepare(device,width,height,false,1,0,DXGI_FORMAT_R16G16B16A16_FLOAT)&&mask.prepare(device,width,height),"private FP16 RGBA shadow and separate final alpha image");
+    auto copyCode=compile(Fixture,"copyRgba","ps_5_0");Com<ID3D11PixelShader> copy;
+    check(SUCCEEDED(device->CreatePixelShader(copyCode->GetBufferPointer(),copyCode->GetBufferSize(),nullptr,copy.out())),"owned X-stage RGBA model");
+    std::array<float,16> constants{};constants[4]=.5f;constants[5]=.75f;constants[6]=.875f;
+    D3D11_BUFFER_DESC cbDesc{};cbDesc.ByteWidth=sizeof constants;cbDesc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+    D3D11_SUBRESOURCE_DATA initial{constants.data(),0,0};Com<ID3D11Buffer> cb;
+    check(SUCCEEDED(device->CreateBuffer(&cbDesc,&initial,cb.out())),"actual native model constants");
+    context->VSSetShader(quad,nullptr,0);context->PSSetShader(copy.value,nullptr,0);context->PSSetConstantBuffers(0,1,&cb.value);
+    context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);context->PSSetShaderResources(0,1,&source.source.value);
+    const D3D11_VIEWPORT viewport{0,0,float(width),float(height),0,1};context->RSSetViewports(1,&viewport);
+    context->OMSetBlendState(nullptr,nullptr,0xffffffffu);context->OMSetRenderTargets(1,&target.value,nullptr);
+    const FLOAT zero[4]{};context->ClearRenderTargetView(target.value,zero);check(shadow.clear(context),"private intermediate starts empty");
+    context->Draw(4,0);const auto before=bytes(native.value);
+    check(replay.intermediate(context,shadow,copy.value,countedDraw,4,0),"native X-stage draw copied to a distinct FP16 shadow without a policy override");
+    check(bytes(native.value)==before&&bytes(shadow.resource())==before,"every native FP16 word is unchanged and private RGBA shadow matches exactly");
+    Texture output,coverage;check(output.prepare(device,width,height)&&coverage.prepare(device,width,height),"owned Y-stage output and coverage verification");
+    context->PSSetShader(scene,nullptr,0);context->PSSetShaderResources(0,1,&view.value);context->OMSetRenderTargets(1,&output.target.value,nullptr);
+    context->Draw(4,0);const auto original=output.bytes(context);
+    check(mask.clear(context)&&replay.filtered(context,mask,shadow,scene,64,countedDraw,4,0),"Y-stage alpha uses the matching private FP16 ancestry with unchanged native geometry");
+    check(output.bytes(context)==original,"original opaque Y-stage RGB/alpha remains byte-identical");
+    context->CopyResource(coverage.image.value,mask.resource());const auto alpha=coverage.bytes(context),inputBytes=source.bytes(context);
+    for(UINT i=0;i<width*height;++i){
+        check(!alpha[i*4]&&!alpha[i*4+1]&&!alpha[i*4+2],"only alpha crosses the private intermediate boundary");
+        check(alpha[i*4+3]==inputBytes[i*4+3],"FP16 source zero/fractional/opaque alpha survives the normal native Y output-opacity policy");
+    }
+    Com<ID3D11ShaderResourceView> restored;context->PSGetShaderResources(0,1,restored.out());
+    check(restored.value==view.value,"original native FP16 source restored after companion replay");
+}
 void run(UINT creationFlags,MutexObserver& mutexes,TextureObserver& textures){
     Com<ID3D11Device> device;Com<ID3D11DeviceContext> context;D3D_FEATURE_LEVEL level{};
     const D3D_FEATURE_LEVEL requested[]={D3D_FEATURE_LEVEL_11_1,D3D_FEATURE_LEVEL_11_0};
@@ -210,6 +316,7 @@ void run(UINT creationFlags,MutexObserver& mutexes,TextureObserver& textures){
         D3D11_SDK_VERSION,device.out(),&level,context.out())),"actual Windows WARP device");
     Com<ID3D11DeviceContext1> extended;
     check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"actual immediate context1");
+    Geometry geometry;activeGeometry=&geometry;geometryDevice=device.value;
     check(mutexes.prepare(device.value),"cold native keyed-mutex observation on the owning device thread");
     auto** const originalDeviceTable=*reinterpret_cast<void***>(device.value);
     check(textures.prepare(device.value)&&*reinterpret_cast<void***>(device.value)==originalDeviceTable,
@@ -288,6 +395,9 @@ void run(UINT creationFlags,MutexObserver& mutexes,TextureObserver& textures){
         check(producerMutex->AcquireSync(0,0)==S_OK,"original native producer acquire");
         const auto producerLease=mutexes.current(device.value,nativeHandle);
         check(bool(producerLease)&&producerLease.key==0,"successful actual native acquire creates a versioned allocation lease");
+        std::array<MutexLease,8> currentScopes{};const auto scopes=mutexes.capture(device.value,currentScopes);
+        check(scopes==1&&currentScopes[0].epoch==producerLease.epoch&&currentScopes[0].retained,
+            "capture names the actual retained native mutex scope, not an inferred presentation");
         const auto beforeTimeout=nativeAcquires;
         check(consumerMutex->AcquireSync(0,0)==HRESULT(WAIT_TIMEOUT),"original native contended acquire reports timeout");
         check(!mutexes.current(consumer.value,nativeHandle)&&nativeAcquires==beforeTimeout,"positive WAIT_TIMEOUT HRESULT never creates a consumer lease");
@@ -405,13 +515,16 @@ void run(UINT creationFlags,MutexObserver& mutexes,TextureObserver& textures){
     }
     check(!eventInvalid&&nativeAcquires==nativeReleases&&nativeReleases==completedReleases,"only successful native lock scopes reach bounded callbacks");
     multisample(device.value,context.value,replay,quad.value,ps64.value,source);
+    intermediateControl(device.value,context.value,replay,quad.value,ps64.value,source);
+    geometryControl(device.value,context.value,geometry);
     context->ClearState();if(replayedConstants){replayedConstants->Release();replayedConstants=nullptr;}
+    activeGeometry=nullptr;geometryDevice=nullptr;
 }
 }
 int main(int argc,char** argv){try{
     if(argc==3&&!std::strcmp(argv[1],"--export-owned-kernels"))exportDirectory=argv[2];else check(argc==1,"only explicit owned-kernel export is accepted");
     MutexObserver mutexes({acquired,releasing,released,nullptr});
-    TextureObserver textures(textureObserved,nullptr,targetObserved);
+    TextureObserver textures(textureObserved,nullptr,targetObserved,bufferObserved,layoutObserved);
     run(0,mutexes,textures);run(D3D11_CREATE_DEVICE_SINGLETHREADED,mutexes,textures);
     check(textureCreates&&textureTargets&&textureOpens==4&&lastTextureDevice,"bounded native texture/view callbacks executed on both original devices");
     using CreateTexture=HRESULT(STDMETHODCALLTYPE*)(ID3D11Device*,const D3D11_TEXTURE2D_DESC*,const D3D11_SUBRESOURCE_DATA*,ID3D11Texture2D**);

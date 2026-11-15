@@ -10,6 +10,7 @@ namespace stream_bridge::sender::projected_alpha {
 struct MutexLease {
     std::uint64_t allocation=0,epoch=0,key=0;
     ID3D11Device* device=nullptr;
+    IDXGIResource* retained=nullptr; // Borrowed only while the actual lease is held.
     explicit operator bool()const noexcept{return allocation&&epoch>1&&device;}
 };
 // Observe ORIGINAL native AcquireSync/ReleaseSync operations. Never acquires a
@@ -71,17 +72,32 @@ private:
             if(!tracked(device.value)||FAILED(texture->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(hold.out()))))return false;
             HANDLE handle=nullptr;
             if(FAILED(hold->GetSharedHandle(&handle))||!handle||handle==INVALID_HANDLE_VALUE)return false;
-            lease.device=device.value;lease.allocation=static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle));return true;
+            lease.device=device.value;lease.retained=hold.value;
+            lease.allocation=static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle));return true;
         }
         MutexLease current(ID3D11Device* device,std::uint64_t allocation)const noexcept{
             if(stopped||!device||!allocation||!tracked(device))return {};
             for(const auto& slot:slots){
                 const auto before=slot.state.load(std::memory_order_acquire);
                 if(before<2||slot.device.load(std::memory_order_relaxed)!=device||slot.allocation.load(std::memory_order_relaxed)!=allocation)continue;
-                const MutexLease value{allocation,before,slot.key.load(std::memory_order_relaxed),device};
+                const MutexLease value{allocation,before,slot.key.load(std::memory_order_relaxed),device,slot.held.load(std::memory_order_relaxed)};
                 if(slot.state.load(std::memory_order_acquire)==before)return value;
             }
             return {};
+        }
+        unsigned capture(ID3D11Device* device,std::array<MutexLease,8>& output)const noexcept{
+            output={};if(stopped||!tracked(device))return 0;
+            unsigned count=0;
+            for(const auto& slot:slots){
+                const auto epoch=slot.state.load(std::memory_order_acquire);
+                if(epoch<2||slot.device.load(std::memory_order_relaxed)!=device)continue;
+                const MutexLease value{slot.allocation.load(std::memory_order_relaxed),epoch,
+                    slot.key.load(std::memory_order_relaxed),device,slot.held.load(std::memory_order_relaxed)};
+                if(slot.state.load(std::memory_order_acquire)!=epoch||!value.retained)return 0;
+                if(count==output.size()){output={};return 0;}
+                output[count++]=value;
+            }
+            return count;
         }
         void acquired(IDXGIKeyedMutex* object,std::uint64_t key)noexcept{
             if(stopped)return;
@@ -109,6 +125,7 @@ private:
                 if(epoch<2||slot.device.load(std::memory_order_relaxed)!=value.device||slot.allocation.load(std::memory_order_relaxed)!=value.allocation)continue;
                 value.epoch=epoch;value.key=slot.key.load(std::memory_order_relaxed);
                 if(!slot.state.compare_exchange_strong(epoch,1,std::memory_order_acq_rel))continue;
+                value.retained=slot.held.load(std::memory_order_relaxed);
                 if(events.releasing)events.releasing(value,key,events.opaque);
                 return &slot;
             }
@@ -199,6 +216,7 @@ public:
     ~MutexObserver(){if(core_){core_->stop();if(!core_->published){Core* expected=core_;Core::instance.compare_exchange_strong(expected,nullptr);delete core_;}}}
     bool prepare(ID3D11Device* device)noexcept{return core_&&core_->prepare(device);}
     MutexLease current(ID3D11Device* device,std::uint64_t allocation)const noexcept{return core_?core_->current(device,allocation):MutexLease{};}
+    unsigned capture(ID3D11Device* device,std::array<MutexLease,8>& output)const noexcept{return core_?core_->capture(device,output):0;}
     std::uint64_t refusals()const noexcept{return core_?core_->refused.load(std::memory_order_relaxed):0;}
     void stop()noexcept{if(core_)core_->stop();}
 };

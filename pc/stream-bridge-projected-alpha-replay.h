@@ -66,12 +66,15 @@ class Image {
     Reference<ID3D11RenderTargetView> target_;
     Reference<ID3D11ShaderResourceView> source_;
 public:
-    bool prepare(ID3D11Device* device,UINT width,UINT height,bool shared=false,UINT samples=1,UINT quality=0)noexcept{
+    bool prepare(ID3D11Device* device,UINT width,UINT height,bool shared=false,UINT samples=1,UINT quality=0,
+        DXGI_FORMAT format=DXGI_FORMAT_R8G8B8A8_UNORM)noexcept{
         if(!device||texture_.value||!width||!height||width>16384||height>16384||
-            std::size_t(width)*height>16*1024*1024||(samples!=1&&samples!=4)||(shared&&samples!=1))return false;
+            std::size_t(width)*height>16*1024*1024||(samples!=1&&samples!=4)||(shared&&samples!=1)||
+            (format!=DXGI_FORMAT_R8G8B8A8_UNORM&&format!=DXGI_FORMAT_R16G16B16A16_FLOAT)||
+            (format!=DXGI_FORMAT_R8G8B8A8_UNORM&&(shared||samples!=1)))return false;
         D3D11_TEXTURE2D_DESC desc{};desc.Width=width;desc.Height=height;
         desc.MipLevels=desc.ArraySize=1;desc.SampleDesc.Count=samples;desc.SampleDesc.Quality=quality;
-        desc.Format=DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.Format=format;
         desc.BindFlags=D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         desc.MiscFlags=shared?D3D11_RESOURCE_MISC_SHARED:0;
         return SUCCEEDED(device->CreateTexture2D(&desc,nullptr,texture_.out()))&&
@@ -79,12 +82,17 @@ public:
             SUCCEEDED(device->CreateShaderResourceView(texture_.value,nullptr,source_.out()));
     }
     ID3D11Texture2D* resource()const noexcept{return texture_.value;}
-    bool clear(ID3D11DeviceContext* context)noexcept{
+    bool clear(ID3D11DeviceContext* context,const FLOAT* color=nullptr)noexcept{
         if(!context||!target_.value)return false;
         Reference<ID3D11Device> left,right;
         context->GetDevice(left.out());target_->GetDevice(right.out());
         if(left.value!=right.value)return false;
-        constexpr FLOAT zero[4]{};context->ClearRenderTargetView(target_.value,zero);return true;
+        constexpr FLOAT zero[4]{};context->ClearRenderTargetView(target_.value,color?color:zero);return true;
+    }
+    void reset()noexcept{
+        if(source_.value){source_.value->Release();source_.value=nullptr;}
+        if(target_.value){target_.value->Release();target_.value=nullptr;}
+        if(texture_.value){texture_.value->Release();texture_.value=nullptr;}
     }
 };
 
@@ -107,6 +115,7 @@ class Replay {
     Reference<ID3D11DeviceContext1> context_;
     Reference<ID3DDeviceContextState> scratch_;
     Reference<ID3D11BlendState> alphaOnly_;
+    Reference<ID3D11BlendState> fullColor_;
     bool attempted_=false,ready_=false;
     static bool sameDevice(ID3D11DeviceChild* child,ID3D11Device* expected)noexcept{
         if(!child)return false;
@@ -159,6 +168,8 @@ public:
         }
         D3D11_BLEND_DESC blend{};blend.RenderTarget[0].RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALPHA;
         if(FAILED(device->CreateBlendState(&blend,alphaOnly_.out())))return false;
+        blend.RenderTarget[0].RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;
+        if(FAILED(device->CreateBlendState(&blend,fullColor_.out())))return false;
         device->AddRef();device_.value=device;ready_=true;return true;
     }
 
@@ -166,17 +177,29 @@ public:
         ID3D11PixelShader* reviewedBoundProgram,unsigned logicalConstantBytes,
         Draw originalDraw,UINT vertices,UINT firstVertex)noexcept{
         if(logicalConstantBytes!=64&&logicalConstantBytes!=80)return false;
-        return draw(context,image,reviewedBoundProgram,logicalConstantBytes,originalDraw,vertices,firstVertex,nullptr);
+        return draw(context,image,reviewedBoundProgram,logicalConstantBytes,originalDraw,vertices,firstVertex,nullptr,false,false);
+    }
+    // The X program retains RGBA. Its private FP16 shadow also retains RGB,
+    // keeping later native colour-dependent filtering intact. It never leaves
+    // the producer, and only its alpha reaches the shareable output mask.
+    bool intermediate(ID3D11DeviceContext* context,const Image& image,ID3D11PixelShader* program,
+        Draw originalDraw,UINT vertices,UINT start)noexcept{
+        return draw(context,image,program,0,originalDraw,vertices,start,nullptr,false,true);
+    }
+    bool filtered(ID3D11DeviceContext* context,const Image& image,const Image& source,
+        ID3D11PixelShader* program,unsigned bytes,Draw originalDraw,UINT vertices,UINT start)noexcept{
+        if(bytes!=64&&bytes!=80)return false;
+        return draw(context,image,program,bytes,originalDraw,vertices,start,&source,false,false);
     }
     bool resolve(ID3D11DeviceContext* context,const Image& image,const Image& source,
         ID3D11PixelShader* reviewedBoundProgram,Draw originalDraw,UINT vertices,UINT firstVertex)noexcept{
         if(!clones_[2].shader.value)return false;
-        return draw(context,image,reviewedBoundProgram,32,originalDraw,vertices,firstVertex,&source);
+        return draw(context,image,reviewedBoundProgram,32,originalDraw,vertices,firstVertex,&source,true,false);
     }
 private:
     bool draw(ID3D11DeviceContext* context,const Image& image,
         ID3D11PixelShader* reviewedBoundProgram,unsigned logicalConstantBytes,
-        Draw originalDraw,UINT vertices,UINT firstVertex,const Image* msaa)noexcept{
+        Draw originalDraw,UINT vertices,UINT firstVertex,const Image* replacement,bool resolving,bool intermediatePass)noexcept{
         auto* companion=image.target_.value;
         if(!ready_||!context||!companion||!reviewedBoundProgram||!originalDraw||!vertices||
             !sameDevice(context,device_.value)||!sameDevice(companion,device_.value))return false;
@@ -212,31 +235,38 @@ private:
         if(!viewShape(targets[0],nativeShape,nativeResource.value)||!viewShape(companion,maskShape,maskResource.value)||
             nativeResource.value==maskResource.value||nativeShape.Width!=maskShape.Width||nativeShape.Height!=maskShape.Height||
             nativeShape.SampleDesc.Count!=maskShape.SampleDesc.Count||nativeShape.SampleDesc.Quality!=maskShape.SampleDesc.Quality||
-            maskShape.Format!=DXGI_FORMAT_R8G8B8A8_UNORM||
+            maskShape.Format!=(intermediatePass?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM)||
             (maskShape.MiscFlags&&maskShape.MiscFlags!=D3D11_RESOURCE_MISC_SHARED))return false;
         Reference<ID3D11ShaderResourceView> originalSource;
-        if(msaa){
-            if(!msaa->source_.value||!sameDevice(msaa->source_.value,device_.value)||nativeShape.SampleDesc.Count!=1)return false;
-            D3D11_TEXTURE2D_DESC sourceShape{};msaa->texture_->GetDesc(&sourceShape);
-            if(sourceShape.SampleDesc.Count!=4||sourceShape.Width!=maskShape.Width||sourceShape.Height!=maskShape.Height)return false;
+        if(replacement){
+            if(!replacement->source_.value||!sameDevice(replacement->source_.value,device_.value))return false;
+            D3D11_TEXTURE2D_DESC sourceShape{};replacement->texture_->GetDesc(&sourceShape);
+            if(resolving&&(nativeShape.SampleDesc.Count!=1||sourceShape.SampleDesc.Count!=4||
+                sourceShape.Width!=maskShape.Width||sourceShape.Height!=maskShape.Height))return false;
+            if(!resolving&&(sourceShape.SampleDesc.Count!=1||sourceShape.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT))return false;
             context->PSGetShaderResources(0,1,originalSource.out());
             if(!originalSource.value)return false;
             D3D11_SHADER_RESOURCE_VIEW_DESC sourceView{};originalSource->GetDesc(&sourceView);
             Reference<ID3D11Resource> resource;originalSource->GetResource(resource.out());
             Reference<ID3D11Texture2D> texture;
-            if(sourceView.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2DMS||!resource.value||
+            const auto expected=resolving?D3D11_SRV_DIMENSION_TEXTURE2DMS:D3D11_SRV_DIMENSION_TEXTURE2D;
+            if(sourceView.ViewDimension!=expected||!resource.value||
                 FAILED(resource->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(texture.out()))))return false;
             D3D11_TEXTURE2D_DESC actualShape{};texture->GetDesc(&actualShape);
-            if(actualShape.SampleDesc.Count!=4||actualShape.SampleDesc.Quality!=sourceShape.SampleDesc.Quality||
+            if(actualShape.SampleDesc.Count!=sourceShape.SampleDesc.Count||actualShape.SampleDesc.Quality!=sourceShape.SampleDesc.Quality||
                 actualShape.Width!=sourceShape.Width||actualShape.Height!=sourceShape.Height||actualShape.MipLevels!=1||actualShape.ArraySize!=1)return false;
+            if(!resolving&&sourceView.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return false;
         }
-        const UINT constantSlot=msaa?2:0;
+        const UINT constantSlot=resolving?2:0;
         Reference<ID3D11Buffer> original;UINT offset=0,count=0;
-        actual->PSGetConstantBuffers1(constantSlot,1,original.out(),&offset,&count);
-        if(!original.value||count<logicalConstantBytes/16)return false;
-        D3D11_BUFFER_DESC buffer{};original->GetDesc(&buffer);
-        if(offset>buffer.ByteWidth/16||logicalConstantBytes>buffer.ByteWidth-offset*16)return false;
-        auto& clone=clones_[msaa?2:(logicalConstantBytes-64)/16];
+        Clone* clone=nullptr;
+        if(!intermediatePass){
+            actual->PSGetConstantBuffers1(constantSlot,1,original.out(),&offset,&count);
+            if(!original.value||count<logicalConstantBytes/16)return false;
+            D3D11_BUFFER_DESC buffer{};original->GetDesc(&buffer);
+            if(offset>buffer.ByteWidth/16||logicalConstantBytes>buffer.ByteWidth-offset*16)return false;
+            clone=&clones_[resolving?2:(logicalConstantBytes-64)/16];
+        }
         Reference<ID3D11BlendState> blend;FLOAT factors[4]{};UINT samples=0;
         context->OMGetBlendState(blend.out(),factors,&samples);
         if(blend.value){
@@ -250,27 +280,25 @@ private:
                 if(desc1.RenderTarget[0].LogicOpEnable)return false;
             }
         }
-        Reference<ID3DDeviceContextState> saved;
-        actual->SwapDeviceContextState(scratch_.value,saved.out());
-        if(!saved.value)return false;
-        context->CSSetConstantBuffers(0,1,&original.value);
-        actual->CSSetConstantBuffers1(0,1,&original.value,&offset,&count);
-        context->CSSetShader(clone.shader.value,nullptr,0);
-        context->CSSetUnorderedAccessViews(0,1,&clone.write.value,nullptr);
-        context->Dispatch(logicalConstantBytes/16,1,1);
-        ID3D11UnorderedAccessView* none=nullptr;context->CSSetUnorderedAccessViews(0,1,&none,nullptr);
-        context->CopyResource(clone.constant.value,clone.raw.value);
-        actual->SwapDeviceContextState(saved.value,nullptr);
-        context->PSSetConstantBuffers(constantSlot,1,&clone.constant.value);
-        if(msaa)context->PSSetShaderResources(0,1,&msaa->source_.value);
+        if(clone){
+            Reference<ID3DDeviceContextState> saved;
+            actual->SwapDeviceContextState(scratch_.value,saved.out());if(!saved.value)return false;
+            context->CSSetConstantBuffers(0,1,&original.value);actual->CSSetConstantBuffers1(0,1,&original.value,&offset,&count);
+            context->CSSetShader(clone->shader.value,nullptr,0);context->CSSetUnorderedAccessViews(0,1,&clone->write.value,nullptr);
+            context->Dispatch(logicalConstantBytes/16,1,1);
+            ID3D11UnorderedAccessView* none=nullptr;context->CSSetUnorderedAccessViews(0,1,&none,nullptr);
+            context->CopyResource(clone->constant.value,clone->raw.value);actual->SwapDeviceContextState(saved.value,nullptr);
+            context->PSSetConstantBuffers(constantSlot,1,&clone->constant.value);
+        }
+        if(replacement)context->PSSetShaderResources(0,1,&replacement->source_.value);
         context->OMSetRenderTargets(1,&companion,nullptr);
-        context->OMSetBlendState(alphaOnly_.value,nullptr,samples);
+        context->OMSetBlendState(intermediatePass?fullColor_.value:alphaOnly_.value,nullptr,samples);
         originalDraw(context,vertices,firstVertex);
         context->OMSetRenderTargets(1,targets.data(),nullptr);
         context->OMSetBlendState(blend.value,factors,samples);
-        context->PSSetConstantBuffers(constantSlot,1,&original.value);
-        actual->PSSetConstantBuffers1(constantSlot,1,&original.value,&offset,&count);
-        if(msaa)context->PSSetShaderResources(0,1,&originalSource.value);
+        if(clone){context->PSSetConstantBuffers(constantSlot,1,&original.value);
+            actual->PSSetConstantBuffers1(constantSlot,1,&original.value,&offset,&count);}
+        if(replacement)context->PSSetShaderResources(0,1,&originalSource.value);
         return true;
     }
 };
