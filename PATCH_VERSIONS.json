@@ -1,5 +1,5 @@
 {
   "schema": "sfnp-patch-versions-v1",
-  "pc": "0.3.25",
+  "pc": "0.3.26",
   "frame": "0.3.13"
 }

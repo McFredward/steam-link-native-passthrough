@@ -24,7 +24,7 @@ class Producer {
     std::atomic<unsigned> stage_{0};
     ChannelPage* page_=nullptr;ID3D11Device* device_=nullptr;
     Replay replay_;Geometry geometry_;NativeShaders* shaders_=nullptr;MutexObserver* locks_=nullptr;
-    std::uint64_t nextGeneration_=1;
+    std::uint64_t nextGeneration_=1;UINT uavSlots_=D3D11_PS_CS_UAV_REGISTER_COUNT;
     static constexpr std::uint64_t Budget=256ull*1024*1024;
     ImageState* find(ID3D11Resource* resource)noexcept{
         if(!resource)return nullptr;
@@ -103,7 +103,9 @@ public:
         if(device_||!device||!page)return false;
         if(!replay_.prepare(device,{kernels::Clone64.data(),kernels::Clone64.size()},
             {kernels::Clone80.data(),kernels::Clone80.size()},{kernels::Clone32.data(),kernels::Clone32.size()}))return false;
-        device_=device;page_=page;shaders_=&shaders;locks_=&locks;stage_=1;return true;
+        device_=device;page_=page;shaders_=&shaders;locks_=&locks;
+        uavSlots_=device->GetFeatureLevel()>=D3D_FEATURE_LEVEL_11_1?D3D11_1_UAV_SLOT_COUNT:D3D11_PS_CS_UAV_REGISTER_COUNT;
+        stage_=1;return true;
     }
     unsigned stage()const noexcept{return stage_.load(std::memory_order_relaxed);}
     Geometry& geometry()noexcept{return geometry_;}
@@ -150,6 +152,18 @@ public:
         geometry_.invalidate(resource);
         for(auto& image:images_)if(image.native.value&&(!resource||image.native.value==resource))revoke(image);
     }
+    void dispatch(ID3D11DeviceContext* context)noexcept{
+        // Compute writes only its currently bound UAV resources. Revoking
+        // unrelated RTV images and vertex bytes permanently lost native quad
+        // evidence after an ordinary compositor compute pass.
+        if(!device_||!context)return;
+        std::array<ID3D11UnorderedAccessView*,D3D11_1_UAV_SLOT_COUNT> views{};
+        context->CSGetUnorderedAccessViews(0,uavSlots_,views.data());
+        for(auto* view:views)if(view){
+            Reference<ID3D11Resource> resource;view->GetResource(resource.out());
+            invalidate(resource.value);view->Release();
+        }
+    }
     void targets(ID3D11DeviceContext* context)noexcept{
         std::array<ID3D11RenderTargetView*,8> views{};context->OMGetRenderTargets(UINT(views.size()),views.data(),nullptr);
         for(auto* view:views)if(view){Reference<ID3D11Resource> resource;view->GetResource(resource.out());invalidate(resource.value);view->Release();}
@@ -183,8 +197,9 @@ public:
         if(!x&&!y&&!inner&&!resolve)return;
         stage_=11;
         const bool fullVertex=vertexKind==NativeShader::StreamVertex||vertexKind==NativeShader::MultiViewVertexY;
-        const bool full=fullVertex&&geometry_.fullUnitQuad(context,count,start,destination->shape.Width,destination->shape.Height,destination->shape.SampleDesc.Count);
-        stage_=1000+2*unsigned(vertexKind)+(full?1:0);
+        unsigned geometryReason=0;
+        const bool full=fullVertex&&geometry_.fullUnitQuad(context,count,start,destination->shape.Width,destination->shape.Height,destination->shape.SampleDesc.Count,&geometryReason);
+        stage_=!full&&fullVertex?2000+geometryReason:1000+2*unsigned(vertexKind)+(full?1:0);
         Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
         context->GSGetShader(geometry.out(),nullptr,nullptr);context->HSGetShader(hull.out(),nullptr,nullptr);context->DSGetShader(domain.out(),nullptr,nullptr);
         if(geometry.value||hull.value||domain.value)return;
