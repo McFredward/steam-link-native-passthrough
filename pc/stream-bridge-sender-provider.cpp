@@ -507,6 +507,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     std::snprintf(text,sizeof text,"projected alpha ancestry: context=%u, root-passes/paired-draws=%llu/%llu; last-root-refusal=%u (1=view,2=allocation,3=registry-read,4=no-lease,5=adapter,6=unretained,7=owner,8=shape,9=ownership,10=revoked); last-input-refusal=%u (1=untracked,2=invalid,3=revoked,4=ownership); approximate counters only, not frame proof",
                         context,static_cast<unsigned long long>(production.rootPasses),static_cast<unsigned long long>(production.pairedDraws),production.rootFailure,production.inputFailure);
                     report(text,stream_bridge::logging::Level::Debug);
+                    std::snprintf(text,sizeof text,"projected alpha storage: context=%u, FP16 callbacks/prepared=%u/%u; last-refusal=%u (2=shape,3=missing-srv,4=uav-capability,5=samples-or-extent,6=float-view,7=view-dimension,8=budget,9=allocation,10=clear,11=capacity); cold target admission diagnostics only",
+                        context,production.fp16Calls,production.fp16Prepared,production.fp16Refusal);
+                    report(text,stream_bridge::logging::Level::Debug);
                 }
                 std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown-retention-overflow=%llu; unknown programs remain diagnostic only",
                     static_cast<unsigned long long>(audit.streamShaderKinds[0]),static_cast<unsigned long long>(audit.streamShaderKinds[1]),
@@ -538,6 +541,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                         static_cast<unsigned long long>(sample.inventoryEpoch),static_cast<unsigned long long>(sample.allocationGeneration),
                         sample.width,sample.height,sample.format,sample.arraySize,sample.samples,sample.view,sample.viewFormat,
                         sample.outputWidth,sample.outputHeight,sample.outputFormat);
+                    report(text,stream_bridge::logging::Level::Debug);
+                    const auto& target=sample.outputDescription;
+                    std::snprintf(text,sizeof text,"compositor target sample: serial=%llu, shader=%u, extent=%ux%u; storage/view=%u/%u, view-dimension=%u; mips/array/samples=%u/%u/%u; bind/CPU/misc=0x%x/0x%x/0x%x, usage=%u; public descriptor only, no frame authority",
+                        static_cast<unsigned long long>(sample.serial),sample.shader,sample.outputWidth,sample.outputHeight,sample.outputFormat,target[7],target[8],target[0],target[1],target[2],target[3],target[5],target[6],target[4]);
                     report(text,stream_bridge::logging::Level::Debug);
                     std::snprintf(text,sizeof text,"compositor program sample: serial=%llu, command=%u, count/instances/start/base/first/argument-offset=%u/%u/%u/%d/%u/%u; vertex-kind=%u, pixel-kind=%u, linked=%u, fingerprint-valid=%u, pixel-fingerprint=%s; bindings only, unknown semantics and indirect counts are not inferred",
                         static_cast<unsigned long long>(sample.serial),sample.command,sample.count,sample.instances,sample.start,sample.baseVertex,

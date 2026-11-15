@@ -1,5 +1,6 @@
 #include "pc/stream-bridge-projected-alpha-producer.h"
 #include "pc/stream-bridge-projected-alpha-consumer.h"
+#include "pc/stream-bridge-projected-alpha-textures.h"
 #include <cstdio>
 #include <stdexcept>
 #include <vector>
@@ -11,6 +12,14 @@ struct CrossProcess {ChannelLaunch launch{};std::uint64_t source=0,native=0;std:
 void check(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
 void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);}
 void released(const MutexLease& lease,HRESULT result,void*)noexcept{if(active)active->released(lease,result);}
+void textureObserved(ID3D11Device*,ID3D11Texture2D*,TextureOrigin,void*)noexcept{}
+void targetObserved(ID3D11Device*,ID3D11RenderTargetView* view,void*)noexcept{if(active)active->target(view);}
+void bufferObserved(ID3D11Device*,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void*)noexcept{
+    if(active)active->geometry().buffer(desc,data,buffer);
+}
+void layoutObserved(ID3D11Device*,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T bytes,ID3D11InputLayout* layout,void*)noexcept{
+    if(active)active->geometry().layout(desc,count,code,bytes,layout);
+}
 void STDMETHODCALLTYPE draw(ID3D11DeviceContext* context,UINT count,UINT start){context->Draw(count,start);}
 constexpr char ProducerFixture[]=R"(
 cbuffer Scene : register(b0) {float4 words[4];};
@@ -73,6 +82,8 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     auto* page=external?external:channel.page();
     const unsigned policyBytes=64;Producer producer(&contracts[1],&policyBytes,1);active=&producer;
     check(producer.prepare(device.value,page,shaders,locks),"production controller prepares embedded own kernels");
+    TextureObserver textures(textureObserved,nullptr,targetObserved,bufferObserved,layoutObserved);
+    check(textures.prepare(device.value),"real public creation callbacks connect native targets and geometry to the producer");
     constexpr UINT width=40,height=36;const std::uint32_t scenePid=77,compositorPid=incoming?incoming->compositorPid:88;
     const std::uint64_t lease=(std::uint64_t(7)<<32)|scenePid;channel.sourceLease(lease);
     std::vector<std::uint8_t> input(width*height*4);
@@ -85,7 +96,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     check((incoming?(SUCCEEDED(open(incoming->source,source.out()))&&SUCCEEDED(open(incoming->native,native.out()))):
         (SUCCEEDED(device->CreateTexture2D(&desc,&initial,source.out()))&&SUCCEEDED(device->CreateTexture2D(&desc,nullptr,native.out()))))&&
         SUCCEEDED(device->CreateShaderResourceView(source.value,nullptr,sourceView.out()))&&SUCCEEDED(device->CreateRenderTargetView(native.value,nullptr,target.out())),"actual owned source and native target");
-    producer.target(target.value);const auto sourceHandle=handle(source.value),nativeHandle=handle(native.value);
+    const auto sourceHandle=handle(source.value),nativeHandle=handle(native.value);
     MaskRegistration prepared{};check(page->registrations[0].read(prepared)&&prepared.maskHandle&&producer.stage()==2,"cold preparation published the actual companion allocation");
     Registry registry{};registry.sourceLease=lease;registry.revision=1;
     registry.retained[0]={sourceHandle,21,scenePid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
@@ -105,14 +116,16 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
         D3D11_RENDER_TARGET_VIEW_DESC rtv{};rtv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;rtv.ViewDimension=D3D11_RTV_DIMENSION_TEXTURE2D;
         D3D11_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;srv.Texture2D.MipLevels=1;
         check(SUCCEEDED(device->CreateTexture2D(&floating,nullptr,intermediate.out()))&&
-            SUCCEEDED(device->CreateRenderTargetView(intermediate.value,&rtv,intermediateTarget.out()))&&
             SUCCEEDED(device->CreateShaderResourceView(intermediate.value,&srv,intermediateView.out())),"actual native-like FP16 storage and typed FLOAT views");
         if(intermediateFormat==DXGI_FORMAT_R16G16B16A16_TYPELESS){
             rtv.Format=DXGI_FORMAT_R16G16B16A16_UINT;
             check(SUCCEEDED(device->CreateRenderTargetView(intermediate.value,&rtv,integerTarget.out())),"typeless storage also has a distinct integer interpretation");
-            producer.target(integerTarget.value);
+            check(producer.diagnostics().fp16Prepared==0&&producer.diagnostics().fp16Refusal==6,
+                "actual creation callback refuses the integer interpretation of typeless storage");
         }
-        producer.target(intermediateTarget.value);
+        rtv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+        check(SUCCEEDED(device->CreateRenderTargetView(intermediate.value,&rtv,intermediateTarget.out())),"actual native FLOAT RTV creation");
+        check(producer.diagnostics().fp16Prepared==1,"the real FLOAT RTV creation callback prepared the native intermediate");
     }
     // Keep more than sixteen distinct live native objects before the actual
     // game quad. Metadata must follow each object, not the first sixteen ever.
@@ -124,22 +137,18 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
             {"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,64+4*i,D3D11_INPUT_PER_VERTEX_DATA,0},
             {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,8,D3D11_INPUT_PER_VERTEX_DATA,0}};
         check(SUCCEEDED(device->CreateInputLayout(otherElements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),otherLayouts[i].out())),"real unrelated layout pressure");
-        producer.geometry().layout(otherElements,2,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),otherLayouts[i].value);
         D3D11_BUFFER_DESC otherDesc{};otherDesc.ByteWidth=32+4*i;otherDesc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
         D3D11_SUBRESOURCE_DATA otherData{otherBytes.data(),0,0};
         check(SUCCEEDED(device->CreateBuffer(&otherDesc,&otherData,otherBuffers[i].out())),"real unrelated vertex allocation pressure");
-        producer.geometry().buffer(&otherDesc,&otherData,otherBuffers[i].value);
     }
     auto layoutCode=compile("layoutVS","vs_5_0");
     const D3D11_INPUT_ELEMENT_DESC elements[]{
         {"POSITION",0,DXGI_FORMAT_R32G32B32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},
         {"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,12,D3D11_INPUT_PER_VERTEX_DATA,0}};
     check(SUCCEEDED(device->CreateInputLayout(elements,2,layoutCode->GetBufferPointer(),layoutCode->GetBufferSize(),layout.out())),"native-style float3 position plus UV layout from a wider creation signature");
-    producer.geometry().layout(elements,2,layoutCode->GetBufferPointer(),layoutCode->GetBufferSize(),layout.value);
     // Deliberately different UVs must not become position evidence.
     const std::array<float,20> points{{0,0,99,7,7,0,1,99,7,8,1,0,99,8,7,1,1,99,8,8}};D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
     D3D11_SUBRESOURCE_DATA vertexData{points.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&vertexData,vertices.out())),"actual vertex buffer");
-    producer.geometry().buffer(&buffer,&vertexData,vertices.value);
     std::array<float,16> words{};words[4]=words[5]=words[6]=1;buffer.ByteWidth=sizeof words;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
     D3D11_SUBRESOURCE_DATA constantData{words.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&constantData,constants.out())),"native alpha policy constant buffer");
     Reference<IDXGIKeyedMutex> sourceMutex,streamMutex;
@@ -174,7 +183,6 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     D3D11_UNORDERED_ACCESS_VIEW_DESC mutableViewDesc{};mutableViewDesc.Format=DXGI_FORMAT_R32_TYPELESS;
     mutableViewDesc.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;mutableViewDesc.Buffer.NumElements=sizeof points/4;mutableViewDesc.Buffer.Flags=D3D11_BUFFER_UAV_FLAG_RAW;
     check(SUCCEEDED(device->CreateUnorderedAccessView(mutableVertices.value,&mutableViewDesc,mutableView.out())),"explicit raw UAV for the actual vertex allocation");
-    producer.geometry().buffer(&mutableDesc,&vertexData,mutableVertices.value);
     context->IASetVertexBuffers(0,1,&mutableVertices.value,&stride,&offset);
     check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"known mutable vertex data initially covers the actual target");
     ID3D11Buffer* noBuffer=nullptr;context->IASetVertexBuffers(0,1,&noBuffer,&stride,&offset);

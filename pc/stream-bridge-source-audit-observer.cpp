@@ -344,11 +344,13 @@ struct Observer {
             if(out.p){Held<ID3D11Resource> output;out.p->GetResource(output.out());Held<ID3D11Texture2D> target;
                 if(output.p&&SUCCEEDED(output.p->QueryInterface(IID_ID3D11Texture2D,reinterpret_cast<void**>(target.out())))){
                     D3D11_TEXTURE2D_DESC d{};target.p->GetDesc(&d);sample.outputWidth=d.Width;sample.outputHeight=d.Height;sample.outputFormat=unsigned(d.Format);
+                    D3D11_RENDER_TARGET_VIEW_DESC v{};out.p->GetDesc(&v);
+                    sample.outputDescription={d.MipLevels,d.ArraySize,d.SampleDesc.Count,d.BindFlags,unsigned(d.Usage),d.CPUAccessFlags,d.MiscFlags,unsigned(v.Format),unsigned(v.ViewDimension)};
                 }
             }
             const auto key=[](const SourceAuditSample& p){return std::make_tuple(p.inventoryEpoch,p.allocationGeneration,
                 p.shader,p.slot,p.pid,p.width,p.height,p.format,p.arraySize,p.samples,p.view,p.viewFormat,p.ownerMatches,
-                p.outputWidth,p.outputHeight,p.outputFormat,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash,p.programLinked);};
+                p.outputWidth,p.outputHeight,p.outputFormat,p.outputDescription,p.command,p.count,p.instances,p.start,p.firstInstance,p.argumentOffset,p.baseVertex,p.vertexKind,p.programHashValid,p.programHash,p.programLinked);};
             bool duplicate=false;
             for(const auto& previous:status.samples)if(previous.serial&&key(previous)==key(sample)){duplicate=true;break;}
             if(duplicate)continue;
@@ -399,7 +401,8 @@ struct Observer {
             status.sourceAlphaErrors[context]=contexts[context].alpha.error();
             status.projectedAlphaStages[context]=contexts[context].producer.stage();
             const auto production=contexts[context].producer.diagnostics();
-            status.production[context]={production.rootFailure,production.inputFailure,production.rootPasses,production.pairedDraws};
+            status.production[context]={production.rootFailure,production.inputFailure,production.rootPasses,production.pairedDraws,
+                production.fp16Calls,production.fp16Prepared,production.fp16Refusal};
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();
