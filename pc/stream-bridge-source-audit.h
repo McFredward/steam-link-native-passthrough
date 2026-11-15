@@ -23,6 +23,9 @@ struct SourceAuditSample {
     // Public native target descriptor only, never image/frame authority:
     // mips, arrays, samples, bind flags, usage, CPU flags, misc, RTV format/dim.
     std::array<std::uint32_t,9> outputDescription{};
+    std::uint32_t viewportCount=0,depthAttached=0;
+    // First bound viewport: x/y, width/height, min/max depth. Diagnostic only.
+    std::array<float,6> viewport{};
     std::uint32_t command=0,count=0,instances=0,start=0,firstInstance=0,argumentOffset=0;
     std::int32_t baseVertex=0;
     std::uint32_t vertexKind=0,programHashValid=0,programLinked=0;
@@ -52,6 +55,8 @@ struct SourceAuditStatus {
         std::uint64_t rootPasses=0,pairedDraws=0;
         std::uint32_t fp16Calls=0,fp16Prepared=0,fp16Refusal=0;
         std::uint64_t rgbaBytes=0,fp16Bytes=0;
+        std::uint32_t geometryReason=0,geometryPixel=0,geometryVertex=0,geometryEmpty=0;
+        std::uint64_t fp16ZeroClears=0,fp16OtherClears=0;
     };
     std::array<Production,4> production{};
     std::uint32_t productionStopped=0;

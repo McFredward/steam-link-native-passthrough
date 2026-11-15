@@ -146,7 +146,20 @@ void run(){
     check(observer->draws==1&&dispatch.owns(),"native first-use specialization preserves object-local observation");
     check(baseline==pixels(context.p,target.p,staging.p),"observer leaves every native output byte unchanged");
     check(observer->status.sampleCount==2&&observer->recognized==1,"bounded observations contain both actual source slots");
-    for(unsigned i=0;i<2;++i){const auto& s=observer->status.samples[i];check(s.slot==i&&s.pid==101+i&&s.ownerMatches==1&&s.width==W&&s.height==H&&s.outputWidth==W&&s.outputHeight==H,"bound source ownership and arbitrary physical extents come from actual views");}
+    for(unsigned i=0;i<2;++i){const auto& s=observer->status.samples[i];check(s.slot==i&&s.pid==101+i&&s.ownerMatches==1&&s.width==W&&s.height==H&&s.outputWidth==W&&s.outputHeight==H,"bound source ownership and arbitrary physical extents come from actual views");
+        check(s.viewportCount==1&&!s.depthAttached&&s.viewport==std::array<float,6>{0,0,float(W),float(H),0,1},"observations carry the actual bound viewport and depth attachment without changing native pixels");}
+    const D3D11_VIEWPORT varied{.25f,.5f,float(W)-.5f,float(H)-1,.2f,.8f};
+    for(UINT viewportCount: {1u,2u}){
+        const D3D11_VIEWPORT viewports[]{varied,viewport};context.p->RSSetViewports(viewportCount,viewports);
+        context.p->ClearRenderTargetView(rtv.p,zero);bits<Draw>(dispatch.function(13))(context.p,3,0);
+        const auto expected=pixels(context.p,target.p,staging.p);
+        context.p->ClearRenderTargetView(rtv.p,zero);context.p->Draw(3,0);
+        const auto& sample=observer->status.samples[(observer->serial-1)%SourceAuditSamples];
+        check(sample.viewportCount==viewportCount&&sample.viewport==std::array<float,6>{.25f,.5f,float(W)-.5f,float(H)-1,.2f,.8f},
+            "actual fractional origin, cropped extent, depth interval and multi-viewport count are captured independently of allocation size");
+        check(expected==pixels(context.p,target.p,staging.p),"viewport diagnostics preserve every native RGBA byte");
+    }
+    context.p->RSSetViewports(1,&viewport);
     Com<ID3D11Buffer> indices;const std::uint32_t indexData[]{99,0,1,2};D3D11_BUFFER_DESC ib{};ib.ByteWidth=sizeof indexData;ib.BindFlags=D3D11_BIND_INDEX_BUFFER;
     D3D11_SUBRESOURCE_DATA indexInitial{indexData,sizeof indexData,0};check(SUCCEEDED(device.p->CreateBuffer(&ib,&indexInitial,indices.out())),"actual index buffer with an ignored prefix");
     context.p->IASetIndexBuffer(indices.p,DXGI_FORMAT_R32_UINT,0);

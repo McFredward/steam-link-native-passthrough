@@ -514,6 +514,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                         context,production.fp16Calls,production.fp16Prepared,production.fp16Refusal,
                         static_cast<unsigned long long>(production.rgbaBytes),static_cast<unsigned long long>(production.fp16Bytes));
                     report(text,stream_bridge::logging::Level::Debug);
+                    std::snprintf(text,sizeof text,"projected alpha geometry: context=%u, reason/pixel/vertex=%u/%u/%u; target-was-zero-cleared=%u; FP16 zero/other-clears=%llu/%llu; sampled public command state only, no frame authority",
+                        context,production.geometryReason,production.geometryPixel,production.geometryVertex,production.geometryEmpty,
+                        static_cast<unsigned long long>(production.fp16ZeroClears),static_cast<unsigned long long>(production.fp16OtherClears));
+                    report(text,stream_bridge::logging::Level::Debug);
                 }
                 std::snprintf(text,sizeof text,"compositor raster audit: stream VS/combine/inset/unknown-PS=%llu/%llu/%llu/%llu; indexed/plain/indexed-instanced/instanced/auto/indexed-indirect/indirect/command-list=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; unknown-retention-overflow=%llu; unknown programs remain diagnostic only",
                     static_cast<unsigned long long>(audit.streamShaderKinds[0]),static_cast<unsigned long long>(audit.streamShaderKinds[1]),
@@ -549,6 +553,11 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     const auto& target=sample.outputDescription;
                     std::snprintf(text,sizeof text,"compositor target sample: serial=%llu, shader=%u, extent=%ux%u; storage/view=%u/%u, view-dimension=%u; mips/array/samples=%u/%u/%u; bind/CPU/misc=0x%x/0x%x/0x%x, usage=%u; public descriptor only, no frame authority",
                         static_cast<unsigned long long>(sample.serial),sample.shader,sample.outputWidth,sample.outputHeight,sample.outputFormat,target[7],target[8],target[0],target[1],target[2],target[3],target[5],target[6],target[4]);
+                    report(text,stream_bridge::logging::Level::Debug);
+                    const auto& viewport=sample.viewport;
+                    std::snprintf(text,sizeof text,"compositor viewport sample: serial=%llu, shader=%u; count=%u; origin=%.9g,%.9g; extent=%.9gx%.9g; depth=%.9g,%.9g; depth-attached=%u; target=%ux%u; public raster state only, no frame authority",
+                        static_cast<unsigned long long>(sample.serial),sample.shader,sample.viewportCount,
+                        double(viewport[0]),double(viewport[1]),double(viewport[2]),double(viewport[3]),double(viewport[4]),double(viewport[5]),sample.depthAttached,sample.outputWidth,sample.outputHeight);
                     report(text,stream_bridge::logging::Level::Debug);
                     std::snprintf(text,sizeof text,"compositor program sample: serial=%llu, command=%u, count/instances/start/base/first/argument-offset=%u/%u/%u/%d/%u/%u; vertex-kind=%u, pixel-kind=%u, linked=%u, fingerprint-valid=%u, pixel-fingerprint=%s; bindings only, unknown semantics and indirect counts are not inferred",
                         static_cast<unsigned long long>(sample.serial),sample.command,sample.count,sample.instances,sample.start,sample.baseVertex,
