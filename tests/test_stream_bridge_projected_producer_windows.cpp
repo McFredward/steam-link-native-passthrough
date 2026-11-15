@@ -64,6 +64,7 @@ void run(){
     check(SUCCEEDED(device->CreateTexture2D(&desc,&initial,source.out()))&&SUCCEEDED(device->CreateTexture2D(&desc,nullptr,native.out()))&&
         SUCCEEDED(device->CreateShaderResourceView(source.value,nullptr,sourceView.out()))&&SUCCEEDED(device->CreateRenderTargetView(native.value,nullptr,target.out())),"actual owned source and native target");
     producer.target(target.value);const auto sourceHandle=handle(source.value),nativeHandle=handle(native.value);
+    MaskRegistration prepared{};check(channel.page()->registrations[0].read(prepared)&&prepared.maskHandle&&producer.stage()==2,"cold preparation published the actual companion allocation");
     Registry registry{};registry.sourceLease=lease;registry.revision=1;
     registry.retained[0]={sourceHandle,21,scenePid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
     registry.retained[1]={nativeHandle,22,compositorPid,width,height,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
@@ -72,6 +73,7 @@ void run(){
     Reference<ID3D11VertexShader> vs;Reference<ID3D11PixelShader> ps;Reference<ID3D11InputLayout> layout;Reference<ID3D11Buffer> vertices,constants;
     check(SUCCEEDED(device->CreateVertexShader(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),nullptr,vs.out()))&&
         SUCCEEDED(device->CreatePixelShader(psCode->GetBufferPointer(),psCode->GetBufferSize(),nullptr,ps.out())),"actual observed native-model program objects");
+    check(shaders.identify(vs.value)==NativeShader::StreamVertex&&shaders.identify(ps.value)==NativeShader::MultiViewInner,"actual shader observations survive cold companion preparation");
     const D3D11_INPUT_ELEMENT_DESC element{"TEXCOORD",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0};
     check(SUCCEEDED(device->CreateInputLayout(&element,1,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.out())),"actual input layout");
     producer.geometry().layout(&element,1,vsCode->GetBufferPointer(),vsCode->GetBufferSize(),layout.value);
@@ -88,8 +90,12 @@ void run(){
     check(SUCCEEDED(source->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sourceMutex.out())))&&
         SUCCEEDED(native->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(streamMutex.out()))),"original application and stream mutexes");
     check(sourceMutex->AcquireSync(0,0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"actual producer ownership");
+    check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"production bound vertex range proves full image coverage");
+    check(bool(locks.current(device.value,sourceHandle)),"actual source-allocation ownership is retained");
     producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();
+    std::printf("production stage after draw=%u\n",producer.stage());
     check(streamMutex->ReleaseSync(3)==S_OK,"native stream ownership transferred with its unchanged release key");
+    std::printf("production stage after release=%u\n",producer.stage());
     ImageWitness witness{};check(channel.page()->witnesses[0].read(witness)&&witness.complete&&witness.sourceLease==lease&&
         witness.scene.pid==scenePid&&witness.native.pid==compositorPid&&witness.native.generation==22,"production witness separates authenticated game ancestry from actual compositor ownership");
     bool sealed=false;for(const auto& release:witness.releases)sealed|=release.allocation==nativeHandle&&release.key==3&&release.scope>1;

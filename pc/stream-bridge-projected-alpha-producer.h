@@ -21,6 +21,7 @@ class Producer {
         ImageWitness witness{};
     };
     std::array<ImageState,ChannelImages> images_{};
+    std::atomic<unsigned> stage_{0};
     ChannelPage* page_=nullptr;ID3D11Device* device_=nullptr;
     Replay replay_;Geometry geometry_;NativeShaders* shaders_=nullptr;MutexObserver* locks_=nullptr;
     std::uint64_t nextGeneration_=1;
@@ -101,8 +102,9 @@ public:
         if(device_||!device||!page)return false;
         if(!replay_.prepare(device,{kernels::Clone64.data(),kernels::Clone64.size()},
             {kernels::Clone80.data(),kernels::Clone80.size()},{kernels::Clone32.data(),kernels::Clone32.size()}))return false;
-        device_=device;page_=page;shaders_=&shaders;locks_=&locks;return true;
+        device_=device;page_=page;shaders_=&shaders;locks_=&locks;stage_=1;return true;
     }
+    unsigned stage()const noexcept{return stage_.load(std::memory_order_relaxed);}
     Geometry& geometry()noexcept{return geometry_;}
     // Called only on native resource creation, never from raster callbacks.
     void target(ID3D11RenderTargetView* view)noexcept{
@@ -131,7 +133,7 @@ public:
             Reference<ID3D11DeviceContext> context;device_->GetImmediateContext(context.out());
             if(!image.companion.clear(context.value))return;
             image.native.value=texture.value;texture.value=nullptr;image.shape=desc;image.shared=shared;
-            image.generation=nextGeneration_++;
+            image.generation=nextGeneration_++;stage_=2;
             if(shared){
                 const auto row=InterlockedIncrement(&page_->nextImageSlot)-1;
                 if(row<0||unsigned(row)>=ChannelImages){image.shared=false;return;}
@@ -166,7 +168,7 @@ public:
     void draw(ID3D11DeviceContext* context,Draw original,UINT count,UINT start)noexcept{
         Reference<ID3D11RenderTargetView> targetView;context->OMGetRenderTargets(1,targetView.out(),nullptr);
         Reference<ID3D11Resource> output;if(targetView.value)targetView->GetResource(output.out());
-        auto* destination=find(output.value);if(!destination)return;
+        auto* destination=find(output.value);if(!destination)return;stage_=10;
         const bool empty=destination->empty;
         revoke(*destination);
         Reference<ID3D11PixelShader> pixel;Reference<ID3D11VertexShader> vertex;UINT pixelClasses=0,vertexClasses=0;
@@ -178,6 +180,7 @@ public:
         const bool y=kind==NativeShader::MultiViewDownscaleY||kind==NativeShader::MultiViewReprojectY;
         const bool inner=kind==NativeShader::MultiViewInner,resolve=kind==NativeShader::MultiViewResolve;
         if(!x&&!y&&!inner&&!resolve)return;
+        stage_=11;
         const bool fullVertex=vertexKind==NativeShader::StreamVertex||vertexKind==NativeShader::MultiViewVertexY;
         const bool full=fullVertex&&geometry_.fullUnitQuad(context,count,start,destination->shape.Width,destination->shape.Height,destination->shape.SampleDesc.Count);
         Reference<ID3D11GeometryShader> geometry;Reference<ID3D11HullShader> hull;Reference<ID3D11DomainShader> domain;
@@ -185,19 +188,20 @@ public:
         if(geometry.value||hull.value||domain.value)return;
         if(!full&&!empty)return;
         if(!full&&(kind!=NativeShader::MultiViewReprojectX||vertexKind!=NativeShader::MultiViewVertexX||count!=4||start))return;
+        stage_=12;
         Reference<ID3D11ShaderResourceView> sourceView;Reference<ID3D11Resource> source;Reference<ID3D11Texture2D> sourceTexture;
         context->PSGetShaderResources(0,1,sourceView.out());D3D11_SHADER_RESOURCE_VIEW_DESC view{};
         if(!sourceView.value)return;
         sourceView->GetDesc(&view);sourceView->GetResource(source.out());
         if(!source.value||FAILED(source->QueryInterface(__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(sourceTexture.out()))))return;
-        Allocation scene{};std::uint64_t lease=0;auto* input=find(source.value);
+        stage_=13;Allocation scene{};std::uint64_t lease=0;auto* input=find(source.value);
         if(x||inner){if(!root(sourceTexture.value,view,scene,lease))return;}
         else {
             if(!input||!input->valid||!live(input->lease)||!owned(*input))return;
             scene=input->scene;lease=input->lease;
         }
-        std::array<MutexLease,8> scopes{};if(!locks_->capture(device_,scopes)||!live(lease))return;
-        bool okay=false;
+        stage_=14;std::array<MutexLease,8> scopes{};if(!locks_->capture(device_,scopes)||!live(lease))return;
+        stage_=15;bool okay=false;
         if(x&&destination->shape.Format==DXGI_FORMAT_R16G16B16A16_FLOAT)
             okay=replay_.intermediate(context,destination->companion,pixel.value,original,count,start);
         else if(y&&input&&input->shape.Format==DXGI_FORMAT_R16G16B16A16_FLOAT)
@@ -205,7 +209,7 @@ public:
         else if(inner)okay=replay_.replay(context,destination->companion,pixel.value,prefix(program),original,count,start);
         else if(resolve&&input)okay=replay_.resolve(context,destination->companion,input->companion,pixel.value,original,count,start);
         if(!okay||!live(lease))return;
-        destination->valid=true;destination->scene=scene;destination->lease=lease;destination->scopes=scopes;
+        stage_=16;destination->valid=true;destination->scene=scene;destination->lease=lease;destination->scopes=scopes;
     }
     void releasing(const MutexLease& scope,std::uint64_t key)noexcept{
         if(!page_||scope.device!=device_||!scope.retained)return;
@@ -222,7 +226,7 @@ public:
             witness.imageVersion=image.version;witness.complete=1;witness.route=1;
             witness.releases[choice]={scope.allocation,scope.epoch,key};
             if(!image.sealed[choice].value){scope.retained->AddRef();image.sealed[choice].value=scope.retained;}
-            page_->witnesses[index(image)].publish(witness);
+            page_->witnesses[index(image)].publish(witness);stage_=20;
         }
     }
     void released(const MutexLease& scope,HRESULT result)noexcept{
