@@ -1,7 +1,7 @@
 {
   "archive": {
-    "bytes": 20317555,
-    "sha256": "8ffa633980fca61fae6ce2171ddcc625fcdfc60d4ab64a7826f9a3927a8a46a1"
+    "bytes": 20318662,
+    "sha256": "c61514d900ea737cda665458a3e6512bfae8eed50cd2c623024154faa8b5c055"
   },
   "artifacts": {
     "frame_layer": {
@@ -37,7 +37,7 @@
   "result": "PASS",
   "runtime_profile": {
     "bytes": 11711,
-    "sha256": "591ed083bd884c171d970f9f9b713d3007b54ee5cededaec6a7b2115230fe2a0"
+    "sha256": "9eb28c930f9e72cd22f78bd6f02c0cd8a61d1f0763256049dec6efcd04840ab7"
   },
   "schema": "sfnp-stream-bridge-packaging-result-v1",
   "source_pins": {
@@ -51,7 +51,7 @@
     },
     "VERSION": {
       "bytes": 7,
-      "sha256": "3e08ee94eb484628407548728e0741b6396ea0a97b7da71e84f8148998630d69"
+      "sha256": "3f00eb418c0fb9f49450c14ee709c7336e7c76d7e5c98e8ae03ccf356045666f"
     },
     "packaging/mask-ffmpeg-patches.json": {
       "bytes": 1943,
@@ -130,24 +130,24 @@
       "sha256": "d9c112646f124f792aeefa4de7721c972f0537688a844c9f9b5512a17c897ccc"
     },
     "setup/steam_link_setup_textual.py": {
-      "bytes": 59855,
-      "sha256": "3298d94454b63f1067a6add2496ed8754135751dd19d6e5c8f4ebbcab409173d"
+      "bytes": 61971,
+      "sha256": "2ff646359371fbd553fe90f7823ed9d42998c82362cde80351702db0edf52c12"
     },
     "setup/steam_link_setup_ui.py": {
-      "bytes": 82008,
-      "sha256": "bfe583d14f3b517d217df9b8e52d32b68dd8c4b73a0f47d3e4192db3bb829b55"
+      "bytes": 83188,
+      "sha256": "31e2599563fb7ed0db9c7750977381190e1f7a16c5ae8467ca91e1401e3b61b1"
     },
     "setup/steam_link_setup_vendor.py": {
       "bytes": 2108,
       "sha256": "00208745e459d4d0303dbcde8c2bc9c3e1c20072eeeb48a025396c7bdb4d62a1"
     },
     "setup/steam_link_setup_workflow.py": {
-      "bytes": 11433,
-      "sha256": "06dcc953d97bdea5aad9740e2513514ab7ee6cf514ff336fd3bd72f81db45208"
+      "bytes": 11606,
+      "sha256": "d93fa1cfd92e357c1fdf81c61a79872ea7ada53b38feb89099bde22a5cd79258"
     },
     "setup/stream_bridge_install.py": {
-      "bytes": 174100,
-      "sha256": "4f4532e7c2f3efb44d5c19f83cb27acbf222f22189bec065d3bb5fbff1937908"
+      "bytes": 175299,
+      "sha256": "1390ff6be3193a7f8573d4df861bf862f85aa87cf93f3c007151c08b79ee69a6"
     },
     "third_party/ffmpeg/COPYING.LGPLv2.1": {
       "bytes": 26517,
@@ -238,7 +238,7 @@
       "sha256": "1b4d71f2a76625c04a9dc3e4a6aa5a2c94c6072f9870a55103a7aa525bf6184d"
     }
   },
-  "source_revision": "d5dd17b49a96720a0ac20f2f91381e7b281da912",
+  "source_revision": "28d8e17219442de1fd10d2820567ac933af64aef",
   "temporary_contract_tree_removed": true,
   "validation_receipts": [
     {
@@ -256,9 +256,9 @@
       "hardware_verified": false,
       "pin": {
         "bytes": 8747,
-        "sha256": "0c0a2d83824d034805a65b6ff215424bfb1215a4472350fa7729b5e1b44507ea"
+        "sha256": "5e0390941bbd0b14fcdb176e4c5173b21e31fff714ea2b848d0c2c934b57a405"
       }
     }
   ],
-  "version": "0.3.37"
+  "version": "0.3.38"
 }
