@@ -12,6 +12,7 @@ struct CrossProcess {ChannelLaunch launch{};std::uint64_t source=0,native=0;std:
 void check(bool okay,const char* why){++checks;if(!okay)throw std::runtime_error(why);}
 void releasing(const MutexLease& lease,std::uint64_t key,void*)noexcept{if(active)active->releasing(lease,key);}
 void released(const MutexLease& lease,HRESULT result,void*)noexcept{if(active)active->released(lease,result);}
+void depthObserved(ID3D11Device*,ID3D11DepthStencilState* state,void*)noexcept{if(active)active->depthState(state);}
 void textureObserved(ID3D11Device*,ID3D11Texture2D*,TextureOrigin,void*)noexcept{}
 void targetObserved(ID3D11Device*,ID3D11RenderTargetView* view,void*)noexcept{if(active)active->target(view);}
 void bufferObserved(ID3D11Device*,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void*)noexcept{
@@ -40,6 +41,11 @@ float4 ps(float4 xy:SV_Position):SV_Target{
     return value;
 }
 float4 copyFp16(float4 xy:SV_Position):SV_Target{return scene.Load(int3(int2(xy.xy),0));}
+float4 boundedY(float4 xy:SV_Position):SV_Target{
+    int2 p=int2(xy.xy);p.y=clamp(p.y,0,int(words[0].y)-1);
+    float4 value=scene.Load(int3(p,0));value.rgb*=words[1].xyz;
+    value.a=words[3].y==0?1:value.a;return value;
+}
 )";
 Reference<ID3DBlob> compile(const char* entry,const char* target){
     Reference<ID3DBlob> code,error;const auto result=D3DCompile(ProducerFixture,sizeof ProducerFixture-1,nullptr,nullptr,nullptr,
@@ -60,9 +66,9 @@ std::uint64_t handle(ID3D11Texture2D* image){Reference<IDXGIResource> resource;H
     check(SUCCEEDED(image->QueryInterface(__uuidof(IDXGIResource),reinterpret_cast<void**>(resource.out())))&&SUCCEEDED(resource->GetSharedHandle(&result))&&result,"owned shared allocation identity");
     return std::uint64_t(reinterpret_cast<std::uintptr_t>(result));
 }
-void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false){
+void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI_FORMAT intermediateFormat=DXGI_FORMAT_UNKNOWN,bool pressure=false,bool padded=false,bool depthTests=false){
     const bool filtering=intermediateFormat!=DXGI_FORMAT_UNKNOWN;
-    auto vsCode=compile("vs","vs_5_0"),psCode=compile("ps","ps_5_0"),copyCode=compile("copyFp16","ps_5_0");
+    auto vsCode=compile("vs","vs_5_0"),psCode=compile(padded?"boundedY":"ps","ps_5_0"),copyCode=compile("copyFp16","ps_5_0");
     Reference<ID3D11ShaderReflection> reflection;D3D11_SHADER_DESC signature{};
     check(SUCCEEDED(D3DReflect(vsCode->GetBufferPointer(),vsCode->GetBufferSize(),IID_ID3D11ShaderReflection,
         reinterpret_cast<void**>(reflection.out())))&&SUCCEEDED(reflection->GetDesc(&signature))&&signature.InputParameters==2,
@@ -80,12 +86,12 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     MutexObserver locks({nullptr,releasing,released,nullptr});check(locks.prepare(device.value),"original native synchronization observed");
     ChannelParent channel;check(channel.create(),"private producer channel");
     auto* page=external?external:channel.page();
-    const unsigned policyBytes=64;Producer producer(&contracts[1],&policyBytes,1);active=&producer;
+    const unsigned policyBytes=64;Producer producer(&contracts[1],&policyBytes,1,padded?&contracts[1].hash:nullptr);active=&producer;
     check(producer.prepare(device.value,page,shaders,locks),"production controller prepares embedded own kernels");
-    TextureObserver textures(textureObserved,nullptr,targetObserved,bufferObserved,layoutObserved);
+    TextureObserver textures(textureObserved,nullptr,targetObserved,bufferObserved,layoutObserved,depthObserved);
     check(textures.prepare(device.value),"real public creation callbacks connect native targets and geometry to the producer");
     constexpr UINT width=40,height=36;const std::uint32_t scenePid=77,compositorPid=incoming?incoming->compositorPid:88;
-    const UINT intermediateWidth=pressure?1216:width,intermediateHeight=pressure?4608:height;
+    const UINT intermediateWidth=pressure?1216:width,intermediateHeight=pressure?4608:padded?64:height;
     const std::uint64_t lease=(std::uint64_t(7)<<32)|scenePid;channel.sourceLease(lease);
     std::vector<std::uint8_t> input(width*height*4);
     for(UINT i=0;i<width*height;++i){input[i*4]=UINT(i*17)%256;input[i*4+1]=UINT(i*39)%256;input[i*4+2]=UINT(i*71)%256;input[i*4+3]=i%3==0?0:i%3==1?127:255;}
@@ -172,7 +178,7 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     // Deliberately different UVs must not become position evidence.
     const std::array<float,20> points{{0,0,99,7,7,0,1,99,7,8,1,0,99,8,7,1,1,99,8,8}};D3D11_BUFFER_DESC buffer{};buffer.ByteWidth=sizeof points;buffer.BindFlags=D3D11_BIND_VERTEX_BUFFER;
     D3D11_SUBRESOURCE_DATA vertexData{points.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&vertexData,vertices.out())),"actual vertex buffer");
-    std::array<float,16> words{};words[4]=words[5]=words[6]=1;buffer.ByteWidth=sizeof words;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+    std::array<float,16> words{};words[1]=float(height);words[4]=words[5]=words[6]=1;buffer.ByteWidth=sizeof words;buffer.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
     D3D11_SUBRESOURCE_DATA constantData{words.data(),0,0};check(SUCCEEDED(device->CreateBuffer(&buffer,&constantData,constants.out())),"native alpha policy constant buffer");
     Reference<IDXGIKeyedMutex> sourceMutex,streamMutex;
     check(SUCCEEDED(source->QueryInterface(__uuidof(IDXGIKeyedMutex),reinterpret_cast<void**>(sourceMutex.out())))&&
@@ -231,21 +237,73 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
             check(producer.diagnostics().pairedDraws==before,"integer RTV cannot borrow the FLOAT interpretation of the same native storage");
         }
         context->OMSetRenderTargets(1,&intermediateTarget.value,nullptr);
-        const FLOAT zero[4]{};producer.clear(context.value,intermediateTarget.value,zero);
-        context->ClearRenderTargetView(intermediateTarget.value,zero);
-        const D3D11_VIEWPORT floatingViewport{0,0,float(intermediateWidth),float(intermediateHeight),0,1};context->RSSetViewports(1,&floatingViewport);
+        const FLOAT zero[4]{},paddingPoison[4]{0.75f,0.25f,0.5f,1};
+        if(!padded)producer.clear(context.value,intermediateTarget.value,zero);
+        context->ClearRenderTargetView(intermediateTarget.value,padded?paddingPoison:zero);
+        // Only the real native viewport is written. The trailing allocation
+        // rows deliberately retain opaque, nonzero data and confer no proof.
+        const D3D11_VIEWPORT floatingViewport{0,0,float(intermediateWidth),float(padded?height:intermediateHeight),0,1};context->RSSetViewports(1,&floatingViewport);
         producer.draw(context.value,draw,4,0);draw(context.value,4,0);
         check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==1,
             "production X pass captures actual source ancestry into an FP16 companion for this exact native target");
-        check(producer.diagnostics().fp16ZeroClears==1&&producer.diagnostics().fp16OtherClears==0&&producer.diagnostics().geometryEmpty==1,
+        check(producer.diagnostics().fp16ZeroClears==(padded?0u:1u)&&producer.diagnostics().fp16OtherClears==0&&producer.diagnostics().geometryEmpty==(padded?0u:1u),
             "the diagnostic distinguishes an observed native zero clear from private companion initialization");
         ID3D11RenderTargetView* none=nullptr;context->OMSetRenderTargets(1,&none,nullptr);
         context->PSSetShaderResources(0,1,&intermediateView.value);context->OMSetRenderTargets(1,&target.value,nullptr);
         context->RSSetViewports(1,&viewport);
         context->PSSetShader(ps.value,nullptr,0);
     }
-    producer.draw(context.value,draw,4,0);draw(context.value,4,0);context->Flush();
-    check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==(filtering?2u:1u),
+    Reference<ID3D11Texture2D> depthImage;Reference<ID3D11DepthStencilView> depthView;Reference<ID3D11DepthStencilState> nativeDepth;
+    if(padded){
+        const auto before=producer.diagnostics().pairedDraws;
+        words[1]=float(intermediateHeight);context->UpdateSubresource(constants.value,0,nullptr,words.data(),0,0);producer.geometry().update(constants.value,words.data());
+        producer.draw(context.value,draw,4,0);
+        check(producer.stage()==2032&&producer.diagnostics().pairedDraws==before,"a Y clamp extending into unwritten native padding is refused");
+        words[1]=float(height);context->UpdateSubresource(constants.value,0,nullptr,words.data(),0,0);
+        producer.geometry().invalidate(constants.value);producer.draw(context.value,draw,4,0);
+        check(producer.stage()==2031&&producer.diagnostics().pairedDraws==before,"unknown current logical constants cannot borrow prior sample bounds");
+        producer.geometry().update(constants.value,words.data());
+        Reference<ID3D11DeviceContext1> ranges;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(ranges.out()))),"public logical constant range");
+        std::array<float,128> rangeWords{};std::copy(words.begin(),words.end(),rangeWords.begin()+64);
+        D3D11_BUFFER_DESC rangeDesc{};rangeDesc.ByteWidth=sizeof rangeWords;rangeDesc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+        D3D11_SUBRESOURCE_DATA rangeData{rangeWords.data(),0,0};Reference<ID3D11Buffer> rangeBuffer;
+        check(SUCCEEDED(device->CreateBuffer(&rangeDesc,&rangeData,rangeBuffer.out())),"owned nonzero logical range buffer");
+        UINT first=16,number=16;ranges->PSSetConstantBuffers1(0,1,&rangeBuffer.value,&first,&number);
+        std::array<float,4> actual{};check(producer.geometry().constantPrefix(context.value,actual.data(),sizeof actual)&&actual[1]==float(height),"bounds follow the actual nonzero logical range, not allocation byte zero");
+        first=32;ranges->PSSetConstantBuffers1(0,1,&rangeBuffer.value,&first,&number);
+        check(!producer.geometry().constantPrefix(context.value,actual.data(),sizeof actual),"a logical range outside the observed allocation refuses");
+        context->PSSetConstantBuffers(0,1,&constants.value);
+        std::printf("owned padded viewport=%ux%u, native storage=%ux%u; poisoned padding and unknown/outside bounds refused\n",width,height,intermediateWidth,intermediateHeight);
+    }
+    if(depthTests){
+        auto depthShape=desc;depthShape.Format=DXGI_FORMAT_R24G8_TYPELESS;depthShape.BindFlags=D3D11_BIND_DEPTH_STENCIL;depthShape.MiscFlags=0;
+        D3D11_DEPTH_STENCIL_VIEW_DESC dsv{};dsv.Format=DXGI_FORMAT_D24_UNORM_S8_UINT;dsv.ViewDimension=D3D11_DSV_DIMENSION_TEXTURE2D;
+        D3D11_DEPTH_STENCIL_DESC state{};state.DepthEnable=TRUE;state.DepthWriteMask=D3D11_DEPTH_WRITE_MASK_ALL;state.DepthFunc=D3D11_COMPARISON_LESS_EQUAL;
+        state.StencilEnable=TRUE;state.StencilReadMask=state.StencilWriteMask=255;
+        state.FrontFace.StencilFunc=D3D11_COMPARISON_EQUAL;
+        state.FrontFace.StencilPassOp=D3D11_STENCIL_OP_INCR_SAT;state.FrontFace.StencilFailOp=state.FrontFace.StencilDepthFailOp=D3D11_STENCIL_OP_KEEP;
+        state.BackFace=state.FrontFace;
+        check(SUCCEEDED(device->CreateTexture2D(&depthShape,nullptr,depthImage.out()))&&SUCCEEDED(device->CreateDepthStencilView(depthImage.value,&dsv,depthView.out()))&&
+            SUCCEEDED(device->CreateDepthStencilState(&state,nativeDepth.out())),"owned real native depth/stencil target and comparison state");
+        context->ClearDepthStencilView(depthView.value,D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL,1,7);
+        context->OMSetRenderTargets(1,&target.value,depthView.value);context->OMSetDepthStencilState(nativeDepth.value,7);
+        const auto before=producer.diagnostics().pairedDraws;producer.draw(context.value,draw,4,0);
+        check(producer.stage()==2021&&producer.diagnostics().pairedDraws==before,"conditional depth/stencil draw cannot complete an unknown destination");
+        Reference<ID3D11DeviceContext1> extended;check(SUCCEEDED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))),"real public ClearView context");
+        const FLOAT zero[4]{};const D3D11_RECT partial{0,0,LONG(width/2),LONG(height)};
+        producer.clearView(context.value,target.value,zero,&partial,1);extended->ClearView(target.value,zero,&partial,1);
+        producer.draw(context.value,draw,4,0);check(producer.stage()==2021&&producer.diagnostics().pairedDraws==before,"partial native ClearView is not a full-image zero baseline");
+        producer.clearView(context.value,target.value,zero,nullptr,0);extended->ClearView(target.value,zero,nullptr,0);
+    }
+    producer.draw(context.value,draw,4,0);draw(context.value,4,0);
+    if(depthTests){
+        context->OMSetDepthStencilState(nativeDepth.value,8);
+        producer.draw(context.value,draw,4,0);draw(context.value,4,0);
+        Reference<ID3D11DepthStencilState> after;UINT reference=0;context->OMGetDepthStencilState(after.out(),&reference);
+        check(after.value==nativeDepth.value&&reference==8,"both companion passes restore the exact original depth/stencil state and reference");
+    }
+    context->Flush();
+    check(producer.stage()==16&&producer.diagnostics().rootPasses==1&&producer.diagnostics().pairedDraws==(filtering?(depthTests?3u:2u):1u),
         "actual producer completes the owned direct or filtered ancestry route before original release");
     producer.dispatch(context.value);context->Dispatch(1,1,1);
     std::printf("production stage after draw=%u\n",producer.stage());
@@ -271,6 +329,11 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr,DXGI
     for(UINT i=0;i<width*height;++i){check(nativePixels[i*4+3]==255,"ordinary native alpha policy remains opaque");
         check(maskPixels[i*4+3]==input[i*4+3],"production mask preserves every zero/fractional/opaque source alpha");
         for(unsigned c=0;c<3;++c)check(nativePixels[i*4+c]==input[i*4+c]&&!maskPixels[i*4+c],"native RGB including additive zero-alpha colour unchanged; no RGB exported");}
+    if(depthTests){
+        const auto actual=pixels(device.value,context.value,depthImage.value);
+        for(UINT i=0;i<width*height;++i)check(actual[i*4+3]==9,"the original native passes increment stencil exactly once each; companion writes none");
+        std::printf("owned depth/stencil comparison: two exact native updates, no companion attachment writes; native RGB and alpha-only image verified\n");
+    }
     producer.invalidate(native.value);check(page->witnesses[0].read(witness)&&!witness.complete,"unsupported native write revokes the previously sealed image before reuse");
     check(streamMutex->ReleaseSync(0)==S_OK&&streamMutex->AcquireSync(0,0)==S_OK,"next exact native ownership interval");
     channel.sourceLease(lease+0x100000000ull);producer.draw(context.value,draw,4,0);draw(context.value,4,0);
@@ -345,6 +408,8 @@ int main(int argc,char** argv){try{
     else if(argc==2&&!std::strcmp(argv[1],"--float"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT);
     else if(argc==2&&!std::strcmp(argv[1],"--typeless"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS);
     else if(argc==2&&!std::strcmp(argv[1],"--pressure"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,true);
+    else if(argc==2&&!std::strcmp(argv[1],"--padded"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,true);
+    else if(argc==2&&!std::strcmp(argv[1],"--padded-depth"))run(nullptr,nullptr,DXGI_FORMAT_R16G16B16A16_TYPELESS,false,true,true);
     else {check(argc==1,"known fixture mode");run();}
     std::printf("PASS %u production alpha ancestry/ownership/pixel checks; no headset result\n",checks);return 0;}
 catch(const std::exception& error){std::fprintf(stderr,"FAIL after %u checks: %s\n",checks,error.what());return 1;}}

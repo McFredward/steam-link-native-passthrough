@@ -51,7 +51,7 @@ struct Observer {
     Launch launch;Page* page=nullptr;HANDLE mapping=nullptr,parent=nullptr;
     projected_alpha::ChannelLaunch productionLaunch{};projected_alpha::ChannelPeer productionPeer;
     projected_alpha::MutexObserver nativeLocks{{nullptr,lockReleasing,lockReleased,this}};
-    projected_alpha::TextureObserver textures{textureObserved,this,targetObserved,bufferObserved,layoutObserved};
+    projected_alpha::TextureObserver textures{textureObserved,this,targetObserved,bufferObserved,layoutObserved,depthObserved};
     inline static thread_local unsigned ownCommands=0;
     struct OwnCommands {OwnCommands(){++ownCommands;}~OwnCommands(){--ownCommands;}};
     NativeShaders shaders;
@@ -120,6 +120,9 @@ struct Observer {
     }
     static void layoutObserved(ID3D11Device* device,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T bytes,ID3D11InputLayout* layout,void* opaque)noexcept{
         auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context)context->producer.geometry().layout(desc,count,code,bytes,layout);
+    }
+    static void depthObserved(ID3D11Device* device,ID3D11DepthStencilState* state,void* opaque)noexcept{
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context){OwnCommands own;context->producer.depthState(state);}
     }
     static void lockReleasing(const projected_alpha::MutexLease& lease,std::uint64_t key,void* opaque)noexcept{
         auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(lease.device))if(auto* context=admission.context)context->producer.releasing(lease,key);
@@ -291,7 +294,7 @@ struct Observer {
     SFNP_PRODUCTION_WRITE(update1,116,(ID3D11DeviceContext* ctx,ID3D11Resource* dst,UINT sub,const D3D11_BOX* box,const void* data,UINT row,UINT depth,UINT flags),(ctx,dst,sub,box,data,row,depth,flags),c->producer.invalidate(dst);if(!sub&&!box)c->producer.geometry().update(dst,data))
     SFNP_PRODUCTION_WRITE(discardResource,117,(ID3D11DeviceContext* ctx,ID3D11Resource* resource),(ctx,resource),c->producer.invalidate(resource))
     SFNP_PRODUCTION_WRITE(discardView,118,(ID3D11DeviceContext* ctx,ID3D11View* view),(ctx,view),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
-    SFNP_PRODUCTION_WRITE(clearView,132,(ID3D11DeviceContext* ctx,ID3D11View* view,const FLOAT* data,const D3D11_RECT* rectangles,UINT count),(ctx,view,data,rectangles,count),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
+    SFNP_PRODUCTION_WRITE(clearView,132,(ID3D11DeviceContext* ctx,ID3D11View* view,const FLOAT* data,const D3D11_RECT* rectangles,UINT count),(ctx,view,data,rectangles,count),c->producer.clearView(ctx,view,data,rectangles,count))
     SFNP_PRODUCTION_WRITE(discardView1,133,(ID3D11DeviceContext* ctx,ID3D11View* view,const D3D11_RECT* rectangles,UINT count),(ctx,view,rectangles,count),Held<ID3D11Resource> held;c->producer.invalidate(resourceOf(view,held)))
 #undef SFNP_PRODUCTION_WRITE
     void inspect(ID3D11DeviceContext* ctx,const Raster& call){
