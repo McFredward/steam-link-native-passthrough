@@ -16,11 +16,11 @@ constexpr char ProducerFixture[]=R"(
 cbuffer Scene : register(b0) {float4 words[4];};
 Texture2D<float4> scene : register(t0);
 RWTexture2D<uint> scratch : register(u0);
-RWStructuredBuffer<float4> positions : register(u1);
+RWByteAddressBuffer positions : register(u1);
 [numthreads(1,1,1)] void compute(uint3 id:SV_DispatchThreadID){scratch[id.xy]=123;}
 [numthreads(1,1,1)] void outside(){
-    positions[0]=float4(4,4,7,7);positions[1]=float4(4,5,7,8);
-    positions[2]=float4(5,4,8,7);positions[3]=float4(5,5,8,8);
+    positions.Store4(0,asuint(float4(4,4,7,7)));positions.Store4(16,asuint(float4(4,5,7,8)));
+    positions.Store4(32,asuint(float4(5,4,8,7)));positions.Store4(48,asuint(float4(5,5,8,8)));
 }
 float4 vs(float2 position:POSITION,float2 uv:TEXCOORD0):SV_Position{return float4(2*position-1,0,1);}
 float4 ps(float4 xy:SV_Position):SV_Target{
@@ -127,10 +127,12 @@ void run(const CrossProcess* incoming=nullptr,ChannelPage* external=nullptr){
     producer.dispatch(context.value);context->Dispatch(1,1,1);
     check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"unrelated compute cannot erase actual native vertex creation evidence");
     D3D11_BUFFER_DESC mutableDesc{};mutableDesc.ByteWidth=sizeof points;mutableDesc.BindFlags=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_UNORDERED_ACCESS;
-    mutableDesc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;mutableDesc.StructureByteStride=16;
+    mutableDesc.MiscFlags=D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS;
     Reference<ID3D11Buffer> mutableVertices;Reference<ID3D11UnorderedAccessView> mutableView;
-    check(SUCCEEDED(device->CreateBuffer(&mutableDesc,&vertexData,mutableVertices.out()))&&
-        SUCCEEDED(device->CreateUnorderedAccessView(mutableVertices.value,nullptr,mutableView.out())),"vertex data that really is compute writable");
+    check(SUCCEEDED(device->CreateBuffer(&mutableDesc,&vertexData,mutableVertices.out())),"native vertex allocation with explicit raw compute access");
+    D3D11_UNORDERED_ACCESS_VIEW_DESC mutableViewDesc{};mutableViewDesc.Format=DXGI_FORMAT_R32_TYPELESS;
+    mutableViewDesc.ViewDimension=D3D11_UAV_DIMENSION_BUFFER;mutableViewDesc.Buffer.NumElements=sizeof points/4;mutableViewDesc.Buffer.Flags=D3D11_BUFFER_UAV_FLAG_RAW;
+    check(SUCCEEDED(device->CreateUnorderedAccessView(mutableVertices.value,&mutableViewDesc,mutableView.out())),"explicit raw UAV for the actual vertex allocation");
     producer.geometry().buffer(&mutableDesc,&vertexData,mutableVertices.value);
     context->IASetVertexBuffers(0,1,&mutableVertices.value,&stride,&offset);
     check(producer.geometry().fullUnitQuad(context.value,4,0,width,height,1),"known mutable vertex data initially covers the actual target");
