@@ -74,7 +74,7 @@ jobs:
       - name: Prepare public Vulkan headers for owned mask-pool controls
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libvulkan-dev
+          sudo apt-get install -y --no-install-recommends libvulkan-dev g++-aarch64-linux-gnu
       - name: Verify immutable per-frame mask storage and visible geometry
         run: python3 tests/stream-bridge-coverage-gpu/run.py --output build/mask-pool --suite core
       - uses: actions/upload-artifact@v4
