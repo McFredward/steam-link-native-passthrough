@@ -507,10 +507,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 report(text,stream_bridge::logging::Level::Debug);
                 const auto& r=encoder.revocationReasons;
                 std::snprintf(text,sizeof text,
-                    "encoder reset continuity: attempts/preserved/rejected/retired-inputs/timestamp-revoked/fallback=%llu/%llu/%llu/%llu/%llu/%llu; eligibility-missing=0x%x (auth1,PTD2,no-B4,clock8,nested16,reserved32); revoked unknown/changed/reset/reserved/nested/native/clock=%llu/%llu/%llu/%llu/%llu/%llu/%llu; diagnostics only",
+                    "encoder reset continuity: attempts/preserved/rejected/retired-inputs/timestamp-revoked/fallback=%llu/%llu/%llu/%llu/%llu/%llu; eligibility-missing=0x%x (PTD2,no-B4,clock8,nested16,reserved32); pending-without-authority=%llu; revoked unknown/changed/reset/reserved/nested/native/clock=%llu/%llu/%llu/%llu/%llu/%llu/%llu; diagnostics only",
                     static_cast<unsigned long long>(encoder.resetAttempts),static_cast<unsigned long long>(encoder.resetPreserved),
                     static_cast<unsigned long long>(encoder.resetRejected),static_cast<unsigned long long>(encoder.resetRetiredInputs),
-                    static_cast<unsigned long long>(encoder.resetTimestampRevoked),static_cast<unsigned long long>(encoder.resetFallback),encoder.resetEligibilityMissing,
+                    static_cast<unsigned long long>(encoder.resetTimestampRevoked),static_cast<unsigned long long>(encoder.resetFallback),encoder.resetEligibilityMissing,static_cast<unsigned long long>(encoder.resetPendingPreserved),
                     static_cast<unsigned long long>(r[0]),static_cast<unsigned long long>(r[1]),static_cast<unsigned long long>(r[2]),
                     static_cast<unsigned long long>(r[3]),static_cast<unsigned long long>(r[4]),static_cast<unsigned long long>(r[5]),static_cast<unsigned long long>(r[6]));
                 report(text,stream_bridge::logging::Level::Debug);

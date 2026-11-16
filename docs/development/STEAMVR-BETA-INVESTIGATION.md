@@ -543,6 +543,79 @@ The new PC DLL is built from isolated source; Frame/setup bytes remain unchanged
 These are software controls; actual reset eligibility, steady headset continuity
 and the reset frequency in an unpatched beta control remain unverified.
 
+## E053 — 0.3.50 hardware result and reconnect reset amplification (2026-11-16)
+
+Matched private evidence: `20261116-after050/pc`, `frame/diagnostics.json`,
+`frame-control/diagnostics.json` and `review-summary.json` in the Venture capture
+root. PC window19:44:30.104–19:47:24.251 CET; Frame18:44:15–18:47:40 UTC.
+Two driver lifetimes exist; do not combine their startup counters as gameplay.
+Candidate0.3.50 / PC0.3.36 / Frame0.3.13, PC SteamVR2.19.3 and Frame runtime
+1794004177. The maintainer reports substantially rarer but remaining flashes.
+Read-only SSH collected and closed; no installation/restart/device changes.
+
+The final reset counters show49 attempts,43 successful preserved resets,
+6 fallbacks and0 timestamp-fence revocations. The expected E052 continuity
+marker is therefore confirmed on hardware. Frame uploads9,724 additional masks,
+with no decode/upload rejection; camera-only operations rise4,669→4,987 (+318,
+not a one-to-one frame count). Most steady selections remain complete.
+A separate16-mutation burst around19:46:15–20 remains unproved.
+
+The additional all-process Frame query identifies two genuine native source
+retirements:18:45:29.189161 and18:46:32.570768 UTC, reason
+`native-source-retired`, last-native-reset `output-stream-off`. Their PC side
+observes transport loss/recovery around19:45:30 and19:46:34 local time.
+These are native decoder output-source transitions, not an invented idle
+control timeout. The second reconnect adds two encoder revocations and
+session refusals38→137 / certificate refusals28→122. Both associated reset
+fallbacks report only missing peer/probe (eligibility0x1), while PTD/no-B/clock
+requirements hold. Existing source-notice suppression is per reason/control;
+absence of another repeated log line does not prove absence of an event.
+
+An actual retired output source must revoke its old connection. Retaining its
+old authority or latest mask is forbidden. The avoidable fault is restarting
+an already unauthenticated/new negotiation when another unchanged-contract IDR
+reset arrives. Candidate0.3.51 / PC0.3.37 / unchanged Frame0.3.13 preserves that
+unfinished negotiation under the existing native contract, PTD, no-B and
+strict-clock guards. It never changes absent peer/probe into confirmed proof;
+actual successful Lock still requires both, plus its exact current input tuple.
+The old production core fails the new pending-negotiation assertion before the
+fix. Required controls reset before discovery, during borrowed Hello/Ack/Commit
+and coded-probe output, and while waiting for each reply; repeat after real
+`revokeDiscovery`, verify authority absent, then produce a new full-size exact
+mask after fresh authentication. A causal mutation restores the auth prerequisite
+and must fail that assertion. Unknown/changed/reserved/nested/fatal/clock-reuse
+revocation remains in force. Frame/setup payload bytes remain unchanged.
+
+Further matched native evidence is in `frame-native-files/diagnostics.json`.
+Frame `vrlink.txt` uses CET, while journald uses UTC. At19:45:29.188379
+and19:46:32.551055 CET, native SVLFEC reports an out-of-backtrack-window
+frame and an unrecoverable error immediately before the recorded stream-off.
+Multiple substantive packet retries/frame skips precede both. PC subsequently
+logs the corresponding receiver-requested stream resets (cause-mask000100).
+Thus transport/reassembly recovery is the observed immediate trigger, not a
+proved format/resolution change. Whether network loss, scheduling, native
+recovery or additional mask traffic creates the condition is unresolved.
+The sender's final rate model reports no mean/burst over-budget event; this
+model does not prove actual wireless capacity or timely packet delivery.
+
+Local software result: seven focused native tests pass, including IP/I-only
+and previous/legacy codec guards. The actual full-size pipeline executes2,317
+checks,174 exact masks,32 in-call IDR completions and18 pending-negotiation
+resets across two fresh nonce/channel negotiations. No coverage/camera grant
+exists before peer+probe confirmation; exact masks resume after real discovery
+revocation and new proof. Seven causal mutants fail at their intended assertion,
+including restoring the old pending-auth reset barrier. Windows syntax/link
+preflight passes. These are owned software controls, not headset acceptance.
+
+Expected next hardware marker: `pending-without-authority` rises on supported
+resets during a reconnect without another encoder-generation change or repeated
+handshake restart. Ordinary supported resets remain preserved; no grants exist
+before fresh peer/probe proof. Genuine native source retirement can still require
+a short camera-only transition. This fixes reconnect amplification; it does not
+establish that every residual gap or native reset trigger is fixed. Whether the
+patch indirectly increases native reset frequency is still unproved without a
+matched unpatched beta control. Headset acceptance of0.3.51 is pending.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are

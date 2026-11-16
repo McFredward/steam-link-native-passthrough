@@ -67,7 +67,7 @@ struct ReconfigureStats {
     std::uint64_t budgeted=0,budgetAccepted=0,budgetRejected=0;
     std::uint32_t requestedVideoRate=0,appliedVideoRate=0,metadataRate=0,meanMetadataRate=0,peakMetadataRate=0;
     std::uint32_t requestedVbv=0,appliedVbv=0,requestedDelay=0,appliedDelay=0;
-    std::uint64_t resetAttempts=0,resetPreserved=0,resetRejected=0,resetRetiredInputs=0,resetTimestampRevoked=0,resetFallback=0;
+    std::uint64_t resetAttempts=0,resetPreserved=0,resetRejected=0,resetRetiredInputs=0,resetTimestampRevoked=0,resetFallback=0,resetPendingPreserved=0;
     // Unknown contract, changed contract, unsupported reset, reserved data,
     // nested reconfigure, native failure, post-reset timestamp reuse.
     std::array<std::uint64_t,7> revocationReasons{};
