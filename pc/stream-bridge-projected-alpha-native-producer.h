@@ -132,11 +132,17 @@ class NativeProducer {
         std::array<std::uint32_t,76> viewState{};std::array<std::uint32_t,700> views{};
         if(!geometry_.constantPrefix(context,dimensions.data(),sizeof dimensions,true,0))return refuse(11);
         if(!geometry_.constantPrefix(context,viewState.data(),sizeof viewState,true,1))return refuse(12);
-        if(!geometry_.constantPrefix(context,views.data(),sizeof views,true,2))return refuse(13);
         if(!std::isfinite(dimensions[1])||dimensions[1]<1||dimensions[1]>float(input.height)||dimensions[1]!=std::floor(dimensions[1]))return refuse(14);
         if(viewState[72]>1)return refuse(15);
+        if(!geometry_.constantPrefix(context,views.data(),sizeof views[0],true,2))return refuse(13);
         if(views[0]>2)return refuse(16);
-        const auto offset=views[0]*58+(viewState[72]?28u:0u);float first=0,last=0;
+        const auto selected=views[0],offset=selected*58+(viewState[72]?28u:0u);
+        // The native public CB range can contain only the selected view. Do
+        // not demand unused later views from a maximum-sized CPU array.
+        const UINT needed=UINT(((offset+30)*4+2)*sizeof views[0]);
+        if(!geometry_.constantPrefix(context,views.data(),needed,true,2))return refuse(13);
+        if(views[0]!=selected)return refuse(16);
+        float first=0,last=0;
         std::memcpy(&first,&views[(offset+28)*4+1],4);std::memcpy(&last,&views[(offset+30)*4+1],4);
         if(!std::isfinite(first)||first<0||first>1)return refuse(17);
         if(!std::isfinite(last)||last<0||last>1)return refuse(18);

@@ -813,12 +813,14 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
     std::array<float,8> flags{{1,0,0,0,.2f,.3f,.4f,0}};D3D11_SUBRESOURCE_DATA policyData{flags.data(),0,0};
     check(SUCCEEDED(device->CreateBuffer(&bd,&constantData,constants.out())),"actual logical native scene constants");bd.ByteWidth=sizeof flags;
     check(SUCCEEDED(device->CreateBuffer(&bd,&policyData,policy.out())),"actual native resolve colour policy, unchanged by MRT");
-    Reference<ID3D11Buffer> viewState,viewBounds;
+    Reference<ID3D11Buffer> viewState,viewBounds,fullViewBounds;
     std::array<std::uint32_t,76> stateWords{};std::array<std::uint32_t,700> boundsWords{};const float one=1;
     std::memcpy(&boundsWords[30*4+1],&one,4);bd.ByteWidth=sizeof stateWords;D3D11_SUBRESOURCE_DATA stateData{stateWords.data(),0,0};
     check(SUCCEEDED(device->CreateBuffer(&bd,&stateData,viewState.out())),"observed selected native eye constants");
-    bd.ByteWidth=sizeof boundsWords;D3D11_SUBRESOURCE_DATA boundsData{boundsWords.data(),0,0};
+    bd.ByteWidth=message.reproject?512u:sizeof boundsWords;D3D11_SUBRESOURCE_DATA boundsData{boundsWords.data(),0,0};
     check(SUCCEEDED(device->CreateBuffer(&bd,&boundsData,viewBounds.out())),"observed normalized native view bounds");
+    if(message.reproject){bd.ByteWidth=sizeof boundsWords;
+        check(SUCCEEDED(device->CreateBuffer(&bd,&boundsData,fullViewBounds.out())),"retained previous full-range native view bounds");}
     context->VSSetConstantBuffers(0,1,&constants.value);context->VSSetConstantBuffers(1,1,&viewState.value);context->VSSetConstantBuffers(2,1,&viewBounds.value);
     D3D11_RASTERIZER_DESC rasterDesc{};rasterDesc.FillMode=D3D11_FILL_SOLID;rasterDesc.CullMode=D3D11_CULL_NONE;rasterDesc.DepthClipEnable=TRUE;rasterDesc.MultisampleEnable=TRUE;
     Reference<ID3D11RasterizerState> raster;check(SUCCEEDED(device->CreateRasterizerState(&rasterDesc,raster.out())),"original native raster state");
@@ -842,13 +844,33 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
         producer.geometry().invalidate(constants.value);before=nativeDrawCalls;
         if(!message.reproject&&!message.direct)check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"unknown padded-Y bounds refuse without an extra original draw");
         producer.geometry().update(constants.value,words.data());
-        if(message.reproject){const float outside=2;std::memcpy(&boundsWords[30*4+1],&outside,4);
+        if(message.reproject){
+            std::array<std::uint32_t,700> observedBounds{};
+            check(!producer.geometry().constantPrefix(context.value,observedBounds.data(),sizeof observedBounds,true,2),
+                "negative control: the old all-views prefix exceeds a valid selected-view public CB range");
+            check(producer.geometry().constantPrefix(context.value,observedBounds.data(),512,true,2),
+                "the current observed short public CB range contains the selected view bounds");
+            stateWords[72]=1;context->UpdateSubresource(viewState.value,0,nullptr,stateWords.data(),0,0);producer.geometry().update(viewState.value,stateWords.data());
+            before=nativeDrawCalls;check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,
+                "an eye whose required bounds exceed the current public range remains refused");
+            stateWords[72]=0;context->UpdateSubresource(viewState.value,0,nullptr,stateWords.data(),0,0);producer.geometry().update(viewState.value,stateWords.data());
+            producer.geometry().invalidate(viewBounds.value);before=nativeDrawCalls;
+            check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,
+                "a short but unknown view-bound range remains refused");
+            producer.geometry().update(viewBounds.value,boundsWords.data());
+            const float outside=2;std::memcpy(&boundsWords[30*4+1],&outside,4);
             context->UpdateSubresource(viewBounds.value,0,nullptr,boundsWords.data(),0,0);producer.geometry().update(viewBounds.value,boundsWords.data());
             before=nativeDrawCalls;check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"reprojection bounds outside the written input region refuse");
             std::memcpy(&boundsWords[30*4+1],&one,4);context->UpdateSubresource(viewBounds.value,0,nullptr,boundsWords.data(),0,0);producer.geometry().update(viewBounds.value,boundsWords.data());
         }
         before=nativeDrawCalls;
         check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,"native Y MRT consumes only proven padded-input rows and runs its original draw once");
+        if(message.reproject){
+            context->VSSetConstantBuffers(2,1,&fullViewBounds.value);before=nativeDrawCalls;
+            check(producer.draw(context.value,draw,4,0)&&nativeDrawCalls==before+1,
+                "the previous full-range reprojection path remains admitted alongside the short selected-view range");
+            context->VSSetConstantBuffers(2,1,&viewBounds.value);
+        }
         context->OMSetRenderTargets(1,&baselineFinal.value,nullptr);context->PSSetShaderResources(0,1,&baselineYView.value);context->PSSetShader(resolve.value,nullptr,0);draw(context.value,4,0);
         context->OMSetRenderTargets(1,&nativeTarget.value,nullptr);context->PSSetShaderResources(0,1,&yView.value);before=nativeDrawCalls;
         mutationPage=page;mutationTarget=native.value;

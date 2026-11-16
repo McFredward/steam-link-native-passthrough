@@ -14,10 +14,17 @@ class Consumer {
     std::array<Imported,ChannelImages> images_{};
     ChannelParent channel_;MutexObserver locks_{{}};
     std::uint64_t nextPoll_=0;bool prepared_=false;
+    // Approximate cold-worker diagnostics, never a substitute for selection.
+    std::array<std::atomic<std::uint64_t>,13> selectionCounts_{};
 public:
     struct Selection {ID3D11ShaderResourceView* view=nullptr;std::uint64_t lease=0;std::uint32_t scenePid=0;};
     Consumer()noexcept{channel_.create();}
     ChannelParent& channel()noexcept{return channel_;}
+    std::array<std::uint64_t,13> selectionStats()const noexcept{
+        std::array<std::uint64_t,13> out{};
+        for(unsigned i=0;i<out.size();++i)out[i]=selectionCounts_[i].load(std::memory_order_relaxed);
+        return out;
+    }
     bool prepare(ID3D11Device* device)noexcept{
         if(prepared_)return true;
         auto* page=channel_.page();
@@ -58,41 +65,48 @@ public:
         }
     }
     Selection select(ID3D11Device* device,const Allocation& native,std::uint64_t sync,std::uint64_t liveLease)noexcept{
+        selectionCounts_[0].fetch_add(1,std::memory_order_relaxed);
+        const auto refuse=[this](unsigned reason)noexcept{selectionCounts_[reason].fetch_add(1,std::memory_order_relaxed);return Selection{};};
         auto* page=channel_.page();
         if(!page||!liveLease||!sync||InterlockedCompareExchange(&page->stopped,0,0)||
-            static_cast<std::uint64_t>(InterlockedCompareExchange64(&page->sourceLease,0,0))!=liveLease)return {};
-        const auto lock=locks_.current(device,sync);if(!lock)return {};
-        RegistryRead retained;if(!retained.acquire(page))return {};
+            static_cast<std::uint64_t>(InterlockedCompareExchange64(&page->sourceLease,0,0))!=liveLease)return refuse(2);
+        const auto lock=locks_.current(device,sync);if(!lock)return refuse(3);
+        RegistryRead retained;if(!retained.acquire(page))return refuse(4);
         const auto current=[&](const Allocation& value){
             unsigned matches=0;
             for(const auto& known:retained.snapshot().retained)if(known.handle==value.handle&&known.generation==value.generation&&known.pid==value.pid&&
                 known.width==value.width&&known.height==value.height&&known.format==value.format&&known.samples==value.samples&&known.arraySize==value.arraySize)++matches;
             return matches==1;
         };
-        if(!current(native))return {};
-        Selection selected{};
+        if(!current(native))return refuse(5);
+        Selection selected{};unsigned reason=6;
         for(unsigned i=0;i<images_.size();++i){auto& image=images_[i];auto* view=image.published.load(std::memory_order_acquire);
             if(!view||image.registration.native.handle!=native.handle)continue;
-            ImageWitness witness{};if(!page->witnesses[i].read(witness)||!witness.complete||!witness.imageVersion||(witness.route!=1&&witness.route!=2)||!current(witness.scene)||
+            reason=7;ImageWitness witness{};if(!page->witnesses[i].read(witness)||!witness.complete||!witness.imageVersion||(witness.route!=1&&witness.route!=2))continue;
+            reason=8;if(!current(witness.scene)||
                 witness.sourceLease!=liveLease||witness.scene.pid!=std::uint32_t(liveLease)||!witness.scene.generation||
                 witness.native.handle!=native.handle||witness.native.generation!=native.generation||witness.native.pid!=native.pid||
                 witness.native.width!=native.width||witness.native.height!=native.height||witness.native.format!=native.format||
                 witness.native.samples!=native.samples||witness.native.arraySize!=native.arraySize||
                 witness.maskHandle!=image.registration.maskHandle||witness.maskGeneration!=image.registration.maskGeneration)continue;
             if(witness.route==2){
+                reason=9;
                 if(!witness.nativeMutation||witness.nativeMutation!=std::uint64_t(InterlockedCompareExchange64(&page->imageMutations[i],0,0))||
                     !witness.contributorCount||witness.contributorCount>witness.contributors.size())continue;
+                reason=10;
                 bool complete=true;
                 for(unsigned contributor=0;contributor<witness.contributorCount;++contributor)
                     if(witness.contributors[contributor].pid!=std::uint32_t(liveLease)||!current(witness.contributors[contributor]))complete=false;
                 if(!complete)continue;
             }
-            bool transfer=false;
+            reason=11;bool transfer=false;
             for(const auto& release:witness.releases)if(release.allocation==lock.allocation&&release.scope>1&&release.key==lock.key)transfer=true;
             if(!transfer)continue;
-            if(selected.view)return {}; // Ambiguous versions never pick a latest mask.
+            if(selected.view)return refuse(12); // Ambiguous versions never pick a latest mask.
             selected={view,witness.sourceLease,witness.scene.pid};
         }
+        if(!selected.view)return refuse(reason);
+        selectionCounts_[1].fetch_add(1,std::memory_order_relaxed);
         return selected;
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{invalidateSharedImages(channel_.page(),resource);}

@@ -390,6 +390,61 @@ submission and a matching current Frame receipt. If it still fails, collect
 matched PC and Frame logs and locate the first refused stage before selecting
 another change. Only after Battlemarked works should Venture be tested.
 
+### E051: first real beta composition; continuity still fails (0.3.48)
+
+The maintainer reports the first real game geometry over passthrough since the
+beta update, followed by continuous brief loss/reappearance of game geometry.
+This is a successful functional source/alpha-path test, **not visual acceptance**.
+Candidate0.3.48 / PC0.3.34 / Frame0.3.13 ran Battlemarked on PC SteamVR2.19.3.
+The read-only matched window is **2026-11-16 10:26:55–10:29:00 UTC**; private
+capture: `build/passthrough-tests/20261116-after048/`. It contains copied PC
+inputs with hashes,324 Frame journal rows and `review-summary.json`. SSH closed;
+no device files, settings or services changed. Frame runtime build observation
+remains1794004177; current mapped Frame0.3.13 payload matches its shipped hash.
+
+Native producer roots/pairs/sealed versions are19,336/23,712/14,800, with no
+stopped channel or overlapping-call refusal. Actual source0x2 remains non-keyed.
+The single-original-draw chain therefore reaches real native output and Frame
+composition. Do not restore the rejected independent keyed-source replay.
+
+PC certified2,810 masks. Frame decoded/uploaded2,795 with zero decode/upload
+refusals;2,689 masks were mixed. Frame recorded6,494 selected game operations
+and3,104 camera-only recovery operations. These operation totals are not a
+one-to-one count of video frames. Received-mask decode/upload is functioning;
+the observed disappearance includes missing current-image coverage and recovery,
+not loss of the underlying passthrough extension or every shader contract.
+
+PC lifetime counts include the ordinary startup compositor before active MR:
+source-contract refusals were already3,084 at10:27:47UTC. They must not all be
+attributed to gameplay. At10:27:57.335UTC the producer reports4431/input113:
+current VSb2 bounds proof unavailable. The implementation requests a fixed
+700-DWORD/2,800-byte prefix for all possible eye/view rows, although the selected
+row can lie in a smaller valid public CB range. This is a concrete availability
+defect. Existing logs do not capture actual CB ranges, so this is the identified
+code defect consistent with that refusal, not proof that it explains every gap.
+
+A second continuity issue remains unlocalized: PC3,412 captures versus2,810
+certified masks,628 session refusals,494 certificate refusals and21 encoder
+contract revocations across the whole run. No readback-pending/GPU error or full
+stage pool was logged. Do not blame the8ms cold-worker wait from duration alone:
+mask readback/compression runs on the exact native output-augmentation callback.
+Do not weaken current frame/eye/source, generation or native ownership checks.
+
+Next candidate hypothesis: read only the selected eye/view's required observed
+VSb2 prefix, preserving all finite bounds, index and written-input checks. The
+owned reprojection control must use a real512-byte bound CB, explicitly reject
+the old maximum-prefix request and accept the selected current row. A selected
+eye outside that range and unknown/outside bounds must still refuse. Normal,
+BGRA, direct, full-range and prior shader/storage paths remain covered.
+
+Add compact five-second selection and capture/readback/certification counters
+through active MR, independently of verbose transition-log budgets. They are
+approximate diagnostics only. Expected hardware change: input113 and associated
+reprojection gaps diminish; interval deltas identify any remaining missing
+native transfer, registration, mutation, ancestry, stage, session or certificate.
+Target delivery0.3.49 / PC0.3.35 / unchanged Frame0.3.13. No new headset test is
+requested before source/GPU/build/package checks finish.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
