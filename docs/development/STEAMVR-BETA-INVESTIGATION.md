@@ -610,6 +610,18 @@ revocation and new proof. Seven causal mutants fail at their intended assertion,
 including restoring the old pending-auth reset barrier. Windows syntax/link
 preflight passes. These are owned software controls, not headset acceptance.
 
+Source CI on `83804f3d6c887e89d06e2bf0ae8300167086fc09` passes the
+[actual Windows/Linux stage pipeline](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43935075010),
+[full native checks](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43935074939),
+owned GPU alpha modes, source observer, Windows resources and lifecycle checks.
+Unchanged readback implementation/headers/GPU fixtures/workflow retain the
+successful0.3.50 control run43928204252; a redundant new dispatch remained
+unassigned and was cancelled. Frame decoder/format validation is also inherited
+only for byte-identical code. The PC DLL is newly built from isolated5622a64;
+all Frame and setup archive payloads must match0.3.50 byte-for-byte. Software
+validation does not establish physical continuity or remove the native packet
+recovery trigger. No device changes have been made.
+
 Expected next hardware marker: `pending-without-authority` rises on supported
 resets during a reconnect without another encoder-generation change or repeated
 handshake restart. Ordinary supported resets remain preserved; no grants exist
