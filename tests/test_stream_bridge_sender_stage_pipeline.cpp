@@ -81,11 +81,12 @@ void copy(unsigned i,std::uint64_t present){
 }
 LocalConfig config(){LocalConfig c{};c.buildId=1;c.nonce[0]=7;c.offered=c.required=KnownCapabilities;return c;}
 VerifiedChannel authority(){VerifiedChannel a{};a.authenticated=true;a.binding[0]=8;return a;}
-void run(){
+void run(bool intraOnly=false){
     NvencBoundary boundary({{1}});boundary.setInputObserver({capture,retire,nullptr});boundary.setOutputAugmenter({augment,nullptr});
     NV_ENCODE_API_FUNCTION_LIST api{};api.version=NV_ENCODE_API_FUNCTION_LIST_VER;check(boundary.create(factory,&api)==NV_ENC_SUCCESS&&boundary.wrapped(),"production native ABI boundary installed");
     NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS op{};op.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;void* handle=nullptr;api.nvEncOpenEncodeSessionEx(&op,&handle);
-    NV_ENC_INITIALIZE_PARAMS ip{};ip.version=NV_ENC_INITIALIZE_PARAMS_VER;ip.encodeGUID=NV_ENC_CODEC_HEVC_GUID;ip.encodeWidth=Width;ip.encodeHeight=Height;ip.frameRateNum=90;ip.frameRateDen=1;api.nvEncInitializeEncoder(handle,&ip);
+    NV_ENC_CONFIG codec{};codec.version=NV_ENC_CONFIG_VER;codec.rcParams.version=NV_ENC_CONFIG_VER;codec.frameIntervalP=intraOnly?0:1;
+    NV_ENC_INITIALIZE_PARAMS ip{};ip.version=NV_ENC_INITIALIZE_PARAMS_VER;ip.encodeGUID=NV_ENC_CODEC_HEVC_GUID;ip.encodeWidth=Width;ip.encodeHeight=Height;ip.frameRateNum=90;ip.frameRateDen=1;ip.enablePTD=1;ip.encodeConfig=&codec;api.nvEncInitializeEncoder(handle,&ip);
     for(unsigned i=0;i<3;++i){NV_ENC_REGISTER_RESOURCE rr{};rr.version=NV_ENC_REGISTER_RESOURCE_VER;rr.resourceType=NV_ENC_INPUT_RESOURCE_TYPE_DIRECTX;rr.bufferUsage=NV_ENC_INPUT_IMAGE;rr.resourceToRegister=input(i);rr.width=Width;rr.height=Height;rr.bufferFormat=NV_ENC_BUFFER_FORMAT_NV12;check(api.nvEncRegisterResource(handle,&rr)==NV_ENC_SUCCESS,"actual registered native input");NV_ENC_MAP_INPUT_RESOURCE mp{};mp.version=NV_ENC_MAP_INPUT_RESOURCE_VER;mp.registeredResource=rr.registeredResource;check(api.nvEncMapInputResource(handle,&mp)==NV_ENC_SUCCESS,"actual native mapped input");}
     std::uint64_t timestamp=1;
     auto submit=[&](unsigned i){NV_ENC_PIC_PARAMS p{};p.version=NV_ENC_PIC_PARAMS_VER;p.inputBuffer=input(i);p.outputBitstream=input(i);p.inputWidth=Width;p.inputHeight=Height;p.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;p.inputTimeStamp=timestamp++;check(api.nvEncEncodePicture(handle,&p)==NV_ENC_SUCCESS,"native Encode accepted");};
@@ -169,7 +170,35 @@ void run(){
     }
     check(captures==140&&masks==140&&retirements==140&&boundary.outputStats().completedBeforeEncodeReturn==16,
         "early native completion and later Encode return neither lose nor resurrect any exact frame");
-    std::printf("PASS: %u checks; 140/140 active native frames fully masked at %ux%u; 60 concurrent native copies; 32 in-call QoS and 16 early Encode completions; no GPU wait or latest-mask fallback\n",checks,Width,Height);
+    const auto resetGeneration=boundary.generation(handle);
+    NV_ENC_RECONFIGURE_PARAMS reset{};reset.version=NV_ENC_RECONFIGURE_PARAMS_VER;reset.reInitEncodeParams=ip;reset.resetEncoder=1;
+    for(std::uint64_t present=141;present<=172;++present){
+        const bool early=present%4<2;
+        if(early){copy(0,present);submit(0);}expectedPresent=present;qosResult=present%2?NV_ENC_SUCCESS:NV_ENC_ERR_INVALID_PARAM;
+        duringQos=[&]{if(!early){copy(0,present);submit(0);}const auto value=get(0);
+            check(value.bitstreamBufferPtr!=au.data()&&value.bitstreamSizeInBytes>au.size(),
+                "same-contract IDR reset keeps the exact accepted frame masked during the original reset");
+            release(0);};
+        check(api.nvEncReconfigureEncoder(handle,&reset)==qosResult&&boundary.generation(handle)==resetGeneration,
+            "successful or rejected same-contract IDR reset preserves the authenticated source without a new handshake");
+        duringQos={};
+    }
+    check(captures==172&&masks==172&&retirements==172,"all active native reset completions retain their own exact masks");
+    qosResult=NV_ENC_SUCCESS;
+    copy(0,173);submit(0);const auto beforeReset=lastCaptured.inputTimestamp;
+    check(api.nvEncReconfigureEncoder(handle,&reset)==NV_ENC_SUCCESS&&boundary.generation(handle)==resetGeneration,
+        "a completed same-contract reset keeps the source while retiring unfinished pre-reset inputs");
+    copy(0,174);submit(0);const auto afterReset=lastCaptured.inputTimestamp;
+    timestamps[0]=beforeReset;p=get(0);
+    check(p.bitstreamBufferPtr==au.data()&&masks==172,"late pre-reset output cannot borrow the newer frame or its mask");release(0);
+    timestamps[0]=afterReset;expectedPresent=174;p=get(0);
+    check(p.bitstreamBufferPtr!=au.data()&&masks==173,"unmatched old Unlock cannot retire the newly accepted input sharing its output handle");release(0);
+    // Timestamp reuse would make pre/post-reset output indistinguishable.
+    // Revoke before native Encode; never guess the latest accepted image.
+    timestamp=afterReset;copy(0,175);active=false;submit(0);p=get(0);
+    check(boundary.generation(handle)>resetGeneration&&p.bitstreamBufferPtr==au.data(),
+        "post-reset timestamp reuse revokes source authority before native output can borrow a previous frame");release(0);
+    std::printf("PASS: %u checks; 173 exact current-frame masks at %ux%u; 60 concurrent native copies; 32 in-call QoS,16 early Encode and32 IDR-reset completions; stale reset output/timestamp reuse refused; frameIntervalP=%d; no latest-mask fallback\n",checks,Width,Height,codec.frameIntervalP);
 }
 }
-int main(){try{run();return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}
+int main(int argc,char** argv){try{run(argc==2&&!std::strcmp(argv[1],"--intra-only"));return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

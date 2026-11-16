@@ -67,6 +67,11 @@ struct ReconfigureStats {
     std::uint64_t budgeted=0,budgetAccepted=0,budgetRejected=0;
     std::uint32_t requestedVideoRate=0,appliedVideoRate=0,metadataRate=0,meanMetadataRate=0,peakMetadataRate=0;
     std::uint32_t requestedVbv=0,appliedVbv=0,requestedDelay=0,appliedDelay=0;
+    std::uint64_t resetAttempts=0,resetPreserved=0,resetRejected=0,resetRetiredInputs=0,resetTimestampRevoked=0,resetFallback=0;
+    // Unknown contract, changed contract, unsupported reset, reserved data,
+    // nested reconfigure, native failure, post-reset timestamp reuse.
+    std::array<std::uint64_t,7> revocationReasons{};
+    std::uint32_t resetEligibilityMissing=0;
 };
 struct OutputStats {
     std::uint64_t locks=0,exact=0,unmatched=0,completedBeforeEncodeReturn=0;
@@ -114,6 +119,8 @@ private:
         SenderAdapter adapter{};VerifiedChannel channel{};
         NV_ENC_INITIALIZE_PARAMS contract{};NV_ENC_CONFIG contractConfig{};
         bool contractKnown=false,contractHasConfig=false,reconfiguring=false;
+        bool timestampSeen=false,timestampsIncreasing=true,resetTimestampFence=false;
+        std::uint64_t maximumInputTimestamp=0;
         WireBudget wireBudget;bool budgetApplied=false;
         NvencQosObservation qosObservation{};
         struct Resource {NV_ENC_REGISTERED_PTR registered=nullptr;void* native=nullptr;std::uint64_t generation=0;std::uint32_t width=0,height=0,subresource=0;NV_ENC_BUFFER_FORMAT format=NV_ENC_BUFFER_FORMAT_UNDEFINED;};

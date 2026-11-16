@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Restore each former native availability barrier and require the real pipeline to fail."""
+"""Mutate native availability/reset proof guards and require the actual pipeline to fail."""
 import argparse
 import hashlib
 import json
@@ -32,6 +32,18 @@ def main():
             'if(submission.evidence.submission&&!submission.locked',
             'if(submission.accepted&&!submission.locked',
             'every full-size exact native output completed BEFORE Encode returns keeps its mask'),
+        'same-contract-idr-barrier': (
+            'continuousReset=self.enabled_&&unchanged&&!missing;',
+            'continuousReset=self.enabled_&&unchanged&&!missing&&false;',
+            'same-contract IDR reset keeps the exact accepted frame masked during the original reset'),
+        'old-unlock-retires-new-input': (
+            'submitted.accepted&&submitted.locked&&submitted.evidence.output==output',
+            'submitted.accepted&&submitted.evidence.output==output',
+            'unmatched old Unlock cannot retire the newly accepted input sharing its output handle'),
+        'timestamp-fence-removed': (
+            'if(s->resetTimestampFence&&reused)',
+            'if(false&&s->resetTimestampFence&&reused)',
+            'post-reset timestamp reuse revokes source authority before native output can borrow a previous frame'),
     }
     results = {}
     with tempfile.TemporaryDirectory(prefix='native-continuity-', dir=output) as temporary:
@@ -60,7 +72,7 @@ def main():
         'controls': results,
         'device_access': False,
     }, indent=2) + '\n')
-    print('All three restored native barriers fail their exact-frame continuity assertion.')
+    print('All six native availability/reset mutations fail their exact-frame proof assertion.')
 
 
 if __name__ == '__main__':
