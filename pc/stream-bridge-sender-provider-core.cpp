@@ -58,6 +58,7 @@ void NvencBoundary::retireSubmissions(Session& s){
 std::uint64_t NvencBoundary::revoke(Session& s,bool retainRegistrations){
     s.adapter.stop();s.initialized=false;s.hevc=false;s.encoded=false;
     s.contractKnown=false;s.reconfiguring=false;s.wireBudget.reset();s.budgetApplied=false;s.qosObservation={};retireSubmissions(s);
+    s.timestampSeen=false;s.timestampsIncreasing=true;s.resetTimestampFence=false;s.maximumInputTimestamp=0;
     if(!retainRegistrations){s.maps={};s.resources={};}
     s.probeQueued=false;
     s.generation=nextGeneration_==std::numeric_limits<std::uint64_t>::max()?0:++nextGeneration_;
@@ -182,7 +183,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
     const auto width=hevc?init->encodeWidth:0,height=hevc?init->encodeHeight:0;
     NV_ENC_INITIALIZE_PARAMS contract{};NV_ENC_CONFIG config{};bool hasConfig=false;
     const bool known=hevc&&snapshotContract(*init,contract,config,hasConfig);
-    std::uint64_t generation=0;bool qos=false;
+    std::uint64_t generation=0,resetInputFence=0;bool qos=false,continuousReset=false,previousTimestampFence=false;
     NV_ENC_RECONFIGURE_PARAMS budgeted{};NV_ENC_CONFIG budgetConfig{};bool applyBudget=false,applyingBudget=false;
     NvencQosObservation observation{};
     {
@@ -195,9 +196,23 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
             for(auto& pending:s->submissions)if(pending.evidence.submission&&!pending.locked)
                 pending.evidence.qos.encodeOverlappedReconfigure=true;
             const bool unchanged=known&&sameContract(*s,contract,config,hasConfig);self.reconfigureStats_.lastSameContract=unchanged;
-            qos=self.enabled_&&unchanged&&!params->resetEncoder&&!params->reserved;
+            if(typed&&params->resetEncoder){
+                count(self.reconfigureStats_.resetAttempts);
+                const auto& effective=hasConfig?config:s->contractConfig;
+                const bool haveConfig=hasConfig||s->contractHasConfig;
+                const unsigned missing=(!s->adapter.mutualConfirmed()||!s->adapter.probeObserved()?1u:0u)|
+                    (!known||!contract.enablePTD?2u:0u)|(!haveConfig||effective.frameIntervalP<0||effective.frameIntervalP>1?4u:0u)|
+                    (!s->timestampSeen||!s->timestampsIncreasing?8u:0u)|(s->reconfiguring?16u:0u)|(params->reserved?32u:0u);
+                self.reconfigureStats_.resetEligibilityMissing=missing;
+                // An IDR/RC reset is not a new source when every public video
+                // field is unchanged. Keep exact accepted completions during
+                // the original call; timestamp fencing excludes older output.
+                continuousReset=self.enabled_&&unchanged&&!missing;
+            }
+            qos=self.enabled_&&unchanged&&(!params->resetEncoder||continuousReset)&&!params->reserved;
             if(qos){
                 generation=s->generation;s->reconfiguring=true;
+                if(continuousReset){resetInputFence=s->nextIdentity;previousTimestampFence=s->resetTimestampFence;s->resetTimestampFence=true;}
                 const auto authority=s->adapter.mutualConfirmed()&&s->adapter.probeObserved()&&self.augmenter_.budgetAuthority?self.augmenter_.budgetAuthority(self.augmenter_.context):0;
                 const auto metadata=s->wireBudget.reserve(authority,contract.frameRateNum,contract.frameRateDen);
                 const auto& requestedConfig=hasConfig?config:s->contractConfig;
@@ -238,15 +253,21 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                 observation.resetEncoder=params->resetEncoder;observation.forceIDR=params->forceIDR;
                 observation.preservedVbvSpan=preservedVbvSpan;
 
-            }else{generation=self.revoke(*s,hevc);count(self.reconfigureStats_.revoked);}
+            }else{
+                const unsigned reason=!known?0u:s->reconfiguring?4u:!unchanged?1u:params->reserved?3u:2u;
+                count(self.reconfigureStats_.revocationReasons[reason]);
+                if(typed&&params->resetEncoder)count(self.reconfigureStats_.resetFallback);
+                generation=self.revoke(*s,hevc);count(self.reconfigureStats_.revoked);
+            }
         }
     }
-    // Only a fully compared bitrate/framerate change reaches this QoS path.
-    // It does not alter input resources, codec, extent or the paired source.
+    // Only fully compared bitrate/framerate changes or the bounded unchanged-
+    // contract IDR reset reach this path. Input resources, codec, extent and
+    // the paired source retain their actual native identities.
     // Native Encode/Lock may overlap this original call on other threads. Keep
     // their normal exact receipts available DURING it as well as after return;
     // a temporary blanket barrier emitted an uncertified video frame. Changed,
-    // resetting, nested or unknown contracts already revoke before this call.
+    // unsupported resets, nested or unknown contracts revoke before this call.
     const auto result=self.original_.nvEncReconfigureEncoder(encoder,applyBudget?&budgeted:params);
     std::lock_guard<std::mutex> guard(self.mutex_);self.reconfigureStats_.lastStatus=static_cast<int>(result);
     if(auto s=self.find(encoder);s&&generation&&s->generation==generation){
@@ -255,12 +276,22 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
             if(applyingBudget){if(result==NV_ENC_SUCCESS)count(self.reconfigureStats_.budgetAccepted);else count(self.reconfigureStats_.budgetRejected);}
             if(self.enabled_&&(result==NV_ENC_SUCCESS||result==NV_ENC_ERR_INVALID_PARAM)){
                 if(result==NV_ENC_SUCCESS){
+                    if(continuousReset){
+                        // Native reset may discard unfinished older inputs.
+                        // A late completion must not borrow a newer timestamp;
+                        // locked output stays borrowed until its real Unlock.
+                        for(auto& pending:s->submissions)if(pending.evidence.submission&&pending.evidence.submission<=resetInputFence&&!pending.locked){
+                            if(self.inputObserver_.retire)try{self.inputObserver_.retire(pending.evidence,self.inputObserver_.context);}catch(...){}
+                            pending={};count(self.reconfigureStats_.resetRetiredInputs);
+                        }
+                        count(self.reconfigureStats_.resetPreserved);
+                    }
                     s->budgetApplied=applyingBudget;
                     // NULL means retain the existing deep-copied configuration.
                     if(!hasConfig){config=s->contractConfig;hasConfig=s->contractHasConfig;}
                     saveContract(*s,contract,config,hasConfig,true);self.observeQos(*s,observation);count(self.reconfigureStats_.preservedSuccessful);
-                }else count(self.reconfigureStats_.preservedRejected);
-            }else{self.revoke(*s);count(self.reconfigureStats_.revoked);}
+                }else{count(self.reconfigureStats_.preservedRejected);if(continuousReset){s->resetTimestampFence=previousTimestampFence;count(self.reconfigureStats_.resetRejected);}}
+            }else{count(self.reconfigureStats_.revocationReasons[5]);if(continuousReset)count(self.reconfigureStats_.resetFallback);self.revoke(*s);count(self.reconfigureStats_.revoked);}
         }else if(self.enabled_&&result==NV_ENC_SUCCESS&&hevc&&s->nextIdentity<=std::numeric_limits<std::uint64_t>::max()-64){
             // Rebase CURRENT records, not a pre-call snapshot: a nested native
             // unregister/unmap must never be resurrected on return.
@@ -314,6 +345,14 @@ NVENCSTATUS NVENCAPI NvencBoundary::encode(void* encoder,NV_ENC_PIC_PARAMS* para
     std::uint64_t identity=0,generation=0;
     if(typed&&params->inputBuffer&&params->outputBitstream&&!(params->encodePicFlags&NV_ENC_PIC_FLAG_EOS)){
         std::lock_guard<std::mutex> guard(self.mutex_);if(auto s=self.find(encoder);self.enabled_&&s&&s->initialized&&s->hevc&&s->nextIdentity!=~std::uint64_t(0)){
+            const bool reused=s->timestampSeen&&params->inputTimeStamp<=s->maximumInputTimestamp;
+            if(s->resetTimestampFence&&reused){
+                count(self.reconfigureStats_.resetTimestampRevoked);count(self.reconfigureStats_.revocationReasons[6]);
+                self.revoke(*s,true);count(self.reconfigureStats_.revoked);
+            }else{
+            if(reused)s->timestampsIncreasing=false;
+            else s->maximumInputTimestamp=params->inputTimeStamp;
+            s->timestampSeen=true;
             generation=s->generation;
             for(auto& m:s->maps)if(m.mapped==params->inputBuffer)for(auto& r:s->resources)if(r.registered==m.registered&&r.generation==m.resourceGeneration&&r.width==params->inputWidth&&r.height==params->inputHeight&&r.width==s->width&&r.height==s->height&&r.format==params->bufferFmt){
                 for(auto& p:s->submissions)if(!p.evidence.submission){identity=++s->nextIdentity;p.evidence={encoder,generation,identity,r.native,r.generation,m.generation,m.mapped,params->outputBitstream,params->inputTimeStamp,r.width,r.height,r.subresource,r.format,true};
@@ -327,7 +366,10 @@ NVENCSTATUS NVENCAPI NvencBoundary::encode(void* encoder,NV_ENC_PIC_PARAMS* para
                     if(s->reconfiguring)count(self.reconfigureStats_.overlappingInputs);
                     break;}
             }
+            }
         }
+    }else if(!typed){
+        std::lock_guard<std::mutex> guard(self.mutex_);if(auto s=self.find(encoder))s->timestampsIncreasing=false;
     }
     const auto result=self.original_.nvEncEncodePicture(encoder,params);
     if(identity){std::lock_guard<std::mutex> guard(self.mutex_);if(auto s=self.find(encoder);s&&s->generation==generation)for(auto& p:s->submissions)if(p.evidence.submission==identity){if(result==NV_ENC_SUCCESS||result==NV_ENC_ERR_NEED_MORE_INPUT){p.accepted=true;s->encoded=true;}else{if(self.inputObserver_.retire)try{self.inputObserver_.retire(p.evidence,self.inputObserver_.context);}catch(...){}p={};}}}
@@ -425,7 +467,10 @@ NVENCSTATUS NVENCAPI NvencBoundary::unlock(void* encoder,NV_ENC_OUTPUT_PTR outpu
     if(result!=NV_ENC_SUCCESS)return result;
     std::lock_guard<std::mutex> guard(self.mutex_);
     if(auto s=self.find(encoder);s){
-        for(auto& submitted:s->submissions)if(submitted.accepted&&submitted.evidence.output==output){if(self.inputObserver_.retire)try{self.inputObserver_.retire(submitted.evidence,self.inputObserver_.context);}catch(...){}submitted={};}
+        // Unlock retires the receipt selected by its actual successful Lock.
+        // An unmatched late pre-reset output must not retire a newer accepted
+        // input that happens to reuse the same native output handle.
+        for(auto& submitted:s->submissions)if(submitted.accepted&&submitted.locked&&submitted.evidence.output==output){if(self.inputObserver_.retire)try{self.inputObserver_.retire(submitted.evidence,self.inputObserver_.context);}catch(...){}submitted={};}
         if(s->output!=output)return result;
         // Pinned driver copies every returned byte before this exact Unlock.
         if(s->ticket){s->adapter.complete(s->ticket,true,s->channel);if(s->adapter.probeObserved()||s->adapter.mutualConfirmed())s->probeQueued=false;}

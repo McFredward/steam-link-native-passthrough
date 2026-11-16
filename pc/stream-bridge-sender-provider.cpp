@@ -505,6 +505,15 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     refused(stream_bridge::sender::CoverageGate::StageReceipt),refused(stream_bridge::sender::CoverageGate::CoverageSession),
                     refused(stream_bridge::sender::CoverageGate::FrameCertificate),static_cast<unsigned long long>(encoder.revoked));
                 report(text,stream_bridge::logging::Level::Debug);
+                const auto& r=encoder.revocationReasons;
+                std::snprintf(text,sizeof text,
+                    "encoder reset continuity: attempts/preserved/rejected/retired-inputs/timestamp-revoked/fallback=%llu/%llu/%llu/%llu/%llu/%llu; eligibility-missing=0x%x (auth1,PTD2,no-B4,clock8,nested16,reserved32); revoked unknown/changed/reset/reserved/nested/native/clock=%llu/%llu/%llu/%llu/%llu/%llu/%llu; diagnostics only",
+                    static_cast<unsigned long long>(encoder.resetAttempts),static_cast<unsigned long long>(encoder.resetPreserved),
+                    static_cast<unsigned long long>(encoder.resetRejected),static_cast<unsigned long long>(encoder.resetRetiredInputs),
+                    static_cast<unsigned long long>(encoder.resetTimestampRevoked),static_cast<unsigned long long>(encoder.resetFallback),encoder.resetEligibilityMissing,
+                    static_cast<unsigned long long>(r[0]),static_cast<unsigned long long>(r[1]),static_cast<unsigned long long>(r[2]),
+                    static_cast<unsigned long long>(r[3]),static_cast<unsigned long long>(r[4]),static_cast<unsigned long long>(r[5]),static_cast<unsigned long long>(r[6]));
+                report(text,stream_bridge::logging::Level::Debug);
             }
             if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&(auditReports<64||auditSamples<128||upstreamAlphaReports<128)){
                 const auto audit=sourceAudit_.status();char text[896]{};

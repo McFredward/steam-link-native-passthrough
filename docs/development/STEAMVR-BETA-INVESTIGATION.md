@@ -455,6 +455,82 @@ Windows syntax/link and29 HLSL entries passed. This establishes the bounded
 software correction; the next headset test must establish its effect on the
 reported flicker and identify any remaining active-MR refusal interval.
 
+### E052: isolate encoder-reset amplification after the selected-view fix (0.3.49)
+
+The maintainer perceives fewer disappearances but still requires uninterrupted
+normal MR; camera-only recovery is an exceptional failure state, not an accepted
+routine gap.0.3.49 / PC0.3.35 / Frame0.3.13 ran Battlemarked on PC SteamVR2.19.3.
+Matched read-only window: **2026-11-16 17:53:00–17:55:25 UTC**. Private capture
+`build/passthrough-tests/20261116-after049/` holds copied PC hashes,333 Frame
+journal rows and `review-summary.json`. Additional bounded native journal/log
+queries did not identify a matched decoder reason for the resets. SSH closed;
+no device changes. The Frame runtime1794004177 and mapped Frame0.3.13 remain.
+
+From PC18:54:05.035 through18:55:05.005 local time, all **21,220/21,220**
+projected selections succeed. Source/witness/mutation/contributor/transfer
+refusals remain flat; no active input113 snapshot recurs. This supports the
+selected-view correction and localizes the later failures beyond native alpha
+capture. An earlier348-mutation/root-no-lease burst is separate and unproved;
+do not merge startup/transitions with later steady gameplay.
+
+Steam Link itself logs12 later `Starting encoder reset` events, each with
+configuration cause-mask000000, lasting roughly1.6–11.1ms. PC encoder revocations
+increase2→14; coverage-session refusals30→406. Each later reset therefore loses
+about31 outputs while re-establishing the same-source session, rather than only
+the short native reset interval. PC captures5,409 masks but certifies5,028.
+Frame receives/uploads5,018 new masks without refusal; camera-only operations
+increase3,104→4,669. Totals are operations, not one-to-one video-frame counts.
+
+The reset request originates in Steam Link. Whether the patch indirectly
+increases their frequency through extra metadata or bitrate control remains
+unproved: no matched unpatched beta control has been run. The demonstrated
+fault is the patch's whole-session renegotiation amplification. Do not claim
+that the same reset frequency would occur without the patch.
+
+The exact reset parameters are not logged, so cause-mask0 does not authorize
+continuity by itself. The actual production NVENC/staging/control fixture now
+reproduces the old failure with an explicit unchanged public contract, PTD1,
+no-B-frame IDR reset and a uniquely timestamped accepted frame completed inside
+the original reset. Before the correction it fails the exact masked-frame
+assertion; `causal-baseline.json` records the old production source hash/result.
+
+Next hypothesis: an internal IDR/rate-control reset with a fully compared
+unchanged public video contract is not a new authenticated game/source. The
+[NVIDIA encoder guide](https://docs.nvidia.com/video-technologies/video-codec-sdk/12.0/pdf/NVENC_VideoEncoder_API_ProgGuide.pdf)
+distinguishes this internal-state reset from format reconfiguration. Preserve
+existing negotiation only when PTD forces IDR, frameIntervalP is0 or1, peer/probe
+remain confirmed and observed native input timestamps are strictly increasing.
+Original API parameters/statuses, exact resource/map/submission receipts and
+actual successful Lock output/timestamp matching remain mandatory.
+
+Accepted completions inside the original reset keep their own mask. A successful
+return retires unfinished pre-reset receipts; a late output cannot borrow a new
+receipt sharing the output handle. Native Unlock must retire only the receipt
+selected by its successful Lock. Timestamp reuse after a preserved reset revokes
+before original Encode. Changed/unknown contracts, unsupported/nested resets,
+reserved data and fatal native failures retain full source revocation. No stale
+mask, unrelated mutex, approximate frame pairing or decoder-proof relaxation.
+
+Required software controls: repeated successful/rejected resets with completions
+accepted before and inside the call; real full-size mask staging/compression;
+late old output/Unlock versus a fresh input; timestamp reuse; existing unknown,
+changed-codec/extent/bit-depth/reset and native unregister/reentry controls.
+Temporary mutations must demonstrate that restoring the reset barrier, broad
+Unlock retirement or removing the timestamp fence fails those exact assertions.
+Expected hardware marker: preserved-reset counter rises while ordinary known
+resets stop adding whole-handshake session refusals/camera-only bursts. Remaining
+fallback reasons must be logged, not assumed repaired. Target0.3.50 / PC0.3.36 /
+unchanged Frame0.3.13, dev only, headset acceptance pending.
+
+Local result before source publication: seven focused native controls passed,
+including both IP and I-only reset modes plus previous/legacy codec and
+unknown/changed source controls. Six temporary mutations each fail their
+specific actual-pipeline assertion: old QoS input/output barriers, delayed
+Encode acceptance, the reset barrier, broad output-handle Unlock retirement
+and absent post-reset timestamp fencing. The Windows sender syntax/link
+preflight passes. These use owned native ABI/staging/control fixtures; they do
+not execute an NVIDIA hardware reset or establish headset acceptance.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
