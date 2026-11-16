@@ -616,7 +616,7 @@ Source CI on `83804f3d6c887e89d06e2bf0ae8300167086fc09` passes the
 owned GPU alpha modes, source observer, Windows resources and lifecycle checks.
 Unchanged readback implementation/headers/GPU fixtures/workflow retain the
 successful0.3.50 control run43928204252; a redundant new dispatch remained
-unassigned and was cancelled. Frame decoder/format validation is also inherited
+unassigned; it is not claimed as validation. Frame decoder/format validation is inherited
 only for byte-identical code. The PC DLL is newly built from isolated5622a64;
 all Frame and setup archive payloads must match0.3.50 byte-for-byte. Software
 validation does not establish physical continuity or remove the native packet
