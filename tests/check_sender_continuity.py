@@ -35,7 +35,11 @@ def main():
         'same-contract-idr-barrier': (
             'continuousReset=self.enabled_&&unchanged&&!missing;',
             'continuousReset=self.enabled_&&unchanged&&!missing&&false;',
-            'same-contract IDR reset keeps the exact accepted frame masked during the original reset'),
+            'same-contract IDR reset preserves pending negotiation without granting coverage'),
+        'pending-negotiation-reset-barrier': (
+            'continuousReset=self.enabled_&&unchanged&&!missing;',
+            'continuousReset=self.enabled_&&unchanged&&!missing&&s->adapter.mutualConfirmed()&&s->adapter.probeObserved();',
+            'same-contract IDR reset preserves pending negotiation without granting coverage'),
         'old-unlock-retires-new-input': (
             'submitted.accepted&&submitted.locked&&submitted.evidence.output==output',
             'submitted.accepted&&submitted.evidence.output==output',
@@ -72,7 +76,7 @@ def main():
         'controls': results,
         'device_access': False,
     }, indent=2) + '\n')
-    print('All six native availability/reset mutations fail their exact-frame proof assertion.')
+    print('All seven native availability/reset mutations fail their exact-frame proof assertion.')
 
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ void check(bool value,const char* why){++checks;if(!value)throw std::runtime_err
 std::mutex barrierMutex;std::condition_variable barrier;
 bool pauseRead=false,readerHeld=false,renderFinished=false;
 std::uint64_t expectedPresent=0;unsigned metadataProtectedCopies=0;
-NvencOutputEvidence lastCaptured{};
+NvencOutputEvidence lastCaptured{},lastObserved{};
 void* encoder=reinterpret_cast<void*>(0x1010);
 const std::vector<std::uint8_t> au{0,0,0,1,0x26,1,0x80,0x34,0x56};
 std::array<std::uint64_t,3> timestamps{};
@@ -52,6 +52,7 @@ void retire(const NvencOutputEvidence& e,void*){
     if(owned){owned->receipt={};owned.publish(Stages::Phase::Retired);++retirements;}
 }
 bool augment(Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& output,void*){
+    lastObserved=e;
     if(!active){output.assign(candidate.data,candidate.data+candidate.size);return true;}
     check(e.exactInput&&e.coverageSessionAuthorized,"real accepted native Lock has authenticated current-generation authority");
     auto owned=stages.read(e.submission,e.encoder,e.encoderGeneration);
@@ -92,13 +93,37 @@ void run(bool intraOnly=false){
     auto submit=[&](unsigned i){NV_ENC_PIC_PARAMS p{};p.version=NV_ENC_PIC_PARAMS_VER;p.inputBuffer=input(i);p.outputBitstream=input(i);p.inputWidth=Width;p.inputHeight=Height;p.bufferFmt=NV_ENC_BUFFER_FORMAT_NV12;p.inputTimeStamp=timestamp++;check(api.nvEncEncodePicture(handle,&p)==NV_ENC_SUCCESS,"native Encode accepted");};
     auto get=[&](unsigned i){NV_ENC_LOCK_BITSTREAM p{};p.version=NV_ENC_LOCK_BITSTREAM_VER;p.outputBitstream=input(i);check(api.nvEncLockBitstream(handle,&p)==NV_ENC_SUCCESS,"native output Lock accepted");return p;};
     auto release=[&](unsigned i){check(api.nvEncUnlockBitstream(handle,input(i))==NV_ENC_SUCCESS,"matching native Unlock accepted");};
-    submit(0);get(0);release(0);check(boundary.requestDiscovery(handle,config(),authority()),"native negotiated source bootstrap");
-    auto peerConfig=config();peerConfig.role=Role::Receiver;peerConfig.nonce[0]=90;Handshake peer;check(peer.begin(peerConfig,authority())==Status::Ok,"independent receiver negotiation");
-    for(auto kind:{Kind::Hello,Kind::Ack,Kind::Commit}){
-        submit(0);auto p=get(0);std::vector<std::uint8_t> body;check(inspectOwned({static_cast<const std::uint8_t*>(p.bitstreamBufferPtr),p.bitstreamSizeInBytes},body)==SeiStatus::Ok,"actual native AU carries negotiation");Message sent;check(decode({body.data(),body.size()},sent)==Status::Ok&&sent.kind==kind,"native discovery order");release(0);
-        check(peer.receive({body.data(),body.size()},authority())==Status::Ok,"independent peer accepts native negotiation");Message reply;check(peer.next(reply)==Status::Ok,"peer response");std::array<std::uint8_t,MessageBytes> bytes{};check(encode(reply,bytes)==Status::Ok&&peer.markSent(reply,authority())==Status::Ok&&boundary.receiveControl(handle,{bytes.data(),bytes.size()},authority())==Status::Ok,"actual reply accepted");
-    }
-    Nonce token{};token[0]=19;check(boundary.requestProbe(handle,boundary.generation(handle),1,token),"real coded probe requested");submit(0);auto p=get(0);std::vector<std::uint8_t> body;check(inspectOwned({static_cast<const std::uint8_t*>(p.bitstreamBufferPtr),p.bitstreamSizeInBytes},body)==SeiStatus::Ok,"real native probe AU");ProbeMessage probe,echo;check(decodeProbe({body.data(),body.size()},probe)==Status::Ok&&makeProbeEcho(peer,probe,authority(),echo)==Status::Ok,"observed probe echo");release(0);std::array<std::uint8_t,ProbeBytes> bytes{};check(encodeProbe(echo,bytes)==Status::Ok&&boundary.receiveEcho(handle,{bytes.data(),bytes.size()},authority())==Status::Ok,"current native generation roundtrip confirmed");
+    unsigned pendingResets=0;
+    auto pendingReset=[&]{
+        const auto generation=boundary.generation(handle);
+        NV_ENC_RECONFIGURE_PARAMS reset{};reset.version=NV_ENC_RECONFIGURE_PARAMS_VER;reset.reInitEncodeParams=ip;reset.resetEncoder=1;
+        qosResult=(pendingResets++&1)?NV_ENC_ERR_INVALID_PARAM:NV_ENC_SUCCESS;
+        check(api.nvEncReconfigureEncoder(handle,&reset)==qosResult&&boundary.generation(handle)==generation,
+            "same-contract IDR reset preserves pending negotiation without granting coverage");
+        check(!lastObserved.coverageSessionAuthorized&&!lastObserved.compressedCoverageAuthorized&&!lastObserved.cameraOnlyRecoveryAuthorized,
+            "pending reset cannot invent coverage or camera authority before authenticated peer and coded probe");
+    };
+    unsigned negotiations=0;
+    auto negotiate=[&]{
+        const auto ordinal=negotiations++;
+        auto local=config();local.nonce[0]+=static_cast<std::uint8_t>(ordinal);
+        auto channel=authority();channel.binding[0]+=static_cast<std::uint8_t>(ordinal);
+        submit(0);get(0);release(0);pendingReset();
+        check(boundary.requestDiscovery(handle,local,channel),"native negotiated source bootstrap with fresh nonce and channel");
+        auto peerConfig=config();peerConfig.role=Role::Receiver;peerConfig.nonce[0]=90+static_cast<std::uint8_t>(ordinal);Handshake peer;check(peer.begin(peerConfig,channel)==Status::Ok,"independent receiver negotiation");
+        for(auto kind:{Kind::Hello,Kind::Ack,Kind::Commit}){
+            submit(0);auto p=get(0);pendingReset();
+            std::vector<std::uint8_t> body;check(inspectOwned({static_cast<const std::uint8_t*>(p.bitstreamBufferPtr),p.bitstreamSizeInBytes},body)==SeiStatus::Ok,"actual native AU carries negotiation across an in-flight reset");Message sent;check(decode({body.data(),body.size()},sent)==Status::Ok&&sent.kind==kind,"native discovery order");release(0);
+            check(peer.receive({body.data(),body.size()},channel)==Status::Ok,"independent peer accepts native negotiation");Message reply;check(peer.next(reply)==Status::Ok,"peer response");std::array<std::uint8_t,MessageBytes> bytes{};check(encode(reply,bytes)==Status::Ok&&peer.markSent(reply,channel)==Status::Ok&&boundary.receiveControl(handle,{bytes.data(),bytes.size()},channel)==Status::Ok,"actual reply accepted");
+            pendingReset();
+        }
+        Nonce token{};token[0]=19+static_cast<std::uint8_t>(ordinal);check(boundary.requestProbe(handle,boundary.generation(handle),1,token),"real coded probe requested");
+        submit(0);auto p=get(0);pendingReset();
+        std::vector<std::uint8_t> body;check(inspectOwned({static_cast<const std::uint8_t*>(p.bitstreamBufferPtr),p.bitstreamSizeInBytes},body)==SeiStatus::Ok,"real native probe AU survives pending reset");ProbeMessage probe,echo;check(decodeProbe({body.data(),body.size()},probe)==Status::Ok&&makeProbeEcho(peer,probe,channel,echo)==Status::Ok,"observed probe echo");release(0);pendingReset();
+        std::array<std::uint8_t,ProbeBytes> bytes{};check(encodeProbe(echo,bytes)==Status::Ok&&boundary.receiveEcho(handle,{bytes.data(),bytes.size()},channel)==Status::Ok,"current native generation roundtrip confirmed");
+        qosResult=NV_ENC_SUCCESS;
+    };
+    negotiate();NV_ENC_LOCK_BITSTREAM p{};
     check(source.publish(Pid),"current live app format granted");active=true;
     // Thirty deterministic three-frame batches cover 90 native frames. Pause
     // each first accepted Lock inside its stage read while the producer still
@@ -193,12 +218,19 @@ void run(bool intraOnly=false){
     check(p.bitstreamBufferPtr==au.data()&&masks==172,"late pre-reset output cannot borrow the newer frame or its mask");release(0);
     timestamps[0]=afterReset;expectedPresent=174;p=get(0);
     check(p.bitstreamBufferPtr!=au.data()&&masks==173,"unmatched old Unlock cannot retire the newly accepted input sharing its output handle");release(0);
+    // A real lost control connection revokes authority immediately. Same-
+    // contract resets may retain the NEW unfinished negotiation, never the old
+    // peer's authority. Resume only after all new peer/probe receipts arrive.
+    active=false;boundary.revokeDiscovery(handle,boundary.generation(handle));
+    negotiate();active=true;copy(0,175);submit(0);expectedPresent=175;p=get(0);
+    check(p.bitstreamBufferPtr!=au.data()&&masks==174&&pendingResets==18,
+        "fresh authenticated reconnect resumes exact full-size masks despite resets during every handshake and probe phase");release(0);
     // Timestamp reuse would make pre/post-reset output indistinguishable.
     // Revoke before native Encode; never guess the latest accepted image.
-    timestamp=afterReset;copy(0,175);active=false;submit(0);p=get(0);
+    timestamp=afterReset;copy(0,176);active=false;submit(0);p=get(0);
     check(boundary.generation(handle)>resetGeneration&&p.bitstreamBufferPtr==au.data(),
         "post-reset timestamp reuse revokes source authority before native output can borrow a previous frame");release(0);
-    std::printf("PASS: %u checks; 173 exact current-frame masks at %ux%u; 60 concurrent native copies; 32 in-call QoS,16 early Encode and32 IDR-reset completions; stale reset output/timestamp reuse refused; frameIntervalP=%d; no latest-mask fallback\n",checks,Width,Height,codec.frameIntervalP);
+    std::printf("PASS: %u checks; 174 exact current-frame masks at %ux%u; 60 concurrent native copies; 32 in-call QoS,16 early Encode and32 IDR-reset completions plus18 pending-negotiation resets; stale reset output/timestamp reuse refused; frameIntervalP=%d; no latest-mask fallback\n",checks,Width,Height,codec.frameIntervalP);
 }
 }
 int main(int argc,char** argv){try{run(argc==2&&!std::strcmp(argv[1],"--intra-only"));return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

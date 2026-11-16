@@ -183,7 +183,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
     const auto width=hevc?init->encodeWidth:0,height=hevc?init->encodeHeight:0;
     NV_ENC_INITIALIZE_PARAMS contract{};NV_ENC_CONFIG config{};bool hasConfig=false;
     const bool known=hevc&&snapshotContract(*init,contract,config,hasConfig);
-    std::uint64_t generation=0,resetInputFence=0;bool qos=false,continuousReset=false,previousTimestampFence=false;
+    std::uint64_t generation=0,resetInputFence=0;bool qos=false,continuousReset=false,pendingReset=false,previousTimestampFence=false;
     NV_ENC_RECONFIGURE_PARAMS budgeted{};NV_ENC_CONFIG budgetConfig{};bool applyBudget=false,applyingBudget=false;
     NvencQosObservation observation{};
     {
@@ -200,14 +200,18 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
                 count(self.reconfigureStats_.resetAttempts);
                 const auto& effective=hasConfig?config:s->contractConfig;
                 const bool haveConfig=hasConfig||s->contractHasConfig;
-                const unsigned missing=(!s->adapter.mutualConfirmed()||!s->adapter.probeObserved()?1u:0u)|
-                    (!known||!contract.enablePTD?2u:0u)|(!haveConfig||effective.frameIntervalP<0||effective.frameIntervalP>1?4u:0u)|
+                const unsigned missing=(!known||!contract.enablePTD?2u:0u)|(!haveConfig||effective.frameIntervalP<0||effective.frameIntervalP>1?4u:0u)|
                     (!s->timestampSeen||!s->timestampsIncreasing?8u:0u)|(s->reconfiguring?16u:0u)|(params->reserved?32u:0u);
                 self.reconfigureStats_.resetEligibilityMissing=missing;
                 // An IDR/RC reset is not a new source when every public video
                 // field is unchanged. Keep exact accepted completions during
                 // the original call; timestamp fencing excludes older output.
+                // Retaining unfinished negotiation does not authorize coverage.
+                // A real peer loss already stopped the adapter; do not restart
+                // its NEW handshake just because another native IDR is needed.
+                // Lock still requires actual current peer + coded-probe proof.
                 continuousReset=self.enabled_&&unchanged&&!missing;
+                pendingReset=continuousReset&&(!s->adapter.mutualConfirmed()||!s->adapter.probeObserved());
             }
             qos=self.enabled_&&unchanged&&(!params->resetEncoder||continuousReset)&&!params->reserved;
             if(qos){
@@ -275,6 +279,7 @@ NVENCSTATUS NVENCAPI NvencBoundary::reconfigure(void* encoder,NV_ENC_RECONFIGURE
             s->reconfiguring=false;
             if(applyingBudget){if(result==NV_ENC_SUCCESS)count(self.reconfigureStats_.budgetAccepted);else count(self.reconfigureStats_.budgetRejected);}
             if(self.enabled_&&(result==NV_ENC_SUCCESS||result==NV_ENC_ERR_INVALID_PARAM)){
+                if(pendingReset)count(self.reconfigureStats_.resetPendingPreserved);
                 if(result==NV_ENC_SUCCESS){
                     if(continuousReset){
                         // Native reset may discard unfinished older inputs.
