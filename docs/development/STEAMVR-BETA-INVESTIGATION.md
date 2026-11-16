@@ -1,8 +1,10 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-15 after the installed **0.3.47 / PC 0.3.33 / Frame 0.3.13**
-test. **Beta mixed reality is still not working.** Battlemarked remains the
-first headset test; Venture must be verified separately afterward.
+Updated 2026-11-16 after the installed **0.3.50 / PC 0.3.36 / Frame 0.3.13**
+test. **Beta mixed reality now displays real passthrough and game elements.**
+Intermittent camera-only recovery remains; 0.3.51 / PC0.3.37 addresses further
+reconnect amplification and awaits its headset result. Battlemarked remains
+the first headset test; Venture must be verified separately afterward.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -10,6 +12,18 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E051–E053 below record the successful initial beta image and the remaining
+continuity defects. 0.3.50 preserves 43 supported native encoder resets in the
+matched run. Two longer interruptions coincide with native SVLFEC packet/frame
+recovery faults and output-stream retirement. 0.3.51 preserves an already
+unfinished negotiation across otherwise supported native IDR resets without
+granting coverage before new peer/probe proof. Neither it nor this audit proves
+the root cause of those native transport faults or all Stable/Beta combinations
+on hardware. The [independent compatibility matrix](../COMPATIBILITY.md#independent-selection-on-pc-and-frame)
+is a continuing requirement, not a version-number activation rule.
+
+### Initial 0.3.47 finding (historical)
 
 The latest PC log identifies **SteamVR 2.19.3**. The original beta request was
 2.19.2; neither string is an activation allowlist or a successful-test claim.
@@ -630,6 +644,41 @@ a short camera-only transition. This fixes reconnect amplification; it does not
 establish that every residual gap or native reset trigger is fixed. Whether the
 patch indirectly increases native reset frequency is still unproved without a
 matched unpatched beta control. Headset acceptance of0.3.51 is pending.
+
+## Compatibility requirement audit — November 16, 2026
+
+The maintainer explicitly reaffirms one current patch for every previously
+working SteamVR contract, including independent stable/stable, stable/beta,
+beta/stable and beta/beta PC/Frame combinations. Normal/Legacy Chroma and
+Auto/fixed resolution remain orthogonal. The requirement and selection points
+are recorded in [compatibility](../COMPATIBILITY.md#independent-selection-on-pc-and-frame)
+and AGENTS.md for future changes.
+
+Audit source: shipping isolated `21c9d0a` / public `d00dc52`, installer0.3.51,
+PC0.3.37, Frame0.3.13. PC PE/NVENC/resource/shader admission and Frame ELF/V4L2/
+native-stage admission select locally, not from a SteamVR release string.
+Retained exact-image paths coexist with structural discovery of compatible
+changed images. The wire protocol negotiates capability intersections, not
+matching SteamVR or companion build numbers. Actual ABI layout versions and
+reviewed shader semantics remain necessary; a new label cannot authorize
+unknown memory or shader behavior. Installer version observations/warnings do
+not silently disable a confirmed installation.
+
+Sixteen focused CTest suites pass on unchanged native code: public moved PE/ELF
+image contracts, original/adaptive decoder, source and image leases, native
+composition, shader interface/normalization, protocol with different build IDs,
+old optional-codec peers and actual native sender staging/reset continuity.
+Eight targeted real setup fixture tests also pass, including changed runtime
+labels/bytes, confirmed untested installation and consent snapshot changes.
+These controls are software evidence, not new headset tests of the four cells.
+Existing hardware confirmations remain scoped to their recorded pair/settings;
+0.3.51's own headset result is still pending.
+
+No gate requiring matching PC/Frame release versions or channels was found in
+the reviewed selection points; no native behavior or payload changes in this audit. Installer and
+native patch versions remain0.3.51 / PC0.3.37 / Frame0.3.13. No device install,
+restart or SteamVR channel change was performed. Native reset/packet-recovery
+investigation continues under E053; this audit does not claim it is resolved.
 
 ## Evidence locations and maintenance
 

@@ -131,6 +131,17 @@
   reviewed logic/interfaces from the current process rather than SteamVR version
   strings or installation-time generated shaders. Keep previous paths and test
   switching back. New semantics still require the same frame/eye/source proof.
+- The maintainer's 2026-11-16 clarification makes all four PC/Frame SteamVR
+  combinations a continuing compatibility requirement: stable/stable,
+  stable/beta, beta/stable and beta/beta, retaining every previously working
+  runtime contract. Select each side independently from observed public ABI,
+  shader logic/interface, resource descriptions and current data ownership;
+  never require matching SteamVR versions or use a release-channel/version
+  label to choose rendering behavior. Retain normal/Legacy conversion and
+  Auto/fixed resolution paths. Separate owned regression evidence from a real
+  headset run for each matrix cell; do not claim an untested combination is
+  hardware-verified. Unknown necessary semantics require a bounded diagnostic,
+  not an invented layout or stale frame. See docs/COMPATIBILITY.md.
 - PC SteamVR must remain closed after Apply, failure recovery and Undo. Never
   relaunch it to restore its historical running state (2026-10-21). A fresh run
   may reconcile an old stop-only journal using freshly verified Valve images;

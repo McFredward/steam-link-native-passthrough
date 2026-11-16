@@ -15,6 +15,7 @@ the earlier implementation and evidence; its formats are not runtime fallbacks.
 | Understand the mask transport | [Negotiation](protocols/stream-bridge-v1.md), [authentication](protocols/stream-bridge-auth-v1.md), [coverage certificate](protocols/stream-coverage-v1.md) |
 | Build, test or publish | [Build and validation guide](development/BUILDING.md), [versioning](PATCH-VERSIONING.md), [payload publication](../distribution/README.md) |
 | Diagnose continuity | [Current compatibility and evidence](COMPATIBILITY.md), [versioned continuity record](development/FRAME-CONTINUITY.md) |
+| Preserve Stable/Beta runtime combinations | [Independent PC/Frame contract selection and required matrix](COMPATIBILITY.md#independent-selection-on-pc-and-frame), [native update recognition](development/NATIVE-UPDATE-RECOGNITION.md) |
 | Investigate SteamVR beta MR failures | [Per-candidate evidence and decisions](development/STEAMVR-BETA-INVESTIGATION.md), [native PC rendering](development/PC-NATIVE-DRAW.md), [compositor source observation](development/COMPOSITOR-SOURCE-AUDIT.md) |
 | Investigate world stability | [Frame-local reference and bounded public timing experiment](development/WORLD-STABILITY.md) |
 | Port to another PC backend | [AMD/Linux boundaries](PC-BACKENDS-AMD-LINUX-20261019.md); these are not supported installation paths |
