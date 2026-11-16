@@ -592,6 +592,9 @@ and19:46:32.551055 CET, native SVLFEC reports an out-of-backtrack-window
 frame and an unrecoverable error immediately before the recorded stream-off.
 Multiple substantive packet retries/frame skips precede both. PC subsequently
 logs the corresponding receiver-requested stream resets (cause-mask000100).
+The Frame skips3079/8054 after last frame3078/8053; the PC reset acknowledgements
+name3078/8053, tying the two sides without assuming synchronized wall clocks.
+Do not interpret the cross-machine wall-clock difference as measured latency.
 Thus transport/reassembly recovery is the observed immediate trigger, not a
 proved format/resolution change. Whether network loss, scheduling, native
 recovery or additional mask traffic creates the condition is unresolved.
