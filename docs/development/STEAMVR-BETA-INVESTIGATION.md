@@ -592,6 +592,9 @@ and19:46:32.551055 CET, native SVLFEC reports an out-of-backtrack-window
 frame and an unrecoverable error immediately before the recorded stream-off.
 Multiple substantive packet retries/frame skips precede both. PC subsequently
 logs the corresponding receiver-requested stream resets (cause-mask000100).
+The Frame skips3079/8054 after last frame3078/8053; the PC reset acknowledgements
+name3078/8053, tying the two sides without assuming synchronized wall clocks.
+Do not interpret the cross-machine wall-clock difference as measured latency.
 Thus transport/reassembly recovery is the observed immediate trigger, not a
 proved format/resolution change. Whether network loss, scheduling, native
 recovery or additional mask traffic creates the condition is unresolved.
@@ -606,6 +609,18 @@ exists before peer+probe confirmation; exact masks resume after real discovery
 revocation and new proof. Seven causal mutants fail at their intended assertion,
 including restoring the old pending-auth reset barrier. Windows syntax/link
 preflight passes. These are owned software controls, not headset acceptance.
+
+Source CI on `83804f3d6c887e89d06e2bf0ae8300167086fc09` passes the
+[actual Windows/Linux stage pipeline](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43935075010),
+[full native checks](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43935074939),
+owned GPU alpha modes, source observer, Windows resources and lifecycle checks.
+Unchanged readback implementation/headers/GPU fixtures/workflow retain the
+successful0.3.50 control run43928204252; a redundant new dispatch remained
+unassigned; it is not claimed as validation. Frame decoder/format validation is inherited
+only for byte-identical code. The PC DLL is newly built from isolated5622a64;
+all Frame and setup archive payloads must match0.3.50 byte-for-byte. Software
+validation does not establish physical continuity or remove the native packet
+recovery trigger. No device changes have been made.
 
 Expected next hardware marker: `pending-without-authority` rises on supported
 resets during a reconnect without another encoder-generation change or repeated
