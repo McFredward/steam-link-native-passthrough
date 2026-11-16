@@ -531,6 +531,18 @@ and absent post-reset timestamp fencing. The Windows sender syntax/link
 preflight passes. These use owned native ABI/staging/control fixtures; they do
 not execute an NVIDIA hardware reset or establish headset acceptance.
 
+Source validation passed on `29e75fd204c87d6701d249b32bb61446e5c15075`.
+[Stage run43928041487](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43928041487)
+executes the actual production boundary/staging/control fixture on both Windows
+and Linux:2,233 checks,173 exact current-frame masks,32 in-call IDR-reset
+completions,32 QoS and16 early-Encode completions. All six causal mutations fail
+at their expected assertion. The full native checks, Windows resource controls,
+readback ordering, connection lifecycle, source observer and owned GPU alpha
+regressions also pass. Full native CTest includes the additional I-only mode.
+The new PC DLL is built from isolated source; Frame/setup bytes remain unchanged.
+These are software controls; actual reset eligibility, steady headset continuity
+and the reset frequency in an unpatched beta control remain unverified.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
