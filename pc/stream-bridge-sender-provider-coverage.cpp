@@ -1021,7 +1021,7 @@ bool SenderCoverage::formatReady(std::uint32_t pid)const noexcept{return impl_->
 bool SenderCoverage::ready(std::uint32_t pid)const noexcept{return formatReady(pid)&&impl_->preparedPid==pid;}
 bool SenderCoverage::operational(std::uint32_t pid)const noexcept{return ready(pid)&&impl_->lastPid==pid;}
 CoverageGateStats SenderCoverage::gateStats()const noexcept{
-    auto& s=*impl_;auto result=s.gates.snapshot();
+    auto& s=*impl_;auto result=s.gates.snapshot();result.projectedSelection=s.projected.selectionStats();
     const auto shaders=s.nativeShaders.stats();result.nativeShaderFactory=shaders.factory;result.nativeShaderDevices=shaders.devices;
     result.nativeShadersRecognized=shaders.recognized;result.nativeShadersRefused=shaders.refused;
     // Enabled publishes the immutable context/facade. They are retained until

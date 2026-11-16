@@ -484,6 +484,28 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
             // on every 8 ms worker tick instead of this cold five-second cadence.
             nextGateReport=now+std::chrono::seconds(5);
             const auto stats=coverage_.gateStats();
+            if(stream_bridge::logging::debug()&&stats.projectedSelection[0]){
+                // Keep a compact cadence after verbose transition budgets are
+                // exhausted. Startup totals alone cannot locate gameplay gaps.
+                char text[768]{};const auto& c=stats.projectedSelection;
+                std::snprintf(text,sizeof text,
+                    "projected alpha selection: attempts/selected=%llu/%llu; refused channel/sync/registry/native/image/witness/ancestry/mutation/contributor/transfer/ambiguous=%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu/%llu; approximate lifetime counters only",
+                    static_cast<unsigned long long>(c[0]),static_cast<unsigned long long>(c[1]),
+                    static_cast<unsigned long long>(c[2]),static_cast<unsigned long long>(c[3]),static_cast<unsigned long long>(c[4]),
+                    static_cast<unsigned long long>(c[5]),static_cast<unsigned long long>(c[6]),static_cast<unsigned long long>(c[7]),
+                    static_cast<unsigned long long>(c[8]),static_cast<unsigned long long>(c[9]),static_cast<unsigned long long>(c[10]),
+                    static_cast<unsigned long long>(c[11]),static_cast<unsigned long long>(c[12]));
+                report(text,stream_bridge::logging::Level::Debug);
+                const auto refused=[&](stream_bridge::sender::CoverageGate gate){return static_cast<unsigned long long>(stats.refusals[static_cast<unsigned>(gate)]);};
+                const auto encoder=boundary().reconfigureStats();
+                std::snprintf(text,sizeof text,
+                    "coverage continuity: copies/readbacks/masks=%llu/%llu/%llu; refused pair/source/stage/session/certificate=%llu/%llu/%llu/%llu/%llu; encoder contract-revocations=%llu; compare interval deltas while MR is active; not frame proof",
+                    static_cast<unsigned long long>(stats.capturedCopies),static_cast<unsigned long long>(stats.readbackReady),static_cast<unsigned long long>(stats.certifiedMasks),
+                    refused(stream_bridge::sender::CoverageGate::CopyPair),refused(stream_bridge::sender::CoverageGate::SourceContract),
+                    refused(stream_bridge::sender::CoverageGate::StageReceipt),refused(stream_bridge::sender::CoverageGate::CoverageSession),
+                    refused(stream_bridge::sender::CoverageGate::FrameCertificate),static_cast<unsigned long long>(encoder.revoked));
+                report(text,stream_bridge::logging::Level::Debug);
+            }
             if(request_.explicitlyEnabled&&stream_bridge::logging::debug()&&(auditReports<64||auditSamples<128||upstreamAlphaReports<128)){
                 const auto audit=sourceAudit_.status();char text[896]{};
                 for(unsigned slot=0;slot<audit.sourceAlpha.size();++slot){const auto& alpha=audit.sourceAlpha[slot];

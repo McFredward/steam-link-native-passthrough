@@ -66,6 +66,7 @@ struct CoverageGateStats {
     // Last rejected composition edge: kind; source w/h/storage/view; output
     // w/h/storage/view; viewport w/h; complete; eye bits; gate. Metadata only.
     std::array<std::uint32_t,14> compositionRefusal{};
+    std::array<std::uint64_t,13> projectedSelection{};
     std::uint64_t hookDraws=0,nativeDraws=0,sourceFrames=0,constantMaps=0,constantCaptures=0,
         eyeDraws=0,completePairs=0,nativeCopies=0,capturedCopies=0,matchedInputs=0,certifiedMasks=0,
         deviceOpened=0,contextsReady=0,otherDraws=0,nativeMaps=0,inventoryRefreshes=0;
