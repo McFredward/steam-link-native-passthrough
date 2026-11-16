@@ -445,6 +445,16 @@ native transfer, registration, mutation, ancestry, stage, session or certificate
 Target delivery0.3.49 / PC0.3.35 / unchanged Frame0.3.13. No new headset test is
 requested before source/GPU/build/package checks finish.
 
+Software result: [Windows/WARP run43851208990](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43851208990)
+passed on `6f08bfbf22021949677b6594d2a54fb1b8adf471`. The actual two-process
+reprojection controller passed74 compositor-side checks, including the real
+short CB and retained full-range CB, then2,933 sender-side checks. Normal/BGRA
+passed63/2,933 each; direct roots61/2,933. The previous61,578/61,719 scene and
+reprojection MRT controls and legacy regressions remained green. Required local
+Windows syntax/link and29 HLSL entries passed. This establishes the bounded
+software correction; the next headset test must establish its effect on the
+reported flicker and identify any remaining active-MR refusal interval.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
