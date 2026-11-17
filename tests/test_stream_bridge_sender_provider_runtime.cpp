@@ -41,11 +41,11 @@ void run(){
     SenderRuntime runtime(boundary,[](void* p){return *static_cast<std::uint64_t*>(p);},&clock);ControlRuntime reverse;
     ControlRequest request;request.offered=KnownCapabilities;request.role=Role::Producer;request.buildId=712;request.pairingsDirectory=files.path/"producer";std::strcpy(request.address.data(),"127.0.0.1");
     runtime.configure(request);runtime.tick();check(runtime.state()==RuntimeState::Off&&runtime.control().localPort()==0,"actual runtime defaults off without opening socket");
-    struct Port{NativePresentation* presentation;ControlRuntime* control;}port{&presentation,&runtime.control()};
+    struct Port{NativePresentation* presentation;ControlRuntime* control;bool activeMr=true;}port{&presentation,&runtime.control()};
     boundary.setInputObserver({nullptr,nullptr,&presentation,[](void* p)noexcept{return static_cast<NativePresentation*>(p)->snapshot();}});
     boundary.setOutputAugmenter({[](Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& result,void* opaque){
         auto& port=*static_cast<Port*>(opaque);
-        if(e.nativePresentation)return port.presentation->certify(*port.control,candidate,e,result);
+        if(e.nativePresentation)return port.presentation->certify(*port.control,candidate,e,result,port.activeMr);
         if(candidate.data==au.data())return false;
         result.assign(candidate.data,candidate.data+candidate.size);return true;
     },&port});
@@ -95,9 +95,16 @@ void run(){
         picture.coverageEncoding==CoverageEncoding::None&&picture.descriptor.cameraRecovery==3&&picture.original==au,
         "actual signed dashboard frame preserves every original video byte and grants only its exact ordinary picture");
     table.nvEncUnlockBitstream(handle,output);
+    port.activeMr=false;submit();ui={};ui.version=NV_ENC_LOCK_BITSTREAM_VER;ui.outputBitstream=output;
+    check(table.nvEncLockBitstream(handle,&ui)==NV_ENC_SUCCESS,"native UI after MR withdrawal completes normally");
+    const rx::AccessUnitContext withdrawnProof{authority,{nativeKey++,8},true,true};
+    check(reverse.verifyAccessUnit({static_cast<const std::uint8_t*>(ui.bitstreamBufferPtr),ui.bitstreamSizeInBytes},withdrawnProof,picture)&&
+        picture.coverageEncoding==CoverageEncoding::None&&picture.descriptor.cameraRecovery==2&&picture.original==au,
+        "ordinary dashboard without MR intent cannot keep or create camera demand");
+    table.nvEncUnlockBitstream(handle,output);port.activeMr=true;
     submit();presentation.dashboard(false);ui={};ui.version=NV_ENC_LOCK_BITSTREAM_VER;ui.outputBitstream=output;
     table.nvEncLockBitstream(handle,&ui);
-    check(ui.bitstreamBufferPtr==au.data()&&presentation.status()[1]==1,
+    check(ui.bitstreamBufferPtr==au.data()&&presentation.status()[1]==2,
         "closing dashboard cannot certify an already queued UI receipt as ordinary video");table.nvEncUnlockBitstream(handle,output);
     const auto stats=boundary.reconfigureStats();check(stats.total==qosCalls&&stats.preservedSuccessful==(qosCalls+1)/2&&stats.preservedRejected==qosCalls/2&&stats.revoked==0&&reconfigureCalls==qosCalls,"bounded cold counters classify every repeated accepted/rejected QoS call");
     check(!receiver.snapshot().metadataSelected,"probe transport does not fabricate selected GPU identity");

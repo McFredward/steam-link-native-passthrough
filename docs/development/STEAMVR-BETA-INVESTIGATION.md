@@ -754,6 +754,15 @@ The public [driver event API](https://github.com/ValveSoftware/openvr/blob/maste
 is observed through the provider's own versioned host; no other application's
 input queue, overlay texture or interaction state is modified.
 
+Prepublication review additionally caught camera intent outside MR: a normal
+native dashboard must not create/retain camera demand when no MR source is
+active. Per-input UI sampling is now conditional on a live MR declaration;
+a declaration withdrawn before Lock selects existing policy2 rather than3.
+A source intent change during signing invalidates that warm-camera output.
+The actual signed native runtime fixture additionally verifies None/policy2
+and original-byte identity after MR withdrawal. This is a general UI/source
+scope guard; it does not change the runtime selection or Frame payload.
+
 Expected hardware markers: `native dashboard presentation` reports a valid
 host, activation/deactivation events and certified pictures while UI is open;
 Frame ordinary-video operations increase instead of continuous camera-only
