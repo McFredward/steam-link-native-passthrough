@@ -67,6 +67,8 @@ struct ChannelPage {
     std::uint32_t bytes=sizeof(ChannelPage),parentPid=0,peerPid=0,reserved=0;
     volatile LONG bound=0,stopped=0,peerReady=0;
     volatile LONG nextImageSlot=0;
+    // Private process-pair admission: count, dirty bit and monotonic overlap epoch.
+    alignas(8) volatile LONG64 captureAdmission=0;
     // Separate bounded pools: ordinary RGBA/MSAA targets cannot consume the
     // storage needed by the native FP16 X/Y path. Each remains <=256 MiB;
     // the total admitted companion storage is therefore <=512 MiB.
@@ -84,6 +86,45 @@ struct ChannelPage {
 static_assert(std::is_trivially_copyable<Registry>::value&&std::is_trivially_copyable<ImageWitness>::value,
     "fixed private production payloads");
 static_assert(sizeof(ChannelPage)<=32768,"bounded private section");
+// One producer owner at a time; rejected callbacks retain a counted guard until
+// their ORIGINAL native operation returns. No waiting or stale witness recovery.
+class CaptureAdmission {
+    ChannelPage* page_=nullptr;std::uint64_t token_=0;bool exclusive_=false;
+public:
+    static constexpr std::uint64_t Count=255,Dirty=256,Step=512;
+    static std::uint64_t state(ChannelPage* page)noexcept{
+        return page?std::uint64_t(InterlockedCompareExchange64(&page->captureAdmission,0,0)):Dirty;
+    }
+    static std::uint64_t epoch(ChannelPage* page)noexcept{return state(page)&~Count;}
+    static bool clean(ChannelPage* page)noexcept{return page&&!(state(page)&Dirty)&&!InterlockedCompareExchange(&page->stopped,0,0);}
+    CaptureAdmission()noexcept=default;
+    explicit CaptureAdmission(ChannelPage* page)noexcept{
+        if(!page||InterlockedCompareExchange(&page->stopped,0,0))return;
+        auto before=state(page);
+        for(unsigned attempt=0;attempt<16;++attempt){
+            const auto count=before&Count;
+            if(count==Count||before>std::uint64_t(INT64_MAX)-Step-1)break;
+            auto after=before+1;
+            if(count)after=(after|Dirty)+Step;
+            const auto observed=std::uint64_t(InterlockedCompareExchange64(&page->captureAdmission,LONG64(after),LONG64(before)));
+            if(observed==before){page_=page;token_=after;exclusive_=count==0;return;}
+            before=observed;
+        }
+        InterlockedExchange(&page->stopped,1); // Unrepresentable/contended admission cannot grant pixels.
+    }
+    CaptureAdmission(const CaptureAdmission&)=delete;CaptureAdmission& operator=(const CaptureAdmission&)=delete;
+    CaptureAdmission(CaptureAdmission&& other)noexcept:page_(other.page_),token_(other.token_),exclusive_(other.exclusive_){other.page_=nullptr;}
+    ~CaptureAdmission(){if(page_)InterlockedDecrement64(&page_->captureAdmission);}
+    bool tracked()const noexcept{return page_!=nullptr;}
+    bool exclusive()const noexcept{return exclusive_;}
+    bool dirty()const noexcept{return (token_&Dirty)!=0;}
+    bool recover()noexcept{
+        // The caller first invalidates ALL producer ancestry and shared versions.
+        // A new overlap during invalidation changes the epoch, so cannot be cleared.
+        return page_&&exclusive_&&InterlockedCompareExchange64(&page_->captureAdmission,
+            LONG64(token_&~Dirty),LONG64(token_))==LONG64(token_);
+    }
+};
 // Every observed write invalidates all registered aliases of that actual
 // shared kernel allocation, including writers on another native device. This
 // counter grants nothing: selection still requires the exact native release,

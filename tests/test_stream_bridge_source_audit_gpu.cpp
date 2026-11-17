@@ -42,9 +42,38 @@ void callerAdmissionControls(){
     {auto admitted=observer->production(token);check(bool(admitted),"first serialized native caller admitted");}
     bool migrated=false;std::thread second([&]{auto admitted=observer->production(token);migrated=bool(admitted);});second.join();
     check(migrated&&!InterlockedCompareExchange(&channel.page()->stopped,0,0),"serialized caller migration does not retire a valid device");
-    {auto held=observer->production(token);check(bool(held),"original caller can resume after serialized migration");
+    {
+        auto held=observer->production(token);check(bool(held),"original caller can resume after serialized migration");
         bool concurrent=true;std::thread other([&]{auto refused=observer->production(token);concurrent=bool(refused);});other.join();
-        check(!concurrent&&InterlockedCompareExchange(&channel.page()->stopped,0,0)&&observer->productionOverlaps.load()==1,"unsupported concurrent state mutation closes private admission without waiting and records its cause");}
+        check(!concurrent&&!InterlockedCompareExchange(&channel.page()->stopped,0,0)&&observer->productionOverlaps.load()==1,
+            "one overlapping caller refuses private work without permanently stopping the channel");
+        check(!projected_alpha::CaptureAdmission::clean(channel.page()),"in-flight owner cannot clear overlap quarantine");
+        auto another=observer->production(token);check(!another,"owner cannot recover while another original operation is in flight");
+    }
+    {
+        auto fresh=observer->production(token);
+        check(bool(fresh)&&observer->productionRecoveries.load()==1&&projected_alpha::CaptureAdmission::clean(channel.page()),
+            "first exclusive callback invalidates ancestry and recovers without another handshake");
+    }
+    for(unsigned cycle=0;cycle<32;++cycle){
+        auto held=observer->production(token);
+        std::thread other([&]{auto refused=observer->production(token);check(!refused,"repeated concurrent caller never receives producer state");});other.join();
+    }
+    {auto fresh=observer->production(token);check(bool(fresh)&&observer->productionRecoveries.load()==33,
+        "repeated overlap and caller migration leave fresh exclusive production available");}
+    std::atomic<bool> entered{false},releaseOriginal{false};
+    std::thread outstanding;
+    {
+        auto owner=observer->production(token);
+        outstanding=std::thread([&]{auto refused=observer->production(token);entered=true;
+            while(!releaseOriginal.load())std::this_thread::yield();});
+        while(!entered.load())std::this_thread::yield();
+    }
+    {auto tooEarly=observer->production(token);check(!tooEarly&&!projected_alpha::CaptureAdmission::clean(channel.page()),
+        "owner exit cannot recover while refused original native call is outstanding");}
+    releaseOriginal=true;outstanding.join();
+    {auto fresh=observer->production(token);check(bool(fresh)&&projected_alpha::CaptureAdmission::clean(channel.page()),
+        "last original native completion permits only a fresh exclusive recovery");}
     projected_alpha::ChannelParent lost;check(lost.create(),"owned changed-dispatch control channel");
     projected_alpha::ChannelLaunch changed{};check(lost.duplicateToVerifiedPeer(GetCurrentProcess(),changed),"owned changed-dispatch peer");
     auto* replaced=new Observer(Launch{});check(replaced->productionPeer.open(changed),"changed-dispatch private mapping");

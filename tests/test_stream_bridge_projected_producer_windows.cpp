@@ -966,6 +966,19 @@ void nativePipelineControl(bool reproject,bool bgra=false,bool direct=false){
     check(other->AcquireSync(0,0)==S_OK&&!consumer.select(device.value,registry.retained[1],handle(unrelated.value),lease).view&&other->ReleaseSync(0)==S_OK,
         "a held unrelated mutex cannot authorize this exact frame");
     channel.sourceLease(0);check(!consumer.select(device.value,registry.retained[1],message.sync,lease).view,"source withdrawal revokes the exact pair");channel.sourceLease(lease);
+    {
+        CaptureAdmission owner(channel.page());
+        {CaptureAdmission overlap(channel.page());check(!overlap.exclusive()&&!consumer.select(device.value,registry.retained[1],message.sync,lease).view,
+            "actual consumer refuses previously valid image throughout overlapping native work");
+            invalidateSharedImages(channel.page(),nullptr);}
+        check(!consumer.select(device.value,registry.retained[1],message.sync,lease).view,
+            "overlap completion alone cannot revive old game coverage");
+    }
+    {
+        CaptureAdmission recovery(channel.page());check(recovery.exclusive()&&recovery.recover(),"explicit quiescent recovery advances the private producer epoch");
+        check(!consumer.select(device.value,registry.retained[1],message.sync,lease).view,
+            "reopening admission cannot reuse the old native image mutation witness");
+    }
     context->Flush();check(sync->ReleaseSync(0)==S_OK,"parent releases only after its exact paired copies");BYTE ack=1;
     check(WriteFile(pipes.write,&ack,1,&sent,nullptr)&&sent==1,"allow next original native interval");
     check(sync->AcquireSync(3,5000)==S_OK&&!consumer.select(device.value,registry.retained[1],message.sync,lease).view,"actual unknown GPU write through a reopened native alias revokes stale private alpha");
