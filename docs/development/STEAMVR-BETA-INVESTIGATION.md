@@ -946,6 +946,14 @@ other active callback. Private-channel controls exercise this late refusal and
 require geometry revocation at the next exclusive recovery. The rebuilt DLL
 is pinned separately from the first successful scoped-recovery build.
 
+The final [full native run](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44175635550)
+passes on integration sourcef65e0df, alongside current observer/GPU/resource CI.
+Only unchanged stage/lifecycle/readback and Frame controls inherit earlier scope.
+The final DLL SHA256 is
+`d12e2e695eac0879a858fb4ebfc771402c5d1910dbfcc8f123b1e47828b04eff`.
+Final archive/bootstrap/alias pins and platform setup checks must validate before
+handoff. Frame13 and all setup payload bytes remain unchanged from053.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
