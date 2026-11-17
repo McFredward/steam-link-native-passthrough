@@ -119,6 +119,18 @@ public:
     bool exclusive()const noexcept{return exclusive_;}
     bool dirty()const noexcept{return (token_&Dirty)!=0;}
     bool geometryUnknown()const noexcept{return (token_&GeometryUnknown)!=0;}
+    void missedWriter()noexcept{
+        if(!page_)return;
+        auto before=state(page_);
+        for(unsigned attempt=0;attempt<16;++attempt){
+            if(before>std::uint64_t(INT64_MAX)-Step)break;
+            const auto after=(before|Dirty|GeometryUnknown)+Step;
+            const auto observed=std::uint64_t(InterlockedCompareExchange64(&page_->captureAdmission,LONG64(after),LONG64(before)));
+            if(observed==before)return;
+            before=observed;
+        }
+        InterlockedExchange(&page_->stopped,1);
+    }
     bool recover()noexcept{
         // The caller first invalidates ALL producer ancestry and shared versions.
         // A new overlap during invalidation changes the epoch, so cannot be cleared.
