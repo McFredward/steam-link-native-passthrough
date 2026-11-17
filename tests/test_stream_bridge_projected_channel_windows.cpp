@@ -52,6 +52,18 @@ void admissionControls(){
         CaptureAdmission fresh(&page);check(fresh.exclusive()&&fresh.recover()&&CaptureAdmission::clean(&page),
             "quiescent explicit invalidation can reopen only the current epoch");
     }
+    {
+        CaptureAdmission owner(&page);
+        {CaptureAdmission writer(&page,true);check(writer.tracked()&&!writer.exclusive(),"missed native writer quarantined");}
+    }
+    {
+        CaptureAdmission recovery(&page);check(recovery.geometryUnknown(),"unknown native writes survive until exclusive geometry invalidation");
+        {CaptureAdmission metadata(&page,false);}
+        check(!recovery.recover(),"metadata overlap during geometry invalidation cannot clear the writer epoch");
+    }
+    {
+        CaptureAdmission recovery(&page);check(recovery.geometryUnknown()&&recovery.recover(),"writer scope remains dirty until exact epoch recovery succeeds");
+    }
     page.captureAdmission=CaptureAdmission::Count;
     {CaptureAdmission overflow(&page);check(!overflow.tracked()&&page.stopped,"bounded admission overflow remains fail closed");}
 }

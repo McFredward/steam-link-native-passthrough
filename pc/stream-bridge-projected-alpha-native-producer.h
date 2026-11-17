@@ -249,7 +249,13 @@ public:
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
         geometry_.invalidate(resource);invalidateSharedImages(page_,resource);
         if(resource){auto record=get(resource);if(record.value)revoke(*record.value);return;}
-        if(epoch_==UINT64_MAX){InterlockedExchange(&page_->stopped,1);return;}++epoch_;
+        invalidateImages();
+    }
+    // Capture overlap alone says nothing about the contents of a native buffer.
+    // Revoke all image ancestry while retaining independently observed geometry.
+    void invalidateImages()noexcept{
+        invalidateSharedImages(page_,static_cast<ID3D11Resource*>(nullptr));
+        if(epoch_==UINT64_MAX){if(page_)InterlockedExchange(&page_->stopped,1);return;}++epoch_;
         for(auto& entry:exports_)if(entry.record.value)revoke(*entry.record.value);
     }
     void dispatch(ID3D11DeviceContext* context)noexcept{

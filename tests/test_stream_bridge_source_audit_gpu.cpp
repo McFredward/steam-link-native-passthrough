@@ -28,6 +28,47 @@ ULONG STDMETHODCALLTYPE fakeRef(ID3D11DeviceContext*){return 1;}
 void STDMETHODCALLTYPE noShader(ID3D11DeviceContext*,ID3D11PixelShader** out,ID3D11ClassInstance**,UINT*){*out=nullptr;SetLastError(999);}
 ID3D11DeviceContext* fakeContext=nullptr;
 void STDMETHODCALLTYPE getFakeContext(ID3D11Device*,ID3D11DeviceContext** out){*out=fakeContext;}
+void geometryAdmissionControls(Observer& observer,ID3D11Device* token){
+    using namespace projected_alpha;
+    Reference<ID3D11Device> device;Reference<ID3D11DeviceContext> gpu;
+    check(SUCCEEDED(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_WARP,nullptr,0,nullptr,0,D3D11_SDK_VERSION,device.out(),nullptr,gpu.out())),
+        "owned GPU device for mutable native geometry recovery");
+    constexpr char code[]="float4 v(float2 p:POSITION):SV_Position{return float4(p,0,1);}";
+    Reference<ID3DBlob> shader;check(SUCCEEDED(D3DCompile(code,sizeof code-1,nullptr,nullptr,nullptr,"v","vs_5_0",0,0,shader.out(),nullptr)),
+        "owned geometry signature compiles");
+    const D3D11_INPUT_ELEMENT_DESC element{"POSITION",0,DXGI_FORMAT_R32G32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0};
+    Reference<ID3D11InputLayout> layout;check(SUCCEEDED(device->CreateInputLayout(&element,1,shader->GetBufferPointer(),shader->GetBufferSize(),layout.out())),
+        "owned native float2 vertex layout");
+    const float points[8]{0,0,0,1,1,0,1,1};D3D11_BUFFER_DESC desc{};desc.ByteWidth=sizeof points;
+    desc.Usage=D3D11_USAGE_DEFAULT;desc.BindFlags=D3D11_BIND_VERTEX_BUFFER;
+    const D3D11_SUBRESOURCE_DATA data{points,0,0};Reference<ID3D11Buffer> vertices;
+    check(SUCCEEDED(device->CreateBuffer(&desc,&data,vertices.out())),"native DEFAULT quad initialized once without IMMUTABLE flag");
+    auto& geometry=observer.contexts[0].producer.geometry();geometry.buffer(&desc,&data,vertices.value);
+    geometry.layout(&element,1,shader->GetBufferPointer(),shader->GetBufferSize(),layout.value);
+    const D3D11_VIEWPORT viewport{0,0,37,67,0,1};gpu->RSSetViewports(1,&viewport);
+    gpu->IASetInputLayout(layout.value);gpu->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+    UINT stride=8,offset=0;gpu->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);
+    check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"actual DEFAULT native quad has exact creation-data proof");
+    {
+        auto owner=observer.production(token);
+        std::thread metadata([&]{auto refused=observer.production(token,1005,false);check(!refused,"overlapping creation callback has no producer authority");});metadata.join();
+    }
+    {auto fresh=observer.production(token);check(bool(fresh),"metadata overlap can recover exclusive image capture");}
+    check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),
+        "metadata overlap preserves unchanged DEFAULT native vertex bytes after image ancestry recovery");
+    {
+        auto owner=observer.production(token);
+        auto missedWrite=observer.production(token,48,true);
+        check(!missedWrite,"missed native buffer write remains quarantined");
+        const float moved[8]{4,4,4,5,5,4,5,5};gpu->UpdateSubresource(vertices.value,0,nullptr,moved,0,0);
+    }
+    {auto fresh=observer.production(token);check(bool(fresh)&&observer.productionGeometryRevocations.load()>0,
+        "unknown native write forces geometry revocation before reopening");}
+    unsigned reason=0;check(!geometry.fullUnitQuad(gpu.value,4,0,37,67,1,&reason)&&reason==7,
+        "changed DEFAULT native vertex buffer cannot reuse its old creation snapshot");
+    gpu->UpdateSubresource(vertices.value,0,nullptr,points,0,0);geometry.update(vertices.value,points);
+    check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"fresh observed native bytes restore only the actual changed quad");
+}
 void callerAdmissionControls(){
     projected_alpha::ChannelParent channel;check(channel.create(),"owned native-caller channel");
     projected_alpha::ChannelLaunch launch{};check(channel.duplicateToVerifiedPeer(GetCurrentProcess(),launch),"owned same-process admission control handle");
@@ -74,6 +115,7 @@ void callerAdmissionControls(){
     releaseOriginal=true;outstanding.join();
     {auto fresh=observer->production(token);check(bool(fresh)&&projected_alpha::CaptureAdmission::clean(channel.page()),
         "last original native completion permits only a fresh exclusive recovery");}
+    geometryAdmissionControls(*observer,token);
     projected_alpha::ChannelParent lost;check(lost.create(),"owned changed-dispatch control channel");
     projected_alpha::ChannelLaunch changed{};check(lost.duplicateToVerifiedPeer(GetCurrentProcess(),changed),"owned changed-dispatch peer");
     auto* replaced=new Observer(Launch{});check(replaced->productionPeer.open(changed),"changed-dispatch private mapping");

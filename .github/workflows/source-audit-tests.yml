@@ -137,6 +137,22 @@ jobs:
           Write-Host $log
           if ($result -ne 1 -or $log -notmatch 'one overlapping caller refuses private work without permanently stopping the channel') { throw 'Old terminal behavior did not fail the intended recovery assertion' }
           exit 0
+      - name: Require broad geometry invalidation to fail unchanged native quad recovery
+        shell: pwsh
+        run: |
+          $observer = Get-Content pc/stream-bridge-source-audit-observer.cpp -Raw
+          $needle = 'if(capture.geometryUnknown())item.producer.invalidate();'
+          if ([regex]::Matches($observer, [regex]::Escape($needle)).Count -ne 1) { throw 'Geometry causal control must replace exactly one production scope guard' }
+          $observer.Replace($needle, 'if(capture.dirty())item.producer.invalidate();') | Set-Content build/broad-geometry-observer.cpp
+          (Get-Content tests/test_stream_bridge_source_audit_gpu.cpp -Raw).Replace('pc/stream-bridge-source-audit-observer.cpp', 'build/broad-geometry-observer.cpp') | Set-Content build/broad-geometry-control.cpp
+          & cl /nologo /std:c++17 /EHsc /W4 /WX /I. /Ipc build/broad-geometry-control.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build/broad-geometry-control.exe /Fo:build/ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib bcrypt.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Geometry causal control must compile' }
+          & build/broad-geometry-control.exe *>build/broad-geometry-control.log
+          $result = $LASTEXITCODE
+          $log = Get-Content build/broad-geometry-control.log -Raw
+          Write-Host $log
+          if ($result -ne 1 -or $log -notmatch 'metadata overlap preserves unchanged DEFAULT native vertex bytes after image ancestry recovery') { throw 'Old broad geometry invalidation did not fail the intended native quad assertion' }
+          exit 0
       - name: Exercise actual asynchronous owned DLL load and refusal paths
         shell: cmd
         run: |
