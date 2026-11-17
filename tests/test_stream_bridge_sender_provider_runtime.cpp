@@ -1,5 +1,6 @@
 #include "pc/stream-bridge-sender-provider-runtime.h"
 #include "pc/stream-bridge-sender-provider-core.h"
+#include "pc/stream-bridge-native-presentation.h"
 #include <cstdio>
 #include <cstring>
 #include <stdexcept>
@@ -36,10 +37,18 @@ struct Files{
     ~Files(){std::error_code ignored;std::filesystem::remove_all(path,ignored);}
 };
 void run(){
-    Files files;NvencBoundary boundary({{1}});std::uint64_t clock=10000;
+    Files files;NvencBoundary boundary({{1}});std::uint64_t clock=10000;NativePresentation presentation;
     SenderRuntime runtime(boundary,[](void* p){return *static_cast<std::uint64_t*>(p);},&clock);ControlRuntime reverse;
-    ControlRequest request;request.role=Role::Producer;request.buildId=712;request.pairingsDirectory=files.path/"producer";std::strcpy(request.address.data(),"127.0.0.1");
+    ControlRequest request;request.offered=KnownCapabilities;request.role=Role::Producer;request.buildId=712;request.pairingsDirectory=files.path/"producer";std::strcpy(request.address.data(),"127.0.0.1");
     runtime.configure(request);runtime.tick();check(runtime.state()==RuntimeState::Off&&runtime.control().localPort()==0,"actual runtime defaults off without opening socket");
+    struct Port{NativePresentation* presentation;ControlRuntime* control;}port{&presentation,&runtime.control()};
+    boundary.setInputObserver({nullptr,nullptr,&presentation,[](void* p)noexcept{return static_cast<NativePresentation*>(p)->snapshot();}});
+    boundary.setOutputAugmenter({[](Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& result,void* opaque){
+        auto& port=*static_cast<Port*>(opaque);
+        if(e.nativePresentation)return port.presentation->certify(*port.control,candidate,e,result);
+        if(candidate.data==au.data())return false;
+        result.assign(candidate.data,candidate.data+candidate.size);return true;
+    },&port});
     request.explicitlyEnabled=true;runtime.configure(request);runtime.tick();check(runtime.state()==RuntimeState::WaitingEncoder&&runtime.control().localPort()==0,"no real encoder cannot prepare discovery");
     NV_ENCODE_API_FUNCTION_LIST table{};table.version=NV_ENCODE_API_FUNCTION_LIST_VER;boundary.create(factory,&table);void* handle=nullptr;NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS op{};op.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;table.nvEncOpenEncodeSessionEx(&op,&handle);
     NV_ENC_INITIALIZE_PARAMS ip{};ip.version=NV_ENC_INITIALIZE_PARAMS_VER;ip.encodeWidth=128;ip.encodeHeight=128;ip.encodeGUID=NV_ENC_CODEC_H264_GUID;table.nvEncInitializeEncoder(handle,&ip);runtime.tick();check(runtime.state()==RuntimeState::WaitingEncoder,"actual H264 never starts HEVC metadata route");
@@ -63,7 +72,7 @@ void run(){
         runtime.tick();check(runtime.control().localPort()==stablePort,"healthy ordinary QoS keeps actual TCP listener and paired channel");
     };
     qos();
-    ControlRequest rr=request;rr.role=Role::Receiver;rr.pairingsDirectory=files.path/"receiver";rr.port=runtime.control().localPort();rr.video={nonce(),4};
+    ControlRequest rr=request;rr.role=Role::Receiver;rr.pairingsDirectory=files.path/"receiver";rr.port=runtime.control().localPort();rr.video={nonce(),4};rr.nativeAccessUnitCapacity=65536;
     check(reverse.prepare(rr)==ControlStatus::Connecting||reverse.status()==ControlStatus::WaitingVideo,"real receiver reverse socket started");
     auto pump=[&](){for(unsigned i=0;i<80;++i){if(i%7==0)qos();reverse.tick();runtime.tick();}};pump();
     LocalConfig receiverLocal;reverse.configuredLocal(receiverLocal);rx::Receiver receiver;rx::Authority authority{rr.video.connection,rr.video.generation,{}};
@@ -75,6 +84,21 @@ void run(){
     pump();check(runtime.state()==RuntimeState::Confirmed&&receiver.snapshot().peerConfirmed,"actual provider worker mutually confirms existing native output session");
     check(runtime.lastFailure().reason==RuntimeFailure::None,"healthy actual handshake has no failure classification");
     check(receiveVideo()==rx::Result::MetadataObserved,"real native AU carries fresh post-handshake probe");ProbeMessage echo;check(receiver.nextEcho(echo),"probe echoed only after actual coded-AU observation");AuthPayload encoded{};encodeProbe(echo,encoded);std::uint64_t ticket=0;check(reverse.queueControl({encoded.data(),encoded.size()},ticket),"exact observed probe echo enters reverse transport");pump();check(runtime.state()==RuntimeState::ProbeObserved,"actual provider worker verifies matching roundtrip probe");
+    // Real production presentation certifier, exact original Encode/Lock,
+    // actual paired TCP/auth signer and receiver verification. No game mask
+    // or sampled alpha is used to classify a native dashboard picture.
+    presentation.dashboard(true);
+    submit();NV_ENC_LOCK_BITSTREAM ui{};ui.version=NV_ENC_LOCK_BITSTREAM_VER;ui.outputBitstream=output;
+    check(table.nvEncLockBitstream(handle,&ui)==NV_ENC_SUCCESS,"native dashboard Lock completes");
+    CertifiedAccessUnit picture;const rx::AccessUnitContext uiProof{authority,{nativeKey++,8},true,true};
+    check(reverse.verifyAccessUnit({static_cast<const std::uint8_t*>(ui.bitstreamBufferPtr),ui.bitstreamSizeInBytes},uiProof,picture)&&
+        picture.coverageEncoding==CoverageEncoding::None&&picture.descriptor.cameraRecovery==3&&picture.original==au,
+        "actual signed dashboard frame preserves every original video byte and grants only its exact ordinary picture");
+    table.nvEncUnlockBitstream(handle,output);
+    submit();presentation.dashboard(false);ui={};ui.version=NV_ENC_LOCK_BITSTREAM_VER;ui.outputBitstream=output;
+    table.nvEncLockBitstream(handle,&ui);
+    check(ui.bitstreamBufferPtr==au.data()&&presentation.status()[1]==1,
+        "closing dashboard cannot certify an already queued UI receipt as ordinary video");table.nvEncUnlockBitstream(handle,output);
     const auto stats=boundary.reconfigureStats();check(stats.total==qosCalls&&stats.preservedSuccessful==(qosCalls+1)/2&&stats.preservedRejected==qosCalls/2&&stats.revoked==0&&reconfigureCalls==qosCalls,"bounded cold counters classify every repeated accepted/rejected QoS call");
     check(!receiver.snapshot().metadataSelected,"probe transport does not fabricate selected GPU identity");
     reverse.stop();for(unsigned i=0;i<80;++i){reverse.tick();runtime.tick();}check(runtime.state()==RuntimeState::Failed&&!runtime.control().peerVerified(),"actual reverse EOF revokes provider handshake without a timeout");

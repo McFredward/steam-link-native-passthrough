@@ -1,8 +1,11 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-15 after the installed **0.3.47 / PC 0.3.33 / Frame 0.3.13**
-test. **Beta mixed reality is still not working.** Battlemarked remains the
-first headset test; Venture must be verified separately afterward.
+Updated 2026-11-17 after installed **0.3.51 / PC0.3.37 / Frame0.3.13**.
+The maintainer reports no more intermittent game disappearances in the latest
+run. Opening SteamVR's dashboard exposes a separate failure: flat desktop/Steam
+panels are invisible, although the lower bar and laser hit-testing still work.
+Candidate0.3.52 / PC0.3.38 targets native dashboard presentation; its headset
+result is pending. Battlemarked remains the test app; Venture is separate.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -10,6 +13,18 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E051–E053 below record the successful initial beta image and the remaining
+continuity defects. 0.3.50 preserves 43 supported native encoder resets in the
+matched run. Two longer interruptions coincide with native SVLFEC packet/frame
+recovery faults and output-stream retirement. 0.3.51 preserves an already
+unfinished negotiation across otherwise supported native IDR resets without
+granting coverage before new peer/probe proof. Neither it nor this audit proves
+the root cause of those native transport faults or all Stable/Beta combinations
+on hardware. The [independent compatibility matrix](../COMPATIBILITY.md#independent-selection-on-pc-and-frame)
+is a continuing requirement, not a version-number activation rule.
+
+### Initial 0.3.47 finding (historical)
 
 The latest PC log identifies **SteamVR 2.19.3**. The original beta request was
 2.19.2; neither string is an activation allowlist or a successful-test claim.
@@ -630,6 +645,112 @@ a short camera-only transition. This fixes reconnect amplification; it does not
 establish that every residual gap or native reset trigger is fixed. Whether the
 patch indirectly increases native reset frequency is still unproved without a
 matched unpatched beta control. Headset acceptance of0.3.51 is pending.
+
+## Compatibility requirement audit — November 16, 2026
+
+The maintainer explicitly reaffirms one current patch for every previously
+working SteamVR contract, including independent stable/stable, stable/beta,
+beta/stable and beta/beta PC/Frame combinations. Normal/Legacy Chroma and
+Auto/fixed resolution remain orthogonal. The requirement and selection points
+are recorded in [compatibility](../COMPATIBILITY.md#independent-selection-on-pc-and-frame)
+and AGENTS.md for future changes.
+
+Audit source: shipping isolated `21c9d0a` / public `d00dc52`, installer0.3.51,
+PC0.3.37, Frame0.3.13. PC PE/NVENC/resource/shader admission and Frame ELF/V4L2/
+native-stage admission select locally, not from a SteamVR release string.
+Retained exact-image paths coexist with structural discovery of compatible
+changed images. The wire protocol negotiates capability intersections, not
+matching SteamVR or companion build numbers. Actual ABI layout versions and
+reviewed shader semantics remain necessary; a new label cannot authorize
+unknown memory or shader behavior. Installer version observations/warnings do
+not silently disable a confirmed installation.
+
+Sixteen focused CTest suites pass on unchanged native code: public moved PE/ELF
+image contracts, original/adaptive decoder, source and image leases, native
+composition, shader interface/normalization, protocol with different build IDs,
+old optional-codec peers and actual native sender staging/reset continuity.
+Eight targeted real setup fixture tests also pass, including changed runtime
+labels/bytes, confirmed untested installation and consent snapshot changes.
+These controls are software evidence, not new headset tests of the four cells.
+Existing hardware confirmations remain scoped to their recorded pair/settings;
+0.3.51's own headset result is still pending.
+
+No gate requiring matching PC/Frame release versions or channels was found in
+the reviewed selection points; no native behavior or payload changes in this audit. Installer and
+native patch versions remain0.3.51 / PC0.3.37 / Frame0.3.13. No device install,
+restart or SteamVR channel change was performed. Native reset/packet-recovery
+investigation continues under E053; this audit does not claim it is resolved.
+
+## E054 — 0.3.51 continuity success; native dashboard hidden (November 17)
+
+Matched private capture `20261117-after051` in the Venture workspace contains
+hashed PC logs, read-only `frame/diagnostics.json`, native Frame log excerpts and
+`review-summary.json`. PC08:54:35.753–08:57:57.620 CET; Frame requested window
+07:54:15–07:58:15 UTC. PC SteamVR2.19.3/build1794604515; Battlemarked PID1740.
+Frame0.3.13/current layer identity retained. The bounded512-row current-process
+journal contains the dashboard period; it is not a complete all-process trace.
+Native log files are separately captured. SSH closed without device changes.
+
+The maintainer reports the prior intermittent failure did not recur. PC records
+18 reset attempts,17 preserved and one startup clock-history fallback, with no
+post-reset timestamp revocation; session/certificate refusal totals stay30/26.
+No out-of-backtrack-window/unrecoverable native fault appears in the captured
+native vrlink rows. This supports continuity for this run, not an unpatched
+comparison or a guarantee that native transport faults cannot recur.
+
+PC receives dashboard-open requests at08:57:12.790 and08:57:19.028. The mask
+path then stops producing new game masks: copies/masks settle at9290/9287;
+selection-mutation refusals rise, reaching4324. After07:57:18 UTC Frame masks
+stay at26810, with zero decode/upload refusal. Ordinary-video operations remain
+zero, while camera-only operations rise by900 per five-second sample. The
+maintainer confirms the game also disappears during dashboard display, then
+returns on close; that is acceptable, but hiding the native dashboard panels
+is not. Input hit-testing and the lower native bar still work. The evidence
+localizes the failure to using active-game recovery for native UI pictures,
+rather than a missing input event or broken dashboard click routing.
+
+Do not remove native-write mutation checks or turn every missing mask into an
+ordinary picture. SteamVR's public dashboard-activation/deactivation events are
+positive presentation intent, separate from game/source and frame authority.
+[Valve's driver event API](https://github.com/ValveSoftware/openvr/blob/master/docs/Driver_API_Documentation.md#events)
+and the pinned public `openvr_driver.h` provide the own-driver host queue and
+502/503 event ABI. The provider reads its host during RunFrame, bounded to64
+events per call, without modifying overlays or synthesizing input.
+
+Candidate0.3.52 freezes the current UI epoch in the exact registered/mapped
+native Encode submission before the original call. Successful native Lock must
+still uniquely match that input/output/timestamp and have current peer/probe
+proof. Only an unchanged active UI epoch can emit signed None coverage with
+existing ordinary-video policy3 (warm camera), or existing policy2 for a peer
+without that optional policy. Opening UI cannot reclassify a previously
+accepted game input; closing/reopening UI cannot revive an old input. Frame
+still requires the exact current decoded-image lease before native ordinary
+output. No GPU mask, game PID exception, approximate timestamp or latest mask
+is substituted. Neither protocol nor Frame payload changes.
+
+Local software controls pass: seven native suites, including IP/I-only reset
+and older-peer modes. The actual full-size pipeline has2676 checks,175 exact
+game masks and65 exact native UI pictures, including close/reopen, unmatched
+output, source loss and resumed game masks without another handshake. The real
+paired socket/auth/native API fixture has1168 checks and executes the actual
+production UI certifier: every original video AU byte is retained, its signed
+ordinary descriptor verifies on the receiver, and close-before-Lock refuses the
+old UI receipt. Nine temporary causal mutations fail their intended assertion,
+including omitting the accepted-input UI receipt or replacing it with latest
+UI state. Unchanged0.3.51 core also fails the new fresh-dashboard-input assertion
+when compiled against the additive internal declarations. These owned controls
+do not prove actual runtime event delivery or physical dashboard appearance.
+
+Expected hardware markers: `native dashboard presentation` reports a valid
+host, activation/deactivation events and certified pictures while UI is open;
+Frame ordinary-video operations increase instead of continuous camera-only
+recovery. Desktop/Steam panels, lower bar, laser hover/click and return to the
+game must work through repeated open/close cycles. Fresh exact game masks resume
+on close; the previous reset-continuity counters remain healthy. The four
+independent stable/beta combinations, normal/Legacy and Auto/fixed resolution
+requirements remain. Unknown native UI intent keeps existing recovery; the new
+bounded counters must make missing runtime events explicit in the next test.
+Headset acceptance of0.3.52 is pending; dev only, no device install/restart.
 
 ## Evidence locations and maintenance
 

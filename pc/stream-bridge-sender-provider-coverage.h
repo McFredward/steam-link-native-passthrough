@@ -270,6 +270,8 @@ public:
     bool takeHevcSyntaxTrace(MaskHevcSyntaxTrace&)noexcept; // Cold one-shot diagnostic only.
     projected_alpha::ChannelParent* projectedChannel()noexcept;
     void sourceProcess(std::uint32_t processId,bool metadataBudget=false)noexcept; // Cold live-app format lease; zero revokes.
+    void pollDashboard(bool (*next)(unsigned&,void*)noexcept,void*)noexcept; // Native host RunFrame owner only.
+    std::array<std::uint64_t,5> presentationStatus()const noexcept;
     void stop()noexcept;
     // Cold format capability only: a game may need this permission before
     // submitting its first independent RGBA eyes. No frame/mask authority.

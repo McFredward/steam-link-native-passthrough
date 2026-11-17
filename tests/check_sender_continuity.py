@@ -40,6 +40,14 @@ def main():
             'continuousReset=self.enabled_&&unchanged&&!missing;',
             'continuousReset=self.enabled_&&unchanged&&!missing&&s->adapter.mutualConfirmed()&&s->adapter.probeObserved();',
             'same-contract IDR reset preserves pending negotiation without granting coverage'),
+        'dashboard-input-receipt-omitted': (
+            'if(self.inputObserver_.presentation)p.evidence.nativePresentation=',
+            'if(false&&self.inputObserver_.presentation)p.evidence.nativePresentation=',
+            'each fresh dashboard input retains exact native RGB without a game mask'),
+        'latest-dashboard-state': (
+            '    evidence.originalAccessUnitBytes=params->bitstreamSizeInBytes;',
+            '    evidence.nativePresentation=self.inputObserver_.presentation?self.inputObserver_.presentation(self.inputObserver_.context):0;\n    evidence.originalAccessUnitBytes=params->bitstreamSizeInBytes;',
+            'opening dashboard cannot retroactively reclassify a previously accepted game input'),
         'old-unlock-retires-new-input': (
             'submitted.accepted&&submitted.locked&&submitted.evidence.output==output',
             'submitted.accepted&&submitted.evidence.output==output',
@@ -76,7 +84,7 @@ def main():
         'controls': results,
         'device_access': False,
     }, indent=2) + '\n')
-    print('All seven native availability/reset mutations fail their exact-frame proof assertion.')
+    print('All nine native availability/reset/presentation mutations fail their exact-frame proof assertion.')
 
 
 if __name__ == '__main__':

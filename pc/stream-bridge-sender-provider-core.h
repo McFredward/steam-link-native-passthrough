@@ -32,6 +32,8 @@ struct NvencOutputEvidence {
     std::uint32_t originalAccessUnitBytes=0;
     bool lossyCoverageAuthorized=false;
     bool temporalCoverageAuthorized=false;
+    // Native UI intent frozen in this accepted input; never latest state.
+    std::uint64_t nativePresentation=0;
 };
 struct DeviceObserver {
     // Successful actual public Open session. Device is borrowed native identity;
@@ -46,6 +48,7 @@ struct InputObserver {
     void (*capture)(const NvencOutputEvidence&,void*)=nullptr;
     void (*retire)(const NvencOutputEvidence&,void*)=nullptr;
     void* context=nullptr;
+    std::uint64_t (*presentation)(void*)noexcept=nullptr;
 };
 struct OutputAugmenter {
     // Original/native pixels are untouched. The candidate can already contain
