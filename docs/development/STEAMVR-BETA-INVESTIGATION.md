@@ -925,6 +925,35 @@ A genuine missed buffer-writing operation may revoke geometry and must be
 identified explicitly. New source CI, immutable delivery and final setup checks
 must pass before testing; physical acceptance of054 is pending.
 
+The actual observer passes473 checks under both MSVC and GNU on Windows.
+The old permanent-stop mutant fails after7 assertions; restoring053's broad
+geometry invalidation fails after53 at the exact unchanged-DEFAULT-quad check.
+Current [observer CI](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44175635627)
+and [GPU CI](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44175635547)
+pass. The private channel passes37 controls, including geometry-scope retention
+across another overlap. Existing image mutation/ownership, cross-process,
+padded FP16, native MSAA/filter and Normal/Legacy controls remain green.
+Windows resource checks also pass.112 PC-only setup/recovery,17 package and2
+artifact-pin checks pass locally. The Windows syntax/link and29-entry owned
+HLSL preflights pass. Full native CI and final immutable delivery/setup checks
+must still complete before the test handoff. No headset acceptance is claimed.
+
+Prepublication review also covers an initially exclusive native writer that
+loses admission when another callback arrives during recovery. Before forwarding
+its now-unobserved original call, it marks geometry unknown in that same epoch.
+The flag cannot disappear just because its constructor originally found no
+other active callback. Private-channel controls exercise this late refusal and
+require geometry revocation at the next exclusive recovery. The rebuilt DLL
+is pinned separately from the first successful scoped-recovery build.
+
+The final [full native run](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44175635550)
+passes on integration sourcef65e0df, alongside current observer/GPU/resource CI.
+Only unchanged stage/lifecycle/readback and Frame controls inherit earlier scope.
+The final DLL SHA256 is
+`d12e2e695eac0879a858fb4ebfc771402c5d1910dbfcc8f123b1e47828b04eff`.
+Final archive/bootstrap/alias pins and platform setup checks must validate before
+handoff. Frame13 and all setup payload bytes remain unchanged from053.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
