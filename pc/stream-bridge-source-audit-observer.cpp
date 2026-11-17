@@ -97,13 +97,13 @@ struct Observer {
     Admission production(ID3D11Device* device)noexcept {
         if(!device||stopped||ownCommands||!productionPeer.page())return {};
         for(auto& context:contexts)if(context.producerDevice==device){
-            auto* page=productionPeer.page();
-            if(!context.owns()){InterlockedExchange(&page->stopped,1);return {};}
-            projected_alpha::CaptureAdmission capture(page);
+            auto* productionPage=productionPeer.page();
+            if(!context.owns()){InterlockedExchange(&productionPage->stopped,1);return {};}
+            projected_alpha::CaptureAdmission capture(productionPage);
             if(!capture.tracked())return {};
             if(!capture.exclusive()){
                 productionOverlaps.fetch_add(1,std::memory_order_relaxed);
-                projected_alpha::invalidateSharedImages(page,nullptr);
+                projected_alpha::invalidateSharedImages(productionPage,nullptr);
                 return {nullptr,std::move(capture)};
             }
             if(capture.dirty()){
@@ -113,7 +113,7 @@ struct Observer {
                 if(!capture.recover())return {nullptr,std::move(capture)};
                 productionRecoveries.fetch_add(1,std::memory_order_relaxed);
             }
-            if(!projected_alpha::CaptureAdmission::clean(page))return {nullptr,std::move(capture)};
+            if(!projected_alpha::CaptureAdmission::clean(productionPage))return {nullptr,std::move(capture)};
             return {&context,std::move(capture)};
         }
         return {};
