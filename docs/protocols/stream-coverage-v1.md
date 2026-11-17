@@ -133,6 +133,15 @@ warm while requiring fresh image proof and authenticated producer binding.
 
 ## Optional ordinary-picture policy3
 
+Native dashboard presentation is another positive ordinary-picture admission.
+The producer freezes public runtime UI intent with an exact accepted native
+encoder input and requires that same UI epoch, current peer/probe and matching
+successful output before signing policy3 with None coverage. UI intent does not
+come from missing alpha or a foreign PID. Warm camera recovery additionally
+requires current MR intent; withdrawal uses existing policy2. Close/reopen
+revokes old UI receipts. This adds no wire field or capability and does not
+weaken the receiver's exact current decoded-image lease checks.
+
 Bit512 (`CapOrdinaryVideoPicture`), together with negotiated bit128, permits
 signed policy3 only with None coverage. It retains active recovery intent while
 authorizing the matching ordinary desktop/compositor picture without a game
