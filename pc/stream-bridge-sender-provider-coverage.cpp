@@ -259,7 +259,12 @@ struct SenderCoverage::Impl {
         // fresh handshake, without reading/compressing any coverage staging.
         if(!e.coverageSessionAuthorized){s.gates.refuse(CoverageGate::CoverageSession);const bool certified=certify(CoverageEncoding::None,{});if(!certified)s.gates.refuse(CoverageGate::FrameCertificate);return certified;}
         if(!s.enabled)return s.gates.refuse(CoverageGate::Prepared);
-        if(e.nativePresentation)return s.presentation.certify(s.control,candidate,e,output);
+        if(e.nativePresentation){
+            const auto intent=s.sourceContract.cameraAuthority();
+            const bool certified=s.presentation.certify(s.control,candidate,e,output,intent!=0);
+            if(certified&&intent&&s.sourceContract.cameraAuthority()!=intent){output.clear();return false;}
+            return certified;
+        }
         std::vector<std::uint8_t> pixels,encoded;CoverageEncoding encoding=CoverageEncoding::None;
         struct Unsent {MaskHevcEncoder* encoder=nullptr;bool sent=false;
             ~Unsent(){if(encoder&&!sent)encoder->requestKeyframe();}} unsent;
@@ -923,7 +928,7 @@ struct SenderCoverage::Impl {
 };
 std::atomic<SenderCoverage::Impl*> SenderCoverage::Impl::instance{nullptr};
 SenderCoverage::SenderCoverage(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c,const ShaderFingerprint* contracts,std::size_t count):impl_(new Impl(d,b,c,contracts,count)){
-    b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get(),[](void* context)noexcept{return static_cast<Impl*>(context)->presentation.snapshot();}});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));},[](void* context)noexcept{return static_cast<Impl*>(context)->lastControlledMetadata.load(std::memory_order_relaxed);}});
+    b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get(),[](void* context)noexcept{auto& s=*static_cast<Impl*>(context);return s.sourceContract.cameraAuthority()?s.presentation.snapshot():0;}});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));},[](void* context)noexcept{return static_cast<Impl*>(context)->lastControlledMetadata.load(std::memory_order_relaxed);}});
 }
 SenderCoverage::~SenderCoverage(){stop();(void)impl_.release();} // callbacks/COM retained until process exit
 bool SenderCoverage::configure(std::uintptr_t module)noexcept{std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->module||!module)return false;impl_->module=module;return true;}

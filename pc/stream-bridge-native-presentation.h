@@ -39,9 +39,10 @@ public:
         return current(receipt)&&recovery?(ordinary?3:2):0;
     }
     bool certify(ControlRuntime& control,Bytes video,const NvencOutputEvidence& e,
-                 std::vector<std::uint8_t>& output)noexcept {
+                 std::vector<std::uint8_t>& output,bool activeMr)noexcept {
         output.clear();
-        const auto selected=policy(e.nativePresentation,e.cameraOnlyRecoveryAuthorized,e.ordinaryVideoAuthorized);
+        auto selected=policy(e.nativePresentation,e.cameraOnlyRecoveryAuthorized,e.ordinaryVideoAuthorized);
+        if(!activeMr&&selected==3)selected=2; // No camera demand without current MR intent.
         if(!e.exactInput||!e.submission||!e.encoderGeneration||!e.coverageSessionAuthorized||!selected||
            !e.width||!e.height||e.width>8192||e.height>8192){++refused_;return false;}
         const FrameDescriptor descriptor{e.submission,e.encoderGeneration,
