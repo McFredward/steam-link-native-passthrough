@@ -741,6 +741,19 @@ UI state. Unchanged0.3.51 core also fails the new fresh-dashboard-input assertio
 when compiled against the additive internal declarations. These owned controls
 do not prove actual runtime event delivery or physical dashboard appearance.
 
+Source validation on `0eb3e258dceb92a960c796d1bec0a594a337d024` passes the
+[Windows/Linux stage pipeline](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44048670769),
+[full native checks](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44048670835),
+current-source owned GPU alpha, Windows resources/readback, source observer
+and lifecycle controls. The unchanged Frame decoder/format controls retain
+their earlier successful scope. The PC DLL is newly built from isolatede239c98;
+all shipped Frame/setup bytes must remain identical to0.3.51. Local PC-only
+update/recovery21 and package17 tests pass. Immutable archive/bootstrap/alias
+pins and final platform setup CI must validate before the test handoff.
+The public [driver event API](https://github.com/ValveSoftware/openvr/blob/master/docs/Driver_API_Documentation.md#events)
+is observed through the provider's own versioned host; no other application's
+input queue, overlay texture or interaction state is modified.
+
 Expected hardware markers: `native dashboard presentation` reports a valid
 host, activation/deactivation events and certified pictures while UI is open;
 Frame ordinary-video operations increase instead of continuous camera-only

@@ -1,11 +1,12 @@
 # Tested versions and evidence
 
-Development candidate0.3.21 retains the new Frame beta shader path alongside the
-previous path in one Frame0.3.7 library. Its software tests and remaining headset
-test are documented in [runtime compatibility](development/FRAME-RUNTIME-COMPATIBILITY.md).
-The table below continues to describe successful headset tests.
-The0.3.21 installer also handles a [PC shutdown query race](development/SETUP-PC-SHUTDOWN.md);
-its native PC0.3.13 and Frame0.3.7 components are unchanged from0.3.20.
+Development candidate **0.3.52 / PC0.3.38 / Frame0.3.13** retains the earlier
+runtime paths alongside the beta paths. The maintainer reports no more
+intermittent game disappearances with0.3.51. A separate SteamVR dashboard issue
+hides flat Steam/desktop panels while the MR game remains open;0.3.52 adds
+positive native UI presentation intent tied to each exact accepted input.
+Its headset dashboard result is pending. See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
+The table below preserves the separately confirmed stable release observations.
 
 ## Successfully tested versions
 
@@ -40,6 +41,67 @@ not identify which update component changed. The functional result is the
 maintainer's report; the SSH checks establish the current device metadata.
 
 ## Runtime compatibility scope
+
+### Independent selection on PC and Frame
+
+Maintainer requirement, reaffirmed November 16, 2026: retain every previously
+working runtime contract in the current patch and select the appropriate route
+from the actual running interfaces and data. PC and Frame choose independently:
+
+| PC SteamVR channel | Frame SteamVR channel | Required behavior |
+|---|---|---|
+| Stable | Stable | Retain the previous working PC and Frame routes. |
+| Stable | Beta | Use the observed stable PC route and the observed Frame route. |
+| Beta | Stable | Use the observed PC route and retain the stable Frame route. |
+| Beta | Beta | Use each side's observed compatible route. |
+
+These are required combinations, not four newly completed headset tests.
+Stable/Beta labels do not select code paths or need to match. The same policy
+applies to later updates and switching back. Normal/Legacy Chroma conversion
+and Auto/fixed render resolution remain independent settings to preserve.
+
+The current selection points are:
+
+- **PC native interfaces:** validate the actual loaded PE image, public imports,
+  DirectMode009 interface and NVENC structure layouts. Retain the exact original
+  image route and discover compatible relocated interfaces structurally.
+- **PC rendering:** inspect the actual shader's executable logic/interface,
+  current texture/view formats, dimensions, viewports and source ownership.
+  Retain normal/Legacy luma/chroma, direct/packed planes and the previous RGBA
+  capture route alongside the additional projected-source route. Do not infer
+  the rendering contract from a SteamVR version or a fixed resolution.
+- **Frame decoding:** validate the actual ELF imports/executable mappings and
+  public V4L2 queue/buffer structures. Retain the previous exact-image route
+  alongside structural admission of compatible changed images. Match each
+  accepted coded frame to its actual decoded image and current buffer lease.
+- **Frame rendering:** recognize the actual native vertex/fragment pair and
+  its interface, then apply its corresponding reviewed transformation. Compiler
+  metadata or identifier changes can normalize without admitting changed shader
+  arithmetic. Do not mix stages from incompatible native contracts.
+- **SteamVR dashboard:** observe native dashboard activation/deactivation on
+  the public driver host and freeze its intent with the actual accepted encoder
+  input. Current UI pictures retain their original native RGB/interaction and
+  use an authenticated ordinary-video descriptor; missing game alpha alone
+  never selects that route. Close/reopen revokes old UI receipts and restores
+  fresh game-mask composition. Runtime release labels do not select UI behavior.
+- **Between devices:** negotiate implemented protocol capabilities and prove
+  the actual coded-video roundtrip. SteamVR release numbers are not part of
+  that negotiation; different device or companion build identifiers need not
+  be equal. Optional codecs must retain the compatible previous capability set.
+
+Public API structure-version fields still define memory layouts; they are not
+SteamVR release numbers and cannot be ignored. File hashes can establish
+identity or select a retained exact path, while semantic shader fingerprints
+establish reviewed executable behavior. Neither means that only one SteamVR
+release is supported. A genuinely new necessary layout or shader operation
+needs recognition and validation before it can safely authorize composition.
+
+The November 16 audit of 0.3.51 found no shared channel/version requirement in
+these selection points. Existing structural PE/ELF, decoder, shader, native
+composition, protocol and older-peer controls are software evidence; matched
+headset evidence remains scoped to the recorded runtime pair and settings.
+
+### Recorded runtime observations
 
 These are recorded successful tests, not a runtime version allowlist. The PC
 and Frame independently recognize the interfaces and rendering properties they
