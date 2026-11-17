@@ -1,10 +1,10 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated2026-11-17 after installed **0.3.52 / PC0.3.38 / Frame0.3.13**.
-Battlemarked initially displays passthrough and game elements, then remains
-camera-only. The matched logs prove a single overlapping observer call
-permanently stops our private mask channel. Candidate0.3.53 / PC0.3.39 targets
-bounded overlap recovery; physical acceptance is pending. Venture is separate.
+Updated 2026-11-17 after installed **0.3.53 / PC0.3.39 / Frame0.3.13**.
+Battlemarked remains camera-only from the start. Admission reopens successfully,
+but recovery invalidates native DEFAULT vertex snapshots and every projected
+draw refuses geometry reason7. Candidate0.3.54 / PC0.3.40 retains independently
+proved buffer bytes across metadata-only overlap. Headset acceptance is pending.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -12,6 +12,13 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E056 supersedes the proposed broad invalidation in E055: reopening the channel
+is insufficient when it invalidates an unchanged native quad initialized only
+once. Distinguish missed native buffer writes from metadata/lock callbacks.
+All image ancestry still retires; native buffer bytes require their independent
+creation/Map/update history and must be revoked for unobserved possible writes.
+
 
 E055 identifies a separate permanent-stop defect in our observer admission.
 At21:02:17CET the private channel is live with no overlaps; by21:02:22 one
@@ -863,6 +870,60 @@ controls retain their earlier successful scope; changed observer/producer/
 consumer behavior has the current Windows GPU controls above.
 Frame and setup payloads must remain byte-identical to0.3.52. Immutable archive,
 bootstrap and final platform setup checks must pass before the test handoff.
+
+## E056 — broad recovery invalidates the once-created native quad (2026-11-17)
+
+Installed0.3.53 / PC0.3.39 / unchangedFrame0.3.13; Battlemarked. Capture:
+`20261117-after053/{pc,frame,review-summary.json}` in the ignored Venture
+passthrough directory. PC21:45:58–21:46:58CET and read-only Frame
+20:45:40–20:47:15UTC. The mapped Frame13 layer retains SHA673f715e…669a42.
+No device changes or restart during collection.
+
+The maintainer sees camera-only from the beginning. Already at21:46:00.826,
+one overlapping call and one fresh recovery are recorded. Stopped and blocked
+remain0. Every interval nevertheless reports projected stage4207 / geometry
+reason7, zero root passes, paired draws, sealed versions and game masks.
+Consumer missing-image refusals reach1974. Source/session authority is not
+revoked; dashboard epoch and certified UI pictures remain0 in this run.
+Frame receives no new game masks (27343 remains flat), with zero mask decode
+or upload refusals. This is an upstream geometry failure, not a Frame decoder
+failure or a still-quarantined admission.
+
+Geometry reason7 means an existing bound vertex record has invalid bytes or a
+retired write epoch. Recovery in053 unconditionally increments that epoch.
+A DEFAULT native vertex buffer initialized once need not be rewritten later;
+its already observed creation bytes therefore never become admissible again.
+The original overlapping callback pair is still unknown. The earlier fixture
+proved admission recovery but did not retain a real DEFAULT quad across it;
+its passing result did not cover this startup rendering failure.
+
+Candidate054 keeps a geometry-unknown bit in the SAME atomic admission epoch.
+Missed device creation/metadata and keyed synchronization callbacks cannot
+change existing native buffer bytes, so their recovery invalidates all image
+ancestry and shared mutation witnesses while preserving independently observed
+geometry. A missed context operation that could write native buffers still
+marks geometry unknown and revokes the write epoch. The flag survives further
+overlap and only clears with successful recovery of that exact epoch. Unknown
+native operations stay conservative; this is not a blanket geometry bypass.
+The bounded status now also reports the last missed operation (public context
+method slot or1001–1005creation/2001–2002sync) and geometry revocations.
+
+The regression fixture must create a real DEFAULT quad from initial data,
+exercise actual production observer overlap/recovery, and prove that unchanged
+bytes remain valid. A real native UpdateSubresource during a missed writer must
+make the OLD creation snapshot inadmissible; fresh observed bytes can repair it.
+Restoring053's broad invalidation must fail exactly the unchanged-quad check.
+Private-channel controls must also reject clearing the geometry flag across a
+new overlap during recovery. Original image/source/eye/native-release and peer
+proofs remain mandatory, as do all independent stable/beta runtime selections,
+normal/Legacy and Auto/fixed resolution. Frame and protocol stay unchanged.
+
+Expected hardware markers: stopped0, blocked returns0 after overlap, and no
+permanent4207 with metadata/sync as last-overlap-op. Fresh source roots, sealed
+versions and exact masks increase from startup and after dashboard close.
+A genuine missed buffer-writing operation may revoke geometry and must be
+identified explicitly. New source CI, immutable delivery and final setup checks
+must pass before testing; physical acceptance of054 is pending.
 
 ## Evidence locations and maintenance
 

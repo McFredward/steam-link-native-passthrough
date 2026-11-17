@@ -91,21 +91,21 @@ static_assert(sizeof(ChannelPage)<=32768,"bounded private section");
 class CaptureAdmission {
     ChannelPage* page_=nullptr;std::uint64_t token_=0;bool exclusive_=false;
 public:
-    static constexpr std::uint64_t Count=255,Dirty=256,Step=512;
+    static constexpr std::uint64_t Count=127,GeometryUnknown=128,Dirty=256,Step=512;
     static std::uint64_t state(ChannelPage* page)noexcept{
         return page?std::uint64_t(InterlockedCompareExchange64(&page->captureAdmission,0,0)):Dirty;
     }
     static std::uint64_t epoch(ChannelPage* page)noexcept{return state(page)&~Count;}
     static bool clean(ChannelPage* page)noexcept{return page&&!(state(page)&Dirty)&&!InterlockedCompareExchange(&page->stopped,0,0);}
     CaptureAdmission()noexcept=default;
-    explicit CaptureAdmission(ChannelPage* page)noexcept{
+    explicit CaptureAdmission(ChannelPage* page,bool geometryWrite=false)noexcept{
         if(!page||InterlockedCompareExchange(&page->stopped,0,0))return;
         auto before=state(page);
         for(unsigned attempt=0;attempt<16;++attempt){
             const auto count=before&Count;
             if(count==Count||before>std::uint64_t(INT64_MAX)-Step-1)break;
             auto after=before+1;
-            if(count)after=(after|Dirty)+Step;
+            if(count)after=(after|Dirty|(geometryWrite?GeometryUnknown:0))+Step;
             const auto observed=std::uint64_t(InterlockedCompareExchange64(&page->captureAdmission,LONG64(after),LONG64(before)));
             if(observed==before){page_=page;token_=after;exclusive_=count==0;return;}
             before=observed;
@@ -118,11 +118,12 @@ public:
     bool tracked()const noexcept{return page_!=nullptr;}
     bool exclusive()const noexcept{return exclusive_;}
     bool dirty()const noexcept{return (token_&Dirty)!=0;}
+    bool geometryUnknown()const noexcept{return (token_&GeometryUnknown)!=0;}
     bool recover()noexcept{
         // The caller first invalidates ALL producer ancestry and shared versions.
         // A new overlap during invalidation changes the epoch, so cannot be cleared.
         return page_&&exclusive_&&InterlockedCompareExchange64(&page_->captureAdmission,
-            LONG64(token_&~Dirty),LONG64(token_))==LONG64(token_);
+            LONG64(token_&~(Dirty|GeometryUnknown)),LONG64(token_))==LONG64(token_);
     }
 };
 // Every observed write invalidates all registered aliases of that actual

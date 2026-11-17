@@ -73,7 +73,8 @@ struct Observer {
     std::array<Context,4> contexts{};
     std::array<std::atomic<ID3D11DeviceContext*>,4> activeContexts{};
     std::atomic<bool> stopped{false};std::atomic<std::uint64_t> draws{0},recognized{0},dropped{0};
-    std::atomic<std::uint64_t> productionOverlaps{0},productionRecoveries{0};
+    std::atomic<std::uint64_t> productionOverlaps{0},productionRecoveries{0},productionGeometryRevocations{0};
+    std::atomic<unsigned> productionOverlapOperation{0};
     std::array<std::atomic<std::uint64_t>,8> rasterCalls{};
     std::uint64_t serial=0;
     static std::atomic<Observer*> instance;
@@ -94,22 +95,27 @@ struct Observer {
         Admission(Admission&&)=default;
         explicit operator bool()const noexcept{return context!=nullptr;}
     };
-    Admission production(ID3D11Device* device)noexcept {
+    Admission production(ID3D11Device* device,unsigned operation=0,bool geometryWrite=false)noexcept {
         if(!device||stopped||ownCommands||!productionPeer.page())return {};
         for(auto& context:contexts)if(context.producerDevice==device){
             auto* productionPage=productionPeer.page();
             if(!context.owns()){InterlockedExchange(&productionPage->stopped,1);return {};}
-            projected_alpha::CaptureAdmission capture(productionPage);
+            projected_alpha::CaptureAdmission capture(productionPage,geometryWrite);
             if(!capture.tracked())return {};
             if(!capture.exclusive()){
                 productionOverlaps.fetch_add(1,std::memory_order_relaxed);
+                productionOverlapOperation.store(operation,std::memory_order_relaxed);
                 projected_alpha::invalidateSharedImages(productionPage,nullptr);
                 return {nullptr,std::move(capture)};
             }
             if(capture.dirty()){
-                // Only one callback may touch private producer state. Old RGB,
-                // geometry and sealed witnesses cannot cross this recovery.
-                for(auto& item:contexts)if(item.producerDevice)item.producer.invalidate();
+                // Only missed operations that could write native buffers revoke
+                // geometry snapshots. Metadata/lock callbacks cannot change them.
+                for(auto& item:contexts)if(item.producerDevice){
+                    if(capture.geometryUnknown())item.producer.invalidate();
+                    else item.producer.invalidateImages();
+                }
+                if(capture.geometryUnknown())productionGeometryRevocations.fetch_add(1,std::memory_order_relaxed);
                 if(!capture.recover())return {nullptr,std::move(capture)};
                 productionRecoveries.fetch_add(1,std::memory_order_relaxed);
             }
@@ -119,30 +125,30 @@ struct Observer {
         return {};
     }
     static void textureObserved(ID3D11Device* device,ID3D11Texture2D* texture,projected_alpha::TextureOrigin,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device)){
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device,1001,false)){
             OwnCommands own;self.nativeLocks.observeTexture(device,texture);
         }
     }
     static void targetObserved(ID3D11Device* device,ID3D11RenderTargetView* view,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context){OwnCommands own;context->producer.target(view);}
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device,1002,false))if(auto* context=admission.context){OwnCommands own;context->producer.target(view);}
     }
     static void bufferObserved(ID3D11Device* device,const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* data,ID3D11Buffer* buffer,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context)context->producer.geometry().buffer(desc,data,buffer);
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device,1003,false))if(auto* context=admission.context)context->producer.geometry().buffer(desc,data,buffer);
     }
     static void layoutObserved(ID3D11Device* device,const D3D11_INPUT_ELEMENT_DESC* desc,UINT count,const void* code,SIZE_T bytes,ID3D11InputLayout* layout,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context)context->producer.geometry().layout(desc,count,code,bytes,layout);
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device,1004,false))if(auto* context=admission.context)context->producer.geometry().layout(desc,count,code,bytes,layout);
     }
     static void depthObserved(ID3D11Device* device,ID3D11DepthStencilState* state,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device))if(auto* context=admission.context){OwnCommands own;context->producer.depthState(state);}
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(device,1005,false))if(auto* context=admission.context){OwnCommands own;context->producer.depthState(state);}
     }
     static void lockReleasing(const projected_alpha::MutexLease& lease,std::uint64_t key,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(lease.device))if(auto* context=admission.context)context->producer.releasing(lease,key);
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(lease.device,2001,false))if(auto* context=admission.context)context->producer.releasing(lease,key);
     }
     static void lockReleased(const projected_alpha::MutexLease& lease,HRESULT result,void* opaque)noexcept{
-        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(lease.device))if(auto* context=admission.context)context->producer.released(lease,result);
+        auto& self=*static_cast<Observer*>(opaque);if(auto admission=self.production(lease.device,2002,false))if(auto* context=admission.context)context->producer.released(lease,result);
     }
-    template<unsigned Index>Admission productionContext(ID3D11DeviceContext* object)noexcept{
-        auto& context=contexts[Index];return context.object==object?production(context.producerDevice):Admission{};
+    template<unsigned Index>Admission productionContext(ID3D11DeviceContext* object,unsigned operation=1,bool geometryWrite=true)noexcept{
+        auto& context=contexts[Index];return context.object==object?production(context.producerDevice,operation,geometryWrite):Admission{};
     }
     void attachContext(ID3D11Device* device,bool prepareAlpha=false){
         std::lock_guard<std::mutex> guard(mutex);if(stopped)return;
@@ -231,7 +237,7 @@ struct Observer {
     template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
         auto& s=*instance.load(std::memory_order_acquire); \
         const DWORD incoming=GetLastError(); \
-        auto admission=s.productionContext<Index>(ctx);bool executed=false;DWORD returned=incoming; \
+        auto admission=s.productionContext<Index>(ctx,Slot,true);bool executed=false;DWORD returned=incoming; \
         if(auto* production=admission.context){OwnCommands own; \
             if(Slot==13)executed=production->producer.draw(ctx,bits<projected_alpha::Draw>(s.contexts[Index].function(13)),callCount(Call),callStart(Call),incoming); \
             if(executed)returned=GetLastError(); \
@@ -253,7 +259,7 @@ struct Observer {
     template<unsigned Index>static void STDMETHODCALLTYPE execute(ID3D11DeviceContext* ctx,ID3D11CommandList* commands,BOOL restore){
         auto& s=*instance.load(std::memory_order_acquire);
         const DWORD incoming=GetLastError();
-        auto admission=s.productionContext<Index>(ctx);
+        auto admission=s.productionContext<Index>(ctx,58,true);
         if(auto* production=admission.context)production->producer.invalidate();
         SetLastError(incoming);
         bits<decltype(&execute<Index>)>(s.contexts[Index].function(58))(ctx,commands,restore);
@@ -264,7 +270,7 @@ struct Observer {
     }
     template<unsigned Index>static HRESULT STDMETHODCALLTYPE map(ID3D11DeviceContext* ctx,ID3D11Resource* resource,UINT sub,D3D11_MAP type,UINT flags,D3D11_MAPPED_SUBRESOURCE* output){
         auto& self=*instance.load();const DWORD incoming=GetLastError();
-        auto admission=self.productionContext<Index>(ctx);
+        auto admission=self.productionContext<Index>(ctx,14,type!=D3D11_MAP_READ);
         if(auto* c=admission.context)if(type!=D3D11_MAP_READ)c->producer.invalidate(resource);
         SetLastError(incoming);const auto result=bits<decltype(&map<Index>)>(self.contexts[Index].function(14))(ctx,resource,sub,type,flags,output);
         const DWORD error=GetLastError();
@@ -273,13 +279,13 @@ struct Observer {
     }
     template<unsigned Index>static void STDMETHODCALLTYPE unmap(ID3D11DeviceContext* ctx,ID3D11Resource* resource,UINT sub){
         auto& self=*instance.load();const DWORD incoming=GetLastError();
-        auto admission=self.productionContext<Index>(ctx);
+        auto admission=self.productionContext<Index>(ctx,15,true);
         if(!sub)if(auto* c=admission.context)c->producer.geometry().beforeUnmap(resource);
         SetLastError(incoming);bits<decltype(&unmap<Index>)>(self.contexts[Index].function(15))(ctx,resource,sub);
     }
     template<unsigned Index>static void STDMETHODCALLTYPE clearTarget(ID3D11DeviceContext* ctx,ID3D11RenderTargetView* view,const FLOAT* color){
         auto& self=*instance.load();const DWORD incoming=GetLastError();
-        auto admission=self.productionContext<Index>(ctx);
+        auto admission=self.productionContext<Index>(ctx,50,true);
         if(auto* c=admission.context){OwnCommands own;c->producer.clear(ctx,view,color);}
         SetLastError(incoming);bits<decltype(&clearTarget<Index>)>(self.contexts[Index].function(50))(ctx,view,color);
     }
@@ -287,7 +293,7 @@ struct Observer {
 #define SFNP_PRODUCTION_WRITE(Name,Slot,Parameters,Arguments,Operation) \
     template<unsigned Index>static void STDMETHODCALLTYPE Name Parameters { \
         auto& self=*instance.load();const DWORD incoming=GetLastError(); \
-        auto admission=self.productionContext<Index>(ctx); \
+        auto admission=self.productionContext<Index>(ctx,Slot,true); \
         if(auto* c=admission.context){OwnCommands own;Operation;} \
         SetLastError(incoming);bits<decltype(&Name<Index>)>(self.contexts[Index].function(Slot)) Arguments; \
     }
@@ -418,6 +424,8 @@ struct Observer {
         status.productionStopped=productionPeer.page()?unsigned(InterlockedCompareExchange(&productionPeer.page()->stopped,0,0)):0;
         status.productionOverlaps=productionOverlaps.load(std::memory_order_relaxed);
         status.productionRecoveries=productionRecoveries.load(std::memory_order_relaxed);
+        status.productionGeometryRevocations=productionGeometryRevocations.load(std::memory_order_relaxed);
+        status.productionOverlapOperation=productionOverlapOperation.load(std::memory_order_relaxed);
         status.productionBlocked=productionPeer.page()&&!projected_alpha::CaptureAdmission::clean(productionPeer.page());
         status.streamShaderKinds=stats.streamKinds;status.unknownPixelPrograms=stats.unknownPixels;
         status.unknownPixelOverflow=stats.unknownPixelOverflow;
