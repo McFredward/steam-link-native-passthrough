@@ -64,6 +64,20 @@ void admissionControls(){
     {
         CaptureAdmission recovery(&page);check(recovery.geometryUnknown()&&recovery.recover(),"writer scope remains dirty until exact epoch recovery succeeds");
     }
+    {
+        CaptureAdmission owner(&page);
+        {CaptureAdmission metadata(&page,false);}
+    }
+    {
+        CaptureAdmission recovery(&page,true);
+        {CaptureAdmission metadata(&page,false);}
+        check(!recovery.recover(),"exclusive writer loses recovery when another callback overlaps");
+        recovery.missedWriter();
+    }
+    {
+        CaptureAdmission recovery(&page);check(recovery.geometryUnknown()&&recovery.recover(),
+            "writer refused after initial exclusive admission cannot lose its geometry revocation");
+    }
     page.captureAdmission=CaptureAdmission::Count;
     {CaptureAdmission overflow(&page);check(!overflow.tracked()&&page.stopped,"bounded admission overflow remains fail closed");}
 }

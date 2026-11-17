@@ -116,10 +116,16 @@ struct Observer {
                     else item.producer.invalidateImages();
                 }
                 if(capture.geometryUnknown())productionGeometryRevocations.fetch_add(1,std::memory_order_relaxed);
-                if(!capture.recover())return {nullptr,std::move(capture)};
+                if(!capture.recover()){
+                    if(geometryWrite){productionOverlapOperation.store(operation,std::memory_order_relaxed);capture.missedWriter();}
+                    return {nullptr,std::move(capture)};
+                }
                 productionRecoveries.fetch_add(1,std::memory_order_relaxed);
             }
-            if(!projected_alpha::CaptureAdmission::clean(productionPage))return {nullptr,std::move(capture)};
+            if(!projected_alpha::CaptureAdmission::clean(productionPage)){
+                if(geometryWrite){productionOverlapOperation.store(operation,std::memory_order_relaxed);capture.missedWriter();}
+                return {nullptr,std::move(capture)};
+            }
             return {&context,std::move(capture)};
         }
         return {};
