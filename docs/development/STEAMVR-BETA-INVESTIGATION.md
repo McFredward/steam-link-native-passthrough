@@ -857,6 +857,10 @@ and current
 [GPU controls](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44167691453)
 pass. The new DLL's SHA256 is
 `4ef8636bb08bd205b16784b8d5b0cd458f144ca17e2c0b355973f8b99982e0d8`.
+The complete [native CI run](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44167691336)
+also passes on the final source. Unchanged stage/lifecycle/readback and Frame
+controls retain their earlier successful scope; changed observer/producer/
+consumer behavior has the current Windows GPU controls above.
 Frame and setup payloads must remain byte-identical to0.3.52. Immutable archive,
 bootstrap and final platform setup checks must pass before the test handoff.
 
