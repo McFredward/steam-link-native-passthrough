@@ -127,7 +127,7 @@ jobs:
           $observer = Get-Content pc/stream-bridge-source-audit-observer.cpp -Raw
           $needle = 'productionOverlaps.fetch_add(1,std::memory_order_relaxed);'
           if ([regex]::Matches($observer, [regex]::Escape($needle)).Count -ne 1) { throw 'Overlap causal control must change exactly one production branch' }
-          $observer.Replace($needle, $needle + 'InterlockedExchange(&page->stopped,1);') | Set-Content build/terminal-observer.cpp
+          $observer.Replace($needle, $needle + 'InterlockedExchange(&productionPage->stopped,1);') | Set-Content build/terminal-observer.cpp
           (Get-Content tests/test_stream_bridge_source_audit_gpu.cpp -Raw).Replace('pc/stream-bridge-source-audit-observer.cpp', 'build/terminal-observer.cpp') | Set-Content build/terminal-control.cpp
           & cl /nologo /std:c++17 /EHsc /W4 /WX /I. /Ipc build/terminal-control.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build/terminal-control.exe /Fo:build/ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib bcrypt.lib
           if ($LASTEXITCODE -ne 0) { throw 'Overlap causal control must compile' }
