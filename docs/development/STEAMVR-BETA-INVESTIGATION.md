@@ -1,11 +1,10 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-17 after installed **0.3.51 / PC0.3.37 / Frame0.3.13**.
-The maintainer reports no more intermittent game disappearances in the latest
-run. Opening SteamVR's dashboard exposes a separate failure: flat desktop/Steam
-panels are invisible, although the lower bar and laser hit-testing still work.
-Candidate0.3.52 / PC0.3.38 targets native dashboard presentation; its headset
-result is pending. Battlemarked remains the test app; Venture is separate.
+Updated2026-11-17 after installed **0.3.52 / PC0.3.38 / Frame0.3.13**.
+Battlemarked initially displays passthrough and game elements, then remains
+camera-only. The matched logs prove a single overlapping observer call
+permanently stops our private mask channel. Candidate0.3.53 / PC0.3.39 targets
+bounded overlap recovery; physical acceptance is pending. Venture is separate.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -13,6 +12,15 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E055 identifies a separate permanent-stop defect in our observer admission.
+At21:02:17CET the private channel is live with no overlaps; by21:02:22 one
+overlap has stopped it. Exact game masks reach533 and never increase again.
+Dashboard events continue and closing the dashboard cannot restore the channel.
+The proposed repair quarantines every overlapping original operation until all
+have returned, invalidates producer ancestry, and requires fresh exact masks.
+It does not revive old witnesses or restart paired negotiation.
+
 
 E051–E053 below record the successful initial beta image and the remaining
 continuity defects. 0.3.50 preserves 43 supported native encoder resets in the
@@ -783,6 +791,54 @@ independent stable/beta combinations, normal/Legacy and Auto/fixed resolution
 requirements remain. Unknown native UI intent keeps existing recovery; the new
 bounded counters must make missing runtime events explicit in the next test.
 Headset acceptance of0.3.52 is pending; dev only, no device install/restart.
+
+## E055 — one observer overlap permanently stops game coverage (2026-11-17)
+
+Installed0.3.52 / PC0.3.38 / unchangedFrame0.3.13. Private matched capture:
+`20261117-after052/{pc,frame,frame-native,review-summary.json}` in Venture's
+ignored passthrough test directory. PC21:01:40–21:02:59CET; read-only Frame
+capture20:01:20–20:03:15UTC. Frame's mapped layer identity matches installed
+Frame13 SHA673f715e…669a42. No device changes or restart during collection.
+
+The maintainer reports an initially working mixed image, followed by permanent
+camera-only output. PC masks increase403→533 from21:02:17to21:02:22, then stay533
+to shutdown. In that same interval private-channel-stopped0→1 and
+ overlapping-calls-refused0→1. Subsequent selection channel refusals rise to3259.
+Encoder reset attempts remain1 with only the startup clock fallback; session/
+certificate refusals stay30/25. The dashboard closes correctly: epoch0 and
+activation/deactivation6/6 at21:02:52, yet game masks still do not resume.
+
+Frame masks increase by exactly533 (26810→27343) and then stay flat; mask decode
+and upload refusals remain0. Ordinary native UI reaches1006 recorded operations
+and503 guarded submits. Thus the new ordinary-image route executes on Frame;
+this is not visual acceptance of every panel. Matched native vrlink file rows
+contain no backtrack/FEC reset. The prior explanation of recurring encoder
+resets does not explain this permanent channel retirement.
+
+The production observer explicitly sets its shared stopped bit on the first
+concurrent admission. That is sufficient to explain nonrecovery. The logs do
+not identify which metadata/draw/lock callback pair overlapped; do not claim
+concurrent native drawing or a dashboard event caused it. Lost facade ownership,
+identity mismatch and exhausted counters must remain terminal.
+
+Candidate0.3.53 replaces the one-overlap permanent stop with a bounded private
+admission count, dirty bit and monotonic overlap epoch. Rejected callbacks retain
+a counted guard through their original native call; they cannot touch producer
+state. Dirty admission blocks producer certification and consumer selection.
+The first exclusive callback after ALL originals return invalidates all producer
+ancestry, geometry write epochs and shared image mutations, then clears only its
+unchanged dirty epoch. Another overlap during recovery cannot be cleared by ABA.
+No thread waits for another callback, no queued frames/resources, no handshake
+reset or Frame payload change. Unsupported/missed metadata remains unproved;
+recovery must observe fresh complete data rather than guess it.
+
+Expected hardware markers: stopped remains0; a transient overlap raises refused
+and fresh-recoveries, blocked returns0, and exact masks resume. UI ordinary video,
+hover/click and repeated open/close must remain usable. A repeated failure with
+blocked0 but no masks needs a new matched diagnosis, not another admission bypass.
+All four independently selected stable/beta combinations, normal/Legacy and
+Auto/fixed resolution remain requirements. Software controls and artifact/CI
+validation are recorded below before publication; headset acceptance is pending.
 
 ## Evidence locations and maintenance
 

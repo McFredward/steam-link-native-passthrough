@@ -58,7 +58,7 @@ struct Observer {
     std::mutex mutex;SourceAuditInventory inventory{};SourceAuditStatus status{};
     struct Context {
         BasicSourceAlphaProbe<8> alpha;
-        projected_alpha::NativeProducer producer;ID3D11Device* producerDevice=nullptr;std::atomic_flag productionBusy=ATOMIC_FLAG_INIT;
+        projected_alpha::NativeProducer producer;ID3D11Device* producerDevice=nullptr;
         ID3D11DeviceContext* object=nullptr;void** original=nullptr;void** facade=nullptr;
         std::array<void*,149> expected{};unsigned count=0;void* allocation=nullptr;
         bool owns()const noexcept {
@@ -73,7 +73,7 @@ struct Observer {
     std::array<Context,4> contexts{};
     std::array<std::atomic<ID3D11DeviceContext*>,4> activeContexts{};
     std::atomic<bool> stopped{false};std::atomic<std::uint64_t> draws{0},recognized{0},dropped{0};
-    std::atomic<std::uint64_t> productionOverlaps{0};
+    std::atomic<std::uint64_t> productionOverlaps{0},productionRecoveries{0};
     std::array<std::atomic<std::uint64_t>,8> rasterCalls{};
     std::uint64_t serial=0;
     static std::atomic<Observer*> instance;
@@ -88,27 +88,33 @@ struct Observer {
         try{s.attachContext(device,true);}catch(...){std::lock_guard<std::mutex> guard(s.mutex);s.status.state=8;s.status.error=ERROR_UNHANDLED_EXCEPTION;}
     }
     struct Admission {
-        Context* context=nullptr;
-        Admission(Context* value=nullptr)noexcept:context(value){}
+        Context* context=nullptr;projected_alpha::CaptureAdmission capture;
+        Admission(Context* value=nullptr,projected_alpha::CaptureAdmission gate={})noexcept:context(value),capture(std::move(gate)){}
         Admission(const Admission&)=delete;Admission& operator=(const Admission&)=delete;
-        ~Admission(){reset();}
+        Admission(Admission&&)=default;
         explicit operator bool()const noexcept{return context!=nullptr;}
-        void reset()noexcept{if(context){context->productionBusy.clear(std::memory_order_release);context=nullptr;}}
     };
     Admission production(ID3D11Device* device)noexcept {
         if(!device||stopped||ownCommands||!productionPeer.page())return {};
         for(auto& context:contexts)if(context.producerDevice==device){
-            if(!context.owns()){InterlockedExchange(&productionPeer.page()->stopped,1);return {};}
-            if(context.productionBusy.test_and_set(std::memory_order_acquire)){
-                // Sequential native callers may migrate between OS threads.
-                // Unsupported concurrent mutation cannot expose an old pair.
+            auto* page=productionPeer.page();
+            if(!context.owns()){InterlockedExchange(&page->stopped,1);return {};}
+            projected_alpha::CaptureAdmission capture(page);
+            if(!capture.tracked())return {};
+            if(!capture.exclusive()){
                 productionOverlaps.fetch_add(1,std::memory_order_relaxed);
-                InterlockedExchange(&productionPeer.page()->stopped,1);return {};
+                projected_alpha::invalidateSharedImages(page,nullptr);
+                return {nullptr,std::move(capture)};
             }
-            if(InterlockedCompareExchange(&productionPeer.page()->stopped,0,0)){
-                context.productionBusy.clear(std::memory_order_release);return {};
+            if(capture.dirty()){
+                // Only one callback may touch private producer state. Old RGB,
+                // geometry and sealed witnesses cannot cross this recovery.
+                for(auto& item:contexts)if(item.producerDevice)item.producer.invalidate();
+                if(!capture.recover())return {nullptr,std::move(capture)};
+                productionRecoveries.fetch_add(1,std::memory_order_relaxed);
             }
-            return Admission(&context);
+            if(!projected_alpha::CaptureAdmission::clean(page))return {nullptr,std::move(capture)};
+            return {&context,std::move(capture)};
         }
         return {};
     }
@@ -411,6 +417,8 @@ struct Observer {
         status.draws=draws.load();status.recognizedDraws=recognized.load();status.dropped=dropped.load();
         status.productionStopped=productionPeer.page()?unsigned(InterlockedCompareExchange(&productionPeer.page()->stopped,0,0)):0;
         status.productionOverlaps=productionOverlaps.load(std::memory_order_relaxed);
+        status.productionRecoveries=productionRecoveries.load(std::memory_order_relaxed);
+        status.productionBlocked=productionPeer.page()&&!projected_alpha::CaptureAdmission::clean(productionPeer.page());
         status.streamShaderKinds=stats.streamKinds;status.unknownPixelPrograms=stats.unknownPixels;
         status.unknownPixelOverflow=stats.unknownPixelOverflow;
         status.multiViewShaderKinds=stats.multiViewKinds;

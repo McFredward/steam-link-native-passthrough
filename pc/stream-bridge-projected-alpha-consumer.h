@@ -67,8 +67,8 @@ public:
     Selection select(ID3D11Device* device,const Allocation& native,std::uint64_t sync,std::uint64_t liveLease)noexcept{
         selectionCounts_[0].fetch_add(1,std::memory_order_relaxed);
         const auto refuse=[this](unsigned reason)noexcept{selectionCounts_[reason].fetch_add(1,std::memory_order_relaxed);return Selection{};};
-        auto* page=channel_.page();
-        if(!page||!liveLease||!sync||InterlockedCompareExchange(&page->stopped,0,0)||
+        auto* page=channel_.page();const auto admission=CaptureAdmission::epoch(page);
+        if(!page||!liveLease||!sync||!CaptureAdmission::clean(page)||
             static_cast<std::uint64_t>(InterlockedCompareExchange64(&page->sourceLease,0,0))!=liveLease)return refuse(2);
         const auto lock=locks_.current(device,sync);if(!lock)return refuse(3);
         RegistryRead retained;if(!retained.acquire(page))return refuse(4);
@@ -106,6 +106,7 @@ public:
             selected={view,witness.sourceLease,witness.scene.pid};
         }
         if(!selected.view)return refuse(reason);
+        if(!CaptureAdmission::clean(page)||CaptureAdmission::epoch(page)!=admission)return refuse(2);
         selectionCounts_[1].fetch_add(1,std::memory_order_relaxed);
         return selected;
     }

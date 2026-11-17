@@ -62,7 +62,7 @@ class NativeProducer {
         return selected;
     }
     bool live(std::uint64_t lease)const noexcept{
-        return page_&&lease&&!InterlockedCompareExchange(&page_->stopped,0,0)&&
+        return page_&&lease&&CaptureAdmission::clean(page_)&&
             std::uint64_t(InterlockedCompareExchange64(&page_->sourceLease,0,0))==lease;
     }
     Reference<Record> get(ID3D11Resource* resource)noexcept{

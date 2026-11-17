@@ -35,6 +35,26 @@ int peer(HANDLE input){
     while(channel.active()&&GetTickCount64()<deadline)Sleep(1); // Own IPC fixture only, never a render callback.
     check(!channel.active(),"explicit parent stop invalidates the child channel");return 0;
 }
+void admissionControls(){
+    ChannelPage page{};
+    {
+        CaptureAdmission first(&page);check(first.exclusive()&&CaptureAdmission::clean(&page),"one native owner permits exact producer work");
+        {CaptureAdmission overlap(&page);check(overlap.tracked()&&!overlap.exclusive()&&!CaptureAdmission::clean(&page),
+            "overlap quarantines without granting producer access");}
+        check(!CaptureAdmission::clean(&page),"overlap completion cannot revive old producer witnesses");
+    }
+    {
+        CaptureAdmission fresh(&page);check(fresh.exclusive()&&fresh.dirty(),"exclusive recovery requires explicit ancestry invalidation");
+        {CaptureAdmission another(&page);check(another.tracked()&&!another.exclusive(),"new overlap has no producer authority");}
+        check(!fresh.recover()&&!CaptureAdmission::clean(&page),"overlap during recovery changes epoch and cannot be cleared by ABA");
+    }
+    {
+        CaptureAdmission fresh(&page);check(fresh.exclusive()&&fresh.recover()&&CaptureAdmission::clean(&page),
+            "quiescent explicit invalidation can reopen only the current epoch");
+    }
+    page.captureAdmission=CaptureAdmission::Count;
+    {CaptureAdmission overflow(&page);check(!overflow.tracked()&&page.stopped,"bounded admission overflow remains fail closed");}
+}
 void budgetControls(){
     ChannelPage page{};
     {
@@ -56,7 +76,7 @@ void budgetControls(){
         "committed storage stays accounted and an overflowing request changes nothing");
 }
 void parent(){
-    budgetControls();
+    admissionControls();budgetControls();
     ChannelParent channel;check(channel.create(),"cold unnamed private section");
     Registry registry{};registry.revision=5;registry.sourceLease=0x70000004du;
     registry.retained[0]={101,18,100,37,29,28,1,1};registry.retained[1]={102,19,77,37,29,28,1,1};

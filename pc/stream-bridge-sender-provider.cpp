@@ -539,8 +539,9 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                 std::snprintf(text,sizeof text,"projected alpha producer stages: %u/%u/%u/%u; 1=prepared, 2=storage, 10=draw, 12=geometry, 13=source, 1305=source-ownership-missing, 14=ancestry, 15=replay, 16=paired, 20=native-release-sealed; 2020=unproved-padded-sample,2021=conditional-write-without-complete-base,2022=unproved-reprojection-source,2031=unknown-logical-constants,2032=sample-height-outside-written-region,2033=sample-width-outside-written-region; geometry-v2 2001=args,2002=predicate,2003=shader-stages,2004=topology,2005=layout,2006=buffer-missing,2007=buffer-content,2008=stride,2009=range,2010=nonfinite,2011=quad,2012=viewport,2013=raster,2014=culling,2015=scissor,2016=sample-mask; layout-capture 2101=args,2102=reflection,2103=signature,2104=register,2105=semantic,2106=format,2107=slot,2108=offset; diagnostics only",
                     audit.projectedAlphaStages[0],audit.projectedAlphaStages[1],audit.projectedAlphaStages[2],audit.projectedAlphaStages[3]);
                 report(text,stream_bridge::logging::Level::Debug);
-                std::snprintf(text,sizeof text,"projected alpha admission: private-channel-stopped=%u, overlapping-calls-refused=%llu; approximate diagnostics only, existing concurrency refusal retained",
-                    audit.productionStopped,static_cast<unsigned long long>(audit.productionOverlaps));
+                std::snprintf(text,sizeof text,"projected alpha admission: private-channel-stopped=%u, overlapping-calls-refused=%llu; fresh-recoveries=%llu; blocked=%u; exact fresh ancestry required after overlap",
+                    audit.productionStopped,static_cast<unsigned long long>(audit.productionOverlaps),
+                    static_cast<unsigned long long>(audit.productionRecoveries),audit.productionBlocked);
                 report(text,stream_bridge::logging::Level::Debug);
                 for(unsigned context=0;context<audit.production.size();++context){const auto& production=audit.production[context];
                     if(!audit.projectedAlphaStages[context])continue;

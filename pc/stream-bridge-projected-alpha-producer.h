@@ -37,7 +37,7 @@ class Producer {
     }
     unsigned index(const ImageState& image)const noexcept{return image.row;}
     bool live(std::uint64_t lease)const noexcept{
-        return page_&&lease&&!InterlockedCompareExchange(&page_->stopped,0,0)&&
+        return page_&&lease&&CaptureAdmission::clean(page_)&&
             static_cast<std::uint64_t>(InterlockedCompareExchange64(&page_->sourceLease,0,0))==lease;
     }
     void revoke(ImageState& image)noexcept{

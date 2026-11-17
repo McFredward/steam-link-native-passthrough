@@ -121,6 +121,22 @@ jobs:
           set "SFNP_RESULT=%ERRORLEVEL%"
           type build\audit-gpu.log
           exit /b %SFNP_RESULT%
+      - name: Require the old permanent overlap stop to fail the recovery control
+        shell: pwsh
+        run: |
+          $observer = Get-Content pc/stream-bridge-source-audit-observer.cpp -Raw
+          $needle = 'productionOverlaps.fetch_add(1,std::memory_order_relaxed);'
+          if ([regex]::Matches($observer, [regex]::Escape($needle)).Count -ne 1) { throw 'Overlap causal control must change exactly one production branch' }
+          $observer.Replace($needle, $needle + 'InterlockedExchange(&page->stopped,1);') | Set-Content build/terminal-observer.cpp
+          (Get-Content tests/test_stream_bridge_source_audit_gpu.cpp -Raw).Replace('pc/stream-bridge-source-audit-observer.cpp', 'build/terminal-observer.cpp') | Set-Content build/terminal-control.cpp
+          & cl /nologo /std:c++17 /EHsc /W4 /WX /I. /Ipc build/terminal-control.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build/terminal-control.exe /Fo:build/ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib bcrypt.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Overlap causal control must compile' }
+          & build/terminal-control.exe *>build/terminal-control.log
+          $result = $LASTEXITCODE
+          $log = Get-Content build/terminal-control.log -Raw
+          Write-Host $log
+          if ($result -ne 1 -or $log -notmatch 'one overlapping caller refuses private work without permanently stopping the channel') { throw 'Old terminal behavior did not fail the intended recovery assertion' }
+          exit 0
       - name: Exercise actual asynchronous owned DLL load and refusal paths
         shell: cmd
         run: |
