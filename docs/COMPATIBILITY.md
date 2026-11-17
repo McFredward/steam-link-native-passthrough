@@ -1,11 +1,11 @@
 # Tested versions and evidence
 
-Development candidate **0.3.51 / PC0.3.37 / Frame0.3.13** retains the earlier
-runtime paths alongside the beta paths. The maintainer confirmed real
-Battlemarked passthrough with game elements on 0.3.48–0.3.50; intermittent
-camera-only recovery remains under investigation. 0.3.51 addresses an additional
-restart of unfinished negotiation during supported encoder resets; its headset
-result is pending. See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
+Development candidate **0.3.52 / PC0.3.38 / Frame0.3.13** retains the earlier
+runtime paths alongside the beta paths. The maintainer reports no more
+intermittent game disappearances with0.3.51. A separate SteamVR dashboard issue
+hides flat Steam/desktop panels while the MR game remains open;0.3.52 adds
+positive native UI presentation intent tied to each exact accepted input.
+Its headset dashboard result is pending. See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
 The table below preserves the separately confirmed stable release observations.
 
 ## Successfully tested versions
@@ -78,6 +78,12 @@ The current selection points are:
   its interface, then apply its corresponding reviewed transformation. Compiler
   metadata or identifier changes can normalize without admitting changed shader
   arithmetic. Do not mix stages from incompatible native contracts.
+- **SteamVR dashboard:** observe native dashboard activation/deactivation on
+  the public driver host and freeze its intent with the actual accepted encoder
+  input. Current UI pictures retain their original native RGB/interaction and
+  use an authenticated ordinary-video descriptor; missing game alpha alone
+  never selects that route. Close/reopen revokes old UI receipts and restores
+  fresh game-mask composition. Runtime release labels do not select UI behavior.
 - **Between devices:** negotiate implemented protocol capabilities and prove
   the actual coded-video roundtrip. SteamVR release numbers are not part of
   that negotiation; different device or companion build identifiers need not

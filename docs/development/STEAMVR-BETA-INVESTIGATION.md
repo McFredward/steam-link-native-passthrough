@@ -763,6 +763,16 @@ The actual signed native runtime fixture additionally verifies None/policy2
 and original-byte identity after MR withdrawal. This is a general UI/source
 scope guard; it does not change the runtime selection or Frame payload.
 
+Final native scope validation on `706d20d3d660538ed5ce4e6cf18ae992401af9ae`
+passes [all native checks](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051784777),
+[Windows/Linux stage controls](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051785154),
+GPU alpha, Windows resources/readback and lifecycle checks. The actual paired
+runtime fixture now has1170 checks, including the signed no-MR policy2 control.
+Observer run44048670747 remains valid for unchanged observer/loader/producer/
+core-ABI inputs, checked byte-for-byte. The final PC DLL is rebuilt from isolated
+e1d6579; Frame/setup bytes remain unchanged. Physical dashboard event delivery
+and display acceptance still require the maintainer's test.
+
 Expected hardware markers: `native dashboard presentation` reports a valid
 host, activation/deactivation events and certified pictures while UI is open;
 Frame ordinary-video operations increase instead of continuous camera-only
