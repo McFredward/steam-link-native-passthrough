@@ -1,0 +1,1093 @@
+{
+  "all_continuity_failures_repaired": false,
+  "archive": {
+    "bytes": 20348025,
+    "sha256": "e5402718ba298fa6d8b60432adbc373b442fcc40e35a93e6639f10052bf666aa"
+  },
+  "artifacts": {
+    "frame_layer": {
+      "bytes": 3724368,
+      "sha256": "673f715eab0bad3d774f3cf803445e82ccd21940cb8f7b1280aba99e2d669a42"
+    },
+    "frame_selector": {
+      "bytes": 73360,
+      "sha256": "3ee160069c02826cf6312e8644a98d5dd148d3afac58a67bfee0987bae79e2ec"
+    },
+    "mask_codec": {
+      "bytes": 1576456,
+      "sha256": "b1e38d3fbb3ba7d5dede736cbd9e85ef358f9d70e5cb74bd8b4ab5d8c51ed739"
+    },
+    "mask_util": {
+      "bytes": 854736,
+      "sha256": "1d595555ce8c1a4f3b8323d71d2a092e648f8e49d6cd7c26f863afe855c8888e"
+    },
+    "pc_provider": {
+      "bytes": 2359296,
+      "sha256": "5bf1d93af700f54810f34679ae5f69f657972664fb297df0a471953c31d27595"
+    }
+  },
+  "base_archive": {
+    "bytes": 20346340,
+    "sha256": "0420e5f621289731895e89a49fbc10252d6c18ddf830cb5ee178642924bb6ea8"
+  },
+  "candidate_ready_for_headset_test": true,
+  "causal_baseline": {
+    "baseline_output": "FAIL: each fresh dashboard input retains exact native RGB without a game mask\n",
+    "declaration_adaptation": "Unchanged old production implementation compiled against current additive internal evidence/observer declarations. It leaves the new per-input presentation receipt absent; no old behavior was rewritten.",
+    "device_access": false,
+    "exit_code": 1,
+    "expected_failure": "each fresh dashboard input retains exact native RGB without a game mask",
+    "production_core_sha256": "d453c8da92323540644adb6bb8024a6b7cb6d3ba8e99916575beab5b9cb38d9b",
+    "source_revision": "21c9d0a"
+  },
+  "causal_mutations": {
+    "controls": {
+      "dashboard-input-receipt-omitted": {
+        "exit_code": 1,
+        "expected_failure": "each fresh dashboard input retains exact native RGB without a game mask"
+      },
+      "late-encode-status": {
+        "exit_code": 1,
+        "expected_failure": "every full-size exact native output completed BEFORE Encode returns keeps its mask"
+      },
+      "latest-dashboard-state": {
+        "exit_code": 1,
+        "expected_failure": "opening dashboard cannot retroactively reclassify a previously accepted game input"
+      },
+      "old-unlock-retires-new-input": {
+        "exit_code": 1,
+        "expected_failure": "unmatched old Unlock cannot retire the newly accepted input sharing its output handle"
+      },
+      "pending-negotiation-reset-barrier": {
+        "exit_code": 1,
+        "expected_failure": "same-contract IDR reset preserves pending negotiation without granting coverage"
+      },
+      "qos-input-barrier": {
+        "exit_code": 1,
+        "expected_failure": "every exact full-size frame completed DURING QoS keeps its mask"
+      },
+      "qos-output-barrier": {
+        "exit_code": 1,
+        "expected_failure": "every exact full-size frame completed DURING QoS keeps its mask"
+      },
+      "same-contract-idr-barrier": {
+        "exit_code": 1,
+        "expected_failure": "same-contract IDR reset preserves pending negotiation without granting coverage"
+      },
+      "timestamp-fence-removed": {
+        "exit_code": 1,
+        "expected_failure": "post-reset timestamp reuse revokes source authority before native output can borrow a previous frame"
+      }
+    },
+    "device_access": false,
+    "production_core_sha256": "53e014b90851fe38febe07fb398dd5dfa1a2ea1cf86c09789cbb9395b6eaaca7"
+  },
+  "causation_limit": "Latest051continuity is user-confirmed for this run; no matched unpatched control establishes native reset causation. Dashboard visibility hypothesis is independently scoped. Public driver event delivery, all dashboard interactions, floating third-party overlays and all stable/beta hardware matrix cells have not been newly verified in a headset test.",
+  "change": "Read positive native DashboardActivated/Deactivated intent from the public per-driver host during bounded RunFrame polling. Freeze its epoch before original Encode in the exact registered/mapped submission; successful native Lock still requires its unique output/timestamp and current peer/probe. A current UI epoch certifies unchanged native video with None coverage and existing ordinary-picture policy3, or policy2 for older optional capability. Do not infer UI from absent alpha, change original RGB/overlay settings/input routing, or retroactively classify game frames. Closed/reopened UI revokes old receipts; fresh game masks resume without another handshake. Frame/protocol unchanged. Skip unnecessary mask encoder submission for positively identified UI inputs.",
+  "ci": {
+    "format_permission": {
+      "conclusion": "success",
+      "databaseId": 43768080240,
+      "headSha": "e284cc0dab5c67f4ea898334e8f0cf9c2dbcc926",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43768080240"
+    },
+    "lifecycle": {
+      "conclusion": "success",
+      "databaseId": 44051784729,
+      "headSha": "706d20d3d660538ed5ce4e6cf18ae992401af9ae",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051784729"
+    },
+    "mask_decoder": {
+      "conclusion": "success",
+      "databaseId": 43928041874,
+      "headSha": "29e75fd204c87d6701d249b32bb61446e5c15075",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/43928041874"
+    },
+    "native": {
+      "conclusion": "success",
+      "databaseId": 44051784777,
+      "headSha": "706d20d3d660538ed5ce4e6cf18ae992401af9ae",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051784777"
+    },
+    "observer": {
+      "conclusion": "success",
+      "databaseId": 44048670747,
+      "headSha": "0eb3e258dceb92a960c796d1bec0a594a337d024",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44048670747"
+    },
+    "projected_alpha": {
+      "conclusion": "success",
+      "databaseId": 44051784678,
+      "headSha": "706d20d3d660538ed5ce4e6cf18ae992401af9ae",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051784678"
+    },
+    "readback": {
+      "conclusion": "success",
+      "databaseId": 44051784694,
+      "headSha": "706d20d3d660538ed5ce4e6cf18ae992401af9ae",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051784694"
+    },
+    "stage_ownership": {
+      "conclusion": "success",
+      "databaseId": 44051785154,
+      "headSha": "706d20d3d660538ed5ce4e6cf18ae992401af9ae",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051785154"
+    },
+    "windows_sender": {
+      "conclusion": "success",
+      "databaseId": 44051784883,
+      "headSha": "706d20d3d660538ed5ce4e6cf18ae992401af9ae",
+      "status": "completed",
+      "url": "https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44051784883"
+    }
+  },
+  "component_versions": {
+    "frame": "0.3.13",
+    "pc": "0.3.38"
+  },
+  "constraints": "Devonly. Main remains approvedecfdf93268746f5ac4ec9caec116cf4c901d52ea. No device changes/restarts, original Valve bodies/shaders redistributed, stale masks or unknown UI/frame/eye guesses. All independent stable/beta runtime contract requirements retained.",
+  "device_changes": false,
+  "expected_hardware_markers": "native dashboard presentation reports host1, activation/deactivation counts and certified native UI frames. Frame ordinary-video operations increase while dashboard panels remain visible/interactive. Onclose fresh exact masks resume and existing reset continuity remains healthy. Repeat Steam/desktop panels, hover/click, repeatedopenclose, normalLegacy and existingresolution. No source/eye/frame/native output proof relaxation.",
+  "frame_payload_unchanged": true,
+  "hardware_acceptance": false,
+  "inherited_frame_validation": [
+    {
+      "checks": [
+        "exact_frame_association",
+        "frame_layer_build",
+        "frame_selector_build",
+        "installer_transaction",
+        "opaque_fallback",
+        "ordinary_rgba_source",
+        "owned_coverage_gpu",
+        "pc_provider_build",
+        "startup_health_logic"
+      ],
+      "hardware_verified": false,
+      "pin": {
+        "bytes": 8747,
+        "sha256": "4b0f2967b6355272f1d0e9b8a3556e209cbe0aa6cd6671ad6b99a793bb1bf67f"
+      }
+    }
+  ],
+  "inherited_unchanged_observer": {
+    "reason": "Only presentation header, coverage.cpp and native runtime fixture changed after observer validation; original source observer/loader/native producer and core header/source remain byte identical.",
+    "run": 44048670747
+  },
+  "installer_sources_unchanged_from_051": true,
+  "native_build_source": "e1d6579933487536a1cf409b56dc6165ab7ce5b3",
+  "native_source_delta": [
+    "pc/stream-bridge-native-presentation.h",
+    "pc/stream-bridge-sender-provider-core.cpp",
+    "pc/stream-bridge-sender-provider-core.h",
+    "pc/stream-bridge-sender-provider-coverage.cpp",
+    "pc/stream-bridge-sender-provider-coverage.h",
+    "pc/stream-bridge-sender-provider.cpp"
+  ],
+  "native_sources": {
+    "CMakeLists.txt": {
+      "bytes": 85699,
+      "sha256": "0e62066a707225319357ed2ae0dc23e76da4e883a5efa9eeca29b710e13f69fd"
+    },
+    "bridge/hevc_bridge_sei.cpp": {
+      "bytes": 6811,
+      "sha256": "9899d7a1006833cbf35a6e1781b01edb97b4ca7673ee5fe6c4562505849cd53b"
+    },
+    "bridge/hevc_bridge_sei.h": {
+      "bytes": 989,
+      "sha256": "feb43d8270b201d701bab265b3005cb3a33bcd7638943e0f7a8868c2a74f36f6"
+    },
+    "bridge/stream_bridge_auth.cpp": {
+      "bytes": 13121,
+      "sha256": "c70e28a002358b5486544b054f14fb22c565a912555d78c7cce7a48fd97924ae"
+    },
+    "bridge/stream_bridge_auth.h": {
+      "bytes": 4343,
+      "sha256": "6a726ae3b19a9fb70d993befe1a3e5c159c0d22c813a20ea4a6263ce238f0bd2"
+    },
+    "bridge/stream_bridge_capacity.cpp": {
+      "bytes": 3546,
+      "sha256": "c94cd3133ce55c654724cb0fd079abaa1a3eb660cf644be6eea5e589945f0cf6"
+    },
+    "bridge/stream_bridge_capacity.h": {
+      "bytes": 807,
+      "sha256": "f1e6b6ab47e2e6ba5d081dcecb3af3dbe6a9f13c6333b4bed7a005444574b6e1"
+    },
+    "bridge/stream_bridge_compression.cpp": {
+      "bytes": 6807,
+      "sha256": "5ae10a38967458afca61b5bc2eaa0dd784bd376b563ca6a9c31f568a18bff81a"
+    },
+    "bridge/stream_bridge_compression.h": {
+      "bytes": 1094,
+      "sha256": "2843ea5052c3eb733fabe00e923dd12e366bfd415b8a6d6711771b35ae097b06"
+    },
+    "bridge/stream_bridge_control.cpp": {
+      "bytes": 22435,
+      "sha256": "115f21253c0fbd471a958cc07712be17525dbd904f259f9cd6aa6ff1f3c50056"
+    },
+    "bridge/stream_bridge_control.h": {
+      "bytes": 5140,
+      "sha256": "c74c0127e22363f38dea021345e431e1d4918e0f75ef3aaf2f870ff9e267ec2f"
+    },
+    "bridge/stream_bridge_credentials.cpp": {
+      "bytes": 13631,
+      "sha256": "53b81430f6299a8c718a2091aba1f5e76b03913789604259005865f3d564d796"
+    },
+    "bridge/stream_bridge_credentials.h": {
+      "bytes": 861,
+      "sha256": "4f02009381677fd2ae102110f799cb5872408c234030504877a05fbedde94460"
+    },
+    "bridge/stream_bridge_frame.cpp": {
+      "bytes": 17944,
+      "sha256": "05cbd77370837f36739ee68c002ff9ecb83346b63c5663a5915f307a6c51dd91"
+    },
+    "bridge/stream_bridge_frame.h": {
+      "bytes": 4026,
+      "sha256": "7baed2668450d87522dab590ade423600c0912f73b5a36fe2adb36a9772bd132"
+    },
+    "bridge/stream_bridge_hevc_coverage.cpp": {
+      "bytes": 15422,
+      "sha256": "8cedeea4d14c33ef3080d778771e2ee2c395ad6510319a43f0353a1f472d4943"
+    },
+    "bridge/stream_bridge_hevc_coverage.h": {
+      "bytes": 2167,
+      "sha256": "541c0599073bd7f83d44376f53fd32a268996a61e14701b18e5cde3ded80d425"
+    },
+    "bridge/stream_bridge_log.h": {
+      "bytes": 2019,
+      "sha256": "b10e1e4a10133990a5f14b4a0a53e6a05d2c867af1b99dcdde7c1d12f23bea25"
+    },
+    "bridge/stream_bridge_protocol.cpp": {
+      "bytes": 11133,
+      "sha256": "0bac772d4a458428498c48eba87361e18001ead718800558ac2fa736771fc486"
+    },
+    "bridge/stream_bridge_protocol.h": {
+      "bytes": 5039,
+      "sha256": "d9c619972b3c7c80fa23d354eab61b314e3baecf8580beffcd971741030d23b3"
+    },
+    "cmake/StreamBridge.cmake": {
+      "bytes": 24850,
+      "sha256": "8322f2f129b5bd04df427c8034c82532b0c8a18dd2e8d1e8cc4256b52edb310a"
+    },
+    "cmake/StreamBridgeReceiver.cmake": {
+      "bytes": 3067,
+      "sha256": "d01a6f8c14d402e27bf352d6f3de2933c78c316e12739cee767c6f7edd8b201f"
+    },
+    "layer/VkLayer_frame_mask_trace.json.in": {
+      "bytes": 451,
+      "sha256": "90bfd888f7d53a6744a36e9090ef7894129d8e25f417121bfae945b79c6dff28"
+    },
+    "layer/VkLayer_frame_pixel_snapshot.json.in": {
+      "bytes": 643,
+      "sha256": "f7d2b0c1efb010d37c5e86bf9bbee1d2d8275258561098a070dfaf2d4d3d661f"
+    },
+    "layer/compositor_hooks.inc": {
+      "bytes": 9695,
+      "sha256": "80c7b42c594cde47106eb7a3c44ff4e65f749e52caf0222826c31ebc3fcf1738"
+    },
+    "layer/compositor_raw_exports.map": {
+      "bytes": 239,
+      "sha256": "01919b9efa749bf83c884ad8f73f5dec66f925e2180a205d758ddd53750cfeac"
+    },
+    "layer/key.frag": {
+      "bytes": 1802,
+      "sha256": "1788d54c6063fb8a283fb24ea572969787650c7fe5cbca29439df9b243869b7b"
+    },
+    "layer/key.vert": {
+      "bytes": 168,
+      "sha256": "b693154268ff7423e5f12a3d5989c69a39b7813aaec6e149017ea141cafe5c8f"
+    },
+    "layer/mask_module_guard.h": {
+      "bytes": 4415,
+      "sha256": "a495c74527e28e8d04dd13322ff4a8dfa25c12217eccf53fa5219c623a5e7fd4"
+    },
+    "layer/mask_reference.frag": {
+      "bytes": 811,
+      "sha256": "c7bbec81f4373043276460547074aa66d2c188cae2232c0cbef885725c5f25ca"
+    },
+    "layer/mrchroma_layer.cpp": {
+      "bytes": 47941,
+      "sha256": "df7298bf35bdc2ff6b8277b8b2e8c1f5855e28db92aac9ba5b66627e14baf8ef"
+    },
+    "layer/native_presenter_pipeline.h": {
+      "bytes": 13427,
+      "sha256": "ac497c4f7a49251ea439b419435e4b5e691b76e516a904569c72337b1aea84fa"
+    },
+    "layer/native_presenter_receiver.cpp": {
+      "bytes": 12392,
+      "sha256": "a06aa9a2b6aea4af6eb1f268cdb209a78e17e27011ca020967563ec387333c0b"
+    },
+    "layer/native_presenter_receiver.h": {
+      "bytes": 4375,
+      "sha256": "59a39b2ea6b9491440564b0bbdff3d1fdbed32fa41fe2675f87b2ac196cafad6"
+    },
+    "layer/native_shader_contract.h": {
+      "bytes": 3128,
+      "sha256": "b9e566a8ec5193311179b8d02fca0d4d08505c2e46089ed0eb1a0eea73e6c6a4"
+    },
+    "layer/native_shader_contract_metadata.h": {
+      "bytes": 9554,
+      "sha256": "3366147855162d5ca89f8e93df10a9e62d97775314259880db5952dad5f2c1a7"
+    },
+    "layer/passive_binding_aliases.inc": {
+      "bytes": 822,
+      "sha256": "36e29c92ab5cdcb0c2aecd8e0c3115c9df166635a1d5b119ec2cb4340d8838d2"
+    },
+    "layer/passive_binding_commands.inc": {
+      "bytes": 1602,
+      "sha256": "255243d21819d0b3bee971ca3cf75f91fc8ca88cf53267f457830260e6727cb4"
+    },
+    "layer/passive_binding_extensions.h": {
+      "bytes": 9774,
+      "sha256": "d3bad015049fecbde2092f7752927bd015d7143e308f1f8cd810e9064fa05d66"
+    },
+    "layer/passive_binding_hooks.inc": {
+      "bytes": 14746,
+      "sha256": "7113690e15ca95f5252c508c663a9c5fe79c282b4583fab8b0f4c85d77f488c3"
+    },
+    "layer/passive_binding_journal.h": {
+      "bytes": 73657,
+      "sha256": "19a07853261ecd82b4f4c09e240d6b6eecc07879edd9b7ef72966fa5c84410e0"
+    },
+    "layer/passive_binding_serialize.inc": {
+      "bytes": 12400,
+      "sha256": "d2ebe78d4ba17b9c87d9c9faec95631f90680a1d71d5ece3afa2ed92f9aee405"
+    },
+    "layer/passive_binding_table.h": {
+      "bytes": 4763,
+      "sha256": "76baa537b956174088bb2ddaf5e71340eb1046eaa9b4b01f0b14abe76ff8343f"
+    },
+    "layer/passive_binding_trace.h": {
+      "bytes": 95481,
+      "sha256": "33889451f5fe7fe2561fefcf9dc370c07dedaf9064a5b387dd2a0ce34e049159"
+    },
+    "layer/passive_pipeline_trace.cpp": {
+      "bytes": 89061,
+      "sha256": "7ca5c323679ecfd4d21e84713cd9472bf788816c66f427473512a29d99732911"
+    },
+    "layer/passive_pipeline_trace.h": {
+      "bytes": 26702,
+      "sha256": "cdc163c7ad15e7a4d933f74f70a0b992aa99a5c939278a0dd48b46414ab292bd"
+    },
+    "layer/pixel_capture_tracker.h": {
+      "bytes": 57206,
+      "sha256": "43d38dd1faeeb0c9780f80af94956818f0745ddd348b3be3f43629abbd33b7c3"
+    },
+    "layer/pixel_definition_facts.h": {
+      "bytes": 17391,
+      "sha256": "90a4d6c2c6348b6bba3ad7479a61585d9d99bf9980271d518b3aaa85a1a86e34"
+    },
+    "layer/pixel_definition_report.h": {
+      "bytes": 2427,
+      "sha256": "9e2f150360deda51f74c4a8f06f49b1a1c8571ac6c3ae0a107dcfdc865f6702d"
+    },
+    "layer/pixel_graphics_definition.h": {
+      "bytes": 35534,
+      "sha256": "7fec5e0947c2c9091993718cd91180a6f93a81fa071d346f6dbc2f6e5049e4b2"
+    },
+    "layer/pixel_native_driver_lease.cpp": {
+      "bytes": 27497,
+      "sha256": "b4f8f10837331deabacad11029d6d6139918157255cb7373f3281c7eef4c2d51"
+    },
+    "layer/pixel_native_driver_lease.h": {
+      "bytes": 3493,
+      "sha256": "5501dc2d357cf5a65211e9726fbe6966da039b4508b29b8543fdab9bc6849dd4"
+    },
+    "layer/pixel_observation_boundary.h": {
+      "bytes": 919,
+      "sha256": "aecbc0aadb7977c5f57a337428c6a4e6510b8acc512b870f1f25fd2431d70d5f"
+    },
+    "layer/pixel_readback.cpp": {
+      "bytes": 15095,
+      "sha256": "89a94a657d8f14181c60d83f20eabf585807b4fd51af4bb6ddac580f9e0dda24"
+    },
+    "layer/pixel_readback.h": {
+      "bytes": 7900,
+      "sha256": "357af2c749e3f9f07a86a45774f7944ce948c9e149b45651604da70761fd1fe0"
+    },
+    "layer/pixel_refusal_status.h": {
+      "bytes": 4335,
+      "sha256": "34a30a3abebfc4983d718cd0a27b95fef2a164051f053d243ac028b191307fdf"
+    },
+    "layer/pixel_renderpass_recording_contract.h": {
+      "bytes": 18912,
+      "sha256": "d116a9887a1b862e1682d718c80c8a79926d548aad6ae14043f785324da9195f"
+    },
+    "layer/pixel_sampler_admission.h": {
+      "bytes": 13105,
+      "sha256": "b68ed3ab99598ad8d4e5dbe147a78329e9f7669ec4645a690f3efaee9dbfeaca"
+    },
+    "layer/pixel_sampler_format.h": {
+      "bytes": 9312,
+      "sha256": "a461c259fd4f523aefc4a198cf6e2a679821c1c6a3417d98f63a7b20c7df10fc"
+    },
+    "layer/pixel_sampler_probe.cpp": {
+      "bytes": 13314,
+      "sha256": "c3e73a754d8362c5c853ec69121a4b449c604ede56cff299c81cda39f7e66e25"
+    },
+    "layer/pixel_sampler_probe.h": {
+      "bytes": 5915,
+      "sha256": "23e23d6d0d24ab4cc5bbd0115e1e72b0af47e8c2a7013602bfb701167924b288"
+    },
+    "layer/pixel_sampler_probe_spv.h": {
+      "bytes": 5219,
+      "sha256": "d306ff37818ada4a012d58c70ee694d1dd1e9c0e36a5292ef8c0a477697adeed"
+    },
+    "layer/pixel_sampler_routes.h": {
+      "bytes": 51965,
+      "sha256": "ee43522293ff7cfc14579834437e2a3790c818361be722682dcff61e1549bd91"
+    },
+    "layer/pixel_snapshot_exports.map": {
+      "bytes": 175,
+      "sha256": "d339241c5e9feba36aaa90df27f0ee72240f3486d7083a5ac603ba4df62e17c6"
+    },
+    "layer/pixel_snapshot_io.h": {
+      "bytes": 7545,
+      "sha256": "b50f7df842a02b125c47ac700675f773a469c51d4f0ed085c6d73b7a2e02043c"
+    },
+    "layer/pixel_snapshot_layer.cpp": {
+      "bytes": 135199,
+      "sha256": "b5e4d187745600adb1fcb96842947c59b46ac62f4dd60be4de779e5a8a39de44"
+    },
+    "layer/pixel_snapshot_selection.h": {
+      "bytes": 1385,
+      "sha256": "cb8eea97e6c927dff0627a62cbec6dd09038932fec0f8fe6a6d07e1182ae53ff"
+    },
+    "layer/pixel_ssbo_clone_contract.h": {
+      "bytes": 53341,
+      "sha256": "59c6b8e725ae3b36307615976c8cd6a30a8661fcdecaa77124a6a6ccde34709d"
+    },
+    "layer/pixel_ssbo_definition_journal.h": {
+      "bytes": 30229,
+      "sha256": "f32f1eb72a9e9ffa9eed915713bf0dc1eb74f0ed42240815d4d07bac1dc20ce7"
+    },
+    "layer/pixel_ssbo_draw_transaction.cpp": {
+      "bytes": 45257,
+      "sha256": "73bd6b05493215a0312f0413d163fa309dfc2f48830f59c5f8ba704993b72e5a"
+    },
+    "layer/pixel_ssbo_draw_transaction.h": {
+      "bytes": 18370,
+      "sha256": "a0d4c5273d5b55d82ac6c3c4a81edfe0b9da032f4346bc7975161254789d64fe"
+    },
+    "layer/pixel_ssbo_owned_clone.cpp": {
+      "bytes": 16589,
+      "sha256": "53dbdf11508aa1f359fbb0c9372d01e11afe1f1c5fe05003ea2f7eb1b0ee68e8"
+    },
+    "layer/pixel_ssbo_owned_clone.h": {
+      "bytes": 5606,
+      "sha256": "e05877131717c545d8e454f8ad588162c59d863573858966a62db0afa1659386"
+    },
+    "layer/pixel_ssbo_profile_transform.h": {
+      "bytes": 20570,
+      "sha256": "f84bc5db76069af0a46a6dcaddc941d6e11e8331a86a70b970e636edcd9a096d"
+    },
+    "layer/pixel_ssbo_receiver_bridge.cpp": {
+      "bytes": 26288,
+      "sha256": "379da4ba6517b9e3f96b12dc1d3c68fdc3da9201bf0fc12407c87cf68643fc74"
+    },
+    "layer/pixel_ssbo_receiver_bridge.h": {
+      "bytes": 7503,
+      "sha256": "fa82ee64869fc53926ef9d127bb8dda71b40a08feacea941dd07763e2b4b541f"
+    },
+    "layer/pixel_uniform_contract.h": {
+      "bytes": 15991,
+      "sha256": "ea15243064333e9a72f223084ad96e58d159432123f00e7a6b7064d9e4d8e117"
+    },
+    "layer/pixel_uniform_copy.cpp": {
+      "bytes": 5269,
+      "sha256": "77fd239d989c11e1736ea3d49e5511b6b1402e0b8e2c5fb632a38e0673da983a"
+    },
+    "layer/pixel_uniform_copy.h": {
+      "bytes": 4369,
+      "sha256": "9b34b5baad362dd90a7f4aa92f6be2fd11851002226842bf6c75480b2975c347"
+    },
+    "layer/pixel_uniform_metadata.h": {
+      "bytes": 8050,
+      "sha256": "946a699a7e02113001a8a0cb9490eeb8a6f327605bac059748b3fed15e70828f"
+    },
+    "layer/raw_trace_sampling.h": {
+      "bytes": 4155,
+      "sha256": "065e21a564c033088d6a67f1e62c90d5592c2f4d3499008a10cc227a3f5fcfb3"
+    },
+    "layer/stream_bridge_artifacts.h": {
+      "bytes": 680,
+      "sha256": "b6d30a07162c733f0bdb1adf45b81177f5b4d1354c7cecf3bf4b288927cdf13f"
+    },
+    "layer/stream_bridge_cold_admission.h": {
+      "bytes": 2998,
+      "sha256": "3eff9443109d569acb015f6a0a27a961c6c36b79ab526f7f0bee8acead83ec16"
+    },
+    "layer/stream_bridge_coverage_gpu.cpp": {
+      "bytes": 31360,
+      "sha256": "622cffefb34e6e1af8bf6fb3a0602cf865ca244aa09c9b7c58d344fa9537384b"
+    },
+    "layer/stream_bridge_coverage_gpu.h": {
+      "bytes": 4516,
+      "sha256": "d9c499ebd7518f44bb719c9dc3be82afb39bbfc0c99abdcca4786a9a5f02c6ab"
+    },
+    "layer/stream_bridge_coverage_transform.h": {
+      "bytes": 3365,
+      "sha256": "f977ffe8c71f708d9b3b7ed17309901b8ef61e22f22762cb6e1278abf12dc871"
+    },
+    "layer/stream_bridge_coverage_transform_data.h": {
+      "bytes": 10257,
+      "sha256": "e72b121c5c2ee8d291506009a3966f2f9e289c70de0ee55f1b7b6b82e593cd3f"
+    },
+    "layer/stream_bridge_exports.map": {
+      "bytes": 175,
+      "sha256": "7e39e20a778f779d47df75683ac5e52c88d3f441a824e53e465b197010d7e2f5"
+    },
+    "layer/stream_bridge_process.cpp": {
+      "bytes": 49355,
+      "sha256": "b2c45361f1ae393ae9ddce310f2c917ec34a425905d940e51ab3f85508056d10"
+    },
+    "layer/stream_bridge_process.h": {
+      "bytes": 2135,
+      "sha256": "78ce858861efd5cc7134ee0a3dd1180c2f69d2f0c97df902366efd9ceeba6d9f"
+    },
+    "layer/stream_bridge_renderer.cpp": {
+      "bytes": 88846,
+      "sha256": "a78d91c7dc5f616e73a458bb10e79c50af8cf706b22fed7779448fc5dc099199"
+    },
+    "layer/stream_bridge_renderer.h": {
+      "bytes": 6517,
+      "sha256": "5d44701386a9f61d9e7aa66ef0cda3632980df6ab4cca02d6dabde9859827541"
+    },
+    "layer/stream_bridge_report_gate.h": {
+      "bytes": 1214,
+      "sha256": "dff941c7fa0dcfc7416e5995bf1f4cbf86027256597a7dc161dc13ec514f7788"
+    },
+    "layer/stream_bridge_report_policy.h": {
+      "bytes": 2943,
+      "sha256": "7819e89cb5bafd369d859b186e50b985998572ca8c996017ff11e2f0f983747f"
+    },
+    "layer/stream_bridge_shader_interface.h": {
+      "bytes": 6980,
+      "sha256": "b2eb1ff54c3f032c84c5773e550743b8449f6791fede8c38c9e648ba6232c9d4"
+    },
+    "layer/stream_bridge_vulkan.cpp": {
+      "bytes": 32570,
+      "sha256": "b771b4bdf43373257c70785cf02a7d031687ee51e203c3079ef49f6115a7c7f6"
+    },
+    "layer/submit_timeline_contract.h": {
+      "bytes": 1259,
+      "sha256": "91806babfb37ab8f6339cba266c39c80f5aa4c384a705e004173d796bea068cd"
+    },
+    "pc/compositor-state-probe-build.sh": {
+      "bytes": 1577,
+      "sha256": "d2af430fe80d9c36717dfde8633898d7bf68ef01b6628414ec2bf6c11a70e7fa"
+    },
+    "pc/compositor-state-probe-core.h": {
+      "bytes": 10175,
+      "sha256": "20af2c850e17a1567411f13ca6a9e340ce7f4c77f72994173efbf04545da9161"
+    },
+    "pc/compositor-state-probe-test.cpp": {
+      "bytes": 14650,
+      "sha256": "8334e109cc6f0044742198f3beefc942a3228ab89c7fcdac6d6e102cb6f2de47"
+    },
+    "pc/compositor-state-probe.cpp": {
+      "bytes": 11730,
+      "sha256": "469aa5ccc6e0892555bc764481fa41179929f823ba2d79199f846f15b2fb9f92"
+    },
+    "pc/compositor-state-probe.md": {
+      "bytes": 7657,
+      "sha256": "df960db6fc2663414b457b98047b4fd125ae50c104d358e27242201f941cfb14"
+    },
+    "pc/mrchroma_panel.pyw": {
+      "bytes": 6870,
+      "sha256": "fb0b7df5218435904b85c214ff88d289e32802d801ba84508efaee72e4a35d3a"
+    },
+    "pc/mrchroma_pcsync.pyw": {
+      "bytes": 8414,
+      "sha256": "05fe96c5dff3d0706648ddc8e0fe36459c7fb1f67c91a6f409732e8b87663ccf"
+    },
+    "pc/projection-overlay-probe-build.sh": {
+      "bytes": 1311,
+      "sha256": "d2563025bc8f3f2c4b0dbbaadfad59320e039848629cd0fdbe32f9964ebd44ff"
+    },
+    "pc/projection-overlay-probe-core.h": {
+      "bytes": 5791,
+      "sha256": "06914ee84d5d26a542537285d9cd27b7f28a5f0de1ea0aa9293d0e48ae2ea8df"
+    },
+    "pc/projection-overlay-probe-test.cpp": {
+      "bytes": 9604,
+      "sha256": "1e050819f078a86f036462ed525903dc42bb96c70405a215dceac4d6734f8f5a"
+    },
+    "pc/projection-overlay-probe.cpp": {
+      "bytes": 17483,
+      "sha256": "d2e2fec36b5a9746c0eeaab8b7ec1690baddb50e9720808ed360c264dac6c0ec"
+    },
+    "pc/projection-overlay-probe.md": {
+      "bytes": 5922,
+      "sha256": "5fffa973dbc31fb7a9de5779d0d39525f290f8cc42bf28785b5d0e6cc0619cd7"
+    },
+    "pc/stream-bridge-amf-boundary.cpp": {
+      "bytes": 8381,
+      "sha256": "4786fbd7e07dcbb0ee7ba66f4614cd3f461d21408a0a17764be28fdbf5e0e6bd"
+    },
+    "pc/stream-bridge-amf-boundary.h": {
+      "bytes": 3511,
+      "sha256": "95007e979cdca275aab7fe2ac45d286f325ea04d1f923479f9c829d565a73c47"
+    },
+    "pc/stream-bridge-mask-capture.cpp": {
+      "bytes": 16219,
+      "sha256": "31677261046dd9c9bb43da7a32ea04ae124ffd0f4dae1b6b54cfba891a630a6d"
+    },
+    "pc/stream-bridge-mask-capture.h": {
+      "bytes": 3911,
+      "sha256": "dad91a49b522389bd97476208d78c22bfda1ba6c62f2c9cf25ffbec2e0ea79d2"
+    },
+    "pc/stream-bridge-mask-config.h": {
+      "bytes": 928,
+      "sha256": "142bb95706342a6c13dfd9b4485909f950132a5498375caf56c10eeb32120f24"
+    },
+    "pc/stream-bridge-mask-content.h": {
+      "bytes": 3307,
+      "sha256": "296730ec2b2f1164d10698a397166aee657b8aeaa35a367395e0306e4d51c7e5"
+    },
+    "pc/stream-bridge-mask-hevc-parameters.h": {
+      "bytes": 4817,
+      "sha256": "7f5ed55080d18fe135f6af1d6e142420a5a656340d88dc9ba35a725575c9564d"
+    },
+    "pc/stream-bridge-mask-hevc-platform.h": {
+      "bytes": 1053,
+      "sha256": "d1db852360f58d6796187e8b6167b4f11157c02106697e788921a6b540bdf71f"
+    },
+    "pc/stream-bridge-mask-hevc-rate.h": {
+      "bytes": 5519,
+      "sha256": "739a3f5a89d5c47db55df753933f579b154118af346f7b216dceee78cc29201f"
+    },
+    "pc/stream-bridge-mask-hevc-stage.h": {
+      "bytes": 727,
+      "sha256": "024650216a25fc88015d9094f283d97943bbf2683b2388e5bce9aa4977877788"
+    },
+    "pc/stream-bridge-mask-hevc-surface.cpp": {
+      "bytes": 8502,
+      "sha256": "117ace0ee3bf29f300782914f85b34502abc8d4a0eb898bad0449d13da346d7c"
+    },
+    "pc/stream-bridge-mask-hevc-surface.h": {
+      "bytes": 898,
+      "sha256": "c18bfc8e3e4d4738e83e843b0e764161170bbe1a8d58be2cb1c1e6cc46ad49a3"
+    },
+    "pc/stream-bridge-mask-hevc-syntax-trace.h": {
+      "bytes": 2827,
+      "sha256": "55246e061140a33a575c30ecd0a1cfe29cfe8b3944229cb1eeb7ee609c269689"
+    },
+    "pc/stream-bridge-mask-hevc.cpp": {
+      "bytes": 33468,
+      "sha256": "15e7442b3d059b3ee3954daa348e466400006d35fe94ca0fef4c0e3524cb0aeb"
+    },
+    "pc/stream-bridge-mask-hevc.h": {
+      "bytes": 7029,
+      "sha256": "11dafacd9c676121e96f7257e0e0fa62c583fe98f567da59fc9ccdc1a81eaf1f"
+    },
+    "pc/stream-bridge-mask-hevc.md": {
+      "bytes": 9139,
+      "sha256": "f1a31d7f301aecc28528045fb684db0608c426a5a99fea8d2bdc905eac5999ff"
+    },
+    "pc/stream-bridge-native-composition.h": {
+      "bytes": 3286,
+      "sha256": "c59a5f2f12ddb1bdba7869e30f67d3ab70abdb8f6f106a7295a5909cb7ef356d"
+    },
+    "pc/stream-bridge-native-draw.h": {
+      "bytes": 985,
+      "sha256": "2c93d0e8ab1fe45f87b335aaf508851a71d9f06cee760661b5872fa9a0146eb1"
+    },
+    "pc/stream-bridge-native-image.h": {
+      "bytes": 11432,
+      "sha256": "0ae26e27c69d53fa4b4ff6506da024f051b1dbe0874e17aabb044bb9802c944e"
+    },
+    "pc/stream-bridge-native-presentation.h": {
+      "bytes": 3369,
+      "sha256": "6150106aca35b036e9148b503489640713abd100c358a2663f2b2d3bb2cb3648"
+    },
+    "pc/stream-bridge-native-shader.h": {
+      "bytes": 4961,
+      "sha256": "40500117c115a6b2d4f275d88bb7fdfd811a44751fa5547e8f59047615626303"
+    },
+    "pc/stream-bridge-projected-alpha-channel.h": {
+      "bytes": 16654,
+      "sha256": "0e570e880acd9937fd4f1add72a34201d32d4fe84d62139b5c8d67c28e28f2be"
+    },
+    "pc/stream-bridge-projected-alpha-consumer.h": {
+      "bytes": 8268,
+      "sha256": "8000c75ec3ea8c382b77b769d9c4869bfa202944799ef7ca11120a0258c761e8"
+    },
+    "pc/stream-bridge-projected-alpha-geometry.h": {
+      "bytes": 18450,
+      "sha256": "beb3eb607dd989857722ce4c56ec421db46b9a1814b6e469f263bfb2b7275ab0"
+    },
+    "pc/stream-bridge-projected-alpha-kernels.h": {
+      "bytes": 13775,
+      "sha256": "777b0da34807bd826a84cb58ab566b49fd42d1f6b1fb17dee14238d9cc75b5ec"
+    },
+    "pc/stream-bridge-projected-alpha-launch.h": {
+      "bytes": 256,
+      "sha256": "c9b1f28b09032ceeb3b8f070c5fd1e2c0ac83f830afa181c4b0ba64fa8fc4d4f"
+    },
+    "pc/stream-bridge-projected-alpha-native-producer.h": {
+      "bytes": 37037,
+      "sha256": "ca95343e89cdba0782445467d709f824d7c1db8f41e87904a918b013f0911ddc"
+    },
+    "pc/stream-bridge-projected-alpha-producer.h": {
+      "bytes": 27086,
+      "sha256": "0f344f6057916116a9cdc5d74c5b881e37eb19d3443f65c73d8a01f1902443b2"
+    },
+    "pc/stream-bridge-projected-alpha-replay.h": {
+      "bytes": 34390,
+      "sha256": "4ca600b5a2276984256b36c540ce69c266169e23563f0a8595b3b617da918a78"
+    },
+    "pc/stream-bridge-projected-alpha-scene-capture.h": {
+      "bytes": 12514,
+      "sha256": "3252d7aecd4a45de926d3eb8ada9b73aefd0b1dfc34f6568bcbbcc8f2d3d568c"
+    },
+    "pc/stream-bridge-projected-alpha-sync.h": {
+      "bytes": 19315,
+      "sha256": "d29c8d1678cddda2ca14eb24e107c832d8caad4a9a93ca979528d93290d03844"
+    },
+    "pc/stream-bridge-projected-alpha-textures.h": {
+      "bytes": 17956,
+      "sha256": "16a2065c9e161fecd356c2e68b4676b6a43865bfd73db6f3fa7b112c54d81593"
+    },
+    "pc/stream-bridge-rgb-telemetry.h": {
+      "bytes": 8830,
+      "sha256": "4def1b664a290be0165b9bc48df9a7c978451978284bc84175fffcf7d5f1b3e8"
+    },
+    "pc/stream-bridge-sender-backend.h": {
+      "bytes": 3515,
+      "sha256": "0f82b7635a19a75e1aebd4fc13c8e6a82706f317f8349785a9b4fa72c72cdeb9"
+    },
+    "pc/stream-bridge-sender-linux-video.cpp": {
+      "bytes": 12686,
+      "sha256": "4129d606bda44ff259752b4c3ec118684a2737bd7adc7a1c78782f441f413728"
+    },
+    "pc/stream-bridge-sender-linux-video.h": {
+      "bytes": 5527,
+      "sha256": "f9c196ce78c45d37546cb669a737b0d700447d9dc9d4a2e9e8afeba519a33824"
+    },
+    "pc/stream-bridge-sender-provider-build.sh": {
+      "bytes": 3149,
+      "sha256": "dca48fe69c163026ca7f6c6895f60ebe724684be67b026bfeb94748f79d5db89"
+    },
+    "pc/stream-bridge-sender-provider-core.cpp": {
+      "bytes": 45693,
+      "sha256": "53e014b90851fe38febe07fb398dd5dfa1a2ea1cf86c09789cbb9395b6eaaca7"
+    },
+    "pc/stream-bridge-sender-provider-core.h": {
+      "bytes": 9991,
+      "sha256": "710b62e691b064464cd2f2069e496e3b545af20c31b0831b1c0afeda6825e707"
+    },
+    "pc/stream-bridge-sender-provider-coverage-render.cpp": {
+      "bytes": 10069,
+      "sha256": "a4d560b63d121d08a6a2287c27dad1f34601c79ab0e8e1f528c4e038d4ef5bf1"
+    },
+    "pc/stream-bridge-sender-provider-coverage-render.h": {
+      "bytes": 4748,
+      "sha256": "6bde78a9d8fa1fb8e467a0e01d86a2bc6ccb2bd79a4085923a53dd30fab37ded"
+    },
+    "pc/stream-bridge-sender-provider-coverage-stages.h": {
+      "bytes": 6991,
+      "sha256": "64983c657ec56e7b47caec579f62c351a48d5911a4552ff2517037ca2abbd1b2"
+    },
+    "pc/stream-bridge-sender-provider-coverage.cpp": {
+      "bytes": 93623,
+      "sha256": "6e5bd4a7bbaf4152a0d30001459227c496269277dc799765f9a0f0ccb369e9c5"
+    },
+    "pc/stream-bridge-sender-provider-coverage.h": {
+      "bytes": 23448,
+      "sha256": "adfccb42b995e9412e761c4d0c0a2ddaf3b977a695d4e2793a84f2e4a2c89618"
+    },
+    "pc/stream-bridge-sender-provider-directmode.cpp": {
+      "bytes": 12091,
+      "sha256": "63857747c5e145a1364682210e5f2cd1ccd44b8a55f559c91f4c947ff84ffd4d"
+    },
+    "pc/stream-bridge-sender-provider-directmode.h": {
+      "bytes": 6649,
+      "sha256": "f708bd9c8d979922b0d47afdf461fdd72b6ae2b14a41f8a4f046cbe48597e8bb"
+    },
+    "pc/stream-bridge-sender-provider-runtime.cpp": {
+      "bytes": 7564,
+      "sha256": "6fc89e301470102f885886a815a6a6127948532febf5f770f1d63ae369463dff"
+    },
+    "pc/stream-bridge-sender-provider-runtime.h": {
+      "bytes": 2600,
+      "sha256": "79325b61479d1d132072322077cd120ab19159644a6298f32ae57e01cfe1bb3c"
+    },
+    "pc/stream-bridge-sender-provider-shaders.cpp": {
+      "bytes": 19816,
+      "sha256": "d3c197d4fa2c4990b2bc554d7d1d8be4952e04aec994aa39076a68d7ce78f6bd"
+    },
+    "pc/stream-bridge-sender-provider-shaders.h": {
+      "bytes": 2329,
+      "sha256": "3f120cc724732bf16479ac1ca661af993a42d482505ac1fb0e09fd6efacf6cc6"
+    },
+    "pc/stream-bridge-sender-provider-sourceipc.cpp": {
+      "bytes": 5684,
+      "sha256": "c4c712417911a80c65c5964abeab905edc44817dd6abaa150050b13cba583ed2"
+    },
+    "pc/stream-bridge-sender-provider-sourceipc.h": {
+      "bytes": 4080,
+      "sha256": "f6b47a8e666d073f15a0ff3a922626f886dbd1d3a9f763331aa67f96e3a5b1ef"
+    },
+    "pc/stream-bridge-sender-provider-swap-shape.h": {
+      "bytes": 1195,
+      "sha256": "f0d298aea5d8b2a1be74a3d9c58e5f680d275a3f735313d5809585bbb1beb244"
+    },
+    "pc/stream-bridge-sender-provider.cpp": {
+      "bytes": 86333,
+      "sha256": "e5b76f319c12b5d8647b0c36316c0cd1a1ebce716016f32346ec8be94e18d9af"
+    },
+    "pc/stream-bridge-sender-provider.vrdrivermanifest": {
+      "bytes": 138,
+      "sha256": "3e5f1d8bff9c1b05b158674b675a010b840e7f6e68862d02f2b55a9497b0c2c3"
+    },
+    "pc/stream-bridge-sender.cpp": {
+      "bytes": 6955,
+      "sha256": "68ae21a086fde75f220ac0acd51159aff4422f80b035275a3d804bf54b70e2c5"
+    },
+    "pc/stream-bridge-sender.h": {
+      "bytes": 3804,
+      "sha256": "c579f23f058dac5c3a9a46c81947ec1d0be4ebbef9a4f917a5150f2573ae0ba6"
+    },
+    "pc/stream-bridge-source-alpha-probe.h": {
+      "bytes": 5872,
+      "sha256": "d3bcecca957f4ade2586bea7653c21b76a76edc6e98111fe475b63c4262948d9"
+    },
+    "pc/stream-bridge-source-alpha-stats.h": {
+      "bytes": 4172,
+      "sha256": "268eafb9a364065c3be7dca4637d802afc6892aeedf1922a01af8a663791ac28"
+    },
+    "pc/stream-bridge-source-audit-modules-windows.h": {
+      "bytes": 3699,
+      "sha256": "061b65adcc31d291699df4f9c44592d8a9b12e2563a1cedba2d99fb0c8a2629d"
+    },
+    "pc/stream-bridge-source-audit-observer.cpp": {
+      "bytes": 39359,
+      "sha256": "caa8254a83c7a0c3e462f5473e2705f9f65de6aa9c164cd900e1b6d568ad8705"
+    },
+    "pc/stream-bridge-source-audit-shared.h": {
+      "bytes": 2103,
+      "sha256": "906729780d3aa6e8ebbdbac66722de7d954bf039f6fc7da5fc9019aa7f54c354"
+    },
+    "pc/stream-bridge-source-audit-windows.cpp": {
+      "bytes": 16583,
+      "sha256": "f8e54dd51677a297cd412d231f65d70f2e12303d50c61c9ef0b943b4027e7061"
+    },
+    "pc/stream-bridge-source-audit-windows.h": {
+      "bytes": 1597,
+      "sha256": "89219d49dd7ee5fc5bc93fcd473839d197a56bead4d7c73d60a2ea735816b1dc"
+    },
+    "pc/stream-bridge-source-audit.h": {
+      "bytes": 4584,
+      "sha256": "4cd08325760f9723b3a9358b5f108ec1a116db67e15d2ae22d1f8a8d7d75c320"
+    },
+    "pc/stream-bridge-source-contract.h": {
+      "bytes": 4430,
+      "sha256": "c89a33dd414a94bbf1663e7e53c214b39bbbe5657302ce4227041c04c6f0ea5d"
+    },
+    "pc/stream-bridge-wire-budget.h": {
+      "bytes": 6312,
+      "sha256": "170cdab43dba308523bc364b37d2f9377e7c0de03ddfa8445c9c379914d64043"
+    },
+    "pc/vrsettings_win.py": {
+      "bytes": 4367,
+      "sha256": "061fd7816a8306a239b1bdc1b392d2a15d97de36214bb32ccd8749ff2460ad9f"
+    },
+    "receiver/client_startup_observer.cpp": {
+      "bytes": 26268,
+      "sha256": "386874cdfd17930e0766aeb6f749f4e58b9870e16b0a5fde2cb8950c5b74c84d"
+    },
+    "receiver/client_startup_runtime.cpp": {
+      "bytes": 56576,
+      "sha256": "bda64ea629e8d94557123f84167937e18e88eb6999ff7cb0290b0d1e76a2b09d"
+    },
+    "receiver/client_startup_runtime.h": {
+      "bytes": 5879,
+      "sha256": "a055d4c7d3115bbe6dfc06542378a19e9abc0404e08b4f2505ba478faf475f07"
+    },
+    "receiver/compositor_arm_marker.h": {
+      "bytes": 4321,
+      "sha256": "aa4bd2261f186020f9803a43c673d9f62a37d0b9819d0bea0012a0e6e80b309a"
+    },
+    "receiver/compositor_launch_selector.c": {
+      "bytes": 25194,
+      "sha256": "eac63e55f46cf39f97a63499ccba6464a701df4e1b4dcc0272209d1d35691db0"
+    },
+    "receiver/compositor_launch_selector.h": {
+      "bytes": 3947,
+      "sha256": "59c7022000653c110faf9cd73e5dad78f5fab6b81229e112c07832c7ea0f3a00"
+    },
+    "receiver/compositor_launch_selector.map": {
+      "bytes": 281,
+      "sha256": "eb68021ab7204f2ea61a7d6674891a7ca9f20666e55e39dc42345e49536cf530"
+    },
+    "receiver/compositor_raw_observer.cpp": {
+      "bytes": 42302,
+      "sha256": "e67bf4b519cf1e37cfa25ebe5d824c87f1158900ac6d6cc199c4c438110c81ee"
+    },
+    "receiver/compositor_raw_runtime.cpp": {
+      "bytes": 34060,
+      "sha256": "096eba0cd18ebca36c8c74ee8213d532d8bba89c27ddd681055c2ace771cd2f9"
+    },
+    "receiver/compositor_raw_runtime.h": {
+      "bytes": 3409,
+      "sha256": "dba1770e6683ac49b034372f51b9c3f1fa6b0190bc430f5edab409198af5627e"
+    },
+    "receiver/receiver_observer.cpp": {
+      "bytes": 20362,
+      "sha256": "5671990e8fe09724f92a3424618cecf2970889ef40dc49d4acf90d8fa8a8d0da"
+    },
+    "receiver/receiver_observer_core.cpp": {
+      "bytes": 7756,
+      "sha256": "34ebc58af6e2963a8c442b3e4c3a43a089ed126634dbb99bfa2e5c69c941fdb8"
+    },
+    "receiver/receiver_observer_core.h": {
+      "bytes": 2903,
+      "sha256": "4c32756471cb4e9ece42bd9bd2b2c5ffde0ca048973ade433caf51ac2dae8f0f"
+    },
+    "receiver/sha256.h": {
+      "bytes": 3846,
+      "sha256": "58d40324cfe899377d0264fed047ad06bd91d06784fec172f14457b9adec7fb2"
+    },
+    "receiver/stream_bridge_camera_client.cpp": {
+      "bytes": 11250,
+      "sha256": "604fc33b79efbc20c9ced1236f9ccfabfdca5aa8d5ec39cb9ef5f65ed01c5bc9"
+    },
+    "receiver/stream_bridge_camera_client.h": {
+      "bytes": 1529,
+      "sha256": "f81f9707ff6ac01605260c853af59f63fe8ef4f62471977174d68300cec6f48a"
+    },
+    "receiver/stream_bridge_launch_config.c": {
+      "bytes": 4419,
+      "sha256": "b6d7e9d1a8d4797859c83b53e1c8e6d8c74d28f6a7f0b526a4584492440a61b8"
+    },
+    "receiver/stream_bridge_local.cpp": {
+      "bytes": 32493,
+      "sha256": "615799f3b71f41eca2e0808bb06fa11981ef41dfffb7018deae8a25ddb7e0aff"
+    },
+    "receiver/stream_bridge_local.h": {
+      "bytes": 4677,
+      "sha256": "dc9a4affa2014f11a149aeb38775b588fea0adeacc19346609722bf4c53b09fc"
+    },
+    "receiver/stream_bridge_mask_hevc.cpp": {
+      "bytes": 17225,
+      "sha256": "b605ff373847dc8fdaf15c8e593cf5eaf86ef3f5614813150a7866c8577df40f"
+    },
+    "receiver/stream_bridge_mask_hevc.h": {
+      "bytes": 2403,
+      "sha256": "e7d0f92c3da9b5d42d6c1fe418f92dbf95569f8502f014be39fb891fe406625d"
+    },
+    "receiver/stream_bridge_mask_hevc_pool.cpp": {
+      "bytes": 9490,
+      "sha256": "2f81ba842290ed9c56a12f50ab834b8a7dba2b67eec5c5a19f85a59e7a34c7c1"
+    },
+    "receiver/stream_bridge_mask_hevc_pool.h": {
+      "bytes": 1750,
+      "sha256": "ff2070748206147facc36edda3fcbc4f6d6b4b4ac7b95d3aaf9d1246d85280df"
+    },
+    "receiver/stream_bridge_native_decode.cpp": {
+      "bytes": 34156,
+      "sha256": "40451424da2dda09c2acf47fcd76379cdb9c991450f980b701ade4c23b194aaa"
+    },
+    "receiver/stream_bridge_native_decode.h": {
+      "bytes": 6663,
+      "sha256": "36a9f97f67c7aabde59d501f49262dab155e0867d8bcf9be1d4ed60c973a9cc6"
+    },
+    "receiver/stream_bridge_native_decode_entry.S": {
+      "bytes": 2612,
+      "sha256": "38f65287bb1beee2de5811f33f37a9ca94e2b1e34972fb12fd59c394f82cf130"
+    },
+    "receiver/stream_bridge_native_elf.h": {
+      "bytes": 6441,
+      "sha256": "a459f36f385614e58771aea2ede532a34e366d8860f3912f258336d5e1212e92"
+    },
+    "receiver/stream_bridge_native_image_runtime.h": {
+      "bytes": 4664,
+      "sha256": "33a4b735d3b3348518d896e45520547bf30080121aa8dfca3174e34962cc1101"
+    },
+    "receiver/stream_bridge_native_images.cpp": {
+      "bytes": 8615,
+      "sha256": "272010ff16f6e5cbf702b93fffce82b19e98a94751e0dc1fe9f78c5dbae1ded3"
+    },
+    "receiver/stream_bridge_native_images.h": {
+      "bytes": 2485,
+      "sha256": "ed9b22398caeadbae990d949af8791b74eae09071479c68ee1452edd78aeea00"
+    },
+    "receiver/stream_bridge_native_loader.cpp": {
+      "bytes": 5361,
+      "sha256": "b5ffd03c29b6703c434314d6e43af0f079c14fa26dffe55ff4432fb8ce0a7859"
+    },
+    "receiver/stream_bridge_native_loader.h": {
+      "bytes": 956,
+      "sha256": "92fc08fde325bed6b0725eb5fd13827cbd96ca032a5e78d048dcc2f5e077bf0e"
+    },
+    "receiver/stream_bridge_native_runtime.cpp": {
+      "bytes": 32215,
+      "sha256": "a2f7191ba1121631794163b88e0ef1b87061a9276341e138806cbdc8f9aea8a7"
+    },
+    "receiver/stream_bridge_native_runtime.h": {
+      "bytes": 5964,
+      "sha256": "1031f25fdb565dcf89c31747101ef9899a834e09ed789fbda22828092ea87613"
+    },
+    "receiver/stream_bridge_receiver.cpp": {
+      "bytes": 13940,
+      "sha256": "b2c9f4ca1e3b4374734371cd9dc29529b2e72a9531d65bd26dec7662608c5616"
+    },
+    "receiver/stream_bridge_receiver.h": {
+      "bytes": 6173,
+      "sha256": "cc267336ad5cdc2c0de1872c010d6096fa5644766d05db28c182b6b223e2852a"
+    },
+    "receiver/stream_bridge_visible_geometry.h": {
+      "bytes": 1466,
+      "sha256": "8a9bb38eea7ca2f442987644a3855af1a6511c95090609bf1adbd30b10b1c550"
+    }
+  },
+  "owned_control_scope": "Seven focused native suites pass, including prior and optional codec peers and IP/I-only reset modes. Actual production source/staging fixture executes2676 assertions,175exact1152x4608game masks and65native UI pictures with byte-identical originalAU and no game mask; validates pre-open game input, close-before-Lock, reopen epochs, unmatched timestamps, peer loss, resumed exact game masks and bounded event drain. Actual paired TCP/auth/native runtime fixture1170checks invokes production UI certifier and verifies originalAU byte identity and signed None/policy3 descriptor on receiver. Nine temporary mutants fail exact assertions, including omitted per-input UI receipt and latest-state reclassification. Unchanged old051core fails new freshUIinput assertion against additive internal declarations. These controls do not establish actual native event delivery or headset UI appearance.",
+  "previous_hardware_result": "051/PC37/Frame13 Battlemarked on PCSteamVR2.19.3/build1794604515: maintainer reports no recurring game disappearances.18native reset attempts,17preserved,1startup-clockfallback,0timestamprevocation; session/certificate refusals flat30/26. Dashboard requests08:57:12.790/08:57:19.028CET correlate with stopped mask generation and sustained Framecamera-only. FlatSteam/desktop panels invisible despite working lowerbar/laser hit; game returns onclose. FinalPC9290copies/9287masks; Frame26810masks,0decode/uploadrefused,0ordinaryvideo;900camera-onlyoperations per5s while dashboard remains open. Current-process journal512rows truncates earlierwindow; nativeFramefile excerpts separately retained.",
+  "schema": "sfnp-native-dashboard-presentation-candidate-v1",
+  "software_logs": {
+    "causal-controls.log": {
+      "bytes": 98,
+      "sha256": "a788c0c8fddf4dd040f071685272846f2153d32733ef8404571a13bdc621615e"
+    },
+    "final-tests.log": {
+      "bytes": 1264,
+      "sha256": "4537439f830ae687f7e06c8925bb7e52f1d1e883c9d83dc6759df03ed0d2a022"
+    },
+    "hlsl-preflight.log": {
+      "bytes": 88,
+      "sha256": "7de79581cdb8f2a9a0463ce02dcebb64708bcb438e8b1b2513e369085f3797e3"
+    },
+    "package.log": {
+      "bytes": 116,
+      "sha256": "d8552e296261aae6adf1df1fbd05d2e6a607a16cffd4b0cd4cd553dbae98b097"
+    },
+    "pc-build.log": {
+      "bytes": 199,
+      "sha256": "789b626ff292e9fb9553881a1f32b959ee49d702c4d626735230d2083be84a94"
+    },
+    "pc-only.log": {
+      "bytes": 3927,
+      "sha256": "e7453c536051d2a6b80e138187a058c90dbf5a0b309bd627503e86fae230718b"
+    },
+    "windows-preflight.log": {
+      "bytes": 261,
+      "sha256": "f79fa90bf5236ccf4b00968cacda00559444da8cfc49fb968864875a25112bcb"
+    }
+  },
+  "source_revision": "8a862a1f0eab0bcd27aa1bc701e22ff83832a0ee",
+  "validation_provenance": {
+    "frame_layer_build": "Exact unchanged Frame0.3.13artifact inherited051; Frame/layer/receiver/bridge/CMake bytes unchanged.",
+    "installer_transaction": "21PC-only update/recovery +17package controls; all setup bytes unchanged.39bootstrap controls repeat after immutablearchive/bootstrap/alias pin updates.",
+    "pc_provider_build": "New fullDLL isolatede1d6579source; local native/runtime/causal controls and Windows syntax/link; current-source fullnative, WindowsLinuxstage, GPUalpha/resource/readback/observer/lifecycleCI pass."
+  },
+  "version": "0.3.52"
+}
