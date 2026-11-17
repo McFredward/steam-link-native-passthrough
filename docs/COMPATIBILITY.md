@@ -1,11 +1,11 @@
 # Tested versions and evidence
 
-Development candidate **0.3.52 / PC0.3.38 / Frame0.3.13** retains the earlier
-runtime paths alongside the beta paths. The maintainer reports no more
-intermittent game disappearances with0.3.51. A separate SteamVR dashboard issue
-hides flat Steam/desktop panels while the MR game remains open;0.3.52 adds
-positive native UI presentation intent tied to each exact accepted input.
-Its headset dashboard result is pending. See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
+Development candidate **0.3.53 / PC0.3.39 / Frame0.3.13** retains the earlier
+native reset and dashboard presentation paths. In0.3.52 a single overlapping
+observer call permanently stopped game coverage after an initially working MR
+image. This candidate quarantines overlapping originals, invalidates old ancestry
+and resumes only with fresh exact image/mask proof. Headset acceptance is pending.
+See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
 The table below preserves the separately confirmed stable release observations.
 
 ## Successfully tested versions
