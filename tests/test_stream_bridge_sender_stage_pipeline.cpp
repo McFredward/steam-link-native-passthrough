@@ -2,6 +2,7 @@
 #include "pc/stream-bridge-sender-provider-coverage-stages.h"
 #include "pc/stream-bridge-source-contract.h"
 #include "bridge/stream_bridge_frame.h"
+#include "pc/stream-bridge-native-presentation.h"
 #include <algorithm>
 #include <condition_variable>
 #include <cstdio>
@@ -16,7 +17,7 @@ constexpr std::uint32_t Width=1152,Height=4608,Pid=123;
 constexpr std::size_t Pixels=std::size_t(Width)*Height;
 struct Resources{std::vector<std::uint8_t> pixels;};
 using Stages=CoverageStages<Resources>;
-Stages stages;SourceContract source;
+Stages stages;SourceContract source;NativePresentation presentation;unsigned uiPictures=0;
 unsigned checks=0,captures=0,masks=0,retirements=0;bool active=false;
 void check(bool value,const char* why){++checks;if(!value)throw std::runtime_error(why);}
 std::mutex barrierMutex;std::condition_variable barrier;
@@ -53,6 +54,12 @@ void retire(const NvencOutputEvidence& e,void*){
 }
 bool augment(Bytes candidate,const NvencOutputEvidence& e,std::vector<std::uint8_t>& output,void*){
     lastObserved=e;
+    if(e.nativePresentation){
+        const auto policy=presentation.policy(e.nativePresentation,e.cameraOnlyRecoveryAuthorized,e.ordinaryVideoAuthorized);
+        if(!e.exactInput||!e.coverageSessionAuthorized||!policy)return false;
+        check(policy==3,"negotiated native dashboard picture keeps the existing warm-camera ordinary-video policy");
+        output.assign(candidate.data,candidate.data+candidate.size);++uiPictures;return true;
+    }
     if(!active){output.assign(candidate.data,candidate.data+candidate.size);return true;}
     check(e.exactInput&&e.coverageSessionAuthorized,"real accepted native Lock has authenticated current-generation authority");
     auto owned=stages.read(e.submission,e.encoder,e.encoderGeneration);
@@ -83,7 +90,16 @@ void copy(unsigned i,std::uint64_t present){
 LocalConfig config(){LocalConfig c{};c.buildId=1;c.nonce[0]=7;c.offered=c.required=KnownCapabilities;return c;}
 VerifiedChannel authority(){VerifiedChannel a{};a.authenticated=true;a.binding[0]=8;return a;}
 void run(bool intraOnly=false){
-    NvencBoundary boundary({{1}});boundary.setInputObserver({capture,retire,nullptr});boundary.setOutputAugmenter({augment,nullptr});
+    NativePresentation events;unsigned position=0;
+    events.poll([&](unsigned& event)noexcept{event=position++==64?NativePresentation::DashboardActivated:999;return true;});
+    check(position==64&&!events.snapshot(),"native UI event polling is bounded without assuming unknown events mean dashboard");
+    events.poll([&](unsigned& event)noexcept{if(position++!=64)return false;event=NativePresentation::DashboardActivated;return true;});
+    const auto eventReceipt=events.snapshot();check(eventReceipt&&events.policy(eventReceipt,true,true)==3&&events.policy(eventReceipt,true,false)==2&&
+        !events.policy(eventReceipt,false,true),"native dashboard policy respects negotiated modern and original receiver capabilities");
+    events.dashboard(true);check(events.snapshot()==eventReceipt,"duplicate native activation does not change an in-flight presentation epoch");
+    events.dashboard(false);check(!events.current(eventReceipt)&&!events.policy(eventReceipt,true,true),"native deactivation immediately revokes presentation policy");
+    NativePresentation exhausted(UINT64_MAX);exhausted.dashboard(false);check(!exhausted.snapshot(),"dashboard epoch exhaustion cannot wrap and revive a previous input");
+    NvencBoundary boundary({{1}});boundary.setInputObserver({capture,retire,nullptr,[](void*)noexcept{return presentation.snapshot();}});boundary.setOutputAugmenter({augment,nullptr});
     NV_ENCODE_API_FUNCTION_LIST api{};api.version=NV_ENCODE_API_FUNCTION_LIST_VER;check(boundary.create(factory,&api)==NV_ENC_SUCCESS&&boundary.wrapped(),"production native ABI boundary installed");
     NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS op{};op.version=NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS_VER;void* handle=nullptr;api.nvEncOpenEncodeSessionEx(&op,&handle);
     NV_ENC_CONFIG codec{};codec.version=NV_ENC_CONFIG_VER;codec.rcParams.version=NV_ENC_CONFIG_VER;codec.frameIntervalP=intraOnly?0:1;
@@ -225,12 +241,35 @@ void run(bool intraOnly=false){
     negotiate();active=true;copy(0,175);submit(0);expectedPresent=175;p=get(0);
     check(p.bitstreamBufferPtr!=au.data()&&masks==174&&pendingResets==18,
         "fresh authenticated reconnect resumes exact full-size masks despite resets during every handshake and probe phase");release(0);
+    // Native system UI is selected positively, per accepted input. Opening
+    // the dashboard cannot reclassify a previously accepted game picture.
+    active=false;submit(0);presentation.dashboard(true);get(0);release(0);
+    check(!lastObserved.nativePresentation&&!uiPictures,"opening dashboard cannot retroactively reclassify a previously accepted game input");
+    const auto firstUi=presentation.snapshot();
+    for(unsigned n=0;n<64;++n){submit(0);p=get(0);
+        check(lastObserved.nativePresentation==firstUi&&p.bitstreamSizeInBytes==au.size(),
+            "each fresh dashboard input retains exact native RGB without a game mask");release(0);}
+    check(uiPictures==64,"all accepted current dashboard inputs have ordinary-picture authority without game alpha");
+    submit(0);presentation.dashboard(false);p=get(0);
+    check(uiPictures==64&&lastObserved.nativePresentation==firstUi&&p.bitstreamBufferPtr==au.data(),
+        "closing dashboard revokes a queued UI input before Lock without a stale ordinary-picture exemption");release(0);
+    presentation.dashboard(true);const auto secondUi=presentation.snapshot();
+    check(secondUi&&secondUi!=firstUi&&!presentation.current(firstUi),"a reopened dashboard cannot reuse a former presentation epoch");
+    submit(0);const auto actualUiTimestamp=timestamps[0];timestamps[0]=actualUiTimestamp-1;p=get(0);
+    check(!lastObserved.exactInput&&!lastObserved.nativePresentation&&uiPictures==64,
+        "unmatched native timestamp cannot borrow current dashboard intent");release(0);
+    timestamps[0]=actualUiTimestamp;p=get(0);release(0);check(uiPictures==65,"the matching accepted UI output retains its own epoch after an unrelated late output");
+    presentation.dashboard(false);active=true;copy(0,177);submit(0);expectedPresent=177;p=get(0);release(0);
+    check(masks==175&&lastObserved.coverageSessionAuthorized&&!lastObserved.nativePresentation,
+        "closing dashboard resumes a fresh full-size exact game mask without a new peer handshake");
+    active=false;presentation.dashboard(true);boundary.revokeDiscovery(handle,boundary.generation(handle));submit(0);p=get(0);release(0);
+    check(!lastObserved.coverageSessionAuthorized&&uiPictures==65,"dashboard intent cannot restore a disconnected peer or coded-probe authority");presentation.dashboard(false);
     // Timestamp reuse would make pre/post-reset output indistinguishable.
     // Revoke before native Encode; never guess the latest accepted image.
-    timestamp=afterReset;copy(0,176);active=false;submit(0);p=get(0);
+    timestamp=afterReset;copy(0,178);active=false;submit(0);p=get(0);
     check(boundary.generation(handle)>resetGeneration&&p.bitstreamBufferPtr==au.data(),
         "post-reset timestamp reuse revokes source authority before native output can borrow a previous frame");release(0);
-    std::printf("PASS: %u checks; 174 exact current-frame masks at %ux%u; 60 concurrent native copies; 32 in-call QoS,16 early Encode and32 IDR-reset completions plus18 pending-negotiation resets; stale reset output/timestamp reuse refused; frameIntervalP=%d; no latest-mask fallback\n",checks,Width,Height,codec.frameIntervalP);
+    std::printf("PASS: %u checks; 175 exact current-frame masks at %ux%u; 60 concurrent native copies; 32 in-call QoS,16 early Encode and32 IDR-reset completions plus18 pending-negotiation resets; 65 exact native UI pictures with no game mask; stale UI/reset output/timestamp reuse refused; frameIntervalP=%d; no latest-mask fallback\n",checks,Width,Height,codec.frameIntervalP);
 }
 }
 int main(int argc,char** argv){try{run(argc==2&&!std::strcmp(argv[1],"--intra-only"));return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL: %s\n",e.what());return 1;}}

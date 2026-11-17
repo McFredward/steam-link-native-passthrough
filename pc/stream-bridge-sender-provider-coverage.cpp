@@ -1,4 +1,5 @@
 #include "stream-bridge-sender-provider-coverage.h"
+#include "stream-bridge-native-presentation.h"
 #include "stream-bridge-mask-capture.h"
 #include "stream-bridge-mask-hevc.h"
 #include "stream-bridge-mask-hevc-stage.h"
@@ -193,7 +194,7 @@ struct SenderCoverage::Impl {
         if(!observed.current())gates.sourceRefusal(observed);
         return observed.current();
     }
-    NativeImageLayout nativeLayout{};bool adaptive=false;
+    NativeImageLayout nativeLayout{};bool adaptive=false;NativePresentation presentation;
     bool site(void* address,std::uintptr_t rva)const{
         const auto value=reinterpret_cast<std::uintptr_t>(address);
         return module&&(adaptive?(value>=module&&value-module<=0xffffffffu&&nativeLayout.containsCode(std::uint32_t(value-module))):value==module+rva);
@@ -218,7 +219,7 @@ struct SenderCoverage::Impl {
         if(matched){
             s.gates.signal(CoverageSignal::MatchedInputs);
             auto owned=s.stages.read(e.submission,e.encoder,e.encoderGeneration);
-            if(e.lossyCoverageAuthorized&&owned&&!owned->receipt.ordinaryVideo&&owned->resources.hevcSurfaceReady&&s.hevcPrepared.load(std::memory_order_acquire)&&
+            if(!e.nativePresentation&&e.lossyCoverageAuthorized&&owned&&!owned->receipt.ordinaryVideo&&owned->resources.hevcSurfaceReady&&s.hevcPrepared.load(std::memory_order_acquire)&&
                s.sourceCurrent(owned->receipt.contract,owned->receipt.pid)){
                 const auto key=maskKey(e,owned->receipt);
                 if(s.hevcContract&&(s.hevcContract!=key.sourceContract||s.hevcPid!=key.processId||s.hevcGeneration!=key.encoderGeneration)){
@@ -258,6 +259,7 @@ struct SenderCoverage::Impl {
         // fresh handshake, without reading/compressing any coverage staging.
         if(!e.coverageSessionAuthorized){s.gates.refuse(CoverageGate::CoverageSession);const bool certified=certify(CoverageEncoding::None,{});if(!certified)s.gates.refuse(CoverageGate::FrameCertificate);return certified;}
         if(!s.enabled)return s.gates.refuse(CoverageGate::Prepared);
+        if(e.nativePresentation)return s.presentation.certify(s.control,candidate,e,output);
         std::vector<std::uint8_t> pixels,encoded;CoverageEncoding encoding=CoverageEncoding::None;
         struct Unsent {MaskHevcEncoder* encoder=nullptr;bool sent=false;
             ~Unsent(){if(encoder&&!sent)encoder->requestKeyframe();}} unsent;
@@ -921,7 +923,7 @@ struct SenderCoverage::Impl {
 };
 std::atomic<SenderCoverage::Impl*> SenderCoverage::Impl::instance{nullptr};
 SenderCoverage::SenderCoverage(DirectModeBoundary& d,NvencBoundary& b,ControlRuntime& c,const ShaderFingerprint* contracts,std::size_t count):impl_(new Impl(d,b,c,contracts,count)){
-    b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get()});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));},[](void* context)noexcept{return static_cast<Impl*>(context)->lastControlledMetadata.load(std::memory_order_relaxed);}});
+    b.setDeviceObserver({Impl::deviceOpened,impl_.get()});b.setInputObserver({Impl::inputCapture,Impl::inputRetire,impl_.get(),[](void* context)noexcept{return static_cast<Impl*>(context)->presentation.snapshot();}});b.setOutputAugmenter({Impl::augment,impl_.get(),[](void* context)noexcept{auto&s=*static_cast<Impl*>(context);return s.sourceContract.budgetAuthority(s.lastPid.load(std::memory_order_acquire));},[](void* context)noexcept{return static_cast<Impl*>(context)->lastControlledMetadata.load(std::memory_order_relaxed);}});
 }
 SenderCoverage::~SenderCoverage(){stop();(void)impl_.release();} // callbacks/COM retained until process exit
 bool SenderCoverage::configure(std::uintptr_t module)noexcept{std::lock_guard<std::mutex> lock(impl_->mutex);if(impl_->module||!module)return false;impl_->module=module;return true;}
@@ -1001,11 +1003,13 @@ HevcMaskStats SenderCoverage::hevcMaskStats()const noexcept{
     stats.maxSubmissionToPollUs=s.hevcMaxCollectAgeUs.load(std::memory_order_relaxed);return stats;
 }
 projected_alpha::ChannelParent* SenderCoverage::projectedChannel()noexcept{return &impl_->projected.channel();}
+void SenderCoverage::pollDashboard(bool (*next)(unsigned&,void*)noexcept,void* context)noexcept{if(next)impl_->presentation.poll([&](unsigned& event)noexcept{return next(event,context);});}
+std::array<std::uint64_t,5> SenderCoverage::presentationStatus()const noexcept{return impl_->presentation.status();}
 void SenderCoverage::sourceProcess(std::uint32_t pid,bool budget)noexcept{
     impl_->sourceContract.publish(pid,budget);impl_->projected.channel().sourceLease(impl_->sourceContract.cameraAuthority());
 }
 void SenderCoverage::stop()noexcept{
-    auto& s=*impl_;s.sourceContract.publish(0);s.projected.stop();s.enabled=false;s.prepared=false;s.lastPid=0;s.preparedPid=0;s.state=8;
+    auto& s=*impl_;s.presentation.stop();s.sourceContract.publish(0);s.projected.stop();s.enabled=false;s.prepared=false;s.lastPid=0;s.preparedPid=0;s.state=8;
     s.hevcPrepared.store(false,std::memory_order_release);
     s.hevcPeerReady.store(false,std::memory_order_release);
     s.maskCapture.stop(); // Cold owner only; no disk work or joining in native callbacks.

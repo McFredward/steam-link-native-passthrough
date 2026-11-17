@@ -14,6 +14,7 @@
 #include "stream-bridge-sender-provider-directmode.h"
 #include "stream-bridge-sender-provider-runtime.h"
 #include "stream-bridge-sender-provider-coverage.h"
+#include "stream-bridge-native-presentation.h"
 #include "stream-bridge-mask-config.h"
 #include "stream-bridge-sender-provider-sourceipc.h"
 #include "stream-bridge-source-audit-windows.h"
@@ -191,6 +192,7 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
     std::mutex mutex_;std::condition_variable changed_;std::thread worker_;
     bool stopped_=false,initialized_=false;void** slot_=nullptr;HMODULE source_=nullptr;HANDLE file_=INVALID_HANDLE_VALUE;
     vr::IVRDriverContext* context_=nullptr;vr::IVRDriverLog* log_=nullptr;
+    std::atomic<vr::IVRServerDriverHost*> host_{nullptr};
     stream_bridge::sender::SenderRuntime runtime_{boundary()};stream_bridge::ControlRequest request_{};
     stream_bridge::sender::SenderCoverage coverage_{directMode(),boundary(),runtime_.control()};
     stream_bridge::sender::SourceIpcServer sourceIpc_{[](std::uint32_t pid,void* context){return static_cast<Provider*>(context)->sourceReady(pid);},this,
@@ -504,6 +506,10 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     refused(stream_bridge::sender::CoverageGate::CopyPair),refused(stream_bridge::sender::CoverageGate::SourceContract),
                     refused(stream_bridge::sender::CoverageGate::StageReceipt),refused(stream_bridge::sender::CoverageGate::CoverageSession),
                     refused(stream_bridge::sender::CoverageGate::FrameCertificate),static_cast<unsigned long long>(encoder.revoked));
+                report(text,stream_bridge::logging::Level::Debug);
+                const auto presentation=coverage_.presentationStatus();
+                std::snprintf(text,sizeof text,"native dashboard presentation: host=%u; current-epoch/certified/refused=%llu/%llu/%llu; activated/deactivated=%llu/%llu; exact accepted input plus current public dashboard intent; ordinary native RGB",
+                    unsigned(host_.load(std::memory_order_acquire)!=nullptr),static_cast<unsigned long long>(presentation[0]),static_cast<unsigned long long>(presentation[1]),static_cast<unsigned long long>(presentation[2]),static_cast<unsigned long long>(presentation[3]),static_cast<unsigned long long>(presentation[4]));
                 report(text,stream_bridge::logging::Level::Debug);
                 const auto& r=encoder.revocationReasons;
                 std::snprintf(text,sizeof text,
@@ -840,13 +846,18 @@ public:
     vr::EVRInitError Init(vr::IVRDriverContext* context)override{
         if(!context||initialized_)return vr::VRInitError_Driver_Failed;
         // This observer provides no HMD/device and makes no OpenVR property calls.
-        context_=context;initialized_=true;try{worker_=std::thread([this]{run();});}
+        context_=context;initialized_=true;
+        vr::EVRInitError error=vr::VRInitError_None;
+        auto* host=static_cast<vr::IVRServerDriverHost*>(context->GetGenericInterface(vr::IVRServerDriverHost_Version,&error));
+        host_.store(error==vr::VRInitError_None?host:nullptr,std::memory_order_release);
+        try{worker_=std::thread([this]{run();});}
         catch(...){bootstrapStatus.store(3);return vr::VRInitError_Driver_Failed;}
         return vr::VRInitError_None;
     }
     void Cleanup()override{
         {std::lock_guard<std::mutex> guard(mutex_);stopped_=true;}changed_.notify_all();
         if(worker_.joinable())worker_.join();
+        host_.store(nullptr,std::memory_order_release);
         sourceIpc_.stop();coverage_.stop();runtime_.stop();boundary().stop();restoreDirect();
         if(slot_){DWORD old=0;if(VirtualProtect(slot_,sizeof(void*),PAGE_READWRITE,&old)){
             // Another hook's later change is not ours to overwrite.
@@ -858,7 +869,15 @@ public:
         bootstrapStatus.store(6);
     }
     const char*const* GetInterfaceVersions()override{static const char*const versions[]{vr::IServerTrackedDeviceProvider_Version,nullptr};return versions;}
-    void RunFrame()override{}
+    void RunFrame()override{
+        static_assert(vr::VREvent_DashboardActivated==stream_bridge::sender::NativePresentation::DashboardActivated&&
+            vr::VREvent_DashboardDeactivated==stream_bridge::sender::NativePresentation::DashboardDeactivated,"public dashboard event ABI");
+        auto* host=host_.load(std::memory_order_acquire);if(!host)return;
+        coverage_.pollDashboard([](unsigned& type,void* opaque)noexcept{
+            vr::VREvent_t event{};if(!static_cast<vr::IVRServerDriverHost*>(opaque)->PollNextEvent(&event,sizeof event))return false;
+            type=event.eventType;return true;
+        },host);
+    }
     bool ShouldBlockStandbyMode()override{return false;}
     void EnterStandby()override{}
     void LeaveStandby()override{}

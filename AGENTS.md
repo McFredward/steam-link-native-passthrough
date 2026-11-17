@@ -142,6 +142,13 @@
   headset run for each matrix cell; do not claim an untested combination is
   hardware-verified. Unknown necessary semantics require a bounded diagnostic,
   not an invented layout or stale frame. See docs/COMPATIBILITY.md.
+- The maintainer's 2026-11-17 dashboard requirement preserves all native
+  SteamVR panel display and interaction while an MR app remains open. Positive
+  public native dashboard intent may select ordinary native video for its exact
+  accepted input; absence of a game mask is never such intent. Freeze and check
+  the UI epoch through native completion, retain authenticated frame/image
+  proofs and resume fresh game masks after close without a handshake reset.
+  Do not change native overlay textures, settings, input routing or clicks.
 - PC SteamVR must remain closed after Apply, failure recovery and Undo. Never
   relaunch it to restore its historical running state (2026-10-21). A fresh run
   may reconcile an old stop-only journal using freshly verified Valve images;
