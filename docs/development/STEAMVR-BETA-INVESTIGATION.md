@@ -837,8 +837,28 @@ and fresh-recoveries, blocked returns0, and exact masks resume. UI ordinary vide
 hover/click and repeated open/close must remain usable. A repeated failure with
 blocked0 but no masks needs a new matched diagnosis, not another admission bypass.
 All four independently selected stable/beta combinations, normal/Legacy and
-Auto/fixed resolution remain requirements. Software controls and artifact/CI
-validation are recorded below before publication; headset acceptance is pending.
+Auto/fixed resolution remain requirements; headset acceptance is pending.
+
+Software validation uses the actual observer:461 assertions pass with both
+MSVC/WARP and the distribution GNU binaries on Windows. Restoring the old
+permanent-stop line fails the intended recovery assertion after7 checks. The
+private process-pair fixture passes31 checks, including overlap/recovery ABA
+and overflow. Actual cross-process GPU tests reject a previously valid image
+while admission is dirty and reject its old mutation witness after reopening;
+subsequently produced replacement coverage still selects. Existing padded
+FP16/filter/geometry controls pass61578/61719 assertions and all four owned
+reproject/BGRA/direct variants. These are owned software controls, not Valve
+runtime or headset rendering acceptance. Seven local native/control/staging
+suites,112 PC-only setup/recovery controls,17 package checks and2 artifact-pin
+controls pass. The newly added MSVC control initially caught a shadowed local
+name; it was corrected before packaging. Production observer and causal control
+[source CI](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44167691393)
+and current
+[GPU controls](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44167691453)
+pass. The new DLL's SHA256 is
+`4ef8636bb08bd205b16784b8d5b0cd458f144ca17e2c0b355973f8b99982e0d8`.
+Frame and setup payloads must remain byte-identical to0.3.52. Immutable archive,
+bootstrap and final platform setup checks must pass before the test handoff.
 
 ## Evidence locations and maintenance
 
