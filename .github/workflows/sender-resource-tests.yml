@@ -146,7 +146,7 @@ jobs:
       - name: Compile actual DirectMode descriptor and ownership boundary
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
@@ -174,7 +174,7 @@ jobs:
       - name: Compile identical DirectMode fixture with only the old admission restored
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
@@ -192,7 +192,7 @@ jobs:
       - name: Compile the actual production resource matcher with the Windows SDK
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
@@ -241,7 +241,7 @@ jobs:
       - name: Compile actual production context observer
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
@@ -301,7 +301,7 @@ jobs:
       - name: Compile identical production facade with only fresh lookup removed
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
@@ -327,7 +327,7 @@ jobs:
       - name: Compile the identical production observer with only the old format prerequisite
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
@@ -359,7 +359,7 @@ jobs:
       - name: Compile independent full-public-ABI writable shadow experiment
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
