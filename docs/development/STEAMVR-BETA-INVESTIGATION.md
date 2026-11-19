@@ -1,10 +1,11 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-19 after **0.3.55 / PC0.3.41 / Frame0.3.13**.
-The PC listener recovers in9ms and fresh peer/coded-AU proof in86ms. A native
-stream fault and separate mask-proof gaps remain. Candidate0.3.56 / PC0.3.42
-adds bounded constant-buffer proof diagnostics; it does not claim a new visual
-fix or change admission/rendering policy. Headset diagnostic evidence is pending.
+Updated 2026-11-19 for candidate **0.3.57 / PC0.3.43 / Frame0.3.14**.
+The2.19.4 update exposes two independent previously unsupported native contracts:
+PC request packing and a selected Frame colour-key shader feature family. Both
+are addressed from actual texture facts and reviewed current-runtime shader
+logic, retaining previous routes. Software validation is distinct from the
+pending paired headset test. E058's separate continuity findings remain below.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -13,12 +14,16 @@ headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
 
-E059 records a new2.19.4 update failure on both PC and Frame. On PC the native
-request's fourth word17 is refused by our old three-bit sample/array decoder.
-The application owns no registered swap, cannot negotiate the RGBA source and
-produces zero masks. Replace private packed-word decoding with independent
-public D3D11 object verification; a successful native creation records only a
-request/handle owner. It is not a texture shape or frame/camera permission.
+E059 identifies two independent2.19.4 blockers. The PC request's fourth
+word17 is rejected by our private packing assumption; the Frame compositor
+selects existing native shader feature variants that our recognizer did not
+admit. The Frame layer/receiver are loaded and initialized, but no admitted
+compositor creates the local image endpoint, so the PC remains waiting for its
+paired peer. Neither changing launch paths nor relaxing peer authentication is
+justified. Candidate057 verifies physical PC textures through public D3D11
+facts and recognizes the reviewed Frame feature pair. Its companion shader uses
+independently attested current-runtime unkeyed RGB plus exact game coverage;
+RGB colour classification never supplies alpha. See E059 for proof and limits.
 
 
 E058 confirms that055 removed the observed first-retry wait. Further timer
@@ -1140,7 +1145,7 @@ pass. No test/assertion/version check is disabled. These CI changes do not alter
 native artifacts. Unchanged Frame/setup bytes are checked during assembly.
 
 
-## E059 — native packed request changes after2.19.4 update (2026-11-19)
+## E059 — independent PC request and Frame shader contracts after2.19.4 update (2026-11-19)
 
 The maintainer reports black passthrough regions after updating BOTH devices.
 Private immutable capture `20261119-steamvr-update/{pc,frame,frame-runtime,
@@ -1152,8 +1157,12 @@ snapshot; do not mistake them for the updated executable. Current runtime logs
 prove actual DirectMode009/NVENC discovery and shader hooks still attach.
 
 Battlemarked PID3012 requests4292x4292/f27 with native descriptor word17. Our
-`create-shape` refusal leaves client-swaps0 and declared-pid0, with7724
-no-declaration refusals and zero masks. Four FP16 targets prepare; the one
+`create-shape` refusal rejects that native request. The run has7724
+no-declaration refusals,7719source-format-contract refusals and zero masks.
+The client-swaps0 observation is after application teardown at21:11:50.386;
+it does not establish that every swap creation failed throughout the run.
+Other registered single-sample/slice allocations for the same PID are observed.
+The PC remains waiting-paired-peer; packing is not the sole cause. Four FP16 targets prepare; the one
 metadata-only overlap recovers without geometry revocation or permanent stop.
 This is a new earlier admission failure, not the previous constant-prefix113
 availability gap. The exact new meaning of17 is not established by the logs;
@@ -1183,21 +1192,73 @@ handles with the new request overload. The native ownership fixture must preserv
 all original bytes for opaque words and reject malformed dimensions/format.
 Restoring the old three-bit packed admission must fail specifically on17.
 
-Frame cold logs also contain unrecognized desktop/distortion shader variants.
-Private review of197 current distortion modules finds the reviewed achromatic
-fragment and layered reprojection vertex still match existing canonical logic.
-The observed CK fragment/achromatic vertex have different logic/declarations and
-remain refused. Neither filenames nor matching varyings are new shader permission.
-Zero PC masks and no declared source prevent diagnosing active MR composition
-from this run; do not claim full2.19.4 Frame acceptance or remove shader guards.
-The next test must establish current PC masks, fresh peer/coded-AU proof and the
-actual active Frame pipeline, or identify its next necessary contract explicitly.
+The initial journal-only capture was incomplete. A connected read-only capture
+finds the selector and Frame13 layer mapped in native vrlink PID5862, a capture
+lease memfd, and receiver initialization. Diagnostics now reach Steam's
+`logs/steam_output.log`: early video source prepared, waiting-local-image-route,
+then an endpoint/peer diagnostic. No admitted compositor consumer means no local
+IPC endpoint. Actual native ELF imports/roles still pass structural verification;
+leave selector, launch discovery and peer authentication unchanged.
 
-Expected markers: no persistent create-shape refusal for17; current app swaps and
-format negotiation become nonzero, followed by real source roots/seals and masks.
-Frame should receive exact masks and retain native panel behavior; this is a
-hypothesis pending software and headset checks. All earlier stable/beta PC/Frame
-combinations, normal/Legacy, Auto/fixed extents and existing recovery remain required.
+The selected native vertex is the7048-byte single achromatic reprojection
+family (canonical3421e670…03d906); its fragment is the28632-byte colour-key
+family (canonical3d458ebb…6d13). Neither was admitted by Frame13. The vertex
+already exists byte-identically in the older November14 private package; this
+is a feature-selection difference, not proof of a wholly new runtime design.
+Do not attribute selection to the native ChromaKey noise-floor log alone.
+
+The unkeyed4532-byte native fragment still normalizes to a42daff4…cfd1f.
+Full descriptor type/member-offset/layout review establishes that its required
+set0 bindings4,9,25 match the keyed family; the keyed configuration binding6 is
+not used by the unkeyed program. Add full logic/operand attestation for both
+new families, retaining all old profiles. Only the verified compositor's cold
+constructor reads and independently attests the current runtime's unkeyed code.
+A preferred filename plus a bounded content search (512 entries/32MiB total,
+regular nonsymlink files, stable stat before/after,64KiB per input) tolerates
+renaming. Failure to find reviewed code leaves the extra feature refused and
+does not disable old routes. No native shader bodies enter the distribution.
+
+The companion pipeline alone selects this attested unkeyed RGB program after
+full keyed-program attestation. It uses existing exact mask/camera transforms;
+ordinary native pipelines and modules stay original. Preserve the actual
+native vertex/reprojection and verify pair/varyings, native descriptor layouts,
+exact video images, current frame/eye/mask and camera/UI authority as before.
+Neither matching names/interfaces nor a SteamVR version grants composition.
+Unknown changed arithmetic/structure remains refused. Shader callback work is
+bounded; runtime file reads occur only in the cold constructor.
+
+Software evidence: all38 host tests pass; AArch64 receiver-enabled release build
+uses the reviewed FFmpeg62/60 ABI headers. Eight owned shader-contract tests and
+nine owned selection controls pass. A private positive check uses the actual
+current native vertex/keyed/unkeyed programs: keyed refuses before independent
+colour preparation, accepted output equals canonical unkeyed code, pair/varyings
+and both production transforms pass, modified literals refuse. Actual Vulkan
+with Khronos validation runs216 current-native fragment cases/1858checks,
+bit-identical RGB and correct zero/fractional/opaque coverage, padding and
+camera-only behavior, with zero validation errors. Actual native vertex plus
+original/coverage/camera fragments compile as3 pipelines/35checks, zero errors,
+no draws. Its existing owned pipeline fixture needed the production mapping
+UBO at set1 binding1; the corrected layout retains all original assertions.
+These private native bodies are inputs only, never public fixtures/assets.
+
+PC Windows/WARP CI passes the complete eight normal/Legacy NV12/P010 cases for
+opaque request9 and17 with existing source/frame/eye/UI assertions. Physical
+array/MSAA/mip/foreign-handle negatives remain. The causal old-packing mutant
+fails specifically on17. Observer473 checks and native update gates pass after
+bounded official Ubuntu downloads replace the unavailable EC2 mirror. Frame
+source CI and package gates must pass before candidate delivery; artifact/CI
+pins are recorded in the candidate evidence JSON.
+
+Expected headset markers: no persistent create-shape refusal for17; the cold
+Frame marker `native unkeyed colour contract prepared from current runtime`,
+then admitted compositor/local image channel, fresh paired peer/coded-AU proof,
+source-format negotiation and actual masks. Verify both visible game elements
+and live passthrough, then open/close native dashboard panels. This candidate
+updates BOTH PC43 and Frame14 through coordinated interactive setup. Hardware
+acceptance remains pending. Stable/stable, stable/beta, beta/stable, beta/beta,
+normal/Legacy and Auto/fixed are continuing independent compatibility requirements;
+this software evidence does not claim all matrix cells tested on a headset.
+
 
 ## Evidence locations and maintenance
 

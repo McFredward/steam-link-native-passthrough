@@ -35,8 +35,11 @@ struct NativeGpu:Gpu {
         VkDescriptorSetLayoutCreateInfo set{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};set.bindingCount=bindings.size();set.pBindings=bindings.data();
         check(vkCreateDescriptorSetLayout(device,&set,nullptr,&descriptorLayout));
         VkDescriptorSetLayoutBinding binding{0,VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr};
-        set.bindingCount=1;set.pBindings=&binding;check(vkCreateDescriptorSetLayout(device,&set,nullptr,&extra[0]));
-        binding.descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;check(vkCreateDescriptorSetLayout(device,&set,nullptr,&extra[1]));
+        // Production coverage also consumes the proved visible-image mapping.
+        const std::array<VkDescriptorSetLayoutBinding,2> maskBindings{{binding,
+            {1,VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,1,VK_SHADER_STAGE_FRAGMENT_BIT,nullptr}}};
+        set.bindingCount=maskBindings.size();set.pBindings=maskBindings.data();check(vkCreateDescriptorSetLayout(device,&set,nullptr,&extra[0]));
+        binding.descriptorType=VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;set.bindingCount=1;set.pBindings=&binding;check(vkCreateDescriptorSetLayout(device,&set,nullptr,&extra[1]));
         const std::array<VkDescriptorSetLayout,3> sets{{descriptorLayout,extra[0],extra[1]}};
         VkPipelineLayoutCreateInfo layout{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};layout.setLayoutCount=sets.size();layout.pSetLayouts=sets.data();
         check(vkCreatePipelineLayout(device,&layout,nullptr,&pipelineLayout));

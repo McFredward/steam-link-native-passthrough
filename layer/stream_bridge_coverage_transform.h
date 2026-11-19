@@ -46,7 +46,7 @@ inline bool pairedStages(const clone::ShaderDefinition& vertex,const clone::Shad
     if(!clone::captureShader(info,clone::ShaderRole::Vertex,vs,why))return false;
     info.codeSize=fragment.bytes;info.pCode=fragment.words.data();
     if(!clone::captureShader(info,clone::ShaderRole::Fragment,ps,why))return false;
-    if(!((vs.bytes==9460&&ps.bytes==6620)||(vs.bytes==7136&&ps.bytes==4532)))return false;
+    if(!((vs.bytes==9460&&ps.bytes==6620)||((vs.bytes==7136||vs.bytes==7048)&&ps.bytes==4532)))return false;
     stream_bridge_shader_interface::Interface outputs,inputs;
     return stream_bridge_shader_interface::capture(vs.words.data(),vs.bytes,true,outputs)&&
            stream_bridge_shader_interface::capture(ps.words.data(),ps.bytes,false,inputs)&&

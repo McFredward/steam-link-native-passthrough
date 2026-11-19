@@ -1,5 +1,6 @@
 #include "bridge/stream_bridge_log.h"
 #include "stream_bridge_process.h"
+#include "stream_bridge_native_colour.h"
 #include "stream_bridge_report_gate.h"
 #include "../receiver/stream_bridge_native_image_runtime.h"
 #include "stream_bridge_artifacts.h"
@@ -461,6 +462,35 @@ bool fragment(const char* name,std::size_t bytes,const char* sha,std::vector<std
 // The tiny launcher injects the heavy library only into the exact vrlink exec.
 // Clean its own token before the first owned thread, preserving all foreign
 // loader tokens; native internal child launches must not inherit this payload.
+// Read native colour code only during the compositor's one cold constructor,
+// never from a rendering/shader callback. The preferred name is an optimization;
+// a bounded content-based search also handles renamed native resources. Every
+// candidate still has to prove the reviewed unkeyed program's complete logic.
+void prepareNativeColourCold() noexcept {try{
+    std::string root;
+    if(native::nativeImageRole(native::processImagePath(getpid()),&root)!=native::NativeRole::Compositor||root.empty())return;
+    const auto directory=std::filesystem::path(root)/"resources/shaders/vulkan";
+    std::size_t total=0;
+    const auto admit=[&](const std::filesystem::path& path){
+        const int fd=open(path.c_str(),O_RDONLY|O_CLOEXEC|O_NONBLOCK|O_NOFOLLOW);if(fd<0)return false;
+        struct stat before{},after{};bool okay=!fstat(fd,&before)&&S_ISREG(before.st_mode)&&before.st_size>=20&&
+            before.st_size<=65536&&!(before.st_size%4)&&total+std::size_t(before.st_size)<=32*1024*1024;
+        std::array<std::uint32_t,65536/4> words{};std::size_t used=0;
+        if(okay){total+=std::size_t(before.st_size);
+            while(used<std::size_t(before.st_size)){const auto n=read(fd,reinterpret_cast<char*>(words.data())+used,std::size_t(before.st_size)-used);
+                if(n<0&&errno==EINTR)continue;
+                if(n<=0){okay=false;break;}used+=std::size_t(n);}
+            okay=okay&&!fstat(fd,&after)&&before.st_dev==after.st_dev&&before.st_ino==after.st_ino&&before.st_size==after.st_size&&
+                before.st_mtim.tv_sec==after.st_mtim.tv_sec&&before.st_mtim.tv_nsec==after.st_mtim.tv_nsec;
+        }
+        close(fd);return okay&&stream_bridge_native_colour::prepareColourCold(words.data(),used);
+    };
+    if(admit(directory/"distort_ps_achromatic_se2.spv"))return;
+    std::error_code error;unsigned inspected=0;
+    for(std::filesystem::directory_iterator it(directory,error),end;!error&&it!=end&&inspected<512;it.increment(error),++inspected)
+        if(it->path().extension()==".spv"&&admit(it->path()))return;
+    }catch(...){/* Optional feature preparation cannot disable older paths. */}
+}
 void cleanPayloadEnvironment(){
     Dl_info info{};if(!dladdr(reinterpret_cast<void*>(&prepareProcessCold),&info)||!info.dli_fname)return;
     const char* previous=std::getenv("LD_PRELOAD");if(!previous)return;
@@ -500,6 +530,11 @@ bool prepareProcessCold() noexcept{
         if(std::memcmp(config,magic,sizeof(magic)-1))return;
         char address[16]{};unsigned port=0;int used=0;
         if(std::sscanf(config+sizeof(magic)-1,"%15[0-9.]\n%u\n%n",address,&port,&used)!=2||used!=st.st_size-static_cast<off_t>(sizeof(magic)-1)||!port||port>65535)return;
+        if(kind==ProcessKind::Compositor){
+            prepareNativeColourCold();
+            if(stream_bridge_native_colour::colourReady.load(std::memory_order_acquire))
+                note(p,"native unkeyed colour contract prepared from current runtime",sb::logging::Level::Debug);
+        }
         p.wake=eventfd(0,EFD_CLOEXEC|EFD_NONBLOCK);if(p.wake<0)return;
         p.kind.store(kind,std::memory_order_release);
         // Only the owned, ABI-matched adjacent codec can enable negotiation.
