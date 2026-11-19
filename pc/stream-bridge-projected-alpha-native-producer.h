@@ -208,6 +208,7 @@ public:
         device_=device;page_=page;shaders_=&shaders;locks_=&locks;stage_=4001;return true;
     }
     Geometry& geometry()noexcept{return geometry_;}
+    std::array<std::uint64_t,18> constantDiagnostics()const noexcept{return geometry_.constantDiagnostics();}
     void depthState(ID3D11DepthStencilState*)noexcept{} // Original attachment updates run once, never replayed.
     unsigned stage()const noexcept{return stage_.load(std::memory_order_relaxed);}
     std::uint64_t sealedVersions()const noexcept{return seals_.load(std::memory_order_relaxed);}

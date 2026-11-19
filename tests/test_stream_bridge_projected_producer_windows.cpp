@@ -842,12 +842,21 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
         // Poison/unknown logical bounds must refuse private capture. Restoring
         // observed bytes restores availability without a session reset.
         producer.geometry().invalidate(constants.value);before=nativeDrawCalls;
-        if(!message.reproject&&!message.direct)check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"unknown padded-Y bounds refuse without an extra original draw");
+        if(!message.reproject&&!message.direct){
+            check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"unknown padded-Y bounds refuse without an extra original draw");
+            const auto diagnostic=producer.constantDiagnostics();
+            check(diagnostic[0]&&diagnostic[1]==5&&diagnostic[2]==0&&diagnostic[4]==diagnostic[5]&&
+                (diagnostic[8]&1)&&!(diagnostic[8]&2),"constant diagnostics identify invalidated actual PS data without admitting it");
+        }
         producer.geometry().update(constants.value,words.data());
         if(message.reproject){
             std::array<std::uint32_t,700> observedBounds{};
             check(!producer.geometry().constantPrefix(context.value,observedBounds.data(),sizeof observedBounds,true,2),
                 "negative control: the old all-views prefix exceeds a valid selected-view public CB range");
+            const auto rangeDiagnostic=producer.constantDiagnostics();
+            check(rangeDiagnostic[0]&&rangeDiagnostic[2]==258&&rangeDiagnostic[3]==sizeof observedBounds&&
+                ((rangeDiagnostic[1]==7&&rangeDiagnostic[7]*16<rangeDiagnostic[3])||
+                 (rangeDiagnostic[1]==8&&rangeDiagnostic[5]<rangeDiagnostic[3]&&rangeDiagnostic[7]*16>=rangeDiagnostic[3])),"constant diagnostics distinguish actual native or captured VS-b2 range limits from missing metadata");
             check(producer.geometry().constantPrefix(context.value,observedBounds.data(),512,true,2),
                 "the current observed short public CB range contains the selected view bounds");
             stateWords[72]=1;context->UpdateSubresource(viewState.value,0,nullptr,stateWords.data(),0,0);producer.geometry().update(viewState.value,stateWords.data());
@@ -857,7 +866,20 @@ void pipelineChild(const NativePipelineMessage& message,ChannelPage* page){
             producer.geometry().invalidate(viewBounds.value);before=nativeDrawCalls;
             check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,
                 "a short but unknown view-bound range remains refused");
+            const auto invalidDiagnostic=producer.constantDiagnostics();
+            check(invalidDiagnostic[1]==5&&invalidDiagnostic[2]==258&&(invalidDiagnostic[8]&1)&&!(invalidDiagnostic[8]&2),
+                "constant diagnostics distinguish invalidated selected-view bytes from native range refusal");
             producer.geometry().update(viewBounds.value,boundsWords.data());
+            Reference<ID3D11Buffer> unobserved;D3D11_BUFFER_DESC unobservedDesc{};unobservedDesc.ByteWidth=16;
+            unobservedDesc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;nativeActive=nullptr;
+            const auto created=device->CreateBuffer(&unobservedDesc,nullptr,unobserved.out());nativeActive=&producer;
+            check(SUCCEEDED(created),"owned unobserved native constant buffer for missing-metadata control");
+            context->VSSetConstantBuffers(2,1,&unobserved.value);
+            check(!producer.geometry().constantPrefix(context.value,observedBounds.data(),16,true,2),"unobserved current native buffer remains refused");
+            const auto missingDiagnostic=producer.constantDiagnostics();
+            check(missingDiagnostic[1]==4&&missingDiagnostic[2]==258&&missingDiagnostic[4]==16&&!missingDiagnostic[5]&&!missingDiagnostic[8],
+                "constant diagnostics report actual allocation size when its CPU metadata is absent");
+            context->VSSetConstantBuffers(2,1,&viewBounds.value);
             const float outside=2;std::memcpy(&boundsWords[30*4+1],&outside,4);
             context->UpdateSubresource(viewBounds.value,0,nullptr,boundsWords.data(),0,0);producer.geometry().update(viewBounds.value,boundsWords.data());
             before=nativeDrawCalls;check(!producer.draw(context.value,draw,4,0)&&producer.stage()==4431&&nativeDrawCalls==before,"reprojection bounds outside the written input region refuse");

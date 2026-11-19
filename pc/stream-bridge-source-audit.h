@@ -60,6 +60,7 @@ struct SourceAuditStatus {
         std::uint32_t rootMisc=0,rootKeyed=0;
         std::array<std::uint64_t,13> nativeSync{};
         std::uint32_t captureMode=0;std::uint64_t sealedVersions=0,targetRecords=0;
+        std::array<std::uint64_t,18> constantRead{};
     };
     std::array<Production,4> production{};
     std::uint32_t productionStopped=0;

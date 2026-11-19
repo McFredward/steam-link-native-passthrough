@@ -112,7 +112,7 @@ struct Observer {
                 // Only missed operations that could write native buffers revoke
                 // geometry snapshots. Metadata/lock callbacks cannot change them.
                 for(auto& item:contexts)if(item.producerDevice){
-                    if(capture.geometryUnknown())item.producer.invalidate();
+                    if(capture.geometryUnknown()){item.producer.geometry().operation(productionOverlapOperation.load(std::memory_order_relaxed));item.producer.invalidate();}
                     else item.producer.invalidateImages();
                 }
                 if(capture.geometryUnknown())productionGeometryRevocations.fetch_add(1,std::memory_order_relaxed);
@@ -126,6 +126,7 @@ struct Observer {
                 if(geometryWrite){productionOverlapOperation.store(operation,std::memory_order_relaxed);capture.missedWriter();}
                 return {nullptr,std::move(capture)};
             }
+            context.producer.geometry().operation(operation);
             return {&context,std::move(capture)};
         }
         return {};
@@ -448,6 +449,7 @@ struct Observer {
                 {sync.textures,sync.shared,sync.keyed,sync.nonKeyed,sync.tables,sync.admissionRefused,sync.acquireCalls,sync.acquireOkay,
                  sync.releaseCalls,sync.identityRefused,sync.slotRefused,sync.active,sync.identityReason},
                 production.captureMode,production.sealedVersions,production.targetRecords};
+            status.production[context].constantRead=contexts[context].producer.constantDiagnostics();
             for(unsigned slot=0;slot<8;++slot)(void)contexts[context].alpha.read(slot,status.sourceAlpha[context*8+slot]);
         }
         for(unsigned i=0;i<rasterCalls.size();++i)status.rasterCalls[i]=rasterCalls[i].load();

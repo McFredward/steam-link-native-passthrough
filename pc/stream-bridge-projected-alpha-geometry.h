@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstring>
 #include <new>
+#include <type_traits>
 
 namespace stream_bridge::sender::projected_alpha {
 // Bounded public creation/Map metadata, not guessed native object offsets.
@@ -22,10 +23,10 @@ class Geometry {
     };
     struct Constants {
         inline static constexpr GUID Id{0x46b562ac,0xcc85,0x462b,{0x8a,0x65,0xb5,0x19,0x2e,0x36,0xf3,0xa4}};
-        inline static std::atomic<unsigned> live{0};
+        inline static std::atomic<unsigned> live{0},refused{0};
         static constexpr unsigned Limit=128;
         std::array<std::uint8_t,65536> bytes{};UINT size=0;
-        std::uint64_t epoch=0;bool valid=false;void* mapped=nullptr;
+        std::uint64_t epoch=0;bool valid=false;void* mapped=nullptr;unsigned lastOperation=0;
     };
     struct Layout {
         inline static constexpr GUID Id{0x018eb540,0x92d1,0x4610,{0xa6,0xc5,0x81,0x43,0x7e,0x6b,0x32,0x20}};
@@ -54,6 +55,9 @@ class Geometry {
     inline static std::atomic<std::uint64_t> nextGeneration_{1};
     const std::uint64_t generation_=nextGeneration_.fetch_add(1,std::memory_order_relaxed);
     std::uint64_t writeEpoch_=1;
+    unsigned operation_=0,epochOperation_=0;
+    std::atomic<std::uint64_t> constantFailures_{0},constantCallbacks_{0},oversizedConstants_{0},diagnosticSequence_{0};
+    std::array<std::atomic<std::uint64_t>,18> constantDiagnostic_{};
     // Native objects own these fixed-size records. There are no retained
     // resource references or first-16 tables that can fill with retired UI
     // resources. Allocation is cold only, with hard per-process record limits.
@@ -61,10 +65,13 @@ class Geometry {
         Reference<Record<Data>> out;
         if(!generation_)return out;
         if(Data::live.fetch_add(1,std::memory_order_acq_rel)>=Data::Limit){
-            Data::live.fetch_sub(1,std::memory_order_release);return out;
+            Data::live.fetch_sub(1,std::memory_order_release);
+            if constexpr(std::is_same<Data,Constants>::value)Constants::refused.fetch_add(1,std::memory_order_relaxed);
+            return out;
         }
         out.value=new(std::nothrow) Record<Data>(this,generation_);
-        if(!out.value)Data::live.fetch_sub(1,std::memory_order_release);
+        if(!out.value){Data::live.fetch_sub(1,std::memory_order_release);
+            if constexpr(std::is_same<Data,Constants>::value)Constants::refused.fetch_add(1,std::memory_order_relaxed);}
         return out;
     }
     template<class Data>Reference<Record<Data>> get(ID3D11DeviceChild* object)noexcept{
@@ -99,10 +106,25 @@ class Geometry {
     }
 public:
     Geometry()=default;Geometry(const Geometry&)=delete;Geometry& operator=(const Geometry&)=delete;
+    void operation(unsigned value)noexcept{operation_=value;}
+    std::array<std::uint64_t,18> constantDiagnostics()const noexcept{
+        for(unsigned attempt=0;attempt<2;++attempt){
+            const auto sequence=diagnosticSequence_.load(std::memory_order_acquire);
+            if(sequence&1)continue;
+            std::array<std::uint64_t,18> result{};
+            for(unsigned i=0;i<result.size();++i)result[i]=constantDiagnostic_[i].load(std::memory_order_relaxed);
+            if(diagnosticSequence_.load(std::memory_order_acquire)==sequence)return result;
+        }
+        return {}; // Diagnostic contention never participates in admission.
+    }
     void buffer(const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* initial,ID3D11Buffer* object)noexcept{
+        if(desc&&object&&(desc->BindFlags&D3D11_BIND_CONSTANT_BUFFER)){
+            constantCallbacks_.fetch_add(1,std::memory_order_relaxed);
+            if(desc->ByteWidth>65536)oversizedConstants_.fetch_add(1,std::memory_order_relaxed);
+        }
         if(desc&&object&&(desc->BindFlags&D3D11_BIND_CONSTANT_BUFFER)&&desc->ByteWidth&&desc->ByteWidth<=65536&&!get<Constants>(object).value){
             auto record=create<Constants>();if(record.value){auto& data=record->data;data.size=desc->ByteWidth;
-                data.valid=initial&&initial->pSysMem;data.epoch=writeEpoch_;
+                data.valid=initial&&initial->pSysMem;data.epoch=writeEpoch_;data.lastOperation=operation_;
                 if(data.valid)std::memcpy(data.bytes.data(),initial->pSysMem,data.size);
                 (void)object->SetPrivateDataInterface(Constants::Id,record.value);}
         }
@@ -151,34 +173,54 @@ public:
     }
     void beginMap(ID3D11Resource* resource,void* pointer)noexcept{
         auto record=get<Buffer>(resource);if(record.value){record->data.valid=false;record->data.mapped=pointer;}
-        auto constants=get<Constants>(resource);if(constants.value){constants->data.valid=false;constants->data.mapped=pointer;}
+        auto constants=get<Constants>(resource);if(constants.value){constants->data.valid=false;constants->data.mapped=pointer;constants->data.lastOperation=operation_;}
     }
     void beforeUnmap(ID3D11Resource* resource)noexcept{
         const auto finish=[this](auto& record)noexcept{if(!record.value)return;auto& data=record->data;
             if(data.mapped){std::memcpy(data.bytes.data(),data.mapped,data.size);data.mapped=nullptr;data.valid=true;data.epoch=writeEpoch_;}};
         auto record=get<Buffer>(resource);finish(record);auto constants=get<Constants>(resource);finish(constants);
+        if(constants.value)constants->data.lastOperation=operation_;
     }
     void update(ID3D11Resource* resource,const void* bytes)noexcept{
         const auto update=[this,bytes](auto& record)noexcept{if(!record.value)return;auto& data=record->data;
             data.valid=bytes!=nullptr;if(bytes)std::memcpy(data.bytes.data(),bytes,data.size);data.mapped=nullptr;data.epoch=writeEpoch_;};
         auto record=get<Buffer>(resource);update(record);auto constants=get<Constants>(resource);update(constants);
+        if(constants.value)constants->data.lastOperation=operation_;
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
-        if(!resource){if(writeEpoch_)++writeEpoch_;return;}
+        if(!resource){if(writeEpoch_)++writeEpoch_;epochOperation_=operation_;return;}
         auto record=get<Buffer>(resource);if(record.value){record->data.valid=false;record->data.mapped=nullptr;}
-        auto constants=get<Constants>(resource);if(constants.value){constants->data.valid=false;constants->data.mapped=nullptr;}
+        auto constants=get<Constants>(resource);if(constants.value){constants->data.valid=false;constants->data.mapped=nullptr;constants->data.lastOperation=operation_;}
     }
     // Current logical public b0 range only. No GPU readback or guessed native
     // constant offsets; unknown, copied, UAV-written or stale bytes refuse.
     bool constantPrefix(ID3D11DeviceContext* context,void* output,UINT bytes,bool vertex=false,UINT slot=0)noexcept{
-        if(!context||!output||!bytes||bytes>(vertex?4096u:80u)||slot>=D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT)return false;
+        const auto refuse=[&](unsigned reason,ID3D11Buffer* actual=nullptr,const Constants* snapshot=nullptr,UINT first=0,UINT count=0)noexcept{
+            D3D11_BUFFER_DESC description{};if(actual)actual->GetDesc(&description);
+            const std::uint64_t flags=snapshot?(1u|(snapshot->valid?2u:0u)|((writeEpoch_&&snapshot->epoch==writeEpoch_)?4u:0u)|(snapshot->mapped?8u:0u)):0u;
+            const std::array<std::uint64_t,18> observation{{constantFailures_.fetch_add(1,std::memory_order_relaxed)+1,
+                reason,(vertex?256u:0u)|slot,bytes,description.ByteWidth,snapshot?snapshot->size:0u,first,count,flags,
+                std::uint64_t(description.Usage),description.BindFlags,description.CPUAccessFlags,snapshot?snapshot->lastOperation:0u,
+                epochOperation_,constantCallbacks_.load(std::memory_order_relaxed),oversizedConstants_.load(std::memory_order_relaxed),
+                Constants::live.load(std::memory_order_relaxed),Constants::refused.load(std::memory_order_relaxed)}};
+            diagnosticSequence_.fetch_add(1,std::memory_order_acq_rel);
+            for(unsigned i=0;i<observation.size();++i)constantDiagnostic_[i].store(observation[i],std::memory_order_relaxed);
+            diagnosticSequence_.fetch_add(1,std::memory_order_release);
+            return false;
+        };
+        if(!context||!output||!bytes||bytes>(vertex?4096u:80u)||slot>=D3D11_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT)return refuse(1);
         Reference<ID3D11DeviceContext1> extended;
-        if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))))return false;
+        if(FAILED(context->QueryInterface(__uuidof(ID3D11DeviceContext1),reinterpret_cast<void**>(extended.out()))))return refuse(2);
         Reference<ID3D11Buffer> buffer;UINT offset=0,count=0;
         if(vertex)extended->VSGetConstantBuffers1(slot,1,buffer.out(),&offset,&count);
         else extended->PSGetConstantBuffers1(slot,1,buffer.out(),&offset,&count);
-        auto record=get<Constants>(buffer.value);if(!record.value)return false;const auto& data=record->data;
-        if(!data.valid||!writeEpoch_||data.epoch!=writeEpoch_||offset>data.size/16||count<((bytes+15)/16)||bytes>data.size-offset*16)return false;
+        if(!buffer.value)return refuse(3);
+        auto record=get<Constants>(buffer.value);if(!record.value)return refuse(4,buffer.value,nullptr,offset,count);
+        const auto& data=record->data;
+        if(!data.valid)return refuse(5,buffer.value,&data,offset,count);
+        if(!writeEpoch_||data.epoch!=writeEpoch_)return refuse(6,buffer.value,&data,offset,count);
+        if(offset>data.size/16||count<((bytes+15)/16))return refuse(7,buffer.value,&data,offset,count);
+        if(bytes>data.size-offset*16)return refuse(8,buffer.value,&data,offset,count);
         std::memcpy(output,data.bytes.data()+offset*16,bytes);return true;
     }
     // Return a completely drawn integer viewport inside a larger allocation.
