@@ -12,6 +12,7 @@ on:
       - 'tools/capture_masks.py'
       - 'tools/check_mask_capture.cpp'
       - 'tests/check_sender_wire_budget.py'
+      - 'tests/check_sender_reconnect.py'
       - 'pc/stream-bridge-sender-provider-runtime.*'
       - 'receiver/stream_bridge_native_runtime.*'
       - 'receiver/stream_bridge_native_decode.*'
@@ -38,6 +39,7 @@ on:
       - 'tools/capture_masks.py'
       - 'tools/check_mask_capture.cpp'
       - 'tests/check_sender_wire_budget.py'
+      - 'tests/check_sender_reconnect.py'
       - 'pc/stream-bridge-sender-provider-runtime.*'
       - 'receiver/stream_bridge_native_runtime.*'
       - 'receiver/stream_bridge_native_decode.*'
@@ -81,6 +83,8 @@ jobs:
           cmake --build build/lifecycle --parallel 4 --target test_stream_bridge_receiver_lifetime test_stream_bridge_control test_stream_bridge_native_runtime test_stream_bridge_native_decode test_stream_bridge_local test_stream_bridge_sender_provider test_stream_bridge_sender_provider_input test_stream_bridge_sender_provider_runtime test_stream_bridge_sender_coverage_gates test_stream_bridge_mask_capture check_mask_capture test_stream_bridge_mask_hevc_encoder
       - name: Require the original missing-budget causal control to fail
         run: python3 tests/check_sender_wire_budget.py --sdk "$PWD/build/nvenc-sdk" --bridge-library "$PWD/build/lifecycle/libsfnp_stream_bridge.a" --output "$PWD/build/wire-budget-control"
+      - name: Require delayed and unproved retry policies to fail real TCP controls
+        run: python3 tests/check_sender_reconnect.py --sdk "$PWD/build/nvenc-sdk" --library-directory "$PWD/build/lifecycle" --output "$PWD/build/reconnect-controls"
       - name: Exercise actual TCP admission, reconfiguration and frame receipts
         run: ctest --test-dir build/lifecycle --output-on-failure --parallel 4 -R '^(stream_bridge_(control|receiver_lifetime|native_runtime|native_decode|local|sender_coverage_gates|sender_provider(_input(_legacy)?|_runtime)?|mask_capture|mask_hevc_encoder)|mask_capture_readers)$'
       - name: Preserve native CBR buffer policy alongside controlled VBR
