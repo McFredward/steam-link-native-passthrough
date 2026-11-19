@@ -92,6 +92,13 @@ void auditChecks(){
     const auto sample=[&]{return auditSource(inventory,42,321,654,29,1,1);};
     auto s=sample();check(s.ownerMatches==1&&s.pid==101&&s.allocationGeneration==8&&s.inventoryEpoch==7,
         "diagnostic identity retains the unique registered allocation and original arbitrary shape");
+    auto requestOnly=inventory;requestOnly.allocations[0].samples=requestOnly.allocations[0].arraySize=0;
+    auto observed=auditSource(requestOnly,42,321,654,29,1,1);
+    check(observed.ownerMatches==1&&observed.samples==1&&observed.arraySize==1,
+        "opaque request ancestry reports actual observed public sample/array facts only");
+    requestOnly.allocations[0].samples=1;
+    check(!auditSource(requestOnly,42,321,654,29,1,1).ownerMatches,
+        "partially specified physical diagnostic metadata remains refused");
     inventory.allocations[1]=inventory.allocations[0];inventory.allocations[1].pid=202;
     s=sample();check(s.ownerMatches==2&&!s.pid&&!s.allocationGeneration,"duplicate numerical handles never choose a preferred owner");
     inventory.allocations[1]={};

@@ -104,6 +104,23 @@ jobs:
           c++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -pthread -I. -isystem build/cleanup-sdk tests/test_stream_bridge_sender_provider_directmode.cpp pc/stream-bridge-sender-provider-directmode.cpp -o build/cleanup-sanitized
           build/cleanup-sanitized
           build/cleanup-sanitized --gloomhaven
+      - name: Restore the obsolete packed-word admission as a causal control
+        run: |
+          python3 - <<'PYCONTROL'
+          from pathlib import Path
+          p=Path('pc/stream-bridge-sender-provider-directmode.cpp')
+          s=p.read_text();needle='if(!description(*desc))'
+          assert s.count(needle)==1
+          old='if(!description(*desc)||!([](unsigned packed){const unsigned samples=(packed&7u)?(packed&7u):1u,arrays=(packed>>3)?(packed>>3):1u;return arrays==1&&(samples==1||samples==2||samples==4);})(desc->nSampleCount))'
+          Path('build/directmode-old-packed.cpp').write_text(s.replace(needle,old))
+          PYCONTROL
+          c++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -pthread -I. -Ipc -isystem build/cleanup-sdk tests/test_stream_bridge_sender_provider_directmode.cpp build/directmode-old-packed.cpp -o build/old-packed
+          python3 - <<'PYCONTROL'
+          import subprocess
+          r=subprocess.run(['build/old-packed'],capture_output=True,text=True)
+          print(r.stderr)
+          assert r.returncode==1 and 'updated native request 17 must reach actual texture verification' in r.stderr
+          PYCONTROL
       - name: Restore only unnecessary epoch changes as a causal control
         run: |
           python3 - <<'PY'
@@ -306,6 +323,23 @@ jobs:
           set "SFNP_COMPOSITION_RESULT=%ERRORLEVEL%"
           type build\context-composition-p010-legacy.log
           if not "%SFNP_COMPOSITION_RESULT%"=="0" exit /b %SFNP_COMPOSITION_RESULT%
+          rem Native opaque descriptor packing17 exercises the SAME complete GPU pipeline.
+          build\native-context.exe --composition-opaque >build\context-composition-opaque.log 2>&1
+          set "SFNP_OPAQUE_RESULT=%ERRORLEVEL%"
+          type build\context-composition-opaque.log
+          if not "%SFNP_OPAQUE_RESULT%"=="0" exit /b %SFNP_OPAQUE_RESULT%
+          build\native-context.exe --composition-p010-opaque >build\context-composition-p010-opaque.log 2>&1
+          set "SFNP_OPAQUE_RESULT=%ERRORLEVEL%"
+          type build\context-composition-p010-opaque.log
+          if not "%SFNP_OPAQUE_RESULT%"=="0" exit /b %SFNP_OPAQUE_RESULT%
+          build\native-context.exe --composition-legacy-opaque >build\context-composition-legacy-opaque.log 2>&1
+          set "SFNP_OPAQUE_RESULT=%ERRORLEVEL%"
+          type build\context-composition-legacy-opaque.log
+          if not "%SFNP_OPAQUE_RESULT%"=="0" exit /b %SFNP_OPAQUE_RESULT%
+          build\native-context.exe --composition-p010-legacy-opaque >build\context-composition-p010-legacy-opaque.log 2>&1
+          set "SFNP_OPAQUE_RESULT=%ERRORLEVEL%"
+          type build\context-composition-p010-legacy-opaque.log
+          if not "%SFNP_OPAQUE_RESULT%"=="0" exit /b %SFNP_OPAQUE_RESULT%
           build\native-context.exe --adaptive >build\context-adaptive.log 2>&1
           set "SFNP_ADAPTIVE_RESULT=%ERRORLEVEL%"
           type build\context-adaptive.log

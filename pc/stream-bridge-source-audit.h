@@ -78,8 +78,12 @@ inline SourceAuditSample auditSource(const SourceAuditInventory& inventory,
     out.width=width;out.height=height;out.format=format;
     out.samples=samples;out.arraySize=arrays;
     if(!inventory.epoch||!handle||!width||!height||!format||!samples||!arrays)return out;
+    // Zero/zero means an opaque native REQUEST, not a physical shape. This
+    // ancestry diagnostic uses the actual observed texture's nonzero fields.
+    // Production retained registries still contain only exact GetDesc facts.
     for(const auto& a:inventory.allocations)if(a.handle==handle&&a.generation&&a.pid&&
-        a.width==width&&a.height==height&&a.format==format&&a.samples==samples&&a.arraySize==arrays){
+        a.width==width&&a.height==height&&a.format==format&&
+        ((!a.samples&&!a.arraySize)||(a.samples==samples&&a.arraySize==arrays))){
         ++out.ownerMatches;out.pid=a.pid;out.allocationGeneration=a.generation;
     }
     if(out.ownerMatches!=1){out.pid=0;out.allocationGeneration=0;}

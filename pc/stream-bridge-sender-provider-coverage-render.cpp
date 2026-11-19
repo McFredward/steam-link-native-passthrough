@@ -39,6 +39,13 @@ bool sharedTextureDescriptionMatches(const D3D11_TEXTURE2D_DESC& actual,
         &&actual.Format==static_cast<DXGI_FORMAT>(expected.format)
         &&actual.SampleDesc.Count==expected.samples&&actual.ArraySize==expected.arraySize&&actual.MipLevels==1;
 }
+bool sharedTextureDescriptionMatches(const D3D11_TEXTURE2D_DESC& actual,
+    const SharedTextureRequest& request)noexcept{
+    // This is the supported coverage shape to VERIFY, not a decoding of the
+    // opaque native word. Actual arrays/MSAA/mips remain refused independently.
+    return sharedTextureDescriptionMatches(actual,
+        SharedTextureShape{request.width,request.height,request.format,1,1});
+}
 bool submittedSharedResource(ID3D11Resource* native,ID3D11Texture2D* held,
     const SharedTextureOwner& opened,const SharedTextureOwner& submitted,const SharedTextureShape& shape)noexcept{
     if(!native||!held||!submitted.handle||!submitted.generation||!submitted.processId
@@ -46,6 +53,11 @@ bool submittedSharedResource(ID3D11Resource* native,ID3D11Texture2D* held,
         ||!shape.width||!shape.height||shape.width>16384||shape.height>16384||!shape.format||shape.samples!=1||shape.arraySize!=1)return false;
     return textureShape(native,shape)&&textureShape(held,shape)
         &&allocationHandle(native,submitted.handle)&&allocationHandle(held,submitted.handle);
+}
+bool submittedSharedResource(ID3D11Resource* native,ID3D11Texture2D* held,
+    const SharedTextureOwner& opened,const SharedTextureOwner& submitted,const SharedTextureRequest& request)noexcept{
+    return submittedSharedResource(native,held,opened,submitted,
+        SharedTextureShape{request.width,request.height,request.format,1,1});
 }
 void copyCoverageBeforeNative(ID3D11DeviceContext* context,ID3D11Resource* nativeDestination,
     ID3D11Resource* nativeSource,ID3D11Resource* readback,ID3D11Resource* coverage,ID3D11Query* completion,

@@ -61,9 +61,9 @@ bool sourceAuditInventory(std::uint64_t previous,stream_bridge::sender::SourceAu
     const auto original=directMode().inventory();if(!original.valid||original.epoch!=revision)return false;
     out.epoch=revision;unsigned used=0;
     for(const auto& swap:original.swaps)if(swap.generation){
-        SharedTextureShape shape{};if(!decodeSwapTextureSetDesc(swap.description,shape))continue;
+        SharedTextureRequest shape{};if(!describeSwapTextureSetRequest(swap.description,shape))continue;
         for(const auto handle:swap.handles)if(handle&&used<out.allocations.size())
-            out.allocations[used++]={handle,swap.generation,swap.processId,shape.width,shape.height,shape.format,shape.samples,shape.arraySize};
+            out.allocations[used++]={handle,swap.generation,swap.processId,shape.width,shape.height,shape.format,0,0};
     }
     return true;
 }

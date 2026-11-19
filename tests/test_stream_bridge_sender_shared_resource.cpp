@@ -54,7 +54,13 @@ HRESULT Shared::GetSharedHandle(HANDLE* out){if(!out)return E_POINTER;*out=SUCCE
 void metadata(){
     Texture native(0x801),held(0x801),foreign(0x802);
     const SharedTextureOwner key{0x801,17,290};SharedTextureShape shape{};
-    check(decodePinnedSwapShape(32,16,DXGI_FORMAT_R8G8B8A8_UNORM,9,shape)&&shape.samples==1&&shape.arraySize==1,"actual packed descriptor 9 normalizes to single-sample single-array coverage shape");
+    shape={32,16,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
+    SharedTextureRequest request{};
+    check(describeSharedTextureRequest(32,16,shape.format,request),"bounded native request has no inferred physical sample or array count");
+    check(sharedTextureDescriptionMatches(native.desc,request)&&submittedSharedResource(&native,&held,key,key,request),
+        "actual single-sample shared allocation proves request independently of opaque native metadata");
+    check(!submittedSharedResource(&foreign,&held,key,key,request)&&!submittedSharedResource(&native,&foreign,key,key,request),
+        "request overload still rejects foreign native and held kernel allocations");
     check(sharedTextureDescriptionMatches(native.desc,shape),"production cold import matches normalized descriptor 9 to actual kernel texture description");
     check(static_cast<IUnknown*>(&native)!=static_cast<IUnknown*>(&held),"fixture uses distinct COM objects, not one reused resource pointer");
     check(submittedSharedResource(&native,&held,key,key,shape),"separately opened SAME allocation admitted by explicit shared handle");
@@ -68,10 +74,9 @@ void metadata(){
     for(auto bad:{SharedTextureShape{31,16,shape.format,1},SharedTextureShape{32,17,shape.format,1},SharedTextureShape{32,16,DXGI_FORMAT_B8G8R8A8_UNORM,1},SharedTextureShape{32,16,shape.format,2},SharedTextureShape{0,16,shape.format,1},SharedTextureShape{32,16,shape.format,1,2},SharedTextureShape{32,16,shape.format,1,0}})
         check(!submittedSharedResource(&native,&held,key,key,bad),"actual native and held shape must match submitted descriptor");
     auto rawShape=shape;rawShape.samples=9;check(!sharedTextureDescriptionMatches(native.desc,rawShape)&&!submittedSharedResource(&native,&held,key,key,rawShape),"raw packed word cannot substitute for decoded physical sample count");
-    for(auto raw:{0u,4u,8u,9u}){SharedTextureShape decoded{};check(decodePinnedSwapShape(32,16,shape.format,raw,decoded),"native default/packed/MSAA metadata decodes");check(submittedSharedResource(&native,&held,key,key,decoded)==(raw!=4),"only physical single-sample metadata admits actual single-sample shared resource");}
     const auto original=native.desc;
     for(unsigned kind=0;kind<3;++kind){if(kind==0)native.desc.ArraySize=2;if(kind==1)native.desc.MipLevels=2;if(kind==2)native.desc.SampleDesc.Count=4;
-        check(!submittedSharedResource(&native,&held,key,key,shape),"native array/mip/MSAA variants refused");native.desc=original;}
+        check(!submittedSharedResource(&native,&held,key,key,shape)&&!submittedSharedResource(&native,&held,key,key,request)&&!sharedTextureDescriptionMatches(native.desc,request),"actual native array/mip/MSAA variants refuse independently of opaque metadata");native.desc=original;}
     held.desc.Width=31;check(!submittedSharedResource(&native,&held,key,key,shape),"held shape checked independently");held.desc.Width=32;
     native.sharing=E_FAIL;check(!submittedSharedResource(&native,&held,key,key,shape),"native failed/nonshared resource refused");native.sharing=S_OK;
     held.sharing=E_FAIL;check(!submittedSharedResource(&native,&held,key,key,shape),"held failed/nonshared resource refused");held.sharing=S_OK;
@@ -105,7 +110,10 @@ int gpuAttempt(D3D_DRIVER_TYPE type){
     Com<ID3D11ShaderResourceView> srv;check(SUCCEEDED(device->CreateShaderResourceView(native.p,nullptr,srv.out())),"actual source SRV");
     context->PSSetShaderResources(0,1,&srv.p);Com<ID3D11ShaderResourceView> bound;context->PSGetShaderResources(0,1,bound.out());Com<ID3D11Resource> actual;bound->GetResource(actual.out());
     const SharedTextureOwner key{static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(handle)),17,290};SharedTextureShape shape{};
-    check(decodePinnedSwapShape(32,16,DXGI_FORMAT_R8G8B8A8_UNORM,9,shape)&&shape.samples==1&&shape.arraySize==1,"GPU fixture consumes final normalized descriptor 9, not fabricated sample metadata");
+    shape={32,16,DXGI_FORMAT_R8G8B8A8_UNORM,1,1};
+    SharedTextureRequest request{};
+    check(describeSharedTextureRequest(32,16,shape.format,request)&&submittedSharedResource(actual.p,held.p,key,key,request),
+        "real independently opened GPU allocation proves opaque native request without a packed-word decoder");
     D3D11_TEXTURE2D_DESC actualDescription{};held->GetDesc(&actualDescription);check(sharedTextureDescriptionMatches(actualDescription,shape),"production cold-import guard consumes descriptor 9 and real opened kernel texture description");
     check(submittedSharedResource(actual.p,held.p,key,key,shape),"production admission consumes descriptor 9 with actual bound-SRV allocation and separately-opened hold");
     shared.reset();creator.reset();check(submittedSharedResource(actual.p,held.p,key,key,shape),"held/native opens retain allocation after creator wrapper release");

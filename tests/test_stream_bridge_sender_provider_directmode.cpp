@@ -20,19 +20,16 @@ void present(void* o,vr::SharedTextureHandle_t sync){++presents;if(const auto* p
 void post(void*,const DirectMode::Throttling_t*){++posts;if(const auto* p=DirectModeBoundary::currentFrame()){check(p->presentSerial==frame.presentSerial&&p->syncTexture==frame.syncTexture,"PostPresent retains exact prior Present and native sync texture scope");++seen;}}
 void timing(void*,vr::DriverDirectMode_FrameTiming*){}
 void descriptors(){
-    SharedTextureShape shape{};
-    for(auto raw:{0u,1u,8u,9u}){
-        check(decodePinnedSwapShape(4040,4040,27,raw,shape)&&shape.width==4040&&shape.height==4040&&shape.format==27&&shape.samples==1&&shape.arraySize==1,"pinned zero/default/packed single-sample descriptors normalize to actual native texture");
+    SharedTextureRequest request{};
+    check(describeSharedTextureRequest(16384,16384,27,request)&&request.width==16384,
+        "native request preserves bounded dimensions without guessing its private packing");
+    for(auto raw:{0u,1u,3u,4u,7u,8u,9u,16u,17u,33u,0xffffffffu}){
+        const DirectMode::SwapTextureSetDesc_t desc{4040,4040,27,raw};
+        check(describeSwapTextureSetRequest(desc,request)&&request.width==4040&&request.height==4040&&request.format==27,
+            "native request metadata is independent of opaque fourth-word encoding");
     }
-    for(auto raw:{2u,4u,10u,12u})
-        check(decodePinnedSwapShape(4040,4040,27,raw,shape)&&shape.samples==(raw&7u)&&shape.arraySize==1,"valid native MSAA metadata decoded without claiming single-sample coverage");
-    for(auto raw:{3u,5u,6u,7u,11u,13u,14u,15u,16u,17u,24u,0xffffffffu}){
-        shape={4040,4040,27,1,1};
-        check(!decodePinnedSwapShape(4040,4040,27,raw,shape)&&!shape.width&&!shape.samples,"unsupported sample/array metadata fails closed and clears old shape");
-    }
-    check(decodePinnedSwapShape(16384,16384,27,9,shape),"maximum bounded extent accepted");
-    for(const auto& d:{DirectMode::SwapTextureSetDesc_t{0,4040,27,9},{4040,0,27,9},{16385,4040,27,9},{4040,16385,27,9},{4040,4040,0,9}})
-        check(!decodeSwapTextureSetDesc(d,shape),"empty/oversized extent and absent format refused");
+    for(auto d:{DirectMode::SwapTextureSetDesc_t{0,1,27,9},DirectMode::SwapTextureSetDesc_t{1,0,27,9},DirectMode::SwapTextureSetDesc_t{16385,1,27,9},DirectMode::SwapTextureSetDesc_t{1,16385,27,9},DirectMode::SwapTextureSetDesc_t{1,1,0,9}})
+        check(!describeSwapTextureSetRequest(d,request)&&!request.width&&!request.format,"invalid dimensions/format refuse and clear old request");
 }
 void run(bool gloomhaven){
     descriptors();
@@ -146,11 +143,18 @@ void run(bool gloomhaven){
     check(destroys==callsBefore+1&&!bridge.ownsProcess(43)&&bridge.inventoryRevision()!=individualRevision,"DestroySwap removes its complete known triple before native forwarding");
     const auto singleRemovedRevision=bridge.inventoryRevision();table.destroy(object,left.rSharedTextureHandles[1]);
     check(bridge.inventoryRevision()==singleRemovedRevision&&bridge.cleanupStats().changed==2,"repeated individual destruction is allocation-free rather than another epoch change");
-    for(auto raw:{0u,4u,8u,9u}){auto d=desc;d.nSampleCount=raw;const auto pid=100u+raw;const auto calls=creates;table.create(object,pid,&d,&left);check(creates==calls+1&&bridge.ownsProcess(pid)&&std::memcmp(&forwarded,&d,sizeof d)==0,"supported packed/default descriptor retains owner with exact native pass-through");table.destroyAll(object,pid);}
-    for(auto raw:{3u,7u,16u,17u,0xffffffffu}){auto d=desc;d.nSampleCount=raw;const auto calls=creates;table.create(object,500,&d,&left);check(creates==calls+1&&!bridge.ownsProcess(500)&&std::memcmp(&forwarded,&d,sizeof d)==0,"rejected coverage shape still forwards native creation untouched");}
-    diagnostics=bridge.diagnostics(500);
-    check(diagnostics.processSwaps==0&&diagnostics.count(DirectDiagnostic::CreateShape)==5&&diagnostics.create.reason==DirectDiagnostic::CreateShape&&diagnostics.create.pid==500&&diagnostics.create.packedSamples==0xffffffffu&&diagnostics.create.width==desc.nWidth,
-        "rejected packed descriptors expose their actual metadata without acquiring ownership");
+    for(auto raw:{17u,0u,1u,3u,4u,7u,8u,9u,16u,33u,0xffffffffu}){
+        auto d=desc;d.nSampleCount=raw;const auto pid=500u;const auto calls=creates;
+        table.create(object,pid,&d,&left);
+        if(raw==17)check(bridge.ownsProcess(pid),"updated native request 17 must reach actual texture verification");
+        check(creates==calls+1&&bridge.ownsProcess(pid)&&std::memcmp(&forwarded,&d,sizeof d)==0,
+            "original native creation with opaque packing retains its handle owner pending actual texture proof");
+        table.destroyAll(object,pid);
+    }
+    auto invalidRequest=desc;invalidRequest.nWidth=16385;
+    table.create(object,500,&invalidRequest,&left);diagnostics=bridge.diagnostics(500);
+    check(!bridge.ownsProcess(500)&&diagnostics.processSwaps==0&&diagnostics.count(DirectDiagnostic::CreateShape)==1&&
+        diagnostics.create.width==16385,"invalid requested extent remains rejected with bounded diagnostic metadata");
     bridge.stop();check(!bridge.inventory().valid&&!bridge.inventoryRevision(),"stopped source registry cannot prepare texture imports or reuse a cold revision");table.submit(object,eyes);table.present(object,77);check(seen==count,"stop preserves original calls but removes all source authority");
 }
 }
