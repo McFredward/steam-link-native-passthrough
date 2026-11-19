@@ -30,13 +30,15 @@ on:
         type: choice
         options: [all, windows, linux]
         default: all
+# These clang-cl jobs use LLVM 20 with VS 2022 headers. The rolling
+# windows-2025 image now selects VS 2026, whose STL requires Clang 22.
 permissions:
   contents: read
 jobs:
   stage-pipeline:
     strategy:
       matrix:
-        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platform == 'windows' && '["windows-2025"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["ubuntu-24.04"]' || '["ubuntu-24.04","windows-2025"]') }}
+        os: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.platform == 'windows' && '["windows-2022"]' || github.event_name == 'workflow_dispatch' && inputs.platform == 'linux' && '["ubuntu-24.04"]' || '["ubuntu-24.04","windows-2022"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 4
     steps:
@@ -60,7 +62,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
+          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -version "[17.0,18.0)" -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "SFNP_VS=%%i"
           if not defined SFNP_VS exit /b 1
           call "%SFNP_VS%\VC\Auxiliary\Build\vcvars64.bat" >nul
           if errorlevel 1 exit /b 1
