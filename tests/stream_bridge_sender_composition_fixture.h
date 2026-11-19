@@ -145,7 +145,7 @@ NVENCSTATUS NVENCAPI compositionLock(void*,NV_ENC_LOCK_BITSTREAM* packet){
     packet->pictureType=NV_ENC_PIC_TYPE_P;packet->pictureStruct=NV_ENC_PIC_STRUCT_FRAME;return NV_ENC_SUCCESS;
 }
 NVENCSTATUS NVENCAPI compositionFactory(NV_ENCODE_API_FUNCTION_LIST* api){factory(api);api->nvEncRegisterResource=compositionRegister;api->nvEncMapInputResource=compositionMap;api->nvEncUnmapInputResource=compositionUnmap;api->nvEncUnregisterResource=compositionUnregister;api->nvEncEncodePicture=compositionEncode;api->nvEncLockBitstream=compositionLock;return NV_ENC_SUCCESS;}
-void runComposition(DXGI_FORMAT planarFormat=DXGI_FORMAT_NV12,bool legacy=false){
+void runComposition(DXGI_FORMAT planarFormat=DXGI_FORMAT_NV12,bool legacy=false,unsigned nativePacking=9){
     // Match the dev diagnostic policy explicitly. The production default is
     // Important, which intentionally does not allocate/sample staged tiles.
     stream_bridge::logging::current.store(stream_bridge::logging::Level::Debug);
@@ -180,7 +180,7 @@ float4 other():SV_Target{return float4(0,0,0,1);}
     ID3D11PixelShader** pixels[]{fixture.copyPixel.out(),fixture.chromaPixel.out(),fixture.packPixel.out(),fixture.lumaPixel.out(),fixture.unknownPixel.out()};
     for(unsigned i=0;i<5;++i)check(SUCCEEDED(device->CreatePixelShader(code[i+1]->GetBufferPointer(),code[i+1]->GetBufferSize(),nullptr,pixels[i])),"production observed actual native pixel creation");
     mark("create native image graph");fixture.prepare();check(direct.prepare({CompositionFixture::create,CompositionFixture::destroy,CompositionFixture::destroyAll,CompositionFixture::next,CompositionFixture::submit,CompositionFixture::present,CompositionFixture::post,CompositionFixture::timing}),"typed DirectMode public callbacks");
-    auto calls=direct.entryPoints();DirectMode::SwapTextureSetDesc_t desc{CompositionFixture::Width,CompositionFixture::Height/2,unsigned(DXGI_FORMAT_R8G8B8A8_UNORM),9};
+    auto calls=direct.entryPoints();DirectMode::SwapTextureSetDesc_t desc{CompositionFixture::Width,CompositionFixture::Height/2,unsigned(DXGI_FORMAT_R8G8B8A8_UNORM),nativePacking};
     DirectMode::SwapTextureSet_t sets[4]{};const auto pid=GetCurrentProcessId();const auto compositorPid=pid==1?2u:1u;
     for(unsigned eye=0;eye<4;++eye)calls.create(&fixture,eye<2?compositorPid:pid,&desc,&sets[eye]);
     mark("open explicit fake NVENC ports");

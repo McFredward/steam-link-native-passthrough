@@ -37,10 +37,14 @@ HRESULT readCoverageNonblocking(ID3D11DeviceContext*,ID3D11Resource* readback,ID
 bool nativeLumaTarget(ID3D11DeviceContext*)noexcept;
 using NativeDraw=void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT);
 struct SharedTextureOwner {std::uint64_t handle=0,generation=0;std::uint32_t processId=0;};
-// Cold import compares the public kernel texture description against normalized
-// pinned DirectMode metadata. This shape check alone grants no frame authority.
+// Compare public kernel facts against either an observed physical shape or
+// the native request. A request can match only the supported physical one-sample,
+// one-slice, one-mip texture; its opaque fourth word never substitutes for GetDesc.
+// This shape check alone grants no frame authority.
 bool sharedTextureDescriptionMatches(const D3D11_TEXTURE2D_DESC&,
     const SharedTextureShape&)noexcept;
+bool sharedTextureDescriptionMatches(const D3D11_TEXTURE2D_DESC&,
+    const SharedTextureRequest&)noexcept;
 // Separately opened DXGI resource wrappers have different IUnknown identities.
 // Admit only the SAME legacy shared-allocation handle on the actual native SRV
 // resource AND the held open, plus the current DirectMode generation/PID/shape.
@@ -49,6 +53,9 @@ bool sharedTextureDescriptionMatches(const D3D11_TEXTURE2D_DESC&,
 bool submittedSharedResource(ID3D11Resource* native,ID3D11Texture2D* held,
     const SharedTextureOwner& opened,const SharedTextureOwner& submitted,
     const SharedTextureShape&)noexcept;
+bool submittedSharedResource(ID3D11Resource* native,ID3D11Texture2D* held,
+    const SharedTextureOwner& opened,const SharedTextureOwner& submitted,
+    const SharedTextureRequest&)noexcept;
 
 // Native PS output alpha supplies coverage. Its RGB/luma is ignored; the R8
 // target stores transmittance T <- T*(1-a), cleared to1 once per native frame.

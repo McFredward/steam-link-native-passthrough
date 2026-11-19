@@ -5,7 +5,7 @@ namespace stream_bridge::sender {
 std::atomic<DirectModeBoundary*> DirectModeBoundary::instance_{nullptr};
 thread_local const DirectFrame* DirectModeBoundary::current_=nullptr;
 namespace {
-bool description(const DirectMode::SwapTextureSetDesc_t& d){SharedTextureShape shape{};return decodeSwapTextureSetDesc(d,shape);}
+bool description(const DirectMode::SwapTextureSetDesc_t& d){SharedTextureRequest request{};return describeSwapTextureSetRequest(d,request);}
 // Native float crop calculations can put a nominal edge just outside [0,1].
 // Four float epsilons are at most 1/128 texel at the admitted 16384 extent.
 // Validate the original mapping; never clamp or rewrite native submit arguments.

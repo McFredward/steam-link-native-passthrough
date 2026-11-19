@@ -485,7 +485,7 @@ struct SenderCoverage::Impl {
         prepared=false;preparedPid=0;state=4;
         for(auto& old:opened){if(!old.handle)continue;bool still=false;for(const auto& set:inventory.swaps)if(set.generation==old.generation)for(auto h:set.handles)if(h==old.handle)still=true;if(!still){release(old.texture);old={};}}
         for(const auto& set:inventory.swaps)if(set.generation){
-            SharedTextureShape shape{};if(!decodeSwapTextureSetDesc(set.description,shape))continue;
+            SharedTextureRequest shape{};if(!describeSwapTextureSetRequest(set.description,shape))continue;
             for(auto handle:set.handles){bool exists=false;for(const auto& old:opened)exists|=old.handle==handle&&old.generation==set.generation;if(exists)continue;
             ID3D11Texture2D* texture=nullptr;
             if(FAILED(device->OpenSharedResource(reinterpret_cast<HANDLE>(static_cast<std::uintptr_t>(handle)),IID_ID3D11Texture2D,reinterpret_cast<void**>(&texture)))){gates.refuse(CoverageGate::SharedResource);continue;}
@@ -597,7 +597,7 @@ struct SenderCoverage::Impl {
         if((!rgba&&!bgra)||sourceDesc.ArraySize!=1||sourceDesc.MipLevels!=1||sourceDesc.SampleDesc.Count!=1||viewDesc.ViewDimension!=D3D11_SRV_DIMENSION_TEXTURE2D||viewDesc.Texture2D.MostDetailedMip){release(resource);return gates.refuse(CoverageGate::SourceShape);}
         unsigned sourceBit=0;std::uint32_t pid=0;
         const unsigned firstEye=adaptive?0:eye,lastEye=adaptive?2:eye+1;
-        for(unsigned layer=0;layer<frame.layerCount;++layer)for(unsigned candidateEye=firstEye;candidateEye<lastEye;++candidateEye){const auto& requested=frame.layers[layer][candidateEye];SharedTextureShape shape{};if(!decodeSwapTextureSetDesc(requested.description,shape))continue;for(const auto& known:opened)if(known.handle==requested.submitted.hTexture&&known.generation==requested.swapGeneration&&submittedSharedResource(resource,known.texture,{known.handle,known.generation,known.pid},{requested.submitted.hTexture,requested.swapGeneration,requested.processId},shape)){if(sourceBit){release(resource);return gates.refuse(CoverageGate::AmbiguousSource);}sourceBit=1u<<(2*layer+candidateEye);pid=requested.processId;eye=candidateEye;}}
+        for(unsigned layer=0;layer<frame.layerCount;++layer)for(unsigned candidateEye=firstEye;candidateEye<lastEye;++candidateEye){const auto& requested=frame.layers[layer][candidateEye];SharedTextureRequest shape{};if(!describeSwapTextureSetRequest(requested.description,shape))continue;for(const auto& known:opened)if(known.handle==requested.submitted.hTexture&&known.generation==requested.swapGeneration&&submittedSharedResource(resource,known.texture,{known.handle,known.generation,known.pid},{requested.submitted.hTexture,requested.swapGeneration,requested.processId},shape)){if(sourceBit){release(resource);return gates.refuse(CoverageGate::AmbiguousSource);}sourceBit=1u<<(2*layer+candidateEye);pid=requested.processId;eye=candidateEye;}}
         if(!sourceBit){release(resource);return gates.refuse(CoverageGate::SharedResource);}
         if(drawBits&sourceBit){release(resource);return gates.refuse(CoverageGate::RepeatedSource);}
         if(activePid&&activePid!=pid){release(resource);return gates.refuse(CoverageGate::MixedProcess);}
@@ -735,7 +735,7 @@ struct SenderCoverage::Impl {
             if(!rgba&&!bgra)return fail(CoverageGate::SourceShape);
             unsigned sourceBit=0;std::uint32_t pid=0;projected_alpha::Allocation nativeAllocation{};
             for(unsigned layer=0;layer<frame.layerCount;++layer)for(unsigned eye=0;eye<2;++eye){
-                const auto& requested=frame.layers[layer][eye];SharedTextureShape sourceShape{};if(!decodeSwapTextureSetDesc(requested.description,sourceShape))continue;
+                const auto& requested=frame.layers[layer][eye];SharedTextureRequest sourceShape{};if(!describeSwapTextureSetRequest(requested.description,sourceShape))continue;
                 for(const auto& known:opened)if(known.handle==requested.submitted.hTexture&&known.generation==requested.swapGeneration&&submittedSharedResource(source,known.texture,{known.handle,known.generation,known.pid},{requested.submitted.hTexture,requested.swapGeneration,requested.processId},sourceShape)){
                     if(sourceBit)return fail(CoverageGate::AmbiguousSource);
                     sourceBit=1u<<(2*layer+eye);pid=requested.processId;

@@ -6,9 +6,9 @@
 #include <mutex>
 namespace stream_bridge::sender {
 using DirectMode=vr::IVRDriverDirectModeComponent;
-inline bool decodeSwapTextureSetDesc(const DirectMode::SwapTextureSetDesc_t& d,
-    SharedTextureShape& shape)noexcept{
-    return decodePinnedSwapShape(d.nWidth,d.nHeight,d.nFormat,d.nSampleCount,shape);
+inline bool describeSwapTextureSetRequest(const DirectMode::SwapTextureSetDesc_t& d,
+    SharedTextureRequest& request)noexcept{
+    return describeSharedTextureRequest(d.nWidth,d.nHeight,d.nFormat,request);
 }
 struct DirectEye {
     DirectMode::SubmitLayerPerEye_t submitted{};

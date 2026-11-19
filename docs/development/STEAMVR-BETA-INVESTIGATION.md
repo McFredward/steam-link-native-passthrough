@@ -13,6 +13,14 @@ headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
 
+E059 records a new2.19.4 update failure on both PC and Frame. On PC the native
+request's fourth word17 is refused by our old three-bit sample/array decoder.
+The application owns no registered swap, cannot negotiate the RGBA source and
+produces zero masks. Replace private packed-word decoding with independent
+public D3D11 object verification; a successful native creation records only a
+request/handle owner. It is not a texture shape or frame/camera permission.
+
+
 E058 confirms that055 removed the observed first-retry wait. Further timer
 cuts cannot fix independent mask-proof gaps. Early rejection4431/113 identifies
 an unproved native VS-b2 constant range, while a later19-frame gap is correlated
@@ -1130,6 +1138,66 @@ The two affected dependency steps now use the signed official Ubuntu archive and
 bounded network timeouts/retries; the resource preflight and all context controls
 pass. No test/assertion/version check is disabled. These CI changes do not alter
 native artifacts. Unchanged Frame/setup bytes are checked during assembly.
+
+
+## E059 — native packed request changes after2.19.4 update (2026-11-19)
+
+The maintainer reports black passthrough regions after updating BOTH devices.
+Private immutable capture `20261119-steamvr-update/{pc,frame,frame-runtime,
+frame-shaders,input-pins.json}` retains PC21:10:18.239–21:11:51.851CET and read-only
+Frame20:05–20:13UTC. PC and Frame banners both identify2.19.4; Frame build1795056138.
+The installed/mapped Frame13 layer remains673f715e…669a42. No device changes.
+The supplied PC DLL/shader reference files still have the earlier November14
+snapshot; do not mistake them for the updated executable. Current runtime logs
+prove actual DirectMode009/NVENC discovery and shader hooks still attach.
+
+Battlemarked PID3012 requests4292x4292/f27 with native descriptor word17. Our
+`create-shape` refusal leaves client-swaps0 and declared-pid0, with7724
+no-declaration refusals and zero masks. Four FP16 targets prepare; the one
+metadata-only overlap recovers without geometry revocation or permanent stop.
+This is a new earlier admission failure, not the previous constant-prefix113
+availability gap. The exact new meaning of17 is not established by the logs;
+do not assert it means two slices, or replace the old shift with another guess.
+
+Candidate057 hypothesis: private request packing need not be decoded to prove
+actual physical textures. Separate a bounded width/height/format REQUEST from a
+physical `SharedTextureShape`. Preserve original descriptor bytes, arguments,
+handles and native calls. Record native output ownership/generation after the
+unchanged success/uniqueness checks. In the existing cold OpenSharedResource
+path, query actual D3D11 descriptors; require the supported single-sample,
+single-slice, single-mip shape and exact requested dimensions/format. At native
+sampling, BOTH retained and actually sampled objects must independently prove
+the SAME handle, current generation/PID and supported actual shape. Production
+retained registries still publish only actual GetDesc facts. The diagnostic-only
+ancestry inventory marks request samples/arrays as unknown0/0 and reports actual
+observed values; partial0 metadata remains refused. No guessed physical fields,
+new version allowlist, render allocation/readback/wait, stale mask or authority
+relaxation. Old/default9, updated17 and future opaque request words use the same
+physical-object checks. Unsupported real arrays/MSAA/mips remain refused.
+
+Owned controls must run the complete real Windows NV12/P010 normal/Legacy
+composition pipeline with both native9 and17, retaining original RGB equality,
+coverage, foreign-source, exact frame/eye, dashboard and source-format bootstrap
+assertions. Public DXGI controls must reject physical arrays/MSAA/mips and foreign
+handles with the new request overload. The native ownership fixture must preserve
+all original bytes for opaque words and reject malformed dimensions/format.
+Restoring the old three-bit packed admission must fail specifically on17.
+
+Frame cold logs also contain unrecognized desktop/distortion shader variants.
+Private review of197 current distortion modules finds the reviewed achromatic
+fragment and layered reprojection vertex still match existing canonical logic.
+The observed CK fragment/achromatic vertex have different logic/declarations and
+remain refused. Neither filenames nor matching varyings are new shader permission.
+Zero PC masks and no declared source prevent diagnosing active MR composition
+from this run; do not claim full2.19.4 Frame acceptance or remove shader guards.
+The next test must establish current PC masks, fresh peer/coded-AU proof and the
+actual active Frame pipeline, or identify its next necessary contract explicitly.
+
+Expected markers: no persistent create-shape refusal for17; current app swaps and
+format negotiation become nonzero, followed by real source roots/seals and masks.
+Frame should receive exact masks and retain native panel behavior; this is a
+hypothesis pending software and headset checks. All earlier stable/beta PC/Frame
+combinations, normal/Legacy, Auto/fixed extents and existing recovery remain required.
 
 ## Evidence locations and maintenance
 
