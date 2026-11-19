@@ -74,8 +74,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Prepare the distribution compiler and pinned public SDK
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-win32
+          # The hosted EC2 mirror stalled this package for the entire job.
+          # Use the signed Ubuntu archive with bounded network retries.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends g++-mingw-w64-x86-64-win32
           mkdir -p build/syntax-sdk
           curl --fail --location --retry 3 --max-time 60 https://raw.githubusercontent.com/FFmpeg/nv-codec-headers/43d91706e097565f57b311e567f0219838bcc2f6/include/ffnvcodec/nvEncodeAPI.h -o build/syntax-sdk/nvEncodeAPI.h
           curl --fail --location --retry 3 --max-time 60 https://raw.githubusercontent.com/ValveSoftware/openvr/0924064316de3effbcd1acf1e309182a2deb1c05/headers/openvr_driver.h -o build/syntax-sdk/openvr_driver.h
