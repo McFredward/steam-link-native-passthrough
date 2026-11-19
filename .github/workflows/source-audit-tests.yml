@@ -39,8 +39,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the distribution compiler and static runtime policy
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends g++-mingw-w64-x86-64-win32
+          # Keep signed Ubuntu package checks while avoiding the stalled EC2 mirror.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update -qq
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends g++-mingw-w64-x86-64-win32
           bash tests/build_source_audit_fixtures.sh build/gnu x86_64-w64-mingw32-g++-win32
       - uses: actions/upload-artifact@v4
         with:
