@@ -1,11 +1,11 @@
 # Tested versions and evidence
 
-Development candidate **0.3.54 / PC0.3.40 / Frame0.3.13** retains the earlier
-native reset and dashboard paths. Candidate0.3.53 reopened observer admission
-but invalidated a once-created DEFAULT native quad, preventing game masks from
-startup. This candidate preserves independently observed geometry across
-metadata/lock overlap while still revoking it for missed possible native buffer
-writes. All image ancestry retires across overlap. Headset acceptance is pending.
+Development candidate **0.3.55 / PC0.3.41 / Frame0.3.13** retains the working
+054 render/geometry/dashboard paths. The maintainer reports one brief native
+Steam Link stream recovery. This candidate removes the initial250ms PC listener
+retry delay once per fully proved paired video session. Repeated unproved
+failures keep bounded backoff; every new source still needs fresh authentication
+and a coded-AU echo. Headset testing of055 is pending.
 See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
 The table below preserves the separately confirmed stable release observations.
 
