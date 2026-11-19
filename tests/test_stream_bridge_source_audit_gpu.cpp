@@ -51,14 +51,57 @@ void geometryAdmissionControls(Observer& observer,ID3D11Device* token){
     check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"actual DEFAULT native quad has exact creation-data proof");
     {
         auto owner=observer.production(token);
-        std::thread metadata([&]{auto refused=observer.production(token,1005,false);check(!refused,"overlapping creation callback has no producer authority");});metadata.join();
+        std::thread metadata([&]{auto refused=observer.production(token,1005);check(!refused,"overlapping creation callback has no producer authority");});metadata.join();
     }
     {auto fresh=observer.production(token);check(bool(fresh),"metadata overlap can recover exclusive image capture");}
     check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),
         "metadata overlap preserves unchanged DEFAULT native vertex bytes after image ancestry recovery");
+    // Exercise the observer's actual slot-13 entry point while another
+    // callback owns admission. Both resources have real WARP descriptors.
+    Reference<ID3D11Buffer> outputVertices,constants;
+    auto outputDesc=desc;outputDesc.BindFlags|=D3D11_BIND_STREAM_OUTPUT;
+    check(SUCCEEDED(device->CreateBuffer(&outputDesc,&data,outputVertices.out())),
+        "owned vertex buffer supports raster output");
+    geometry.buffer(&outputDesc,&data,outputVertices.value);
+    auto constantDesc=desc;constantDesc.BindFlags=D3D11_BIND_CONSTANT_BUFFER;
+    check(SUCCEEDED(device->CreateBuffer(&constantDesc,&data,constants.out())),
+        "owned input-only constant buffer");
+    geometry.buffer(&constantDesc,&data,constants.value);
+    gpu->VSSetConstantBuffers(2,1,&constants.value);
+    float marker=1;
+    check(geometry.constantPrefix(gpu.value,&marker,sizeof marker,true,2)&&marker==0,
+        "actual b2 constant snapshot before raster overlap");
+    gpu->IASetVertexBuffers(0,1,&outputVertices.value,&stride,&offset);
+    check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"raster-writable vertex proof starts valid");
+    gpu->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);
+    const auto drawCount=nativeDraws;
     {
         auto owner=observer.production(token);
-        auto missedWrite=observer.production(token,48,true);
+        Observer::draw<0>(observer.contexts[0].object,4,0);
+        check(nativeDraws==drawCount+1&&GetLastError()==1234&&observer.productionOverlapOperation.load()==13,
+            "overlapping Draw forwards the original once and records slot 13");
+    }
+    {auto fresh=observer.production(token);check(bool(fresh),"raster overlap reopens image capture");}
+    check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),
+        "raster overlap preserves the input-only DEFAULT native quad");
+    check(geometry.constantPrefix(gpu.value,&marker,sizeof marker,true,2)&&marker==0,
+        "raster overlap preserves the independently proved constant input");
+    gpu->IASetVertexBuffers(0,1,&outputVertices.value,&stride,&offset);
+    check(!geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"raster overlap retires potentially written output bytes");
+    gpu->UpdateSubresource(outputVertices.value,0,nullptr,points,0,0);
+    geometry.update(outputVertices.value,points);
+    check(geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"observed output-buffer write restores proof");
+    ID3D11Buffer* noVertex=nullptr;
+    gpu->IASetVertexBuffers(0,1,&noVertex,&stride,&offset);
+    gpu->SOSetTargets(1,&outputVertices.value,&offset);
+    geometry.invalidateStreamOutputs(gpu.value);
+    gpu->SOSetTargets(0,nullptr,nullptr);
+    gpu->IASetVertexBuffers(0,1,&outputVertices.value,&stride,&offset);
+    check(!geometry.fullUnitQuad(gpu.value,4,0,37,67,1),"observed stream output retires its target bytes");
+    gpu->IASetVertexBuffers(0,1,&vertices.value,&stride,&offset);
+    {
+        auto owner=observer.production(token);
+        auto missedWrite=observer.production(token,48,BufferWriteScope::Any);
         check(!missedWrite,"missed native buffer write remains quarantined");
         const float moved[8]{4,4,4,5,5,4,5,5};gpu->UpdateSubresource(vertices.value,0,nullptr,moved,0,0);
     }
@@ -115,7 +158,13 @@ void callerAdmissionControls(){
     releaseOriginal=true;outstanding.join();
     {auto fresh=observer->production(token);check(bool(fresh)&&projected_alpha::CaptureAdmission::clean(channel.page()),
         "last original native completion permits only a fresh exclusive recovery");}
+    auto original=facade;
+    original[13]=bits<void*>(&fakeDraw);
+    context.original=original.data();
+    Observer::instance.store(observer);
     geometryAdmissionControls(*observer,token);
+    Observer::instance.store(nullptr);
+    nativeDraws=0;
     projected_alpha::ChannelParent lost;check(lost.create(),"owned changed-dispatch control channel");
     projected_alpha::ChannelLaunch changed{};check(lost.duplicateToVerifiedPeer(GetCurrentProcess(),changed),"owned changed-dispatch peer");
     auto* replaced=new Observer(Launch{});check(replaced->productionPeer.open(changed),"changed-dispatch private mapping");

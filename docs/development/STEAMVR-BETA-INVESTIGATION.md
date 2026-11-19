@@ -1,11 +1,9 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-19 for candidate **0.3.57 / PC0.3.43 / Frame0.3.14**.
-The2.19.4 update exposes two independent previously unsupported native contracts:
-PC request packing and a selected Frame colour-key shader feature family. Both
-are addressed from actual texture facts and reviewed current-runtime shader
-logic, retaining previous routes. Software validation is distinct from the
-pending paired headset test. E058's separate continuity findings remain below.
+Updated 2026-11-19 after the **0.3.57 / PC0.3.43 / Frame0.3.14** headset run.
+Battlemarked initially showed the game and live passthrough together on the
+updated SteamVR pair. E060 records why the game later disappeared and the
+targeted PC-only recovery change proposed for0.3.58 / PC0.3.44.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -13,6 +11,11 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E060 identifies a PC capture failure after working mixed reality. A missed
+D3D11 Draw escalates to blanket buffer invalidation. The observer reopens, but
+the input-only native quad's proof is no longer current. PC masks stop at602
+and the Frame continues camera-only while new decoded video arrives.
 
 E059 identifies two independent2.19.4 blockers. The PC request's fourth
 word17 is rejected by our private packing assumption; the Frame compositor
@@ -1259,6 +1262,63 @@ acceptance remains pending. Stable/stable, stable/beta, beta/stable, beta/beta,
 normal/Legacy and Auto/fixed are continuing independent compatibility requirements;
 this software evidence does not claim all matrix cells tested on a headset.
 
+
+## E060 — missed Draw retires a buffer it cannot write (2026-11-19)
+
+Tested0.3.57 / PC0.3.43 / Frame0.3.14 in Battlemarked after the SteamVR2.19.4
+update. The maintainer sees game plus passthrough first, then only passthrough.
+Matched private capture `20261119-after057/{pc,frame,frame-stderr}`.
+PC22:51:56.409–22:53:16.962 CET; read-only Frame journal21:51:50–21:53:21 UTC.
+The pair authenticates at22:51:59.001 CET with coded-AU confirmation9ms later.
+Frame receives, decodes and uploads602 coverage masks, rejects zero and observes
+559 mixed masks. This confirms that E059's changes can produce working MR after
+the update. Dashboard activation/deactivation appears earlier in the test.
+The logs do not establish an exact timestamp for the visual report or full
+native panel acceptance.
+
+At22:52:38.821, PC masks382, overlap0, geometry revocations0 and stage4020
+(sealed). It reaches602 masks by22:52:43.824. In that interval one overlap is
+recorded at public D3D11 method slot13 (Draw), with one geometry revocation and
+one exclusive recovery. The producer reports stage4207 (native vertex buffer
+bytes no longer valid for the current write epoch). Source roots2470, sealed
+versions2452 and masks602 never increase again before teardown. The admission
+gate reports stopped0 and blocked0. Encoder contract revocations remain2 from
+startup. The Frame logs602/0 decode rejections and rising camera-only draws
+(232 at21:52:41.645 UTC,5196 by21:53:11.651) while fresh video flows until
+disconnect. This is a loss of PC game coverage, with the expected recovery
+presentation on the Frame. Receiver shader/decoding rollback is unwarranted.
+
+The separate diagnostic for six invalidated VS-b2 reads identifies last native
+operation46 (CopySubresourceRegion), valid=false with current epoch and actual
+2800 bytes. It records a real earlier/interval constant-proof problem, which
+does not keep increasing during the sustained outage. Do not treat that
+diagnostic as a stale-byte read permission or equate the six failures with
+the subsequently repeated stage4207. The overlapping counterpart and exact
+subsecond ordering are not visible in the sampled PC summaries.
+
+The raster wrappers classify every missed Draw as though it can write every
+mutable buffer. E056 already established why invalidating the once-created
+DEFAULT vertex quad can prevent recovery indefinitely. D3D11 Draw can write
+raster/stream outputs. Input-only bind roles on the actual buffer description
+do not allow that draw to edit vertex input bytes. Constant-buffer bindings
+are exclusive in D3D11. Keep separate raster-output and broad buffer write
+scopes in the same counted atomic admission epoch. Invalidate all image and
+mask ancestry as before. Only a raster-capable vertex record loses its proof
+after a raster-only miss. Output observation also invalidates actual bound
+stream-output buffers in fallback draws. Real or unknown buffer writes retain
+broad invalidation and late refusals preserve the same scope across recovery.
+Do not use thread IDs, SteamVR versions, elapsed time, stale masks or guessed
+buffer bytes to restore authority.
+
+Software controls must invoke the real slot13 observer entry while admission
+is held and verify exact original forwarding, continued actual WARP DEFAULT
+quad/constant proof, retirement of output-capable vertex proof and rejection
+after a genuinely missed native UpdateSubresource. Restoring the old broad
+slot13 classification must fail the unchanged-quad assertion. A second overlap
+that may write a buffer must prevent narrower recovery. Expected headset
+result is fresh game roots/seals/masks after any raster-only quarantine, even
+when the native quad is never recreated. The patch is PC-only with an intact
+Frame0.3.14. Headset acceptance pending.
 
 ## Evidence locations and maintenance
 

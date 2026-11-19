@@ -265,6 +265,7 @@ public:
         for(auto* view:views)if(view){Reference<ID3D11Resource> resource;view->GetResource(resource.out());invalidate(resource.value);view->Release();}
     }
     void targets(ID3D11DeviceContext* context)noexcept{
+        geometry_.invalidateStreamOutputs(context);
         Reference<ID3D11BlendState> blend;context->OMGetBlendState(blend.out(),nullptr,nullptr);D3D11_BLEND_DESC desc{};
         if(blend.value)blend->GetDesc(&desc);else desc.RenderTarget[0].RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_ALL;
         std::array<ID3D11RenderTargetView*,8> views{};context->OMGetRenderTargets(UINT(views.size()),views.data(),nullptr);
