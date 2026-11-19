@@ -38,5 +38,17 @@ class Contract(unittest.TestCase):
     def test_truncation_and_oversized_input_are_bounded(self):
         for raw in (b'',packed(self.input)[:-1],packed(self.input)+bytes(65536)):
             with self.assertRaises(ValueError):tool.normalize(raw)
+    def test_existing_single_view_family_uses_same_logic_attestation(self):
+        metadata=copy.deepcopy(tool._METADATA)
+        metadata['vertex_achromatic_single']=metadata['fragment']
+        with patch.object(tool,'_METADATA',metadata):
+            self.assertEqual(tool.normalize(packed(self.input),'vertex'),packed(self.canonical))
+    def test_keyed_family_is_separate_and_literal_changes_stay_refused(self):
+        metadata=copy.deepcopy(tool._METADATA)
+        metadata['fragment_chroma_key_beta']=metadata['fragment']
+        with patch.object(tool,'_METADATA',metadata):
+            self.assertEqual(tool.normalize_chroma_key(packed(self.input)),packed(self.canonical))
+            changed=self.input[:];changed[-1]+=1
+            with self.assertRaises(ValueError):tool.normalize_chroma_key(packed(changed))
 
 if __name__=='__main__':unittest.main()

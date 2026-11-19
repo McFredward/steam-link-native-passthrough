@@ -51,4 +51,6 @@ inline Contract fragment()noexcept{return {FragmentHeader,FragmentResultIds,size
 inline Contract vertexBeta()noexcept{return {VertexBetaHeader,VertexBetaResultIds,sizeof(VertexBetaResultIds)/sizeof(*VertexBetaResultIds)};}
 inline Contract fragmentBeta()noexcept{return {FragmentBetaHeader,FragmentBetaResultIds,sizeof(FragmentBetaResultIds)/sizeof(*FragmentBetaResultIds)};}
 inline Contract vertexAchromaticBeta()noexcept{return {VertexAchromaticBetaHeader,VertexAchromaticBetaResultIds,sizeof(VertexAchromaticBetaResultIds)/sizeof(*VertexAchromaticBetaResultIds)};}
+inline Contract vertexAchromaticSingle()noexcept{return {VertexAchromaticSingleHeader,VertexAchromaticSingleResultIds,sizeof(VertexAchromaticSingleResultIds)/sizeof(*VertexAchromaticSingleResultIds)};}
+inline Contract fragmentChromaKeyBeta()noexcept{return {FragmentChromaKeyBetaHeader,FragmentChromaKeyBetaResultIds,sizeof(FragmentChromaKeyBetaResultIds)/sizeof(*FragmentChromaKeyBetaResultIds)};}
 } // namespace stream_bridge_shader_contract

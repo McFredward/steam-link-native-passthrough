@@ -16,7 +16,7 @@ _DEBUG = frozenset((0, 2, 3, 4, 5, 6, 7, 8, 317, 330))
 def normalize(raw, stage='fragment'):
     """Select by actual logic, independently of the installed runtime version."""
     first_error = None
-    for key in (stage, stage + '_beta', stage + '_achromatic_beta'):
+    for key in (stage, stage + '_beta', stage + '_achromatic_beta', stage + '_achromatic_single'):
         if key not in _METADATA:
             continue
         try:
@@ -25,6 +25,11 @@ def normalize(raw, stage='fragment'):
             if first_error is None:
                 first_error = error
     raise first_error or ValueError('unsupported native shader stage')
+
+
+def normalize_chroma_key(raw):
+    """Attest the native colour-key family; never treat its alpha as coverage."""
+    return _normalize(raw, _METADATA['fragment_chroma_key_beta'])
 
 
 def _normalize(raw, profile):

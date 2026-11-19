@@ -1,12 +1,14 @@
 # Tested versions and evidence
 
-Development candidate **0.3.56 / PC0.3.42 / Frame0.3.13** adds bounded
-constant-buffer proof diagnostics to distinguish remaining mask gaps. Rendering,
-admission policy, native dashboard and055's faster first listener retry remain
-the same. The055 hardware run recreated its listener in9ms and completed fresh
-peer/coded-AU proof in86ms; a native stream fault and independent mask-proof gaps
-remain. This diagnostic candidate makes no additional visual-fix claim.
-See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
+Development candidate **0.3.57 / PC0.3.43 / Frame0.3.14** addresses the
+observed2.19.4 request-packing and selected native shader feature contracts.
+PC physical texture descriptions come from public D3D11 objects, independent of
+private request packing. Frame feature selection requires reviewed complete
+shader logic/interfaces and independently attested current-runtime native RGB;
+exact per-frame game coverage remains mandatory. Previous supported routes and
+native dashboard authority remain. Owned Windows/Vulkan validation is distinct
+from the pending paired headset test; see the
+[per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
 The table below preserves the separately confirmed stable release observations.
 
 ## Successfully tested versions
