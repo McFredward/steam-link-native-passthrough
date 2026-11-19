@@ -19,7 +19,9 @@ class Geometry {
         inline static std::atomic<unsigned> live{0};
         static constexpr unsigned Limit=4096;
         std::array<std::uint8_t,4096> bytes{};UINT size=0;
-        std::uint64_t epoch=0;bool valid=false,immutable=false;void* mapped=nullptr;
+        std::uint64_t epoch=0,rasterEpoch=0;
+        bool valid=false,immutable=false,rasterWritable=true;
+        void* mapped=nullptr;
     };
     struct Constants {
         inline static constexpr GUID Id{0x46b562ac,0xcc85,0x462b,{0x8a,0x65,0xb5,0x19,0x2e,0x36,0xf3,0xa4}};
@@ -54,7 +56,8 @@ class Geometry {
     };
     inline static std::atomic<std::uint64_t> nextGeneration_{1};
     const std::uint64_t generation_=nextGeneration_.fetch_add(1,std::memory_order_relaxed);
-    std::uint64_t writeEpoch_=1;
+    std::uint64_t writeEpoch_=1,rasterEpoch_=1;
+    bool trackStreamOutput_=false;
     unsigned operation_=0,epochOperation_=0;
     std::atomic<std::uint64_t> constantFailures_{0},constantCallbacks_{0},oversizedConstants_{0},diagnosticSequence_{0};
     std::array<std::atomic<std::uint64_t>,18> constantDiagnostic_{};
@@ -118,11 +121,18 @@ public:
         return {}; // Diagnostic contention never participates in admission.
     }
     void buffer(const D3D11_BUFFER_DESC* desc,const D3D11_SUBRESOURCE_DATA* initial,ID3D11Buffer* object)noexcept{
-        if(desc&&object&&(desc->BindFlags&D3D11_BIND_CONSTANT_BUFFER)){
+        if(!desc||!object||!(desc->BindFlags&(D3D11_BIND_CONSTANT_BUFFER|D3D11_BIND_VERTEX_BUFFER)))return;
+        // Use the native object's creation facts to distinguish input-only
+        // geometry from buffers that may be written by an unobserved draw.
+        D3D11_BUFFER_DESC actual{};
+        object->GetDesc(&actual);
+        if(actual.ByteWidth!=desc->ByteWidth||actual.BindFlags!=desc->BindFlags)return;
+        desc=&actual;
+        if(desc&&object&&(desc->BindFlags==D3D11_BIND_CONSTANT_BUFFER)){
             constantCallbacks_.fetch_add(1,std::memory_order_relaxed);
             if(desc->ByteWidth>65536)oversizedConstants_.fetch_add(1,std::memory_order_relaxed);
         }
-        if(desc&&object&&(desc->BindFlags&D3D11_BIND_CONSTANT_BUFFER)&&desc->ByteWidth&&desc->ByteWidth<=65536&&!get<Constants>(object).value){
+        if(desc&&object&&(desc->BindFlags==D3D11_BIND_CONSTANT_BUFFER)&&desc->ByteWidth&&desc->ByteWidth<=65536&&!get<Constants>(object).value){
             auto record=create<Constants>();if(record.value){auto& data=record->data;data.size=desc->ByteWidth;
                 data.valid=initial&&initial->pSysMem;data.epoch=writeEpoch_;data.lastOperation=operation_;
                 if(data.valid)std::memcpy(data.bytes.data(),initial->pSysMem,data.size);
@@ -132,7 +142,10 @@ public:
         if(get<Buffer>(object).value)return;
         auto record=create<Buffer>();if(!record.value)return;
         auto& data=record->data;data.size=desc->ByteWidth;data.valid=initial&&initial->pSysMem;
-        data.immutable=desc->Usage==D3D11_USAGE_IMMUTABLE;data.epoch=writeEpoch_;
+        data.immutable=desc->Usage==D3D11_USAGE_IMMUTABLE;data.epoch=writeEpoch_;data.rasterEpoch=rasterEpoch_;
+        constexpr UINT inputBindings=D3D11_BIND_VERTEX_BUFFER|D3D11_BIND_INDEX_BUFFER|D3D11_BIND_SHADER_RESOURCE;
+        data.rasterWritable=(desc->BindFlags&~inputBindings)!=0||desc->MiscFlags!=0;
+        if(desc->BindFlags&D3D11_BIND_STREAM_OUTPUT)trackStreamOutput_=true;
         if(data.valid)std::memcpy(data.bytes.data(),initial->pSysMem,data.size);
         (void)object->SetPrivateDataInterface(Buffer::Id,record.value);
     }
@@ -177,15 +190,29 @@ public:
     }
     void beforeUnmap(ID3D11Resource* resource)noexcept{
         const auto finish=[this](auto& record)noexcept{if(!record.value)return;auto& data=record->data;
-            if(data.mapped){std::memcpy(data.bytes.data(),data.mapped,data.size);data.mapped=nullptr;data.valid=true;data.epoch=writeEpoch_;}};
+            if(data.mapped){std::memcpy(data.bytes.data(),data.mapped,data.size);data.mapped=nullptr;data.valid=true;data.epoch=writeEpoch_;
+                if constexpr(std::is_same_v<std::decay_t<decltype(data)>,Buffer>)data.rasterEpoch=rasterEpoch_;
+            }};
         auto record=get<Buffer>(resource);finish(record);auto constants=get<Constants>(resource);finish(constants);
         if(constants.value)constants->data.lastOperation=operation_;
     }
     void update(ID3D11Resource* resource,const void* bytes)noexcept{
         const auto update=[this,bytes](auto& record)noexcept{if(!record.value)return;auto& data=record->data;
-            data.valid=bytes!=nullptr;if(bytes)std::memcpy(data.bytes.data(),bytes,data.size);data.mapped=nullptr;data.epoch=writeEpoch_;};
+            data.valid=bytes!=nullptr;if(bytes)std::memcpy(data.bytes.data(),bytes,data.size);data.mapped=nullptr;data.epoch=writeEpoch_;
+            if constexpr(std::is_same_v<std::decay_t<decltype(data)>,Buffer>)data.rasterEpoch=rasterEpoch_;
+        };
         auto record=get<Buffer>(resource);update(record);auto constants=get<Constants>(resource);update(constants);
         if(constants.value)constants->data.lastOperation=operation_;
+    }
+    void invalidateRasterOutputs()noexcept{if(rasterEpoch_)++rasterEpoch_;}
+    void invalidateStreamOutputs(ID3D11DeviceContext* context)noexcept{
+        if(!trackStreamOutput_)return;
+        std::array<ID3D11Buffer*,D3D11_SO_BUFFER_SLOT_COUNT> outputs{};
+        context->SOGetTargets(UINT(outputs.size()),outputs.data());
+        for(auto* output:outputs)if(output){
+            invalidate(output);
+            output->Release();
+        }
     }
     void invalidate(ID3D11Resource* resource=nullptr)noexcept{
         if(!resource){if(writeEpoch_)++writeEpoch_;epochOperation_=operation_;return;}
@@ -261,7 +288,8 @@ public:
         context->IAGetVertexBuffers(layoutInfo->slot,1,actualBuffer.out(),&stride,&offset);
         auto bufferRecord=get<Buffer>(actualBuffer.value);const auto* bufferInfo=bufferRecord.value?&bufferRecord->data:nullptr;
         if(!bufferInfo)return refuse(6);
-        if(!bufferInfo->valid||(!bufferInfo->immutable&&(!writeEpoch_||bufferInfo->epoch!=writeEpoch_)))return refuse(7);
+        if(!bufferInfo->valid||(!bufferInfo->immutable&&(!writeEpoch_||bufferInfo->epoch!=writeEpoch_||
+            (bufferInfo->rasterWritable&&(!rasterEpoch_||bufferInfo->rasterEpoch!=rasterEpoch_)))))return refuse(7);
         if(stride<8)return refuse(8);
         std::array<std::array<float,2>,4> points{};
         for(unsigned i=0;i<4;++i){

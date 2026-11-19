@@ -54,11 +54,11 @@ void admissionControls(){
     }
     {
         CaptureAdmission owner(&page);
-        {CaptureAdmission writer(&page,true);check(writer.tracked()&&!writer.exclusive(),"missed native writer quarantined");}
+        {CaptureAdmission writer(&page,BufferWriteScope::Any);check(writer.tracked()&&!writer.exclusive(),"missed native writer quarantined");}
     }
     {
         CaptureAdmission recovery(&page);check(recovery.geometryUnknown(),"unknown native writes survive until exclusive geometry invalidation");
-        {CaptureAdmission metadata(&page,false);}
+        {CaptureAdmission metadata(&page);}
         check(!recovery.recover(),"metadata overlap during geometry invalidation cannot clear the writer epoch");
     }
     {
@@ -66,17 +66,33 @@ void admissionControls(){
     }
     {
         CaptureAdmission owner(&page);
-        {CaptureAdmission metadata(&page,false);}
+        {CaptureAdmission metadata(&page);}
     }
     {
-        CaptureAdmission recovery(&page,true);
-        {CaptureAdmission metadata(&page,false);}
+        CaptureAdmission recovery(&page,BufferWriteScope::Any);
+        {CaptureAdmission metadata(&page);}
         check(!recovery.recover(),"exclusive writer loses recovery when another callback overlaps");
-        recovery.missedWriter();
+        recovery.missedWriter(BufferWriteScope::Any);
     }
     {
         CaptureAdmission recovery(&page);check(recovery.geometryUnknown()&&recovery.recover(),
             "writer refused after initial exclusive admission cannot lose its geometry revocation");
+    }
+    {
+        CaptureAdmission owner(&page);
+        {CaptureAdmission draw(&page,BufferWriteScope::RasterOutput);}
+    }
+    {
+        CaptureAdmission recovery(&page);
+        check(recovery.rasterOutputsUnknown()&&!recovery.geometryUnknown(),
+            "missed raster output does not retire independently proved input buffers");
+        {CaptureAdmission write(&page,BufferWriteScope::Any);}
+        check(!recovery.recover(),"later unobserved buffer writer prevents raster-only recovery");
+    }
+    {
+        CaptureAdmission recovery(&page);
+        check(recovery.rasterOutputsUnknown()&&recovery.geometryUnknown()&&recovery.recover(),
+            "recovery retains the wider write scope until the exact epoch clears");
     }
     page.captureAdmission=CaptureAdmission::Count;
     {CaptureAdmission overflow(&page);check(!overflow.tracked()&&page.stopped,"bounded admission overflow remains fail closed");}

@@ -88,24 +88,27 @@ static_assert(std::is_trivially_copyable<Registry>::value&&std::is_trivially_cop
 static_assert(sizeof(ChannelPage)<=32768,"bounded private section");
 // One producer owner at a time; rejected callbacks retain a counted guard until
 // their ORIGINAL native operation returns. No waiting or stale witness recovery.
+enum class BufferWriteScope : std::uint64_t { None=0, Any=128, RasterOutput=512 };
 class CaptureAdmission {
     ChannelPage* page_=nullptr;std::uint64_t token_=0;bool exclusive_=false;
 public:
-    static constexpr std::uint64_t Count=127,GeometryUnknown=128,Dirty=256,Step=512;
+    static constexpr std::uint64_t Count=127,Dirty=256,Step=1024;
+    static constexpr auto GeometryUnknown=std::uint64_t(BufferWriteScope::Any);
+    static constexpr auto RasterUnknown=std::uint64_t(BufferWriteScope::RasterOutput);
     static std::uint64_t state(ChannelPage* page)noexcept{
         return page?std::uint64_t(InterlockedCompareExchange64(&page->captureAdmission,0,0)):Dirty;
     }
     static std::uint64_t epoch(ChannelPage* page)noexcept{return state(page)&~Count;}
     static bool clean(ChannelPage* page)noexcept{return page&&!(state(page)&Dirty)&&!InterlockedCompareExchange(&page->stopped,0,0);}
     CaptureAdmission()noexcept=default;
-    explicit CaptureAdmission(ChannelPage* page,bool geometryWrite=false)noexcept{
+    explicit CaptureAdmission(ChannelPage* page,BufferWriteScope scope=BufferWriteScope::None)noexcept{
         if(!page||InterlockedCompareExchange(&page->stopped,0,0))return;
         auto before=state(page);
         for(unsigned attempt=0;attempt<16;++attempt){
             const auto count=before&Count;
             if(count==Count||before>std::uint64_t(INT64_MAX)-Step-1)break;
             auto after=before+1;
-            if(count)after=(after|Dirty|(geometryWrite?GeometryUnknown:0))+Step;
+            if(count)after=(after|Dirty|std::uint64_t(scope))+Step;
             const auto observed=std::uint64_t(InterlockedCompareExchange64(&page->captureAdmission,LONG64(after),LONG64(before)));
             if(observed==before){page_=page;token_=after;exclusive_=count==0;return;}
             before=observed;
@@ -119,12 +122,13 @@ public:
     bool exclusive()const noexcept{return exclusive_;}
     bool dirty()const noexcept{return (token_&Dirty)!=0;}
     bool geometryUnknown()const noexcept{return (token_&GeometryUnknown)!=0;}
-    void missedWriter()noexcept{
+    bool rasterOutputsUnknown()const noexcept{return (token_&RasterUnknown)!=0;}
+    void missedWriter(BufferWriteScope scope)noexcept{
         if(!page_)return;
         auto before=state(page_);
         for(unsigned attempt=0;attempt<16;++attempt){
             if(before>std::uint64_t(INT64_MAX)-Step)break;
-            const auto after=(before|Dirty|GeometryUnknown)+Step;
+            const auto after=(before|Dirty|std::uint64_t(scope))+Step;
             const auto observed=std::uint64_t(InterlockedCompareExchange64(&page_->captureAdmission,LONG64(after),LONG64(before)));
             if(observed==before)return;
             before=observed;
@@ -135,7 +139,7 @@ public:
         // The caller first invalidates ALL producer ancestry and shared versions.
         // A new overlap during invalidation changes the epoch, so cannot be cleared.
         return page_&&exclusive_&&InterlockedCompareExchange64(&page_->captureAdmission,
-            LONG64(token_&~(Dirty|GeometryUnknown)),LONG64(token_))==LONG64(token_);
+            LONG64(token_&~(Dirty|GeometryUnknown|RasterUnknown)),LONG64(token_))==LONG64(token_);
     }
 };
 // Every observed write invalidates all registered aliases of that actual

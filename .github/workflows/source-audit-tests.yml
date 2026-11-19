@@ -157,6 +157,22 @@ jobs:
           Write-Host $log
           if ($result -ne 1 -or $log -notmatch 'metadata overlap preserves unchanged DEFAULT native vertex bytes after image ancestry recovery') { throw 'Old broad geometry invalidation did not fail the intended native quad assertion' }
           exit 0
+      - name: Require unscoped Draw recovery to fail the input-only quad control
+        shell: pwsh
+        run: |
+          $observer = Get-Content pc/stream-bridge-source-audit-observer.cpp -Raw
+          $needle = 's.productionContext<Index>(ctx,Slot,BufferWriteScope::RasterOutput)'
+          if ([regex]::Matches($observer, [regex]::Escape($needle)).Count -ne 1) { throw 'Geometry causal control must replace exactly one production scope guard' }
+          $observer.Replace($needle, 's.productionContext<Index>(ctx,Slot,BufferWriteScope::Any)') | Set-Content build/unscoped-raster-observer.cpp
+          (Get-Content tests/test_stream_bridge_source_audit_gpu.cpp -Raw).Replace('pc/stream-bridge-source-audit-observer.cpp', 'build/unscoped-raster-observer.cpp') | Set-Content build/unscoped-raster-control.cpp
+          & cl /nologo /std:c++17 /EHsc /W4 /WX /I. /Ipc build/unscoped-raster-control.cpp pc/stream-bridge-sender-provider-shaders.cpp /Fe:build/unscoped-raster-control.exe /Fo:build/ /link d3d11.lib d3dcompiler.lib dxgi.lib dxguid.lib uuid.lib bcrypt.lib
+          if ($LASTEXITCODE -ne 0) { throw 'Geometry causal control must compile' }
+          & build/unscoped-raster-control.exe *>build/unscoped-raster-control.log
+          $result = $LASTEXITCODE
+          $log = Get-Content build/unscoped-raster-control.log -Raw
+          Write-Host $log
+          if ($result -ne 1 -or $log -notmatch 'raster overlap preserves the input-only DEFAULT native quad') { throw 'Old unscoped Draw did not fail the intended native quad assertion' }
+          exit 0
       - name: Exercise actual asynchronous owned DLL load and refusal paths
         shell: cmd
         run: |
