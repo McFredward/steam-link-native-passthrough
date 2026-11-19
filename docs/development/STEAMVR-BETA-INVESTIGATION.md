@@ -1,10 +1,10 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-19 after installed **0.3.54 / PC0.3.40 / Frame0.3.13**.
-The maintainer reports working MR with one brief, tolerable interruption.
-Two native Steam Link backtrack/FEC faults retire the Frame source in that
-interval. Candidate0.3.55 / PC0.3.41 removes only the first250ms PC listener
-retry delay after a fully proved paired video session. Headset testing is pending.
+Updated 2026-11-19 after **0.3.55 / PC0.3.41 / Frame0.3.13**.
+The PC listener recovers in9ms and fresh peer/coded-AU proof in86ms. A native
+stream fault and separate mask-proof gaps remain. Candidate0.3.56 / PC0.3.42
+adds bounded constant-buffer proof diagnostics; it does not claim a new visual
+fix or change admission/rendering policy. Headset diagnostic evidence is pending.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -12,6 +12,13 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E058 confirms that055 removed the observed first-retry wait. Further timer
+cuts cannot fix independent mask-proof gaps. Early rejection4431/113 identifies
+an unproved native VS-b2 constant range, while a later19-frame gap is correlated
+with mutation refusals but not individually classified by the existing five-second
+last-state counters. Diagnose the missing proof before changing graphics logic.
+
 
 E057 records substantial hardware progress with054. No observer admission
 stop, overlap or persistent geometry failure appears in the matched run. The
@@ -1038,6 +1045,67 @@ Unchanged stage/GPU/resource/observer/readback and Frame checks retain their pri
 successful scope, verified by source comparison. All shipped Frame and setup
 members must remain byte-identical to054. Final immutable archive/bootstrap/
 alias pins and all platform setup jobs must pass before the handoff.
+
+## E058 — fast reconnection works; classify remaining mask-proof gaps (2026-11-19)
+
+Test055 / PC41 / unchangedFrame13, Battlemarked. The maintainer reports a few
+shorter interruptions. Private capture `20261119-after055/{pc,frame,frame-native,
+frame-control,review-summary.json}` is retained in Venture's ignored passthrough
+directory. PC19:28:49.515–19:30:54.262CET; requested Frame18:28:30–18:31:15UTC.
+The installed/mapped Frame13 hash remains673f715e…669a42. Read-only collection;
+no device changes or restarts.
+
+On the SAME PC clock, transport loss19:29:43.340 is followed by a fresh listener
+at43.349 and fresh paired/coded-AU proof at43.426:9ms and86ms respectively.
+The prior054 run measured257ms and1145ms. The intended mandatory250ms delay is
+absent. These separate runs do not establish that every difference in overall
+recovery was caused by055; native reset counts, video and network timing differ.
+Frame native vrlink records one backtrack-window fault at19:29:42.130298 followed
+by an SVLFEC unrecoverable error, and the receiver retires its source at
+18:29:42.131038UTC. Thus a real native recovery still occurs.
+
+PC admission overlap/stopped/blocked remain0.10 encoder reset attempts preserve9
+supported resets with only the startup clock fallback. Following fast recovery,
+session/certificate refusals remain40/29. A separate cluster at19:29:46–51 raises
+mutation refusals345→364 and refused pairs357→376, with19 extra None descriptors
+on Frame and36 camera-only draw operations in the corresponding coarse interval.
+Earlier19:29:11–21 mutation refusals increase0→345 while the producer reports
+4431 / last-input113: the actual native ReprojectY read domain cannot be proved
+from the selected VS-b2 CPU snapshot. Native dashboard intent remains closed in
+these intervals. Game-mask generation stopping after19:30:44 accompanies dashboard
+epoch3 and726 ordinary UI certificates; the game quits at19:30:52.771. Do not
+misclassify the deliberate final UI/quit sequence as another permanent failure.
+
+The remaining gaps are not explained by a still-delayed listener or lost paired
+session. Existing counters cannot distinguish absent creation metadata, an
+invalidated buffer, an old geometry epoch, a larger untracked allocation or a
+shorter actually bound range. They also do not prove that every later mutation
+refusal has the same b2 cause. Do not substitute an old mask or guess constants.
+
+Candidate056 adds diagnostics only. Every refused constant-prefix query records
+a bounded coherent scalar snapshot: failure class, VS/PS slot and requested bytes,
+actual allocation vs captured size, native first/count range, record/valid/epoch/
+map flags, native usage/bind/access flags, last observed write operation, epoch
+invalidation operation and cold creation/oversize/live/refused-record counts.
+It logs no buffer bytes, matrices, pixels, keys or shader bodies. Successful
+reads keep their current checks and result; all failed reads still refuse.
+Operation tags are never consulted for admission. Publication uses18 atomic
+scalars and a bounded two-attempt snapshot; logging stays on the existing cold
+five-second Debug report. Mixed old/new private status sizes remain refused.
+No new buffer allocation, GPU readback, shader compilation, wait or socket I/O
+is added to rendering. Frame and wire protocol remain unchanged.
+
+The owned GPU controls must distinguish an actually invalidated PS snapshot,
+a native/captured short VS-b2 range and a real currently bound but unobserved
+constant buffer; original draw counts and RGBA/coverage results must stay intact.
+The purpose is to select a justified next fix: improve bounded metadata admission,
+observe a known copy/update, or review the actual range semantics as indicated
+by the new evidence. This candidate is not advertised as an interruption fix.
+All stable/beta combinations, normal/Legacy, Auto/fixed resolution, exact current
+source/frame/eye/mask proof and native dashboard behavior remain mandatory.
+Expected hardware marker: `projected alpha constant proof` distinguishes the
+next4431/113 event without changing how it is handled. Current source CI, package
+and final platform setup checks must pass before handing off056 for diagnosis.
 
 ## Evidence locations and maintenance
 

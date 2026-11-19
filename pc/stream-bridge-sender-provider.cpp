@@ -549,6 +549,20 @@ class Provider final:public vr::IServerTrackedDeviceProvider {
                     std::snprintf(text,sizeof text,"projected alpha ancestry: context=%u, root-passes/paired-draws=%llu/%llu; last-root-refusal=%u (1=view,2=allocation,3=registry-read,4=no-lease,5=adapter,6=unretained,7=owner,8=shape,9=ownership,10=revoked); last-input-refusal=%u (1=untracked,2=invalid,3=revoked,4=legacy-ownership; MRT101=width,102=unreviewed,103=unknown-PS-b0,104=height,111/112/113=unknown-VS-b0/b1/b2,114=VS-height,115=eye,116=view,117/118=UV-bounds); approximate counters only, not frame proof",
                         context,static_cast<unsigned long long>(production.rootPasses),static_cast<unsigned long long>(production.pairedDraws),production.rootFailure,production.inputFailure);
                     report(text,stream_bridge::logging::Level::Debug);
+                    const auto& constants=production.constantRead;
+                    if(constants[0]){
+                        std::snprintf(text,sizeof text,"projected alpha constant proof: context=%u; failures/reason=%llu/%llu (1=args,2=context1,3=unbound,4=unobserved,5=invalidated,6=epoch,7=native-range,8=captured-range); stage-slot/request-bytes=%llu/%llu (VS256+slot,PSslot); allocation/captured-bytes=%llu/%llu; first/count16=%llu/%llu; flags=%llu (record1,valid2,epoch4,mapped8); usage/bind/cpu=%llu/%llu/%llu; last-write/epoch-op=%llu/%llu; create/oversized=%llu/%llu; live/refused-records=%llu/%llu; diagnostic only, no bytes or authority",
+                            context,static_cast<unsigned long long>(constants[0]),static_cast<unsigned long long>(constants[1]),
+                            static_cast<unsigned long long>(constants[2]),static_cast<unsigned long long>(constants[3]),
+                            static_cast<unsigned long long>(constants[4]),static_cast<unsigned long long>(constants[5]),
+                            static_cast<unsigned long long>(constants[6]),static_cast<unsigned long long>(constants[7]),
+                            static_cast<unsigned long long>(constants[8]),static_cast<unsigned long long>(constants[9]),
+                            static_cast<unsigned long long>(constants[10]),static_cast<unsigned long long>(constants[11]),
+                            static_cast<unsigned long long>(constants[12]),static_cast<unsigned long long>(constants[13]),
+                            static_cast<unsigned long long>(constants[14]),static_cast<unsigned long long>(constants[15]),
+                            static_cast<unsigned long long>(constants[16]),static_cast<unsigned long long>(constants[17]));
+                        report(text,stream_bridge::logging::Level::Debug);
+                    }
                     std::snprintf(text,sizeof text,"projected alpha storage: context=%u, FP16 callbacks/prepared=%u/%u; last-refusal=%u (2=shape,3=missing-srv,4=uav-capability,5=samples-or-extent,6=float-view,7=view-dimension,8=budget,9=allocation,10=clear,11=capacity); rgba/fp16-reserved-bytes=%llu/%llu, mode=%u (1=two256MiB-pools,2=512MiB-alpha-and-FP16-metadata); cold target admission diagnostics only",
                         context,production.fp16Calls,production.fp16Prepared,production.fp16Refusal,
                         static_cast<unsigned long long>(production.rgbaBytes),static_cast<unsigned long long>(production.fp16Bytes),production.captureMode);

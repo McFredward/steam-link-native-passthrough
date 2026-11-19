@@ -141,7 +141,7 @@ jobs:
         shell: pwsh
         run: |
           $observer = Get-Content pc/stream-bridge-source-audit-observer.cpp -Raw
-          $needle = 'if(capture.geometryUnknown())item.producer.invalidate();'
+          $needle = 'if(capture.geometryUnknown()){item.producer.geometry().operation(productionOverlapOperation.load(std::memory_order_relaxed));item.producer.invalidate();}'
           if ([regex]::Matches($observer, [regex]::Escape($needle)).Count -ne 1) { throw 'Geometry causal control must replace exactly one production scope guard' }
           $observer.Replace($needle, 'if(capture.dirty())item.producer.invalidate();') | Set-Content build/broad-geometry-observer.cpp
           (Get-Content tests/test_stream_bridge_source_audit_gpu.cpp -Raw).Replace('pc/stream-bridge-source-audit-observer.cpp', 'build/broad-geometry-observer.cpp') | Set-Content build/broad-geometry-control.cpp
