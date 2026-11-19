@@ -1,10 +1,10 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-17 after installed **0.3.53 / PC0.3.39 / Frame0.3.13**.
-Battlemarked remains camera-only from the start. Admission reopens successfully,
-but recovery invalidates native DEFAULT vertex snapshots and every projected
-draw refuses geometry reason7. Candidate0.3.54 / PC0.3.40 retains independently
-proved buffer bytes across metadata-only overlap. Headset acceptance is pending.
+Updated 2026-11-19 after installed **0.3.54 / PC0.3.40 / Frame0.3.13**.
+The maintainer reports working MR with one brief, tolerable interruption.
+Two native Steam Link backtrack/FEC faults retire the Frame source in that
+interval. Candidate0.3.55 / PC0.3.41 removes only the first250ms PC listener
+retry delay after a fully proved paired video session. Headset testing is pending.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -12,6 +12,14 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E057 records substantial hardware progress with054. No observer admission
+stop, overlap or persistent geometry failure appears in the matched run. The
+remaining interruption accompanies an actual native decoder/transport recovery.
+It does not justify keeping old source/image authority. A measured257ms gap
+between PC transport-loss detection and listener recreation includes our250ms
+retry timer; one immediately eligible retry can remove that avoidable wait.
+
 
 E056 supersedes the proposed broad invalidation in E055: reopening the channel
 is insufficient when it invalidates an unchanged native quad initialized only
@@ -953,6 +961,70 @@ The final DLL SHA256 is
 `d12e2e695eac0879a858fb4ebfc771402c5d1910dbfcc8f123b1e47828b04eff`.
 Final archive/bootstrap/alias pins and platform setup checks must validate before
 handoff. Frame13 and all setup payload bytes remain unchanged from053.
+
+## E057 — one native stream recovery; avoidable first listener delay (2026-11-19)
+
+Tested054 / PC40 / unchangedFrame13, Battlemarked. The maintainer reports only
+one brief disappearance, otherwise working MR, and considers this tolerable.
+Capture `20261119-after054/{pc,frame,frame-native,frame-control,review-summary.json}`
+is retained privately in Venture's ignored passthrough test directory.
+PC18:32:31.872–18:35:18.352CET; requested Frame17:32:15–17:35:35UTC.
+The Frame's mapped layer still matches SHA673f715e…669a42. Collection is
+read-only with no device restart, installation or settings changes.
+
+The PC ends with7825 copies and7718 masks. Observer stopped/overlap/blocked
+counters stay0; the new overlap recovery therefore was not exercised in this
+particular hardware run.22 native encoder reset attempts include21 preserved
+resets and one startup clock fallback, with0 timestamp revocations. Dashboard
+intent produces316 signed ordinary-video pictures. These are observed route
+counters, not a new complete visual certification of every dashboard interaction.
+
+Frame native vrlink reports `Received frame outside of backtrack window` at
+18:34:38.444605 and38.462632CET, each followed by an SVLFEC unrecoverable error.
+The matching receiver notices retire the source on native output-stream-off at
+17:34:38.445437 and38.463272UTC. Pool/admission4/5 advances through8/8. This is
+an actual native source retirement; retaining previous masks or authentication
+as a shortcut is not acceptable. The logs prove this immediate trigger, not
+whether loss, reorder, scheduling or our added wire workload caused it. A
+matched unpatched control would be required to attribute those native faults.
+
+On the SAME PC clock, transport loss is detected at18:34:39.565, a new listener
+starts at39.822, and fresh paired/coded-AU proof completes at40.710. Thus257ms
+of a1.145s recovery interval is the existing fixed250ms PC retry delay plus
+worker scheduling. PC and Frame timestamps must not be treated as synchronized
+when estimating cross-device latency. Session/certificate refusals increase
+31/26→133/124 during retirement/re-authentication, then stay flat. Frame decoded
+masks rise27343→35040 over the run, with0 mask decode/upload refusals. Its source
+and fresh exact image associations recover; no permanent failure remains.
+
+Candidate055 arms ONE immediately eligible listener retry only after current
+peer confirmation, verified private control channel AND exact coded-AU probe
+roundtrip. Actual transport loss first revokes old authority and consumes that
+budget. The next ordinary provider-worker turn can create the fresh listener
+without waiting250ms. Repeated losses before a new complete video proof retain
+the existing250/500/1000/2000ms backoff. Configure/stop and actual encoder/source
+changes clear the budget. Authentication/protocol/local-stop refusals do not
+enter automatic retry. No old mask, source nonce, peer, probe or native borrowed
+output is reused; every replacement still completes its new handshake and echo.
+Frame, render/shader/geometry paths and wire protocol remain unchanged.
+
+The actual TCP/native boundary fixture passes1565 assertions, including immediate
+first reopening at a fixed fake clock, stable waiting listener, old authority
+revocation, delayed re-loss after peer confirmation without a new echo, retained
+borrowed original AU bytes, fresh bindings and rearming only after new video
+proof. Three causal mutants restore the original delayed-first policy, fail to
+consume the fast budget or rearm without a coded-AU echo; each fails its intended
+assertion. These checks cover listener policy, not physical fault duration.
+
+Expected hardware marker: after a proved session's transport loss, the PC's
+`fresh transport started` follows on the next normal worker turn rather than
+a mandatory250ms pause. Fresh peer/coded-AU proof remains mandatory. Native FEC
+faults may still occur and the complete visible gap may remain limited by their
+recovery, fresh video and Frame retry timing. This does not claim to prevent the
+native reset or promise a particular visual duration. Existing Stable/Beta
+combinations, normal/Legacy, Auto/fixed resolution and native dashboard behavior
+remain requirements. Source CI, immutable package pins and final setup checks
+must pass before another candidate handoff; headset acceptance of055 is pending.
 
 ## Evidence locations and maintenance
 

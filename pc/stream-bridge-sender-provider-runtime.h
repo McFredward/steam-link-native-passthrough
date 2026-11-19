@@ -40,6 +40,9 @@ private:
     bool attempted_=false,probeRequested_=false,discoveryPending_=false;std::uint64_t nextProbe_=0;
     Clock clock_=nullptr;void* clockContext_=nullptr;
     std::uint64_t retryAt_=0;std::uint32_t retryDelay_=250;bool retryTransport_=false;
+    // One immediate listener retry after a fully proved paired video session.
+    // Repeated failures without a fresh coded-AU echo retain bounded backoff.
+    bool provenRetryAvailable_=false;
     std::uint64_t now()const;
     void scheduleTransportRetry();
 };

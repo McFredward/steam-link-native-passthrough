@@ -8,12 +8,15 @@ std::uint64_t SenderRuntime::now()const{
         std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 void SenderRuntime::scheduleTransportRetry(){
+    if(provenRetryAvailable_){
+        provenRetryAvailable_=false;retryAt_=now();retryTransport_=true;return;
+    }
     const auto clock=now();retryAt_=clock>std::numeric_limits<std::uint64_t>::max()-retryDelay_
         ?std::numeric_limits<std::uint64_t>::max():clock+retryDelay_;
     retryDelay_=std::min<std::uint32_t>(2000,retryDelay_*2);retryTransport_=true;
 }
 void SenderRuntime::configure(const ControlRequest& request){stop();request_=request;state_=request.explicitlyEnabled?RuntimeState::WaitingEncoder:RuntimeState::Off;}
-void SenderRuntime::stop(){if(encoder_.encoder)boundary_.revokeDiscovery(encoder_.encoder,encoder_.generation);control_.stop();encoder_={};attempted_=probeRequested_=discoveryPending_=false;request_.explicitlyEnabled=false;state_=RuntimeState::Off;failure_={};retryTransport_=false;retryAt_=0;retryDelay_=250;}
+void SenderRuntime::stop(){if(encoder_.encoder)boundary_.revokeDiscovery(encoder_.encoder,encoder_.generation);control_.stop();encoder_={};attempted_=probeRequested_=discoveryPending_=false;request_.explicitlyEnabled=false;state_=RuntimeState::Off;failure_={};retryTransport_=false;retryAt_=0;retryDelay_=250;provenRetryAvailable_=false;}
 void SenderRuntime::fail(RuntimeFailure reason,Status protocol,bool hasProtocolStatus){
     failure_={reason,control_.status(),protocol,hasProtocolStatus,encoder_,boundary_.liveLeases()};state_=RuntimeState::Failed;discoveryPending_=false;
 }
@@ -23,7 +26,7 @@ void SenderRuntime::tick(){
     for(const auto& e:boundary_.encoderStates())if(e.encoder&&e.hevc&&e.encoded){current=e;++candidates;}
     if(candidates!=1){if(encoder_.encoder){boundary_.revokeDiscovery(encoder_.encoder,encoder_.generation);control_.stop();encoder_={};attempted_=probeRequested_=discoveryPending_=false;}state_=candidates?RuntimeState::AmbiguousEncoder:RuntimeState::WaitingEncoder;return;}
     if(current.encoder!=encoder_.encoder||current.generation!=encoder_.generation){
-        retryTransport_=false;retryAt_=0;retryDelay_=250;
+        retryTransport_=false;retryAt_=0;retryDelay_=250;provenRetryAvailable_=false;
         if(encoder_.encoder)boundary_.revokeDiscovery(encoder_.encoder,encoder_.generation);
         control_.stop();encoder_=current;attempted_=probeRequested_=discoveryPending_=false;
     }else encoder_=current;
@@ -75,6 +78,7 @@ void SenderRuntime::tick(){
         probeRequested_=true;
     }
     if(encoder_.peerConfirmed)retryDelay_=250;
+    if(encoder_.peerConfirmed&&encoder_.probeObserved&&control_.peerVerified())provenRetryAvailable_=true;
     state_=encoder_.probeObserved?RuntimeState::ProbeObserved:encoder_.peerConfirmed?RuntimeState::Confirmed:control_.peerVerified()?RuntimeState::Negotiating:RuntimeState::WaitingPeer;
 }
 const char* runtimeStateName(RuntimeState state)noexcept{switch(state){case RuntimeState::Off:return "off";case RuntimeState::WaitingEncoder:return "waiting-supported-encoder";case RuntimeState::AmbiguousEncoder:return "multiple-encoders-refused";case RuntimeState::Preparing:return "preparing";case RuntimeState::WaitingPeer:return "waiting-paired-peer";case RuntimeState::Negotiating:return "authenticating-peer";case RuntimeState::Confirmed:return "compatible-peer-confirmed";case RuntimeState::ProbeObserved:return "coded-au-roundtrip-confirmed-not-coverage";default:return "source-or-control-failed-ordinary-video";}}
