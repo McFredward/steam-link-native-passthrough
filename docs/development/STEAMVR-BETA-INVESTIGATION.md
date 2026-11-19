@@ -1026,6 +1026,19 @@ combinations, normal/Legacy, Auto/fixed resolution and native dashboard behavior
 remain requirements. Source CI, immutable package pins and final setup checks
 must pass before another candidate handoff; headset acceptance of055 is pending.
 
+Current source55293d7 passes the complete
+[native CI](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44581204346)
+and focused [connection lifecycle CI](https://github.com/McFredward/steam-link-native-passthrough/actions/runs/44581204204),
+including the three newly compiled real-TCP causal controls. The local actual
+runtime fixture has1565 assertions;112 PC-only setup/recovery,17 package and2
+artifact-pin controls pass, alongside Windows sender syntax/link preflight.
+The complete rebuilt PC DLL SHA256 is
+`df4626076fc1d05484881f8d948b8b2d81113a3d8de9deaf4223d63293a01a74`.
+Unchanged stage/GPU/resource/observer/readback and Frame checks retain their prior
+successful scope, verified by source comparison. All shipped Frame and setup
+members must remain byte-identical to054. Final immutable archive/bootstrap/
+alias pins and all platform setup jobs must pass before the handoff.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
