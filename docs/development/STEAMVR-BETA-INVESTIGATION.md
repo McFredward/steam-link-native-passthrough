@@ -1115,7 +1115,9 @@ passes473MSVC and473GNU Windows checks and both recovery causal controls.
 Full native44592565493 passes; its PC producer/observer source and their owned
 GPU fixtures are the same as the candidate. Current resource44596128711, stage44594332841, public update
 44594140460 and offline quality44594140525 pass.112PC-only,17package and2artifact
-pin local controls pass; bootstrap and final setup/package gates follow assembly.
+pin local controls pass. The assembled056 archive retains every Frame/setup
+member byte-for-byte;39bootstrap controls, including real PowerShell extraction,
+pass. Final setup/package gates must pass on the public delivery commit.
 
 CI investigation: the rolling2025 runner now pairs LLVM20 with VS2026 headers
 that require Clang22. CPU/basic WARP checks use the compatible2022 image;
