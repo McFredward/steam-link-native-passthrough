@@ -1,11 +1,11 @@
 # Tested versions and evidence
 
-Development candidate **0.3.55 / PC0.3.41 / Frame0.3.13** retains the working
-054 render/geometry/dashboard paths. The maintainer reports one brief native
-Steam Link stream recovery. This candidate removes the initial250ms PC listener
-retry delay once per fully proved paired video session. Repeated unproved
-failures keep bounded backoff; every new source still needs fresh authentication
-and a coded-AU echo. Headset testing of055 is pending.
+Development candidate **0.3.56 / PC0.3.42 / Frame0.3.13** adds bounded
+constant-buffer proof diagnostics to distinguish remaining mask gaps. Rendering,
+admission policy, native dashboard and055's faster first listener retry remain
+the same. The055 hardware run recreated its listener in9ms and completed fresh
+peer/coded-AU proof in86ms; a native stream fault and independent mask-proof gaps
+remain. This diagnostic candidate makes no additional visual-fix claim.
 See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
 The table below preserves the separately confirmed stable release observations.
 

@@ -1107,6 +1107,30 @@ Expected hardware marker: `projected alpha constant proof` distinguishes the
 next4431/113 event without changing how it is handled. Current source CI, package
 and final platform setup checks must pass before handing off056 for diagnosis.
 
+
+Software validation for056: current GPU run44592565515 passes the new invalidated,
+short-range and unobserved-buffer controls while retaining the original normal,
+Legacy, fixed-extent, RGBA and coverage results. Current observer44592565527
+passes473MSVC and473GNU Windows checks and both recovery causal controls.
+Full native44592565493 passes; its PC producer/observer source and their owned
+GPU fixtures are the same as the candidate. Current resource44596128711, stage44594332841, public update
+44594140460 and offline quality44594140525 pass.112PC-only,17package and2artifact
+pin local controls pass. The assembled056 archive retains every Frame/setup
+member byte-for-byte;39bootstrap controls, including real PowerShell extraction,
+pass. Final setup/package gates must pass on the public delivery commit.
+
+CI investigation: the rolling2025 runner now pairs LLVM20 with VS2026 headers
+that require Clang22. CPU/basic WARP checks use the compatible2022 image;
+the native P010 GPU context stays on2025 WARP with an explicitly selected supported
+compiler (bundled22+ or a SHA256-pinned official22.1.8 fallback). Moving that P010
+case to2022 built successfully but could not create its real native texture;
+this was not a graphics regression in the patch. Keep that negative observation.
+An independent EC2 Ubuntu mirror download then stalled for the whole4-minute job.
+The two affected dependency steps now use the signed official Ubuntu archive and
+bounded network timeouts/retries; the resource preflight and all context controls
+pass. No test/assertion/version check is disabled. These CI changes do not alter
+native artifacts. Unchanged Frame/setup bytes are checked during assembly.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
