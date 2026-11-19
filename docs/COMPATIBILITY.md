@@ -1,14 +1,12 @@
 # Tested versions and evidence
 
-Development candidate **0.3.57 / PC0.3.43 / Frame0.3.14** addresses the
-observed2.19.4 request-packing and selected native shader feature contracts.
-PC physical texture descriptions come from public D3D11 objects, independent of
-private request packing. Frame feature selection requires reviewed complete
-shader logic/interfaces and independently attested current-runtime native RGB;
-exact per-frame game coverage remains mandatory. Previous supported routes and
-native dashboard authority remain. Owned Windows/Vulkan validation is distinct
-from the pending paired headset test; see the
-[per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
+Development candidate **0.3.58 / PC0.3.44 / Frame0.3.14** scopes recovery
+after an overlapping D3D11 Draw to buffers that could be raster outputs.
+The previous0.3.57 headset run showed game and live passthrough on SteamVR2.19.4
+before the PC stopped producing new game coverage on a Draw overlap.
+Both native compatibility changes from0.3.57 are retained. The current
+candidate updates the PC component. Its continuity result on the headset is
+pending. See the [per-candidate investigation](development/STEAMVR-BETA-INVESTIGATION.md).
 The table below preserves the separately confirmed stable release observations.
 
 ## Successfully tested versions
