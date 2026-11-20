@@ -1,9 +1,9 @@
 # SteamVR beta passthrough: evidence and decision log
 
-Updated 2026-11-19 after the **0.3.57 / PC0.3.43 / Frame0.3.14** headset run.
-Battlemarked initially showed the game and live passthrough together on the
-updated SteamVR pair. E060 records why the game later disappeared and the
-targeted PC-only recovery change proposed for0.3.58 / PC0.3.44.
+Updated 2026-11-20 after the successful **0.3.58 / PC 0.3.44 / Frame 0.3.14**
+Battlemarked run on SteamVR 2.19.4. The Frame decoded and uploaded all 9,634
+new PC masks. The run recovered from a texture-creation callback overlap.
+E061 records the headset result and the narrower scope of this evidence.
 
 This is the central investigation ledger. Each candidate must identify its
 hypothesis, evidence, expected observable change and actual headset result.
@@ -11,6 +11,11 @@ Successful compilation, CI and owned GPU fixtures are software evidence, not
 headset acceptance. A repaired intermediate defect is not a repaired MR image.
 
 ## Current finding
+
+E061 confirms the maintainer's successful 0.3.58 headset run. Mask production
+and Frame uploads continued after the observed callback overlap and through
+normal shutdown. This overlap was texture creation (slot 1001). The earlier
+slot 13 Draw overlap did not recur in this run.
 
 E060 identifies a PC capture failure after working mixed reality. A missed
 D3D11 Draw escalates to blanket buffer invalidation. The observer reopens, but
@@ -1319,6 +1324,40 @@ that may write a buffer must prevent narrower recovery. Expected headset
 result is fresh game roots/seals/masks after any raster-only quarantine, even
 when the native quad is never recreated. The patch is PC-only with an intact
 Frame0.3.14. Headset acceptance pending.
+
+## E061 — successful 0.3.58 Battlemarked retest (2026-11-20)
+
+The maintainer reports a fully successful headset test on 0.3.58 / PC 0.3.44 /
+Frame 0.3.14. Windows SteamVR reports 2.19.4, and a read-only Frame check
+identifies SteamVR 2.19.4 and Frame 0.3.14 with the same installed layer hash
+`b069bde519d223ac09266d8eb53b74e5491828c431116b828b53fe8cba7d2c67`.
+The PC patch version is taken from the candidate under test. The PC log itself
+identifies the runtime but does not independently print the patch version.
+
+Matched private capture `20261120-after058/{pc,frame,frame-install,review-summary.json}`.
+PC startup 21:00:48.927 CET, Battlemarked scene transition 21:01:14.607, Quit
+21:03:20.604, sender stop 21:03:21.365 and graceful runtime exit 21:03:22.058.
+Frame journal window 20:00:45–20:03:27 UTC. No device changes during collection.
+
+The PC produced 9,634 new masks by sender stop. The Frame process's lifetime
+decode and actual upload counts rose from 602 before the new MR source to
+10,236 at 20:03:21.592 UTC, a delta of 9,634. Decode and upload refusals
+remained zero. The received coverage included 9,398 new mixed masks. The
+camera-only recording counter also increased temporarily and was flat for the
+final logged minute. Counters describe processing and draw recording. The
+maintainer's report establishes the perceived headset result.
+
+Between 21:01:26.288 and 21:01:31.293 CET the observer recorded one overlap and
+one exclusive recovery at operation 1001 (texture creation). Stopped, blocked
+and geometry revocations remained zero in the samples. The PC mask count grew
+from 591 at the first post-overlap sample to 713, then 1,149, and finally
+9,634. Production returned to stage 4020 by 21:01:36.298. The constant-buffer
+proof diagnostic reached 62 transient refusals, with subsequent mask recovery.
+No lasting stage 4207 or stuck mask count appeared. The slot 13 Draw from E060
+did not recur. This run confirms end-to-end continuity for the tested
+configuration and recovery from the observed overlap. The targeted slot 13
+case remains separately verified by the Windows/WARP regression and causal
+control. No release, dashboard panel or compatibility matrix claim is added.
 
 ## Evidence locations and maintenance
 
