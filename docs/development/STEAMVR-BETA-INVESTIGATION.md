@@ -1359,6 +1359,39 @@ configuration and recovery from the observed overlap. The targeted slot 13
 case remains separately verified by the Windows/WARP regression and causal
 control. No release, dashboard panel or compatibility matrix claim is added.
 
+## E062 — Venture streamed on 2.19.4 without Companion masks (2026-11-20)
+
+The maintainer reports a Venture test after the successful E061 Battlemarked
+run. Matched private capture `20261120-venture-058/{pc,frame,frame-install,
+review-summary.json}`. PC SteamVR 2.19.4 startup at 21:05:55.973 CET and normal
+exit at 21:08:08.773. Venture's Spirit Sling Tabletop worker connected at
+21:07:16.916 and became the OpenXR scene at 21:07:22.394. The paired companion
+negotiated at 21:05:57.962 and completed its coded-AU probe 9ms later. Read-only
+Frame inventory verifies the same SteamVR 2.19.4 and Frame 0.3.14 layer as E061.
+
+PC coverage remained at zero masks and zero sealed versions, with no-declaration
+refusals reaching 11,545 over the whole session. The Frame journal window
+20:05:50–20:08:15 UTC shows increasing video metadata
+(477,734 to 489,258). Lifetime decoded and uploaded coverage stayed at 10,236,
+and the camera-only draw counter stayed at 6,608. Those totals are carried
+over from E061. The companion link was available but no new companion coverage
+was sent or composed for Venture in this run.
+
+SteamVR reported native chroma-key support and a room-view setting transition.
+These messages do not identify which OpenXR path Venture used. Venture can
+choose host OpenXR passthrough, a host alpha blend mode, or another backend
+before the external companion, so an apparently successful picture does not
+exercise the external route by itself. The game runtime log
+`%LOCALAPPDATA%/Venture/logs/runtime-com.meta.spiritsling.log` can identify the
+backend. Retain that file before the stable run overwrites it. The November 19
+OpenXR diagnostic file does not match this November 20 session.
+
+For the public Stable/Stable test, keep the installed 0.3.58 package and
+record the actual runtime banners on both devices after the channel switch.
+Use Battlemarked as the known companion-positive comparison, then test Venture
+and capture its backend log along with matched Steam logs. A successful visual
+test and a verified companion-mask test should be credited separately.
+
 ## Evidence locations and maintenance
 
 Public software evidence, source revisions, artifact pins and CI references are
