@@ -27,6 +27,11 @@ if(FRAME_DASHBOARD_TRANSITION_PROBE)
     target_link_libraries(test_dashboard_transition_probe PRIVATE Threads::Threads)
 endif()
 include(CTest)
+option(FRAME_OPENXR_LAYER
+    "Build the Windows OpenXR API layer exposing passthrough through XR_FB_passthrough and ALPHA_BLEND" ON)
+if(FRAME_OPENXR_LAYER)
+    include(cmake/OpenXrLayer.cmake)
+endif()
 option(FRAME_STREAM_BRIDGE_ONLY
     "Build only the uninstalled negotiated stream-bridge prototype and its focused tests" OFF)
 option(FRAME_STREAM_BRIDGE_RECEIVER "Build the negotiated full-resolution receiver (not automatically installed)" OFF)

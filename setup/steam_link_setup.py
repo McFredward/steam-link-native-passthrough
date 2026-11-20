@@ -856,14 +856,53 @@ def registry_path(home=None, system=None):
     return Path(os.environ.get('XDG_CONFIG_HOME') or home / '.config') / 'openvr/openvrpaths.vrpath'
 
 
+class OpenXrLayers:
+    """This user's implicit OpenXR API layers (HKCU\\Software\\Khronos\\OpenXR\\1\\ApiLayers\\Implicit:
+    one DWORD 0 value per enabled manifest path). Only the exact owned value is written or removed."""
+    KEY = r'Software\Khronos\OpenXR\1\ApiLayers\Implicit'
+
+    def __init__(self):
+        import winreg
+        self.winreg = winreg
+
+    def registered(self, manifest):
+        w = self.winreg
+        try:
+            with w.OpenKey(w.HKEY_CURRENT_USER, self.KEY) as key:
+                value, kind = w.QueryValueEx(key, str(manifest))
+        except FileNotFoundError:
+            return False
+        return kind == w.REG_DWORD and value == 0
+
+    def set(self, manifest, enabled):
+        w = self.winreg
+        if enabled:
+            with w.CreateKeyEx(w.HKEY_CURRENT_USER, self.KEY, 0, w.KEY_SET_VALUE) as key:
+                w.SetValueEx(key, str(manifest), 0, w.REG_DWORD, 0)
+        else:
+            try:
+                with w.OpenKey(w.HKEY_CURRENT_USER, self.KEY, 0, w.KEY_SET_VALUE) as key:
+                    w.DeleteValue(key, str(manifest))
+            except FileNotFoundError:
+                pass
+        require(self.registered(manifest) == enabled, 'The OpenXR layer registration could not be confirmed.')
+
+
 class Local:
-    def __init__(self, home=None, system=None, runner=None, steamvr=None):
+    def __init__(self, home=None, system=None, runner=None, steamvr=None, openxr_layers=None):
         self.system = system or platform.system()
         self.home = Path.home() if home is None else Path(home)
         self.root = data_root(self.home, self.system)
         self.registry = registry_path(self.home, self.system)
         self.runner = runner or Runner()
         self.explicit_steamvr = Path(steamvr) if steamvr else None
+        # Only a real Windows host has the OpenXR loader's registry; elsewhere
+        # (Linux-hosted tests of the Windows flow) layer registration is skipped.
+        self.openxr_layers = openxr_layers if openxr_layers is not None else OpenXrLayers() if os.name == 'nt' else None
+
+    def openxr_layer(self, manifest, enabled):
+        if self.openxr_layers is not None:
+            self.openxr_layers.set(manifest, enabled)
 
     def state(self):
         path = self.root / 'install.json'

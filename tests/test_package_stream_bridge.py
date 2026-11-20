@@ -47,6 +47,7 @@ class Tests(unittest.TestCase):
         for name in p.required_sources(ROOT):
             target=self.root/name;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes((ROOT/name).read_bytes())
         self.pc=self.base/'provider.dll';self.pc.write_bytes(pe(True))
+        self.openxr=self.base/'openxr-layer.dll';self.openxr.write_bytes(pe(True)+b'own-openxr-layer-fixture')
         self.layer=self.base/'layer.so';self.layer.write_bytes(elf())
         self.selector=self.base/'selector.so';self.selector.write_bytes(elf()+b'own-selector-fixture')
         self.askpass=self.base/'askpass.exe';self.askpass.write_bytes(helper_pe())
@@ -66,12 +67,12 @@ class Tests(unittest.TestCase):
         rp=lambda name:{'base':'steamvr','path':name,'bytes':1,'sha256':'a'*64}
         self.profile={'schema':p.PROFILE,'source_revision':'1'*40,'bridge_protocol':{'major':1,'minor':0,'wire_sha256':'a'*64},
                       'source_pins':{n:p.pin((self.root/n).read_bytes()) for n in p.required_sources(self.root)},
-                      'artifacts':{'pc_provider':p.pin(self.pc.read_bytes()),'frame_layer':p.pin(self.layer.read_bytes()),'frame_selector':p.pin(self.selector.read_bytes())},
+                      'artifacts':{'pc_provider':p.pin(self.pc.read_bytes()),'openxr_layer':p.pin(self.openxr.read_bytes()),'frame_layer':p.pin(self.layer.read_bytes()),'frame_selector':p.pin(self.selector.read_bytes())},
                       'pc':{'reviewed':True,'platform':'windows-x86_64','runtime_files':{'vrlink':rp('drivers/vrlink/bin/win64/driver_vrlink.dll'),'vrpathreg':rp('bin/win64/vrpathreg.exe')}},
                       'frame':{'reviewed':True,'generated':contract.GENERATED,'runtime_files':{'vrlink':rp('tools/vrlink/bin/linuxarm64/vrlink'),'compositor':rp('bin/linuxarm64/vrcompositor'),'fragment':rp('resources/shaders/vulkan/distort_ps_achromatic_se2.spv'),'openvr':rp('bin/linuxarm64/libopenvr_api.so')}}}
         self.path=self.base/'profile.json';self.save_profile()
     def save_profile(self):self.path.write_bytes(encoded(self.profile))
-    def build(self,**kw):return p.build(self.pc,self.layer,self.selector,self.path,self.python,self.ssh,root=self.root,textual_wheels=self.wheels,askpass_exe=self.askpass,**kw)
+    def build(self,**kw):return p.build(self.pc,self.layer,self.selector,self.path,self.python,self.ssh,root=self.root,textual_wheels=self.wheels,askpass_exe=self.askpass,**{'openxr_layer':self.openxr,**kw})
     def validation(self,checks=None):
         value={'schema':p.VALIDATION,'result':'PASS','runtime_profile_sha256':p.pin(self.path.read_bytes())['sha256'],'source_revision':self.profile['source_revision'],'source_pins':self.profile['source_pins'],'artifacts':self.profile['artifacts'],'checks':{n:True for n in (checks or p.CHECKS)},'hardware_verified':False}
         path=self.base/'validation.json';path.write_bytes(encoded(value));return path
@@ -90,6 +91,17 @@ class Tests(unittest.TestCase):
             self.assertIn('GNU LESSER GENERAL PUBLIC LICENSE',archive.read('third_party/ffmpeg/COPYING.LGPLv2.1').decode())
         decoder['mask_util'].write_bytes(elf()+b'changed private dependency')
         with self.assertRaises(ValueError):self.build(mask_decoder=decoder)
+
+    def test_openxr_layer_is_always_packaged_for_the_pc(self):
+        raw,_=self.build()
+        with zipfile.ZipFile(io.BytesIO(raw)) as z:
+            self.assertEqual(z.read('pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.dll'),self.openxr.read_bytes())
+            self.assertEqual(z.read('pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.json'),(ROOT/'openxr/XrApiLayer_sfnp_passthrough.json').read_bytes())
+            bundle=json.loads(z.read('stream-bridge-bundle.json'))
+            self.assertIn('pc-provider/bin/win64/XrApiLayer_sfnp_passthrough.dll',bundle['pc']['files'])
+        with self.assertRaises(ValueError):self.build(openxr_layer=None)
+        self.openxr.write_bytes(elf())
+        with self.assertRaises(ValueError):self.build()
 
     def test_partial_or_wrong_architecture_hevc_pair_is_refused(self):
         codec=self.base/'mask.so';codec.write_bytes(elf())
