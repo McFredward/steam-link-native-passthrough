@@ -1359,11 +1359,10 @@ configuration and recovery from the observed overlap. The targeted slot 13
 case remains separately verified by the Windows/WARP regression and causal
 control. No release, dashboard panel or compatibility matrix claim is added.
 
-## E062 — Venture streamed on 2.19.4 without Companion masks (2026-11-20)
+## E062 — Venture used SteamVR OpenXR alpha blend on 2.19.4 (2026-11-20)
 
 The maintainer reports a Venture test after the successful E061 Battlemarked
-run. Matched private capture `20261120-venture-058/{pc,frame,frame-install,
-review-summary.json}`. PC SteamVR 2.19.4 startup at 21:05:55.973 CET and normal
+run. Matched private capture `20261120-venture-058/{pc,frame,frame-install,venture,review-summary.json}`. PC SteamVR 2.19.4 startup at 21:05:55.973 CET and normal
 exit at 21:08:08.773. Venture's Spirit Sling Tabletop worker connected at
 21:07:16.916 and became the OpenXR scene at 21:07:22.394. The paired companion
 negotiated at 21:05:57.962 and completed its coded-AU probe 9ms later. Read-only
@@ -1377,14 +1376,16 @@ and the camera-only draw counter stayed at 6,608. Those totals are carried
 over from E061. The companion link was available but no new companion coverage
 was sent or composed for Venture in this run.
 
-SteamVR reported native chroma-key support and a room-view setting transition.
-These messages do not identify which OpenXR path Venture used. Venture can
-choose host OpenXR passthrough, a host alpha blend mode, or another backend
-before the external companion, so an apparently successful picture does not
-exercise the external route by itself. The game runtime log
-`%LOCALAPPDATA%/Venture/logs/runtime-com.meta.spiritsling.log` can identify the
-backend. Retain that file before the stable run overwrites it. The November 19
-OpenXR diagnostic file does not match this November 20 session.
+SteamVR reported chroma-key support and a room-view setting transition. Its
+logs alone left the Venture backend open. The maintainer then supplied
+`venture/runtime-com.meta.spiritsling.log` for the same run, matched by the
+20:07:16 UTC launch and worker PID 30260. Venture selected the host environment
+blend mode from SteamVR/OpenXR. Its passthrough creation returned success and
+its active layer logged host mode 3 (`XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND`).
+The host reported neither XR_FB_passthrough nor XR_HTC_passthrough. This confirms
+Venture's native OpenXR alpha-blend path on the tested configuration. The app
+did not select its color-key backend. The logs do not establish the transport
+implementation behind SteamVR's OpenXR mode.
 
 For the public Stable/Stable test, keep the installed 0.3.58 package and
 record the actual runtime banners on both devices after the channel switch.
